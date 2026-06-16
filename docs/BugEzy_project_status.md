@@ -194,7 +194,7 @@ FOX = 創辦人 + 決策者 + 手動驗收
 - Cloudflare Workers API：POST /api/reports + GET /api/reports/:id
 - Supabase：reports 表（metadata + console/network/voice JSONB）
 - R2：rrweb events 大檔存儲（reports/<id>/rrweb.json）
-- 程式碼完成、`npx tsc --noEmit` 通過；本機 curl round-trip 驗收待 FOX 完成 §5（wrangler login/bucket/secret + Supabase 建表）後執行
+- 程式碼完成、`npx tsc --noEmit` 通過；本機 curl round-trip 驗收通過（PM 用 dc-light curl 實測 POST+GET round-trip 成功）
 
 ---
 
