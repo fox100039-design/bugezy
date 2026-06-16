@@ -1,0 +1,20 @@
+{
+  "name": "@bugezy/extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "BugEzy Chrome 擴充（Manifest V3）— rrweb DOM 側錄 + Console/Network 攔截",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs --watch",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "rrweb": "^2.0.0-alpha.4"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "esbuild": "^0.21.5",
+    "typescript": "^5.4.5"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "bugezy",
+  "version": "0.1.0",
+  "private": true,
+  "description": "亞洲專屬平價 MCP 語音除錯工具 — 中文語音錄 Bug，自動產出 DOM 軌跡 + 網路/Console + 中文字幕報告，一鍵分享給隊友或 AI",
+  "author": "FOX",
+  "license": "UNLICENSED",
+  "workspaces": [
+    "extension",
+    "server",
+    "web",
+    "mcp-server"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace web",
+    "dev:server": "npm run dev --workspace server",
+    "build": "npm run build --workspaces --if-present"
+  }
+}

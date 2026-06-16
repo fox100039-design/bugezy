@@ -1,0 +1,57 @@
+# BugEzy Changelog
+
+## 2026-06-16
+
+- 專案建立（`C:\dev\bugezy`）
+- 目錄結構：extension / server / web / mcp-server / docs / job
+- 工作流基礎：CLAUDE.md + claudePM.md + .mcp.json（獨立 memory）
+- ARCHITECTURE.md 初版
+- 產品規格書 v0.2（從 lottoshare_tools 搬入）
+- PM-02：第 1 代 Chrome 擴充骨架（Manifest V3 + esbuild）
+  - rrweb DOM 側錄 + Console（warn/error）+ Network（4xx/5xx）攔截
+  - MAIN world 注入腳本攔截頁面 fetch/XHR/console，ISOLATED world 橋接 chrome API
+  - background service worker 管理錄製狀態（持久化至 storage.local）
+  - 極簡 popup UI：開始/停止錄製、計時、結果摘要、複製 JSON
+  - `npm run build` → `extension/dist/`（載入解壓縮擴充功能測試）
+- PM-03：UX 修正 — 錄製狀態可見 + 結果清楚呈現
+  - icon Badge 顯示紅色「REC」，SW 重啟依持久化狀態還原 badge
+  - popup 三態畫面：閒置 / 錄製中（計時器）/ 錄製完成（摘要 + 時長）
+  - 完成畫面含 DOM/Console/Network 筆數、頁面 URL、錄製秒數
+  - 新增「🗑️ 清除，重新錄製」按鈕（清 storage + badge → 回初始）
+- PM-04：修 inject.ts 注入除錯 — rrweb/console/network 全空
+  - inject/content 全程加 `[BugEzy]` 診斷 log（載入、握手、START/STOP、打包筆數）
+  - inject 防重複注入（`window.__bugezyInjected`）
+  - rrweb `record()` 與 fetch 攔截包 try/catch，啟動失敗不再靜默
+  - 新增 READY/STARTED 握手（含 `rrwebOk`），content 可確認 inject 存活
+- PM-05：popup 加「💾 匯出 JSON」按鈕
+  - manifest 加 `downloads` 權限
+  - 一鍵把 payload 寫到 `Downloads/bugezy-debug/payload-<ts>.json`（給 Claude Chat 用 dc-light 直接讀，免複製貼上爆對話長度）
+  - 時間戳用 `YYYYMMDD-HHmmss`（避開 Windows 非法檔名 `:`）、`saveAs:false` 直接落檔
+- PM-06：第 2 代 — 語音辨識（Web Speech API + offscreen document）
+  - 新增 offscreen document（`offscreen.html`/`.ts`）跑 `webkitSpeechRecognition`（zh-TW、continuous）
+  - background 管理 offscreen 生命週期、邊辨識邊把語音片段存進 `VOICE_KEY`
+  - onend 自動 restart（撐過靜默）、onerror 不中斷錄製
+  - payload 加 `voiceTranscript[]`（content 合併）、popup 摘要顯示「語音片段 N」
+  - manifest 加 `offscreen` 權限
+- PM-07：修語音收不到（PM-06 voiceTranscript 全空）
+  - 根因：offscreen 是隱藏頁，Chrome 不為它彈麥克風授權 → `SpeechRecognition.start()` 靜默失敗
+  - Fix 1：popup 開始錄製前先 `getUserMedia({audio:true})` 取權限（可見視窗才會彈授權），拿到即關閉 stream
+  - Fix 2：offscreen 載入後送 `VOICE_READY`，background 等握手（3s 超時保險）才送 `VOICE_START`，解決競態
+  - Fix 3：offscreen `onerror` 明確 blog `error+message`；`not-allowed`/`service-not-allowed` 不再自動 restart
+- PM-08：語音改架構 — 砍 offscreen，SpeechRecognition 直接跑在 inject.ts（MAIN world）
+  - 砍除 `offscreen.html`/`offscreen.ts`、manifest `offscreen` 權限、build offscreen entry
+  - background/popup/content 移除全部 offscreen/VOICE_* 跨 context 邏輯（大幅簡化）
+  - 語音收集移進 inject.ts，與 rrweb/console/network 同層；payload 直接帶 `voiceTranscript`
+  - 麥克風授權改由網頁觸發（MAIN world 是頁面真實 window，API 保證可用）
+  - 保留 `VoiceSegment` 型別、popup「語音片段」顯示不變
+- PM-09：修語音 `not-allowed` — 注入頁面授權按鈕解 user gesture 問題
+  - 根因：START 經 popup→background→content→inject 四層傳遞，user gesture context 已丟失，Chrome 拒絕啟麥克風
+  - inject 收到 START 後先 `permissions.query`：已授權直接啟動；未授權注入頁面頂部浮層
+  - 浮層「允許麥克風」按鈕的 click 才是有效 user gesture → `getUserMedia` 彈標準授權 → 啟動語音
+  - 「跳過」按鈕可不錄語音、不阻擋 DOM/console/network；只動 `inject.ts`
+- PM-10：第 3 代後端骨架（Cloudflare Workers + Supabase + R2）§6
+  - 建 `server/`：package.json / tsconfig.json / wrangler.toml / schema.sql / src/index.ts
+  - `POST /api/reports`：rrweb 存 R2、metadata + console/network/voice 存 Supabase，回 `{report_id, share_url}`
+  - `GET /api/reports/:id`：合併 Supabase metadata + R2 rrweb 回完整報告
+  - CORS 全開、無框架路由、`SUPABASE_ANON_KEY` 走 secret 不進碼
+  - `npx tsc --noEmit` 通過（未執行 wrangler login/deploy/secret，由 FOX 手動）

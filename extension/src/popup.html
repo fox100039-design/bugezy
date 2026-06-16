@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BugEzy</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #ffffff;
+        --fg: #1a1a1a;
+        --muted: #6b7280;
+        --line: #e5e7eb;
+        --accent: #ef4444;
+        --accent-stop: #374151;
+      }
+      * { box-sizing: border-box; }
+      body {
+        width: 260px;
+        margin: 0;
+        padding: 14px;
+        font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+        font-size: 14px;
+      }
+      h1 { font-size: 16px; margin: 0 0 12px; }
+      button {
+        width: 100%;
+        padding: 10px;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        color: #fff;
+        cursor: pointer;
+        margin-bottom: 8px;
+      }
+      button:disabled { opacity: 0.5; cursor: default; }
+      #startBtn { background: var(--accent); }
+      #stopBtn { background: var(--accent-stop); }
+      #copyBtn { background: #2563eb; }
+      #copyBtn.copied { background: #16a34a; }
+      #exportBtn { background: #7c3aed; }
+      #exportBtn.done { background: #16a34a; }
+      #clearBtn { background: #9ca3af; }
+      .hidden { display: none; }
+      .dot {
+        display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+        background: var(--accent); margin-right: 6px;
+        animation: blink 1s steps(2, start) infinite;
+      }
+      @keyframes blink { to { visibility: hidden; } }
+      .recline { color: var(--muted); font-variant-numeric: tabular-nums; margin: 2px 0 12px; }
+      .done-title { color: #16a34a; font-weight: 700; margin: 0 0 10px; }
+      .summary { border-top: 1px solid var(--line); padding-top: 10px; }
+      .summary h2 { font-size: 12px; color: var(--muted); margin: 0 0 6px; font-weight: 600; }
+      .row { display: flex; justify-content: space-between; padding: 2px 0; }
+      .row .val { font-weight: 600; }
+      .meta { color: var(--muted); font-size: 11px; word-break: break-all; margin: 6px 0 10px; }
+    </style>
+  </head>
+  <body>
+    <h1>🐛 BugEzy</h1>
+
+    <!-- 狀態一：閒置 -->
+    <section id="idleView" class="hidden">
+      <button id="startBtn">🔴 開始錄製</button>
+    </section>
+
+    <!-- 狀態二：錄製中 -->
+    <section id="recordingView" class="hidden">
+      <div class="recline"><span class="dot"></span>錄製中… <span id="elapsed">00:00</span></div>
+      <button id="stopBtn">⏹ 停止錄製</button>
+    </section>
+
+    <!-- 狀態三：錄製完成 -->
+    <section id="doneView" class="hidden">
+      <div class="done-title">✅ 錄製完成！</div>
+      <div class="summary">
+        <div class="row"><span>DOM 事件</span><span class="val" id="domCount">0</span></div>
+        <div class="row"><span>Console</span><span class="val" id="consoleCount">0</span></div>
+        <div class="row"><span>Network 錯誤</span><span class="val" id="networkCount">0</span></div>
+        <div class="row"><span>語音片段</span><span class="val" id="voiceCount">0</span></div>
+        <div class="row"><span>時間</span><span class="val" id="durationVal">0 秒</span></div>
+        <div class="meta" id="pageUrl"></div>
+      </div>
+      <button id="copyBtn">📋 複製 JSON</button>
+      <button id="exportBtn">💾 匯出 JSON（給 AI 讀）</button>
+      <button id="clearBtn">🗑️ 清除，重新錄製</button>
+    </section>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
