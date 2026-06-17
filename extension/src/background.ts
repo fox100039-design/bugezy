@@ -3,7 +3,9 @@
 // 狀態持久化到 chrome.storage.local，避免 service worker 被回收後遺失。
 
 import {
+  API_BASE,
   STORAGE_KEY,
+  blog,
   type ControlMessage,
   type RecordingSummary,
   type StateResponse,
@@ -96,6 +98,47 @@ function toResponse(s: PersistedState): StateResponse {
   return { recording: s.recording, startedAt: s.startedAt, summary: s.summary };
 }
 
+/** 局部更新已存的 summary（上傳狀態用） */
+async function patchSummary(patch: Partial<RecordingSummary>): Promise<void> {
+  const s = await getState();
+  if (!s.summary) return;
+  await setState({ summary: { ...s.summary, ...patch } });
+}
+
+/**
+ * 把最後一次打包的 payload 上傳到 Workers API。
+ * 失敗不阻擋本機 payload（已存 chrome.storage.local），只更新 summary 的上傳狀態。
+ */
+async function uploadPayload(): Promise<void> {
+  try {
+    const r = await chrome.storage.local.get(STORAGE_KEY);
+    const payload = r[STORAGE_KEY];
+    if (!payload) {
+      blog('uploadPayload: 沒有 payload，跳過');
+      return;
+    }
+
+    blog('uploadPayload: 開始上傳...');
+    const res = await fetch(`${API_BASE}/api/reports`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`HTTP ${res.status}: ${errText}`);
+    }
+
+    const data = (await res.json()) as { report_id: string; share_url: string };
+    blog('uploadPayload: 上傳成功', data.share_url);
+    await patchSummary({ uploadStatus: 'success', shareUrl: data.share_url, uploadError: null });
+  } catch (err) {
+    blog('uploadPayload: 上傳失敗', err);
+    await patchSummary({ uploadStatus: 'error', uploadError: String(err) });
+  }
+}
+
 chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summary?: RecordingSummary }, _sender, sendResponse) => {
   (async () => {
     try {
@@ -124,9 +167,14 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summ
           const summary: RecordingSummary = {
             ...incoming,
             durationMs: prev.startedAt ? Date.now() - prev.startedAt : 0,
+            uploadStatus: 'uploading', // 進入上傳流程
+            shareUrl: null,
+            uploadError: null,
           };
-          const s = await setState({ recording: false, summary });
+          const s = await setState({ recording: false, startedAt: null, tabId: null, summary });
           clearBadge();
+          // 非同步上傳（不阻擋 sendResponse）；失敗只更新 summary 狀態
+          uploadPayload().catch(() => {});
           sendResponse(toResponse(s));
           break;
         }

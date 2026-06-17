@@ -55,3 +55,30 @@
   - `GET /api/reports/:id`：合併 Supabase metadata + R2 rrweb 回完整報告
   - CORS 全開、無框架路由、`SUPABASE_ANON_KEY` 走 secret 不進碼
   - `npx tsc --noEmit` 通過（未執行 wrangler login/deploy/secret，由 FOX 手動）
+
+## 2026-06-17
+
+- PM-11：擴充上傳整合（錄完自動送 API）
+  - 停止錄製後 background 自動 `POST /api/reports`（`API_BASE=http://127.0.0.1:8787`）
+  - 上傳非同步、失敗不阻擋本機 payload；`RecordingSummary` 加 `uploadStatus`/`shareUrl`/`uploadError`
+  - popup 顯示「⏳ 上傳中 → ✅ 已上傳 + 分享連結 + 📋 複製連結」/「❌ 上傳失敗（可手動匯出）」
+  - 上傳中 popup 每秒輪詢 GET_STATE 更新狀態；manifest 不變（API CORS 全開，SW fetch 免 host 權限）
+- PM-12：React 報告頁（`web/`）
+  - Vite + React + TS 骨架，路由 `/report/:id`，`/api` proxy 到 localhost:8787
+  - `RrwebPlayer`（rrweb-player + useRef/useEffect 掛載 DOM 回放）+ Console/Network/Voice 三面板
+  - 深色主題（與 popup 統一）、載入中/找不到報告狀態
+  - `npm run build`（tsc && vite build）通過
+- PM-13：rrweb 回放改用 `@rrweb/replay`（去 Svelte 依賴）
+  - `rrweb-player`（Svelte）在 React+Vite 靜默失敗 → 改用底層 `Replayer` class + 自製播放控制列
+  - 播放/暫停 + 進度條 seek + 時間顯示，requestAnimationFrame 追蹤進度
+  - 移除 `rrweb-player` 依賴；只動 `RrwebPlayer.tsx` + `index.css`
+- PM-14：第 4 代 MCP Server（8 Tool Pull 模式）= MVP
+  - §1 Workers 加 `GET /api/reports`（列最近報告，metadata only，`limit`/`url` 過濾）
+  - `mcp-server/`：`@modelcontextprotocol/sdk` stdio server，8 個 tool（list/overview/console/network/voice/page/rrweb-summary/rrweb-events）
+  - 每 tool 呼叫 Workers API 只回需要欄位（省 token）；`BUGEZY_API_URL` 環境變數
+  - `npm run build` 通過；MCP handshake + tools/list 實測回傳 8 個 tool
+- PM-15：Workers 加 `/mcp` 端點（Cloudflare Agents SDK）— 讓 Claude.ai 直接連
+  - 用 `agents` 套件的 `createMcpHandler`（Streamable HTTP，無狀態，免 Durable Objects）
+  - `/mcp` 路由掛 `McpServer`，註冊同 8 個 tool 但**直接讀 Supabase/R2**（不繞 HTTP）
+  - tool 參數改用 zod shape（SDK 要求）；fetch handler 加 `ctx: ExecutionContext`
+  - `npm install` + `npx tsc --noEmit` 通過（未部署，deploy 由 FOX）

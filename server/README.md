@@ -8,6 +8,8 @@
 |---|---|---|
 | `POST` | `/api/reports` | 接收 `RecordingPayload`：rrweb 軌跡存 R2、metadata + console/network/voice 存 Supabase；回 `{ report_id, share_url }` |
 | `GET` | `/api/reports/:id` | 讀回完整報告（含從 R2 取回的 `rrwebEvents`） |
+| `GET` | `/api/reports` | 列出最近報告（metadata only，`limit`/`url` 過濾） |
+| `*` | `/mcp` | MCP 端點（Streamable HTTP，`agents/mcp` 的 `createMcpHandler`）— 8 tool，給 Claude.ai Connectors / IDE 直接連 |
 | `OPTIONS` | `*` | CORS preflight（MVP 全開 `*`） |
 
 ## 儲存切分

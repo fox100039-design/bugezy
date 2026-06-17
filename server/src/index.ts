@@ -1,10 +1,15 @@
 // BugEzy API — Cloudflare Workers
 // POST /api/reports      接收 RecordingPayload → rrweb 存 R2、metadata 存 Supabase
 // GET  /api/reports/:id  讀回完整報告（含從 R2 取回的 rrwebEvents）
+// GET  /api/reports      列出最近報告（metadata only）
+// /mcp                   MCP 端點（Streamable HTTP，給 Claude.ai 等直接連）
 //
 // 機密（SUPABASE_ANON_KEY）走 wrangler secret，不寫進程式碼。
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createMcpHandler } from 'agents/mcp';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
 
 export interface Env {
   R2: R2Bucket;
@@ -66,7 +71,7 @@ function supa(env: Env): SupabaseClient {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: CORS });
     }
@@ -74,9 +79,18 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
+    // MCP 端點（Streamable HTTP）— 給 Claude.ai Connectors / IDE 直接連
+    if (path === '/mcp' || path.startsWith('/mcp/')) {
+      const handler = createMcpHandler(createMcpServer(env), { route: '/mcp' });
+      return handler(request, env, ctx);
+    }
+
     try {
       if (request.method === 'POST' && path === '/api/reports') {
         return await createReport(request, env, url.origin);
+      }
+      if (request.method === 'GET' && path === '/api/reports') {
+        return await listReports(url, env);
       }
       const match = path.match(/^\/api\/reports\/([^/]+)$/);
       if (request.method === 'GET' && match) {
@@ -164,4 +178,187 @@ async function getReport(reportId: string, env: Env): Promise<Response> {
     rrwebEvents,
     created_at: data.created_at,
   });
+}
+
+// GET /api/reports — 列出最近報告（metadata only，不含 rrweb / JSONB 大欄位）
+async function listReports(url: URL, env: Env): Promise<Response> {
+  let limit = parseInt(url.searchParams.get('limit') ?? '10', 10);
+  if (!Number.isFinite(limit) || limit < 1) limit = 10;
+  if (limit > 50) limit = 50;
+
+  let query = supa(env)
+    .from('reports')
+    .select(
+      'report_id, url, title, browser, screen_size, console_count, network_count, voice_count, rrweb_count, created_at',
+    )
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  const keyword = url.searchParams.get('url');
+  if (keyword) query = query.ilike('url', `%${keyword}%`);
+
+  const { data, error } = await query;
+  if (error) {
+    return json({ error: `supabase query failed: ${error.message}` }, 500);
+  }
+  return json({ reports: data ?? [] });
+}
+
+// ── MCP Server（8 Tool，直接讀 Supabase/R2，不繞 HTTP）──────
+const META_COLS =
+  'report_id, url, title, browser, screen_size, console_count, network_count, voice_count, rrweb_count, created_at';
+
+function txt(data: unknown) {
+  const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+  return { content: [{ type: 'text' as const, text }] };
+}
+
+function createMcpServer(env: Env): McpServer {
+  const server = new McpServer({ name: 'BugEzy', version: '0.1.0' });
+  const supabase = () => supa(env);
+
+  // Tool 1: list_reports
+  server.tool(
+    'list_reports',
+    '列出最近的 Bug 報告（metadata）。List recent bug reports.',
+    { limit: z.number().min(1).max(50).optional(), url: z.string().optional() },
+    async (args) => {
+      const limit = Math.min(Math.max(args.limit ?? 10, 1), 50);
+      let query = supabase()
+        .from('reports')
+        .select(META_COLS)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      if (args.url) query = query.ilike('url', `%${args.url}%`);
+      const { data, error } = await query;
+      if (error) return txt(`查詢失敗: ${error.message}`);
+      return txt(data ?? []);
+    },
+  );
+
+  // Tool 2: get_report_overview
+  server.tool(
+    'get_report_overview',
+    '取得報告概覽（metadata + 各筆數，不含原始資料）。Report overview.',
+    { report_id: z.string() },
+    async (args) => {
+      const { data, error } = await supabase()
+        .from('reports')
+        .select(META_COLS)
+        .eq('report_id', args.report_id)
+        .single();
+      if (error || !data) return txt('找不到報告');
+      return txt(data);
+    },
+  );
+
+  // Tool 3: get_console_logs
+  server.tool(
+    'get_console_logs',
+    '取得 Console 記錄（warn/error）。Console logs.',
+    { report_id: z.string() },
+    async (args) => {
+      const { data, error } = await supabase()
+        .from('reports')
+        .select('console_logs')
+        .eq('report_id', args.report_id)
+        .single();
+      if (error || !data) return txt('找不到報告');
+      return txt(data.console_logs);
+    },
+  );
+
+  // Tool 4: get_network_errors
+  server.tool(
+    'get_network_errors',
+    '取得 Network 錯誤（4xx/5xx）。Network errors.',
+    { report_id: z.string() },
+    async (args) => {
+      const { data, error } = await supabase()
+        .from('reports')
+        .select('network_errors')
+        .eq('report_id', args.report_id)
+        .single();
+      if (error || !data) return txt('找不到報告');
+      return txt(data.network_errors);
+    },
+  );
+
+  // Tool 5: get_voice_transcript — 最有價值的除錯線索
+  server.tool(
+    'get_voice_transcript',
+    '取得開發者語音描述（中文轉錄）。Developer voice transcript.',
+    { report_id: z.string() },
+    async (args) => {
+      const { data, error } = await supabase()
+        .from('reports')
+        .select('voice_transcript')
+        .eq('report_id', args.report_id)
+        .single();
+      if (error || !data) return txt('找不到報告');
+      return txt(data.voice_transcript);
+    },
+  );
+
+  // Tool 6: get_page_info
+  server.tool(
+    'get_page_info',
+    '取得頁面資訊（URL/標題/瀏覽器/解析度）。Page info.',
+    { report_id: z.string() },
+    async (args) => {
+      const { data, error } = await supabase()
+        .from('reports')
+        .select('url, title, browser, screen_size, created_at')
+        .eq('report_id', args.report_id)
+        .single();
+      if (error || !data) return txt('找不到報告');
+      return txt(data);
+    },
+  );
+
+  // Tool 7: get_rrweb_summary（從 R2 讀，只回摘要）
+  server.tool(
+    'get_rrweb_summary',
+    'DOM 軌跡摘要（事件數/時長/類型分布，不回完整資料）。rrweb summary.',
+    { report_id: z.string() },
+    async (args) => {
+      const { data: meta } = await supabase()
+        .from('reports')
+        .select('rrweb_r2_key')
+        .eq('report_id', args.report_id)
+        .single();
+      if (!meta?.rrweb_r2_key) return txt('無 DOM 軌跡');
+      const obj = await env.R2.get(meta.rrweb_r2_key as string);
+      if (!obj) return txt('R2 檔案不存在');
+      const events = JSON.parse(await obj.text()) as Array<{ type?: number; timestamp?: number }>;
+      const event_types: Record<string, number> = {};
+      for (const e of events) {
+        const key = `type_${e.type ?? 'unknown'}`;
+        event_types[key] = (event_types[key] ?? 0) + 1;
+      }
+      const ts = events.map((e) => e.timestamp ?? 0).filter((t) => t > 0);
+      const duration_ms = ts.length >= 2 ? Math.max(...ts) - Math.min(...ts) : 0;
+      return txt({ event_count: events.length, duration_ms, event_types });
+    },
+  );
+
+  // Tool 8: get_rrweb_events（完整資料，⚠ 大）
+  server.tool(
+    'get_rrweb_events',
+    '取得完整 DOM 事件（⚠ 資料量大）。Full rrweb events.',
+    { report_id: z.string() },
+    async (args) => {
+      const { data: meta } = await supabase()
+        .from('reports')
+        .select('rrweb_r2_key')
+        .eq('report_id', args.report_id)
+        .single();
+      if (!meta?.rrweb_r2_key) return txt('無 DOM 軌跡');
+      const obj = await env.R2.get(meta.rrweb_r2_key as string);
+      if (!obj) return txt('R2 檔案不存在');
+      return txt(await obj.text());
+    },
+  );
+
+  return server;
 }

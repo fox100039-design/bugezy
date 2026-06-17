@@ -1,0 +1,19 @@
+{
+  "name": "@bugezy/mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": { "bugezy-mcp": "./dist/index.js" },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "^5.4",
+    "tsx": "^4"
+  }
+}

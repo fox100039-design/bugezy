@@ -85,6 +85,14 @@
         <div class="row"><span>時間</span><span class="val" id="durationVal">0 秒</span></div>
         <div class="meta" id="pageUrl"></div>
       </div>
+      <!-- 上傳狀態 -->
+      <div id="uploadArea" style="margin-top: 8px;">
+        <div id="uploadStatus" class="meta"></div>
+        <div id="shareUrlRow" style="display:none; margin-top: 6px;">
+          <a id="shareLink" href="#" target="_blank" style="color: #818cf8; word-break: break-all;"></a>
+          <button id="copyLinkBtn" style="margin-left: 8px; background: #7c3aed; color:#fff; border:none; border-radius:4px; padding:2px 8px; cursor:pointer; font-size:12px;">📋 複製連結</button>
+        </div>
+      </div>
       <button id="copyBtn">📋 複製 JSON</button>
       <button id="exportBtn">💾 匯出 JSON（給 AI 讀）</button>
       <button id="clearBtn">🗑️ 清除，重新錄製</button>

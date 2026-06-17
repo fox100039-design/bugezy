@@ -43,6 +43,9 @@ export interface RecordingPayload {
   voiceTranscript: VoiceSegment[]; // 語音轉文字（content.ts 合併）
 }
 
+/** 上傳狀態 */
+export type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
+
 /** 摘要（供 popup 顯示） */
 export interface RecordingSummary {
   domEvents: number;
@@ -52,6 +55,10 @@ export interface RecordingSummary {
   /** 錄製時長（毫秒）— 由 background 依 startedAt 回填 */
   durationMs: number;
   voiceSegments: number;
+  /** 雲端上傳狀態（PM-11） */
+  uploadStatus: UploadStatus;
+  shareUrl: string | null;
+  uploadError: string | null;
 }
 
 // ── 訊息協定 ──────────────────────────────────────────────
@@ -70,6 +77,9 @@ export interface StateResponse {
   startedAt: number | null;
   summary: RecordingSummary | null;
 }
+
+/** API base URL — 開發期 localhost，部署後改正式 URL */
+export const API_BASE = 'http://127.0.0.1:8787';
 
 /** 開發診斷 log 開關（PM-04 除錯用，全程印 [BugEzy] log） */
 export const BUGEZY_DEBUG = true;

@@ -33,6 +33,9 @@ function summarize(payload: RecordingPayload): RecordingSummary {
     pageInfo: payload.pageInfo,
     durationMs: 0, // 由 background 依 startedAt 回填
     voiceSegments: payload.voiceTranscript.length,
+    uploadStatus: 'idle', // 由 background RECORDING_DONE 後接手上傳
+    shareUrl: null,
+    uploadError: null,
   };
 }
 

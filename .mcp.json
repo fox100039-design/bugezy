@@ -10,6 +10,13 @@
     "sequential-thinking": {
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+    },
+    "bugezy": {
+      "command": "node",
+      "args": ["C:\\dev\\bugezy\\mcp-server\\dist\\index.js"],
+      "env": {
+        "BUGEZY_API_URL": "http://127.0.0.1:8787"
+      }
     }
   }
 }

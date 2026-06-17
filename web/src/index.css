@@ -1,0 +1,177 @@
+:root {
+  --bg: #1a1a2e;
+  --panel: #16213e;
+  --line: #333;
+  --fg: #eee;
+  --muted: #9aa3b2;
+  --err: #ef4444;
+  --warn: #eab308;
+  --orange: #f97316;
+  --accent: #818cf8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+  font-size: 14px;
+}
+
+a {
+  color: var(--accent);
+}
+
+.report {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 20px 16px 48px;
+}
+
+.report-header {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 14px;
+  margin-bottom: 18px;
+}
+
+.report-header h1 {
+  font-size: 20px;
+  margin: 0 0 8px;
+}
+
+.report-header .meta {
+  color: var(--muted);
+  line-height: 1.7;
+  word-break: break-all;
+}
+
+.report-header .meta a {
+  word-break: break-all;
+}
+
+.player-wrap {
+  margin: 18px 0;
+  display: flex;
+  justify-content: center;
+}
+
+.panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 860px) {
+  .panels {
+    grid-template-columns: 1fr;
+  }
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  min-height: 120px;
+}
+
+.panel h2 {
+  font-size: 13px;
+  margin: 0 0 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.panel ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.panel li {
+  font-size: 13px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.empty {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.mono {
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+
+.tag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-right: 6px;
+}
+
+.tag-error {
+  background: rgba(239, 68, 68, 0.18);
+  color: var(--err);
+}
+.tag-warn {
+  background: rgba(234, 179, 8, 0.18);
+  color: var(--warn);
+}
+.tag-5xx {
+  background: rgba(239, 68, 68, 0.18);
+  color: var(--err);
+}
+.tag-4xx {
+  background: rgba(249, 115, 22, 0.18);
+  color: var(--orange);
+}
+
+.ts {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.state {
+  text-align: center;
+  padding: 80px 20px;
+  color: var(--muted);
+}
+
+/* rrweb Replayer 自製控制列（PM-13） */
+.player-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  max-width: 800px;
+}
+.play-btn {
+  background: #7c3aed;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.play-btn:hover {
+  background: #6d28d9;
+}
+.time-display {
+  color: #aaa;
+  font-size: 13px;
+  font-family: monospace;
+  white-space: nowrap;
+}

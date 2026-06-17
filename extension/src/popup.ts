@@ -1,7 +1,7 @@
 // popup.ts — Popup UI 邏輯（三態：閒置 / 錄製中 / 錄製完成）
 // 與 background service worker 溝通：開始/停止/清除、輪詢狀態、顯示摘要、複製 JSON。
 
-import { type RecordingPayload, type StateResponse } from './types';
+import { type RecordingPayload, type RecordingSummary, type StateResponse } from './types';
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -27,8 +27,14 @@ const voiceCount = $('voiceCount');
 const durationVal = $('durationVal');
 const pageUrl = $('pageUrl');
 
+const uploadStatusEl = $('uploadStatus');
+const shareUrlRow = $('shareUrlRow');
+const shareLink = $<HTMLAnchorElement>('shareLink');
+const copyLinkBtn = $<HTMLButtonElement>('copyLinkBtn');
+
 let startedAt: number | null = null;
 let tick: number | undefined;
+let uploadPoll: number | undefined;
 
 function send<T = unknown>(type: string): Promise<T> {
   return chrome.runtime.sendMessage({ type }) as Promise<T>;
@@ -58,6 +64,43 @@ function stopTick() {
   }
 }
 
+function stopUploadPoll() {
+  if (uploadPoll !== undefined) {
+    clearInterval(uploadPoll);
+    uploadPoll = undefined;
+  }
+}
+
+// 顯示上傳狀態（上傳中 / 已上傳含連結 / 失敗）
+function renderUpload(summary: RecordingSummary | null) {
+  if (!summary) {
+    uploadStatusEl.textContent = '';
+    shareUrlRow.style.display = 'none';
+    return;
+  }
+  switch (summary.uploadStatus) {
+    case 'uploading':
+      uploadStatusEl.textContent = '⏳ 正在上傳到雲端...';
+      shareUrlRow.style.display = 'none';
+      break;
+    case 'success':
+      uploadStatusEl.textContent = '✅ 已上傳';
+      if (summary.shareUrl) {
+        shareUrlRow.style.display = 'flex';
+        shareLink.href = summary.shareUrl;
+        shareLink.textContent = summary.shareUrl;
+      }
+      break;
+    case 'error':
+      uploadStatusEl.textContent = '❌ 上傳失敗（可手動匯出 JSON）';
+      shareUrlRow.style.display = 'none';
+      break;
+    default:
+      uploadStatusEl.textContent = '';
+      shareUrlRow.style.display = 'none';
+  }
+}
+
 // 依 background 回傳的狀態決定要顯示哪一態
 function render(state: StateResponse) {
   startedAt = state.startedAt;
@@ -79,7 +122,22 @@ function render(state: StateResponse) {
     voiceCount.textContent = String(state.summary.voiceSegments ?? 0);
     durationVal.textContent = `${Math.round(state.summary.durationMs / 1000)} 秒`;
     pageUrl.textContent = state.summary.pageInfo.url;
+    renderUpload(state.summary);
+
+    // 上傳是 background 非同步做的 → 上傳中時每秒輪詢更新
+    if (state.summary.uploadStatus === 'uploading') {
+      if (uploadPoll === undefined) {
+        uploadPoll = window.setInterval(async () => {
+          const fresh = await send<StateResponse>('GET_STATE');
+          renderUpload(fresh.summary);
+          if (fresh.summary?.uploadStatus !== 'uploading') stopUploadPoll();
+        }, 1000);
+      }
+    } else {
+      stopUploadPoll();
+    }
   } else {
+    stopUploadPoll();
     show('idle');
   }
 }
@@ -133,6 +191,17 @@ copyBtn.addEventListener('click', async () => {
   setTimeout(() => {
     copyBtn.textContent = '📋 複製 JSON';
     copyBtn.classList.remove('copied');
+  }, 1500);
+});
+
+// 複製分享連結
+copyLinkBtn.addEventListener('click', () => {
+  const url = shareLink.textContent?.trim();
+  if (!url) return;
+  navigator.clipboard.writeText(url);
+  copyLinkBtn.textContent = '✅ 已複製';
+  setTimeout(() => {
+    copyLinkBtn.textContent = '📋 複製連結';
   }, 1500);
 });
 

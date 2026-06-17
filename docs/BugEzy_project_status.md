@@ -1,6 +1,6 @@
 # BugEzy 專案全貌與接手指南
 
-> 最後更新：2026-06-16
+> 最後更新：2026-06-17
 > 維護者：FOX（Claude Chat PM 角色）
 > 用途：新 Chat 對話開始時讀此檔，快速掌握全貌並接手開發
 
@@ -20,8 +20,8 @@
 |---|---|---|---|
 | **① 能錄能存** | Chrome 擴充骨架 | rrweb DOM + Console + Network 攔截 → 打包 JSON | ✅ 完成 |
 | **② 能聽能說** | 語音辨識 | Web Speech API 中文即時轉文字，收進 payload | ✅ 完成 |
-| **③ 能存能看** | 後端 + 報告頁 | Cloudflare Workers + Supabase + R2 + React 報告頁 | 🔨 進行中（API 完成，擴充上傳+報告頁待做） |
-| **④ AI 能讀** | MCP Server | Pull 模式 8 Tool，AI 按需查詢 = **MVP 封測** | 待做 |
+| **③ 能存能看** | 後端 + 報告頁 | Cloudflare Workers + Supabase + R2 + React 報告頁 | ✅ 完成 |
+| **④ AI 能讀** | MCP Server | Pull 模式 8 Tool，AI 按需查詢 = **MVP 封測** | ✅ 完成 |
 | **⑤ 能收錢** | 付費上線 | Stripe 串接 + Chrome Web Store 上架 = **正式上線** | 待做 |
 | **⑥ 更好用** | UX 優化 | 即時字幕 overlay、隱私遮罩、AI 標題、Markdown 匯出 | 待做 |
 | **⑦ 規模化** | 多語 + 企業 | 日韓越語音、跨境除錯鏈、企業自託管 | 待做 |
@@ -196,6 +196,27 @@ FOX = 創辦人 + 決策者 + 手動驗收
 - R2：rrweb events 大檔存儲（reports/<id>/rrweb.json）
 - 程式碼完成、`npx tsc --noEmit` 通過；本機 curl round-trip 驗收通過（PM 用 dc-light curl 實測 POST+GET round-trip 成功）
 
+### PM-11：擴充上傳整合（錄完自動送 API）
+- 停止錄製後 background 自動 `POST /api/reports`，popup 顯示「⏳ 上傳中 → ✅ 已上傳 + 分享連結 + 複製連結」
+- 失敗不阻擋本機 payload；`RecordingSummary` 加 `uploadStatus`/`shareUrl`/`uploadError`，上傳中每秒輪詢
+
+### PM-12：React 報告頁（`web/`）
+- Vite + React + TS，路由 `/report/:id`，`/api` proxy 到 Workers
+- rrweb 回放 + Console/Network/Voice 三面板 + 深色主題
+
+### PM-13：rrweb 回放改用 `@rrweb/replay`（去 Svelte 依賴）
+- `rrweb-player`（Svelte）在 React+Vite 靜默失敗 → 改底層 `Replayer` class + 自製播放控制列（▶/⏸ + 進度條 + 時間）
+
+### PM-14：第 4 代 MCP Server（8 Tool Pull 模式）= MVP
+- Workers 加 `GET /api/reports`（列最近報告）；`mcp-server/` stdio server，8 tool（list/overview/console/network/voice/page/rrweb-summary/rrweb-events）
+- 每 tool 只回需要欄位（省 token）；MCP handshake + tools/list 實測回 8 tool
+- **驗收通過**：MCP `list_reports` 實測列出雲端 2 筆報告（example.com 含語音 + DOM 14 筆、test.com）
+
+### PM-15：Workers 加 `/mcp` 端點（Cloudflare Agents SDK）
+- 用 `agents` 套件的 `createMcpHandler`（Streamable HTTP，無狀態，免 Durable Objects），`/mcp` 掛同 8 tool 但直接讀 Supabase/R2
+- SDK 實際 API 與規格範例有出入（`agents/mcp` 非 `@cloudflare/agents/mcp`、tool 參數要 zod shape），已依型別調整
+- **已部署**：Claude.ai 可在 Connectors 加 `/mcp` 直接查報告（全鏈路打通）
+
 ---
 
 ## §7 已知問題與技術債
@@ -211,17 +232,23 @@ FOX = 創辦人 + 決策者 + 手動驗收
 
 ---
 
-## §8 第 3 代進度（能存能看）
+## §8 第 3+4 代進度（能存能看 + AI 能讀）— ✅ 已完成
 
-### 已完成
-- PM-10：Workers API + Supabase schema + R2 設定，POST/GET 端點程式碼完成、tsc 通過（本機 curl 驗收待 FOX 啟用 §5 後執行）
+### 已完成（全鏈路打通）
+- PM-10：Workers API（POST/GET reports）+ Supabase schema + R2，curl round-trip 通過
+- PM-11：擴充錄完自動上傳，popup 顯示分享連結
+- PM-12 + PM-13：React 報告頁（`@rrweb/replay` 回放 + Console/Network/Voice 面板）
+- PM-14：MCP Server（stdio，8 tool）— `list_reports` 實測列出雲端報告
+- PM-15：Workers `/mcp` 端點（Agents SDK，已部署）— Claude.ai Connectors 可直接連
 
-### 待做
-- PM-11：擴充上傳整合（錄完自動送 API）
-- PM-12：React 報告頁（rrweb-player 回放 + 時間軸）
+> **里程碑**：錄製 → 上傳 → 雲端報告頁 → AI（MCP）按需查詢，整條閉環已驗證可用 = MVP 達成。
 
-### 目標
-把 payload 從本機 JSON 檔變成雲端報告，有分享連結、可回放。
+### 下一步（第 5 代）
+- 付費上線：Stripe 串接 + Chrome Web Store 上架（見 §10 定價）
+- 技術債：Groq Whisper 離線降級（§7 #6）
+
+### 目標（達成）
+把 payload 從本機 JSON 檔變成雲端報告，有分享連結、可回放、AI 可讀。
 
 ### 元件
 1. **Cloudflare Workers API**：接收 payload、存 Supabase、上傳 rrweb JSON 到 R2
@@ -247,11 +274,11 @@ FOX = 創辦人 + 決策者 + 手動驗收
 | DOM 側錄 | rrweb 2.0-alpha | ✅ 完成 |
 | 語音辨識 | Web Speech API (zh-TW) | ✅ 完成 |
 | 語音降級 | Groq Whisper API | 待做（第 6 代） |
-| 後端 API | Cloudflare Workers | 待做（第 3 代） |
-| 資料庫 | Supabase (PostgreSQL + Auth) | 待做（第 3 代） |
-| 檔案儲存 | Cloudflare R2 | 待做（第 3 代） |
-| Web 報告頁 | React + Vite | 待做（第 3 代） |
-| MCP Server | TypeScript + MCP SDK (8 Tool) | 待做（第 4 代） |
+| 後端 API | Cloudflare Workers | ✅ 完成 |
+| 資料庫 | Supabase (PostgreSQL + Auth) | ✅ 完成（Auth 留第 5 代） |
+| 檔案儲存 | Cloudflare R2 | ✅ 完成 |
+| Web 報告頁 | React + Vite（`@rrweb/replay`） | ✅ 完成 |
+| MCP Server | stdio + Workers `/mcp`（8 Tool） | ✅ 完成 |
 | 付費 | Stripe | 待做（第 5 代） |
 
 ---
