@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <title>BugEzy — 截圖標注</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #1a1a2e; display: flex; flex-direction: column; height: 100vh; overflow: hidden; font-family: system-ui, "Microsoft JhengHei", sans-serif; }
+
+    /* 工具列 */
+    .toolbar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 16px; background: #16213e;
+      border-bottom: 1px solid #333;
+    }
+    .toolbar button {
+      background: #333; color: #fff; border: 1px solid #555;
+      border-radius: 6px; padding: 6px 14px; cursor: pointer; font-size: 14px;
+    }
+    .toolbar button.active { background: #7c3aed; border-color: #7c3aed; }
+    .toolbar button.save { background: #059669; border-color: #059669; font-weight: 600; }
+    .toolbar button.cancel { background: #dc2626; border-color: #dc2626; }
+    .toolbar .separator { width: 1px; height: 24px; background: #555; }
+    .toolbar label { color: #aaa; font-size: 13px; }
+    .toolbar input[type="color"] { width: 32px; height: 28px; border: none; cursor: pointer; background: none; }
+    .toolbar select { background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; padding: 4px; }
+
+    /* 畫布區 */
+    .canvas-wrapper {
+      flex: 1; overflow: auto; display: flex; align-items: center; justify-content: center;
+      background: #111;
+    }
+    .canvas-container { position: relative; display: inline-block; }
+    .canvas-container canvas { display: block; cursor: crosshair; }
+
+    /* 文字說明區（PM-20） */
+    .description-area { padding: 8px 16px; background: #16213e; border-top: 1px solid #333; }
+    .description-area label { display: block; color: #9aa3b2; font-size: 13px; margin-bottom: 4px; }
+    .desc-row { display: flex; gap: 8px; align-items: stretch; }
+    .desc-row textarea {
+      flex: 1; background: #1a1a2e; color: #eee; border: 1px solid #444; border-radius: 6px;
+      padding: 8px; font-size: 14px; font-family: system-ui, sans-serif; resize: vertical;
+    }
+    .desc-row textarea:focus { outline: none; border-color: #7c3aed; }
+    .voice-btn {
+      background: #333; color: #fff; border: 1px solid #555; border-radius: 6px;
+      padding: 8px 12px; font-size: 20px; cursor: pointer; transition: all 0.15s;
+    }
+    .voice-btn.listening { background: #dc2626; border-color: #dc2626; animation: pulse 1s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+    .voice-status { color: #9aa3b2; font-size: 12px; margin-top: 4px; min-height: 16px; }
+
+    /* AI 精簡（PM-25） */
+    .desc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+    .desc-header label { margin: 0; }
+    .ai-btn {
+      background: linear-gradient(135deg, #7c3aed, #6d28d9); color: #fff; border: none;
+      border-radius: 8px; padding: 5px 12px; font-size: 12px; cursor: pointer; font-weight: 600; transition: all 0.15s;
+    }
+    .ai-btn:hover { filter: brightness(1.15); transform: translateY(-1px); }
+    .ai-btn:disabled { opacity: 0.5; cursor: default; transform: none; }
+    .ai-btn.done { background: linear-gradient(135deg, #059669, #047857); }
+
+    /* 即時字幕（PM-21，浮在畫布底部，pointer-events:none 不擋畫圖） */
+    #liveCaptions {
+      position: fixed; bottom: 180px; left: 50%; transform: translateX(-50%);
+      z-index: 9999; pointer-events: none;
+      background: rgba(0, 0, 0, 0.75); color: #fff; padding: 8px 20px;
+      border-radius: 8px; font-size: 16px; max-width: 80%; text-align: center;
+      transition: opacity 0.3s; line-height: 1.5;
+    }
+    #liveCaptions.hidden { opacity: 0; }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <button id="penTool" class="active" title="畫筆">✏️ 畫筆</button>
+    <button id="arrowTool" title="箭頭">➡️ 箭頭</button>
+    <button id="rectTool" title="框框">⬜ 框框</button>
+    <button id="textTool" title="文字">📝 文字</button>
+    <div class="separator"></div>
+    <label>顏色</label>
+    <input type="color" id="colorPicker" value="#ff0000">
+    <label>粗細</label>
+    <select id="lineWidth">
+      <option value="2">細</option>
+      <option value="4" selected>中</option>
+      <option value="8">粗</option>
+    </select>
+    <div class="separator"></div>
+    <button id="undoBtn">↩️ 復原</button>
+    <button id="clearBtn">🗑️ 清除全部</button>
+    <div style="flex:1"></div>
+    <button id="cancelBtn" class="cancel">✗ 取消</button>
+    <button id="saveBtn" class="save">✅ 完成儲存</button>
+  </div>
+  <div class="canvas-wrapper">
+    <div class="canvas-container">
+      <canvas id="canvas"></canvas>
+    </div>
+  </div>
+  <!-- 即時字幕（浮在畫布底部，不擋畫圖）（PM-21） -->
+  <div id="liveCaptions" class="hidden">
+    <span id="captionText">🔴 聆聽中，邊畫邊說描述問題...</span>
+  </div>
+  <!-- 文字說明區（PM-20） -->
+  <div class="description-area">
+    <div class="desc-header">
+      <label for="descInput">💬 問題描述（選填）</label>
+    </div>
+    <div class="desc-row">
+      <textarea id="descInput" placeholder="描述你看到的問題，或按右邊麥克風語音輸入..." rows="3"></textarea>
+      <button id="voiceInputBtn" class="voice-btn" title="語音輸入">🎤</button>
+    </div>
+    <div id="voiceStatus" class="voice-status"></div>
+  </div>
+  <script type="module" src="annotate.js"></script>
+</body>
+</html>

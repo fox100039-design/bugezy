@@ -18,6 +18,8 @@ mkdirSync(outdir, { recursive: true });
 function copyStatic() {
   cpSync(resolve(root, 'manifest.json'), resolve(outdir, 'manifest.json'));
   cpSync(resolve(root, 'src/popup.html'), resolve(outdir, 'popup.html'));
+  cpSync(resolve(root, 'src/annotate.html'), resolve(outdir, 'annotate.html'));
+  cpSync(resolve(root, 'src/edit-report.html'), resolve(outdir, 'edit-report.html'));
 }
 
 /** esbuild 插件：每次 build 結束後同步靜態檔（watch 模式也會觸發） */
@@ -37,6 +39,8 @@ const options = {
     content: resolve(root, 'src/content.ts'),
     inject: resolve(root, 'src/inject.ts'),
     popup: resolve(root, 'src/popup.ts'),
+    annotate: resolve(root, 'src/annotate.ts'),
+    'edit-report': resolve(root, 'src/edit-report.ts'),
   },
   outdir,
   bundle: true,

@@ -4,14 +4,14 @@
 
 import {
   API_BASE,
+  LAST_SCREENSHOT_KEY,
+  STATE_KEY,
   STORAGE_KEY,
   blog,
   type ControlMessage,
   type RecordingSummary,
   type StateResponse,
 } from './types';
-
-const STATE_KEY = 'bugezy:state';
 
 interface PersistedState {
   recording: boolean;
@@ -64,7 +64,7 @@ async function getActiveTab(): Promise<chrome.tabs.Tab | undefined> {
 async function startRecording(): Promise<StateResponse> {
   const tab = await getActiveTab();
   if (!tab?.id) throw new Error('找不到 active tab');
-  // 語音改由 inject.ts（MAIN world）自行收集，background 不再管理 offscreen
+  // 語音改由 inject.ts（MAIN world）自行收集；截圖改為獨立功能（PM-18），不再混入錄製
   await chrome.tabs.sendMessage(tab.id, { type: 'START_RECORDING' } satisfies ControlMessage);
   const s = await setState({
     recording: true,
@@ -94,48 +94,77 @@ async function clearRecording(): Promise<StateResponse> {
   return toResponse(DEFAULT_STATE);
 }
 
+/**
+ * 截圖（PM-19）：不再直接擷取，改為通知 content 在頁面注入截圖模式 overlay
+ * （整頁 / 區域兩點 / 自由形狀）。實際擷取由 content 驅動 `CAPTURE_SEGMENT`。
+ */
+async function captureScreenshot(): Promise<{ ok: boolean; error?: string }> {
+  const tab = await getActiveTab();
+  if (!tab?.id) return { ok: false, error: '找不到 active tab' };
+  try {
+    await chrome.tabs.sendMessage(tab.id, { type: 'START_SCREENSHOT' } satisfies ControlMessage);
+    return { ok: true };
+  } catch (err) {
+    // content 未注入（如 chrome:// 或商店頁）
+    blog('START_SCREENSHOT 送達失敗（該頁無法截圖）', err);
+    return { ok: false, error: '此頁面無法截圖' };
+  }
+}
+
+/** content 區域/整頁/自由模式請求擷取目前可見分頁 */
+async function captureSegment(): Promise<{ dataUrl: string } | { error: string }> {
+  try {
+    const dataUrl = await chrome.tabs.captureVisibleTab({ format: 'png' });
+    return { dataUrl };
+  } catch (err) {
+    blog('captureSegment 失敗', err);
+    return { error: String(err) };
+  }
+}
+
+/** content 截圖完成 → 暫存 + 開標注分頁 */
+async function openAnnotate(dataUrl: string, pageUrl: string, pageTitle: string): Promise<void> {
+  const ts = Date.now();
+  const tempKey = `bugezy:ss-temp-${ts}`;
+  await chrome.storage.local.set({ [tempKey]: dataUrl });
+  const q = new URLSearchParams({ key: tempKey, timestamp: String(ts), pageUrl, pageTitle });
+  await chrome.tabs.create({ url: `annotate.html?${q.toString()}` });
+  blog('截圖完成，開標注頁', tempKey);
+}
+
 function toResponse(s: PersistedState): StateResponse {
   return { recording: s.recording, startedAt: s.startedAt, summary: s.summary };
 }
 
-/** 局部更新已存的 summary（上傳狀態用） */
-async function patchSummary(patch: Partial<RecordingSummary>): Promise<void> {
-  const s = await getState();
-  if (!s.summary) return;
-  await setState({ summary: { ...s.summary, ...patch } });
+/** PM-24：停止錄製後開「報告編輯頁」（不直接上傳） */
+async function openEditReport(): Promise<void> {
+  await chrome.tabs.create({ url: 'edit-report.html' });
+  blog('開啟報告編輯頁');
 }
 
 /**
- * 把最後一次打包的 payload 上傳到 Workers API。
- * 失敗不阻擋本機 payload（已存 chrome.storage.local），只更新 summary 的上傳狀態。
+ * PM-24：edit-report 確認上傳時呼叫。讀 STORAGE_KEY payload + 合併 description → POST API。
  */
-async function uploadPayload(): Promise<void> {
+async function uploadReport(
+  description: string,
+): Promise<{ ok: boolean; shareUrl?: string; reportId?: string; error?: string }> {
+  const r = await chrome.storage.local.get(STORAGE_KEY);
+  const payload = r[STORAGE_KEY];
+  if (!payload) return { ok: false, error: '沒有報告資料' };
+  payload.description = description ?? '';
   try {
-    const r = await chrome.storage.local.get(STORAGE_KEY);
-    const payload = r[STORAGE_KEY];
-    if (!payload) {
-      blog('uploadPayload: 沒有 payload，跳過');
-      return;
-    }
-
-    blog('uploadPayload: 開始上傳...');
     const res = await fetch(`${API_BASE}/api/reports`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`HTTP ${res.status}: ${errText}`);
-    }
-
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
     const data = (await res.json()) as { report_id: string; share_url: string };
-    blog('uploadPayload: 上傳成功', data.share_url);
-    await patchSummary({ uploadStatus: 'success', shareUrl: data.share_url, uploadError: null });
+    blog('uploadReport: 上傳成功', data.share_url);
+    return { ok: true, shareUrl: data.share_url, reportId: data.report_id };
   } catch (err) {
-    blog('uploadPayload: 上傳失敗', err);
-    await patchSummary({ uploadStatus: 'error', uploadError: String(err) });
+    blog('uploadReport: 上傳失敗', err);
+    return { ok: false, error: String(err) };
   }
 }
 
@@ -160,22 +189,48 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summ
           sendResponse({ payload: r[STORAGE_KEY] ?? null });
           break;
         }
+        case 'CAPTURE_SCREENSHOT':
+          sendResponse(await captureScreenshot());
+          break;
+        case 'CAPTURE_SEGMENT':
+          sendResponse(await captureSegment());
+          break;
+        case 'SCREENSHOT_READY': {
+          const m = msg as { dataUrl: string; pageUrl: string; pageTitle: string };
+          await openAnnotate(m.dataUrl, m.pageUrl, m.pageTitle);
+          sendResponse({ ok: true });
+          break;
+        }
+        case 'SCREENSHOT_UPLOADED': {
+          // 標注頁獨立上傳完成 → 記下最近一筆，供 popup 閒置畫面顯示連結
+          const m = msg as { shareUrl: string; reportId: string };
+          await chrome.storage.local.set({
+            [LAST_SCREENSHOT_KEY]: { shareUrl: m.shareUrl, reportId: m.reportId, timestamp: Date.now() },
+          });
+          blog('截圖上傳完成:', m.shareUrl);
+          sendResponse({ ok: true });
+          break;
+        }
         case 'RECORDING_DONE': {
-          // content script 打包完成 → 回填摘要，並依 startedAt 算出錄製時長
+          // content script 打包完成 → 回填摘要（PM-24：不直接上傳，改開編輯頁）
           const prev = await getState();
           const incoming = (msg as { summary: RecordingSummary }).summary;
           const summary: RecordingSummary = {
             ...incoming,
             durationMs: prev.startedAt ? Date.now() - prev.startedAt : 0,
-            uploadStatus: 'uploading', // 進入上傳流程
+            uploadStatus: 'idle',
             shareUrl: null,
             uploadError: null,
           };
           const s = await setState({ recording: false, startedAt: null, tabId: null, summary });
           clearBadge();
-          // 非同步上傳（不阻擋 sendResponse）；失敗只更新 summary 狀態
-          uploadPayload().catch(() => {});
+          await openEditReport(); // 開報告編輯頁，由使用者補描述後再上傳
           sendResponse(toResponse(s));
+          break;
+        }
+        case 'UPLOAD_REPORT': {
+          const m = msg as { description: string };
+          sendResponse(await uploadReport(m.description));
           break;
         }
         default:

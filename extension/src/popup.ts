@@ -1,7 +1,12 @@
 // popup.ts — Popup UI 邏輯（三態：閒置 / 錄製中 / 錄製完成）
 // 與 background service worker 溝通：開始/停止/清除、輪詢狀態、顯示摘要、複製 JSON。
 
-import { type RecordingPayload, type RecordingSummary, type StateResponse } from './types';
+import {
+  LAST_SCREENSHOT_KEY,
+  type RecordingPayload,
+  type RecordingSummary,
+  type StateResponse,
+} from './types';
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -15,6 +20,7 @@ const doneView = $('doneView');
 
 const startBtn = $<HTMLButtonElement>('startBtn');
 const stopBtn = $<HTMLButtonElement>('stopBtn');
+const screenshotBtn = $<HTMLButtonElement>('screenshotBtn');
 const copyBtn = $<HTMLButtonElement>('copyBtn');
 const exportBtn = $<HTMLButtonElement>('exportBtn');
 const clearBtn = $<HTMLButtonElement>('clearBtn');
@@ -26,6 +32,7 @@ const networkCount = $('networkCount');
 const voiceCount = $('voiceCount');
 const durationVal = $('durationVal');
 const pageUrl = $('pageUrl');
+const lastScreenshot = $('lastScreenshot');
 
 const uploadStatusEl = $('uploadStatus');
 const shareUrlRow = $('shareUrlRow');
@@ -139,6 +146,26 @@ function render(state: StateResponse) {
   } else {
     stopUploadPoll();
     show('idle');
+    void updateLastScreenshot();
+  }
+}
+
+// 閒置畫面：若 5 分鐘內有截圖獨立上傳，顯示連結
+async function updateLastScreenshot() {
+  const r = await chrome.storage.local.get(LAST_SCREENSHOT_KEY);
+  const last = r[LAST_SCREENSHOT_KEY] as { shareUrl: string; timestamp: number } | undefined;
+  if (last?.shareUrl && Date.now() - last.timestamp < 5 * 60 * 1000) {
+    lastScreenshot.textContent = '';
+    const label = document.createTextNode('最近截圖：');
+    const a = document.createElement('a');
+    a.href = last.shareUrl;
+    a.target = '_blank';
+    a.textContent = last.shareUrl;
+    a.style.color = '#818cf8';
+    lastScreenshot.append(label, a);
+    lastScreenshot.style.display = 'block';
+  } else {
+    lastScreenshot.style.display = 'none';
   }
 }
 
@@ -168,6 +195,18 @@ stopBtn.addEventListener('click', async () => {
     console.error('[BugEzy popup]', err);
   } finally {
     stopBtn.disabled = false;
+  }
+});
+
+// 截圖標注：獨立入口（不需先錄製）。送 CAPTURE_SCREENSHOT → background 開標注分頁，
+// popup 會在新分頁取得焦點時自動關閉。
+screenshotBtn.addEventListener('click', async () => {
+  screenshotBtn.disabled = true;
+  try {
+    await send('CAPTURE_SCREENSHOT');
+  } catch (err) {
+    console.error('[BugEzy popup]', err);
+    screenshotBtn.disabled = false;
   }
 });
 

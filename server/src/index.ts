@@ -15,6 +15,7 @@ export interface Env {
   R2: R2Bucket;
   SUPABASE_URL: string;
   SUPABASE_ANON_KEY: string;
+  AI: Ai; // Cloudflare Workers AI binding（PM-25）
 }
 
 // ── 與擴充端一致的 payload 型別 ──────────────────────────
@@ -44,12 +45,18 @@ interface VoiceSegment {
   timestamp: number;
   isFinal: boolean;
 }
+interface Screenshot {
+  dataUrl: string;
+  timestamp: number;
+}
 interface RecordingPayload {
   rrwebEvents: unknown[];
   consoleLogs: ConsoleLog[];
   networkErrors: NetworkError[];
   voiceTranscript: VoiceSegment[];
   pageInfo: PageInfo;
+  screenshots: Screenshot[];
+  description?: string;
 }
 
 // ── CORS（MVP 先全開，第 5 代再收緊）────────────────────
@@ -86,6 +93,9 @@ export default {
     }
 
     try {
+      if (request.method === 'POST' && path === '/api/summarize') {
+        return await summarizeText(request, env);
+      }
       if (request.method === 'POST' && path === '/api/reports') {
         return await createReport(request, env, url.origin);
       }
@@ -112,11 +122,19 @@ async function createReport(request: Request, env: Env, origin: string): Promise
 
   const report_id = crypto.randomUUID();
   const rrweb_r2_key = `reports/${report_id}/rrweb.json`;
+  const screenshots = payload.screenshots ?? [];
+  const screenshots_r2_key = screenshots.length ? `reports/${report_id}/screenshots.json` : null;
 
   // 大檔 rrweb 軌跡存 R2（可能數 MB）
   await env.R2.put(rrweb_r2_key, JSON.stringify(payload.rrwebEvents ?? []), {
     httpMetadata: { contentType: 'application/json' },
   });
+  // 截圖（base64 PNG，也偏大）存 R2
+  if (screenshots_r2_key) {
+    await env.R2.put(screenshots_r2_key, JSON.stringify(screenshots), {
+      httpMetadata: { contentType: 'application/json' },
+    });
+  }
 
   // metadata + 較小的 console/network/voice 存 Supabase
   const { pageInfo } = payload;
@@ -130,10 +148,13 @@ async function createReport(request: Request, env: Env, origin: string): Promise
     network_count: payload.networkErrors?.length ?? 0,
     voice_count: payload.voiceTranscript?.length ?? 0,
     rrweb_count: payload.rrwebEvents?.length ?? 0,
+    screenshot_count: screenshots.length,
     rrweb_r2_key,
+    screenshots_r2_key,
     console_logs: payload.consoleLogs ?? [],
     network_errors: payload.networkErrors ?? [],
     voice_transcript: payload.voiceTranscript ?? [],
+    description: payload.description ?? '',
   };
 
   const { error } = await supa(env).from('reports').insert(row);
@@ -166,6 +187,13 @@ async function getReport(reportId: string, env: Env): Promise<Response> {
     if (obj) rrwebEvents = (await obj.json()) as unknown[];
   }
 
+  // 從 R2 取回截圖
+  let screenshots: unknown[] = [];
+  if (data.screenshots_r2_key) {
+    const obj = await env.R2.get(data.screenshots_r2_key as string);
+    if (obj) screenshots = (await obj.json()) as unknown[];
+  }
+
   return json({
     report_id: data.report_id,
     url: data.url,
@@ -175,7 +203,9 @@ async function getReport(reportId: string, env: Env): Promise<Response> {
     consoleLogs: data.console_logs,
     networkErrors: data.network_errors,
     voiceTranscript: data.voice_transcript,
+    description: data.description ?? '',
     rrwebEvents,
+    screenshots,
     created_at: data.created_at,
   });
 }
@@ -189,7 +219,7 @@ async function listReports(url: URL, env: Env): Promise<Response> {
   let query = supa(env)
     .from('reports')
     .select(
-      'report_id, url, title, browser, screen_size, console_count, network_count, voice_count, rrweb_count, created_at',
+      'report_id, url, title, browser, screen_size, console_count, network_count, voice_count, rrweb_count, screenshot_count, created_at',
     )
     .order('created_at', { ascending: false })
     .limit(limit);
@@ -204,9 +234,34 @@ async function listReports(url: URL, env: Env): Promise<Response> {
   return json({ reports: data ?? [] });
 }
 
+// POST /api/summarize — 用 Workers AI 把語音記錄精簡成重點（PM-25）
+async function summarizeText(request: Request, env: Env): Promise<Response> {
+  const { text } = (await request.json().catch(() => ({}))) as { text?: string };
+  if (!text || text.length < 10) {
+    return json({ summary: text ?? '' });
+  }
+  try {
+    const result = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
+      messages: [
+        {
+          role: 'system',
+          content:
+            '你是 Bug 報告精簡助手。把使用者的語音描述精簡成 2-5 個重點。保留關鍵資訊（什麼元素、什麼問題、預期行為），去除重複和口語贅詞。用繁體中文，條列式輸出。',
+        },
+        { role: 'user', content: `請精簡以下語音記錄：\n\n${text}` },
+      ],
+      max_tokens: 300,
+    });
+    const summary = (result as { response?: string }).response ?? '';
+    return json({ summary });
+  } catch (err) {
+    return json({ error: `AI 精簡失敗: ${err instanceof Error ? err.message : String(err)}` }, 500);
+  }
+}
+
 // ── MCP Server（8 Tool，直接讀 Supabase/R2，不繞 HTTP）──────
 const META_COLS =
-  'report_id, url, title, browser, screen_size, console_count, network_count, voice_count, rrweb_count, created_at';
+  'report_id, url, title, browser, screen_size, console_count, network_count, voice_count, rrweb_count, screenshot_count, description, created_at';
 
 function txt(data: unknown) {
   const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
@@ -308,7 +363,7 @@ function createMcpServer(env: Env): McpServer {
     async (args) => {
       const { data, error } = await supabase()
         .from('reports')
-        .select('url, title, browser, screen_size, created_at')
+        .select('url, title, browser, screen_size, description, created_at')
         .eq('report_id', args.report_id)
         .single();
       if (error || !data) return txt('找不到報告');

@@ -23,7 +23,7 @@
 | **③ 能存能看** | 後端 + 報告頁 | Cloudflare Workers + Supabase + R2 + React 報告頁 | ✅ 完成 |
 | **④ AI 能讀** | MCP Server | Pull 模式 8 Tool，AI 按需查詢 = **MVP 封測** | ✅ 完成 |
 | **⑤ 能收錢** | 付費上線 | Stripe 串接 + Chrome Web Store 上架 = **正式上線** | 待做 |
-| **⑥ 更好用** | UX 優化 | 即時字幕 overlay、隱私遮罩、AI 標題、Markdown 匯出 | 待做 |
+| **⑥ 更好用** | UX 優化 | 即時字幕 overlay、隱私遮罩、AI 標題、Markdown 匯出 | 🔨 進行中（截圖三模式+標注+即時字幕+編輯頁+AI精簡） |
 | **⑦ 規模化** | 多語 + 企業 | 日韓越語音、跨境除錯鏈、企業自託管 | 待做 |
 
 ---
@@ -216,6 +216,37 @@ FOX = 創辦人 + 決策者 + 手動驗收
 - 用 `agents` 套件的 `createMcpHandler`（Streamable HTTP，無狀態，免 Durable Objects），`/mcp` 掛同 8 tool 但直接讀 Supabase/R2
 - SDK 實際 API 與規格範例有出入（`agents/mcp` 非 `@cloudflare/agents/mcp`、tool 參數要 zod shape），已依型別調整
 - **已部署**：Claude.ai 可在 Connectors 加 `/mcp` 直接查報告（全鏈路打通）
+
+### PM-16~17：截圖擷取 + 標注
+- PM-16：錄製中 `captureVisibleTab` 截圖 → R2 `reports/<id>/screenshots.json`、Supabase `screenshot_count`/`screenshots_r2_key`；報告頁 `ScreenshotPanel` 縮圖
+- PM-17：截圖後開標注分頁 `annotate.html`，canvas 四工具（畫筆/箭頭/框框/文字）+ undo + 清除
+
+### PM-18：截圖與錄製分離
+- popup 閒置兩入口「🎬 錄製」「📸 截圖標注」；截圖標注完成獨立上傳為一份報告（不再塞進錄製 payload）
+
+### PM-19：截圖三模式
+- content 注入模式選擇 overlay：整頁 / **區域兩點式可捲動**（跨 viewport 逐段擷取 + dpr 拼接 + 裁切）/ 自由形狀（多邊形 clip）
+
+### PM-20~21：標注頁文字說明 + 語音 + 即時字幕
+- PM-20：標注頁底部文字說明欄 + 🎤 語音輸入（存進報告 `description`）
+- PM-21：標注頁載入自動錄語音 + `pointer-events:none` 浮動字幕條（interim 即時 / final 寫入文字框）
+
+### PM-22：UI 美化
+- 設計語言 `#0f0f1a` 深底 + `#7c3aed` 品牌紫 + 12px 圓角 + 漸層按鈕；popup 品牌 Header/雙入口漸層、報告頁品牌導航列/卡片化/載入 spinner
+
+### PM-23：修標注頁語音中斷
+- 工具列容器層 `mousedown` `preventDefault`（排除 input/select），按鈕不搶焦點 → 不打斷 SpeechRecognition
+
+### PM-24：錄製即時字幕 + 停止後編輯頁
+- inject 錄製中浮動字幕（interim/final）；停止後不直接上傳，改開 `edit-report.html`（摘要 + 語音記錄 + 補充描述含 🎤）→「上傳報告」才送 API
+
+### PM-25：AI 精簡摘要
+- server `POST /api/summarize`（Cloudflare Workers AI，繁中條列精簡）；edit-report + annotate 加「🤖 AI 精簡」鈕
+- **已部署 + 線上驗證**；規格的 `llama-3.1-8b-instruct` 已 deprecated（2026-05-30）→ 改用 `@cf/meta/llama-3.3-70b-instruct-fp8-fast`
+
+### PM-26：Bug 修復 + 驗證
+- edit-report AI 精簡成功後永久 disable、inject 語音中斷顯示「🔄 重新啟動語音」按鈕（PM 手改，已驗 TS）
+- **抓出連帶 bug**：annotate.html 移除 AI 鈕後，annotate.ts 仍 `$('summarizeBtn')` → 載入即 throw 使整頁失效 → 移除對應 JS 修復
 
 ---
 

@@ -79,6 +79,302 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
   } else if (msg.type === 'STOP_RECORDING') {
     sendToInject('STOP');
     sendResponse({ ok: true });
+  } else if (msg.type === 'START_SCREENSHOT') {
+    injectScreenshotOverlay();
+    sendResponse({ ok: true });
   }
   return true;
 });
+
+// ════════════════════════════════════════════════════════════
+// PM-19：截圖模式 overlay（整頁 / 區域兩點可捲動 / 自由形狀）
+// 注入頁面 DOM（ISOLATED world 共用頁面 DOM），擷取交由 background。
+// ════════════════════════════════════════════════════════════
+
+const SS_TOOLBAR_ID = 'bugezy-ss-toolbar';
+const SS_OVERLAY_ID = 'bugezy-ss-overlay';
+const SS_CANVAS_ID = 'bugezy-ss-canvas';
+const SS_DOT_ID = 'bugezy-ss-dot';
+const Z_TOP = '2147483647';
+const Z_LAYER = '2147483646';
+
+let ssKeyHandler: ((e: KeyboardEvent) => void) | null = null;
+
+/** 移除所有截圖 overlay DOM + 鍵盤監聽 */
+function ssCleanup() {
+  [SS_TOOLBAR_ID, SS_OVERLAY_ID, SS_CANVAS_ID, SS_DOT_ID].forEach((id) =>
+    document.getElementById(id)?.remove(),
+  );
+  if (ssKeyHandler) {
+    window.removeEventListener('keydown', ssKeyHandler);
+    ssKeyHandler = null;
+  }
+}
+
+const raf = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+/** 等捲動/移除 overlay 後渲染完成，並避開 captureVisibleTab 速率限制 */
+async function settle() {
+  await raf();
+  await raf();
+  await new Promise((r) => setTimeout(r, 350));
+}
+
+/** 請 background 擷取目前可見分頁 */
+async function captureSegment(): Promise<string> {
+  const resp = (await chrome.runtime.sendMessage({ type: 'CAPTURE_SEGMENT' })) as {
+    dataUrl?: string;
+    error?: string;
+  };
+  if (!resp?.dataUrl) throw new Error(resp?.error ?? 'capture 失敗');
+  return resp.dataUrl;
+}
+
+function loadImage(dataUrl: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('image load 失敗'));
+    img.src = dataUrl;
+  });
+}
+
+function sendReady(dataUrl: string) {
+  chrome.runtime.sendMessage({
+    type: 'SCREENSHOT_READY',
+    dataUrl,
+    pageUrl: location.href,
+    pageTitle: document.title,
+  } satisfies ControlMessage);
+}
+
+function setHint(text: string) {
+  const hint = document.getElementById('bugezy-ss-hint');
+  if (hint) hint.textContent = text;
+}
+
+/** 頂部模式選擇列 */
+function createToolbar(onMode: (mode: string) => void) {
+  const bar = document.createElement('div');
+  bar.id = SS_TOOLBAR_ID;
+  bar.style.cssText = `position:fixed;top:0;left:0;right:0;z-index:${Z_TOP};display:flex;align-items:center;gap:8px;padding:10px 16px;background:#16213e;border-bottom:1px solid #333;font-family:system-ui,sans-serif;font-size:14px;color:#fff;`;
+  const modes: Array<[string, string]> = [
+    ['full', '📷 整頁'],
+    ['area', '⬜ 區域（兩點）'],
+    ['free', '✂️ 自由形狀'],
+    ['cancel', '✗ 取消'],
+  ];
+  for (const [mode, label] of modes) {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.dataset.mode = mode;
+    b.style.cssText = `background:${mode === 'cancel' ? '#dc2626' : '#333'};color:#fff;border:1px solid #555;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:14px;`;
+    b.addEventListener('click', () => onMode(mode));
+    bar.appendChild(b);
+  }
+  const hint = document.createElement('span');
+  hint.id = 'bugezy-ss-hint';
+  hint.textContent = '選擇截圖模式';
+  hint.style.cssText = 'margin-left:8px;color:#9aa3b2;';
+  bar.appendChild(hint);
+  document.body.appendChild(bar);
+}
+
+/** 半透明遮罩 + 預覽 canvas（區域/自由形狀模式） */
+function createSelectionLayer(): {
+  overlay: HTMLDivElement;
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+} {
+  const overlay = document.createElement('div');
+  overlay.id = SS_OVERLAY_ID;
+  overlay.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.3);z-index:${Z_LAYER};cursor:crosshair;`;
+  document.body.appendChild(overlay);
+
+  const canvas = document.createElement('canvas');
+  canvas.id = SS_CANVAS_ID;
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  canvas.style.cssText = `position:fixed;inset:0;z-index:${Z_LAYER};pointer-events:none;`;
+  document.body.appendChild(canvas);
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('canvas 2d 不可用');
+  return { overlay, canvas, ctx };
+}
+
+function injectScreenshotOverlay() {
+  ssCleanup();
+  createToolbar((mode) => {
+    if (mode === 'cancel') {
+      ssCleanup();
+    } else if (mode === 'full') {
+      void startFullCapture();
+    } else if (mode === 'area') {
+      startAreaCapture();
+    } else if (mode === 'free') {
+      startFreeCapture();
+    }
+  });
+}
+
+// ── 模式 A：整頁（可見範圍）──────────────────────────────
+async function startFullCapture() {
+  ssCleanup(); // 擷取前移除工具列，避免入鏡
+  await settle();
+  try {
+    sendReady(await captureSegment());
+  } catch (err) {
+    blog('整頁截圖失敗', err);
+  }
+}
+
+// ── 模式 B：區域（兩點式，可捲動拼接）────────────────────
+function startAreaCapture() {
+  setHint('點第一下標記起點');
+  const { overlay, canvas, ctx } = createSelectionLayer();
+  let start: { x: number; y: number } | null = null; // document 絕對座標
+
+  const toDoc = (e: MouseEvent) => ({ x: e.clientX + window.scrollX, y: e.clientY + window.scrollY });
+
+  overlay.addEventListener('mousemove', (e) => {
+    if (!start) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const sx = start.x - window.scrollX;
+    const sy = start.y - window.scrollY;
+    ctx.strokeStyle = '#7c3aed';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(Math.min(sx, e.clientX), Math.min(sy, e.clientY), Math.abs(e.clientX - sx), Math.abs(e.clientY - sy));
+  });
+
+  overlay.addEventListener('click', (e) => {
+    if (!start) {
+      start = toDoc(e);
+      setHint('可自由捲動頁面，點第二下標記終點');
+      const dot = document.createElement('div');
+      dot.id = SS_DOT_ID;
+      dot.style.cssText = `position:absolute;left:${start.x - 5}px;top:${start.y - 5}px;width:10px;height:10px;border-radius:50%;background:#ef4444;z-index:${Z_TOP};pointer-events:none;`;
+      document.body.appendChild(dot);
+      return;
+    }
+    const end = toDoc(e);
+    const s = start;
+    ssCleanup();
+    void stitchArea(s, end);
+  });
+}
+
+/** 跨 viewport 捲動 + 逐段擷取 + 拼接 + 裁切 */
+async function stitchArea(start: { x: number; y: number }, end: { x: number; y: number }) {
+  const left = Math.min(start.x, end.x);
+  const top = Math.min(start.y, end.y);
+  const rectW = Math.max(1, Math.abs(end.x - start.x));
+  const rectH = Math.max(1, Math.abs(end.y - start.y));
+  const dpr = window.devicePixelRatio || 1;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const orig = { x: window.scrollX, y: window.scrollY };
+
+  try {
+    const big = document.createElement('canvas');
+    big.width = Math.round(vw * dpr);
+    big.height = Math.round(rectH * dpr);
+    const bctx = big.getContext('2d');
+    if (!bctx) throw new Error('canvas 2d 不可用');
+
+    let target = top;
+    let guard = 0;
+    while (target < top + rectH && guard < 40) {
+      guard++;
+      window.scrollTo(0, target);
+      await settle();
+      const actualY = window.scrollY;
+      const img = await loadImage(await captureSegment());
+      bctx.drawImage(img, 0, Math.round((actualY - top) * dpr), Math.round(vw * dpr), Math.round(vh * dpr));
+      if (actualY + vh >= top + rectH) break; // 已涵蓋底部
+      target = actualY + vh;
+    }
+    window.scrollTo(orig.x, orig.y);
+
+    const out = document.createElement('canvas');
+    out.width = Math.round(rectW * dpr);
+    out.height = Math.round(rectH * dpr);
+    const octx = out.getContext('2d');
+    if (!octx) throw new Error('canvas 2d 不可用');
+    octx.drawImage(big, Math.round(left * dpr), 0, out.width, out.height, 0, 0, out.width, out.height);
+    sendReady(out.toDataURL('image/png'));
+  } catch (err) {
+    blog('區域截圖拼接失敗', err);
+    window.scrollTo(orig.x, orig.y);
+  }
+}
+
+// ── 模式 C：自由形狀（多邊形 clip，限可見範圍）────────────
+function startFreeCapture() {
+  setHint('連續點擊畫多邊形，雙擊或按 Enter 封閉');
+  const { overlay, canvas, ctx } = createSelectionLayer();
+  const points: Array<{ x: number; y: number }> = []; // viewport 座標
+
+  function redraw(cursor?: { x: number; y: number }) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (points.length === 0) return;
+    ctx.strokeStyle = '#7c3aed';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+    if (cursor) {
+      ctx.setLineDash([6, 4]);
+      ctx.lineTo(cursor.x, cursor.y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#ef4444';
+    for (const p of points) {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  overlay.addEventListener('mousemove', (e) => redraw({ x: e.clientX, y: e.clientY }));
+  overlay.addEventListener('click', (e) => {
+    points.push({ x: e.clientX, y: e.clientY });
+    redraw();
+  });
+  overlay.addEventListener('dblclick', () => void closeFree());
+  ssKeyHandler = (e: KeyboardEvent) => {
+    if (e.key === 'Enter') void closeFree();
+    else if (e.key === 'Escape') ssCleanup();
+  };
+  window.addEventListener('keydown', ssKeyHandler);
+
+  async function closeFree() {
+    if (points.length < 3) {
+      setHint('至少需要 3 個點');
+      return;
+    }
+    const pts = points.slice();
+    const dpr = window.devicePixelRatio || 1;
+    ssCleanup();
+    await settle();
+    try {
+      const img = await loadImage(await captureSegment());
+      const out = document.createElement('canvas');
+      out.width = Math.round(window.innerWidth * dpr);
+      out.height = Math.round(window.innerHeight * dpr);
+      const octx = out.getContext('2d');
+      if (!octx) throw new Error('canvas 2d 不可用');
+      octx.beginPath();
+      octx.moveTo(pts[0].x * dpr, pts[0].y * dpr);
+      for (let i = 1; i < pts.length; i++) octx.lineTo(pts[i].x * dpr, pts[i].y * dpr);
+      octx.closePath();
+      octx.clip();
+      octx.drawImage(img, 0, 0, out.width, out.height);
+      sendReady(out.toDataURL('image/png'));
+    } catch (err) {
+      blog('自由形狀截圖失敗', err);
+    }
+  }
+}

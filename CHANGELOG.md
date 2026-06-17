@@ -82,3 +82,51 @@
   - `/mcp` 路由掛 `McpServer`，註冊同 8 個 tool 但**直接讀 Supabase/R2**（不繞 HTTP）
   - tool 參數改用 zod shape（SDK 要求）；fetch handler 加 `ctx: ExecutionContext`
   - `npm install` + `npx tsc --noEmit` 通過（未部署，deploy 由 FOX）
+- PM-16：截圖擷取（錄製中截圖 → 存報告 → 報告頁顯示）
+  - extension：錄製中 popup「📸 截圖」→ background `captureVisibleTab` 存 `SCREENSHOTS_KEY`，上傳前併入 payload
+  - server：截圖存 R2 `reports/<id>/screenshots.json`，Supabase 加 `screenshot_count`/`screenshots_r2_key`；GET 合併回傳；MCP overview 含截圖數
+  - web：新增 `ScreenshotPanel`（縮圖列 + 點開大圖），插在 rrweb 回放與三欄之間
+  - schema.sql 加截圖欄位（ALTER，FOX 手動跑）；extension build + server tsc + web build 三者通過
+- PM-17：截圖標注（畫筆 + 箭頭 + 框框 + 文字）
+  - 新增 `annotate.html`/`annotate.ts` 標注畫布：4 工具（freehand 畫筆 / 箭頭含三角頭 / 框框 / 文字 prompt）+ 顏色/粗細 + undo（history stack）+ 清除還原底圖
+  - 截圖流程改為「📸 截圖 → 暫存 → 開新分頁標注 → ✅ 完成存回」；background 加 `SCREENSHOT_ANNOTATED`
+  - build 加 annotate entry + 複製 annotate.html；只動 extension（server/web 已支援 screenshots）
+- PM-18：分離錄製與截圖為兩個獨立功能（仿 Jam）
+  - popup 閒置畫面改兩個並排入口：「🎬 錄製」「📸 截圖標注」，互不干擾
+  - 截圖標注完成後**獨立上傳為一份報告**（annotate 直接 POST API + 帶頁面資訊），不再塞進錄製 payload
+  - background 加 `SCREENSHOT_UPLOADED`（記最近一筆）；popup 閒置顯示「最近截圖」連結（5 分鐘內）
+  - 錄製流程移除截圖：`RecordingPayload` 去 `screenshots`、`RecordingSummary` 去 `screenshotCount`，錄製中畫面移除截圖鈕；server/web 不改（向後相容）
+- PM-19：截圖模式選擇器 + 區域截圖（兩點可捲動）+ 自由形狀
+  - 「📸 截圖標注」→ background 通知 content 在頁面注入模式選擇列（整頁 / 區域 / 自由 / 取消）
+  - content `injectScreenshotOverlay()` 拆三模式：整頁直接擷取；**區域兩點式**（點起點→自由捲動→點終點，跨 viewport 捲動逐段擷取 + dpr 拼接 + 裁切）；自由形狀（多邊形 clip，限可見範圍）
+  - 擷取前移除 overlay DOM 避免入鏡；新增 `CAPTURE_SEGMENT`（background captureVisibleTab）+ `SCREENSHOT_READY`（開標注頁）訊息
+  - 只動 types/background/content；inject/annotate/server/web/popup 不動
+- PM-20：標注頁加文字說明欄 + 語音輸入
+  - annotate 底部加「💬 問題描述」textarea + 🎤 語音輸入（Web Speech API zh-TW、interim 即時預覽、toggle、自動重啟）
+  - 截圖獨立上傳 payload 加 `description`；server POST 存、GET 回；MCP overview/page_info select 加 `description`
+  - schema.sql 加 `description TEXT`（ALTER）；web 報告頁 PageInfo 下方加「💬 開發者描述」區塊
+  - 三端 build/tsc 通過；**server 已 `wrangler deploy` 部署**，curl 實測 description POST/GET round-trip 成功
+- PM-21：標注頁自動錄語音 + 即時字幕（邊畫邊講邊看）
+  - 標注頁載入後自動啟動語音辨識（不需手按 🎤）；🎤 改 toggle 暫停/續錄
+  - 畫布底部加 `#liveCaptions` 浮動字幕條（`pointer-events:none` 不擋畫圖）：interim 即時顯示、final 寫入文字框 + 顯 ✅ 1.5 秒
+  - 語音邏輯抽成 `startListening()`/`stopListening()`；只動 `annotate.ts` + `annotate.html`
+- PM-22：UI 美化（popup + 報告頁）統一設計語言
+  - 設計語言：`#0f0f1a` 深底 + `#7c3aed` 品牌紫 + 12px 圓角 + 漸層按鈕
+  - popup：品牌 Header、320px、兩入口漸層 + hover 上浮、錄製中大計時器 + 脈動圓點、完成摘要卡 + 分享連結卡（所有 `popup.ts` 依賴的 ID 全保留）
+  - 報告頁：sticky 品牌導航列、header 卡片化、面板圓角 + 標題底線、截圖 hover 放大、載入 spinner；`ReportPage` 條件渲染（截圖/rrweb 有資料才顯示）
+  - 只動 `popup.html` + `web/index.css` + `ReportPage.tsx`；extension/server/types 不動
+- PM-23：修標注頁語音中斷（工具按鈕不搶焦點）
+  - annotate 工具列加容器層 `mousedown` `preventDefault`（排除 input/select），避免按鈕搶焦點打斷 SpeechRecognition；click 仍正常
+- PM-24：錄製加即時字幕 + 停止後編輯頁
+  - inject 錄製中注入 `#bugezy-live-caption` 浮動字幕（`interimResults=true`：interim 即時、final 顯 ✅ 1.5 秒、停止移除）
+  - 停止錄製後 background 不直接上傳，改開新增的 `edit-report.html`（摘要 + 語音記錄 + 補充描述含 🎤 語音輸入）→「✅ 上傳報告」才送 API、「✗ 捨棄」清 storage
+  - background 加 `UPLOAD_REPORT` handler；types 加 `UPLOAD_REPORT` + 匯出 `STATE_KEY`；build 加 edit-report entry
+- PM-25：AI 精簡摘要（語音記錄一鍵變重點）
+  - server 加 `POST /api/summarize`（Cloudflare Workers AI，繁中條列式精簡）；wrangler.toml 加 `[ai]` binding、Env 加 `AI`
+  - edit-report + annotate 各加「🤖 AI 精簡」按鈕（漸層）；精簡結果寫入要上傳的描述欄位
+  - **已部署 + 線上實測**：`/api/summarize` 回正確繁中重點摘要
+  - 修正：規格用的 `@cf/meta/llama-3.1-8b-instruct` 已於 2026-05-30 deprecated → 改用 `@cf/meta/llama-3.3-70b-instruct-fp8-fast`
+- PM-26：驗證 PM 手動改動 + 修一個連帶 bug
+  - 改動1（edit-report.ts AI 精簡成功後永久 disable）、改動2（inject.ts 語音中斷顯示重啟按鈕）皆驗證 TS 正確
+  - 改動3（annotate.html 移除 AI 精簡按鈕）連帶造成 annotate.ts 仍 `$('summarizeBtn')` → 載入即 throw 使整頁失效 → 移除對應 JS 修復
+  - tsc + build 通過；逐一驗證 annotate/edit-report 的 DOM ID 與 HTML 一致

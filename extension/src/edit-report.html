@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <title>BugEzy — 報告編輯</title>
+    <style>
+      :root {
+        --bg: #0f0f1a; --panel: #1a1a2e; --line: #2a2a3e; --fg: #f0f0f0;
+        --muted: #8b8fa3; --accent: #7c3aed; --success: #10b981; --danger: #ef4444;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; background: var(--bg); color: var(--fg);
+        font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+        font-size: 14px;
+      }
+      .wrap { max-width: 720px; margin: 0 auto; padding: 24px 20px 48px; }
+      .brand { display: flex; align-items: center; gap: 8px; padding-bottom: 14px; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
+      .brand-icon { font-size: 24px; }
+      .brand-name { font-size: 18px; font-weight: 700; color: var(--accent); }
+      .brand-tag { font-size: 13px; color: var(--muted); }
+      h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 18px 0 8px; }
+      .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+      .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 16px; }
+      .summary-grid div { font-size: 13px; }
+      .summary-grid b { color: var(--accent); }
+      textarea {
+        width: 100%; background: var(--bg); color: var(--fg); border: 1px solid var(--line);
+        border-radius: 8px; padding: 10px; font-size: 14px; font-family: inherit; resize: vertical;
+      }
+      textarea:focus { outline: none; border-color: var(--accent); }
+      textarea[readonly] { color: var(--muted); }
+      .desc-row { display: flex; gap: 8px; align-items: stretch; }
+      .voice-btn { background: #333; color: #fff; border: 1px solid #555; border-radius: 8px; padding: 8px 12px; font-size: 20px; cursor: pointer; }
+      .voice-btn.listening { background: var(--danger); border-color: var(--danger); animation: pulse 1s infinite; }
+      @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+      .voice-status { color: var(--muted); font-size: 12px; margin-top: 4px; min-height: 16px; }
+      .actions { display: flex; gap: 12px; margin-top: 20px; }
+      button.action { flex: 1; padding: 12px; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; color: #fff; cursor: pointer; }
+      .discard { background: #4a4a5e; }
+      .upload { background: linear-gradient(135deg, #7c3aed, #6d28d9); }
+      button:disabled { opacity: 0.5; cursor: default; }
+      #result { margin-top: 16px; }
+      #result a { color: #a78bfa; word-break: break-all; }
+      .hidden { display: none; }
+
+      /* AI 精簡（PM-25） */
+      .transcript-header { display: flex; justify-content: space-between; align-items: center; margin: 18px 0 8px; }
+      .transcript-header h2 { margin: 0; }
+      .ai-btn {
+        background: linear-gradient(135deg, #7c3aed, #6d28d9); color: #fff; border: none;
+        border-radius: 8px; padding: 6px 14px; font-size: 13px; cursor: pointer;
+        font-weight: 600; transition: all 0.15s;
+      }
+      .ai-btn:hover { filter: brightness(1.15); transform: translateY(-1px); }
+      .ai-btn:disabled { opacity: 0.5; cursor: default; transform: none; }
+      .ai-btn.done { background: linear-gradient(135deg, #059669, #047857); }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="brand">
+        <span class="brand-icon">🐛</span>
+        <span class="brand-name">BugEzy</span>
+        <span class="brand-tag">報告編輯</span>
+      </div>
+
+      <h2>📊 錄製摘要</h2>
+      <div class="card summary-grid" id="summary"></div>
+
+      <div class="transcript-header">
+        <h2>🎤 語音記錄（自動辨識）</h2>
+        <button id="summarizeBtn" class="ai-btn">🤖 AI 精簡</button>
+      </div>
+      <textarea id="voiceText" rows="3" readonly placeholder="（這次錄製沒有語音）"></textarea>
+
+      <h2>💬 補充說明（選填）</h2>
+      <div class="desc-row">
+        <textarea id="descInput" rows="3" placeholder="打字或按右邊麥克風語音補充..."></textarea>
+        <button id="voiceBtn" class="voice-btn" title="語音輸入">🎤</button>
+      </div>
+      <div id="voiceStatus" class="voice-status"></div>
+
+      <div class="actions">
+        <button id="discardBtn" class="action discard">✗ 捨棄報告</button>
+        <button id="uploadBtn" class="action upload">✅ 上傳報告</button>
+      </div>
+
+      <div id="result" class="hidden"></div>
+    </div>
+    <script type="module" src="edit-report.js"></script>
+  </body>
+</html>

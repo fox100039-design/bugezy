@@ -81,6 +81,65 @@ function main() {
   let voiceSegments: VoiceSegment[] = [];
   let recognition: SRInstance | null = null;
   let voiceActive = false;
+  let captionBar: HTMLDivElement | null = null; // PM-24：錄製中即時字幕
+
+  function showCaptionBar() {
+    document.getElementById('bugezy-live-caption')?.remove();
+    const bar = document.createElement('div');
+    bar.id = 'bugezy-live-caption';
+    bar.style.cssText =
+      'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);z-index:2147483647;pointer-events:none;background:rgba(0,0,0,0.85);color:#fff;padding:12px 28px;border-radius:12px;font-size:22px;max-width:80%;text-align:center;font-family:system-ui,sans-serif;transition:opacity 0.3s;letter-spacing:0.5px;';
+    bar.textContent = '🔴 錄製中，可以用中文描述問題...';
+    document.body.appendChild(bar);
+    captionBar = bar;
+  }
+  function hideCaptionBar() {
+    captionBar?.remove();
+    captionBar = null;
+  }
+
+  /** 語音中斷時在字幕條顯示重新啟動按鈕 */
+  function showRestartButton() {
+    if (!captionBar || !voiceActive) return;
+    captionBar.style.pointerEvents = 'auto'; // 暫時允許點擊
+    captionBar.innerHTML = '';
+    
+    const text = document.createElement('span');
+    text.textContent = '⚠ 語音已中斷 ';
+    text.style.cssText = 'pointer-events:none;';
+    
+    const btn = document.createElement('button');
+    btn.textContent = '🔄 重新啟動語音';
+    btn.style.cssText = 'pointer-events:auto;background:#7c3aed;color:#fff;border:none;border-radius:8px;padding:6px 16px;font-size:18px;cursor:pointer;font-weight:600;margin-left:8px;';
+    btn.addEventListener('click', () => {
+      blog('手動重啟 SpeechRecognition');
+      captionBar!.style.pointerEvents = 'none';
+      captionBar!.textContent = '🔴 重新啟動中...';
+      // 建新的 recognition 實例
+      const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (!SR) return;
+      try {
+        const newRec = new SR() as SRInstance;
+        newRec.lang = 'zh-TW';
+        newRec.continuous = true;
+        newRec.interimResults = false;
+        // 複製 event handlers（指向外層的 voiceSegments 等）
+        newRec.onresult = recognition!.onresult;
+        newRec.onend = recognition!.onend;
+        newRec.onerror = recognition!.onerror;
+        recognition = newRec;
+        newRec.start();
+        captionBar!.textContent = '🔴 聆聽中...';
+        blog('SpeechRecognition 手動重啟成功');
+      } catch (err) {
+        blog('手動重啟也失敗', err);
+        captionBar!.textContent = '❌ 語音無法使用';
+      }
+    });
+    
+    captionBar.appendChild(text);
+    captionBar.appendChild(btn);
+  }
 
   // 保留原始參考（只 patch 一次，靠 recording 旗標決定是否收集）
   const originalWarn = console.warn.bind(console);
@@ -216,6 +275,7 @@ function main() {
     }
 
     // ── D. 語音辨識（需 user gesture 授權麥克風）──────────
+    showCaptionBar(); // PM-24：錄製中浮動字幕
     voiceSegments = [];
     voiceActive = true;
     const win = window as unknown as {
@@ -340,18 +400,29 @@ function main() {
       const rec = new SR();
       rec.lang = 'zh-TW';
       rec.continuous = true;
-      rec.interimResults = false;
+      rec.interimResults = true; // PM-24：要 interim 才能做即時字幕
 
       rec.onresult = (e: SREvent) => {
+        let interim = '';
         for (let i = e.resultIndex; i < e.results.length; i++) {
           const result = e.results[i];
-          if (!result.isFinal) continue;
-          const text = result[0].transcript.trim();
-          if (text) {
-            voiceSegments.push({ text, timestamp: Date.now(), isFinal: true });
-            blog('voice segment:', text.slice(0, 40));
+          if (result.isFinal) {
+            const text = result[0].transcript.trim();
+            if (text) {
+              voiceSegments.push({ text, timestamp: Date.now(), isFinal: true });
+              blog('voice segment:', text.slice(0, 40));
+              if (captionBar) {
+                captionBar.textContent = `✅ ${text}`;
+                window.setTimeout(() => {
+                  if (recording && captionBar) captionBar.textContent = '🔴 聆聽中...';
+                }, 1500);
+              }
+            }
+          } else {
+            interim = result[0].transcript;
           }
         }
+        if (interim && captionBar) captionBar.textContent = `🔴 ${interim}`;
       };
 
       rec.onend = () => {
@@ -361,7 +432,9 @@ function main() {
           try {
             rec.start();
           } catch {
-            /* 忽略 */
+            // 重啟失敗 → 顯示手動重啟按鈕
+            blog('SpeechRecognition restart 失敗，顯示重啟按鈕');
+            showRestartButton();
           }
         }
       };
@@ -405,7 +478,7 @@ function main() {
       }
       stopRrweb = null;
     }
-    // 停止語音辨識
+    // 停止語音辨識 + 移除即時字幕
     voiceActive = false;
     if (recognition) {
       try {
@@ -415,6 +488,7 @@ function main() {
       }
       recognition = null;
     }
+    hideCaptionBar();
     const payload: RecordingPayload = {
       rrwebEvents: events,
       consoleLogs,

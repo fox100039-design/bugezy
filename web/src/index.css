@@ -1,13 +1,14 @@
 :root {
-  --bg: #1a1a2e;
-  --panel: #16213e;
-  --line: #333;
-  --fg: #eee;
-  --muted: #9aa3b2;
+  --bg: #0f0f1a;
+  --panel: #1a1a2e;
+  --line: #2a2a3e;
+  --fg: #f0f0f0;
+  --muted: #8b8fa3;
   --err: #ef4444;
-  --warn: #eab308;
+  --warn: #f59e0b;
   --orange: #f97316;
-  --accent: #818cf8;
+  --accent: #7c3aed;
+  --link: #a78bfa;
 }
 
 * {
@@ -23,8 +24,23 @@ body {
 }
 
 a {
-  color: var(--accent);
+  color: var(--link);
 }
+
+/* 頂部品牌導航列（PM-22） */
+.topbar {
+  background: #0f0f1a;
+  border-bottom: 1px solid var(--line);
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.topbar-brand { font-size: 18px; font-weight: 700; color: var(--accent); }
+.topbar-title { font-size: 14px; color: var(--muted); }
 
 .report {
   max-width: 1000px;
@@ -33,9 +49,11 @@ a {
 }
 
 .report-header {
-  border-bottom: 1px solid var(--line);
-  padding-bottom: 14px;
-  margin-bottom: 18px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
 }
 
 .report-header h1 {
@@ -51,6 +69,26 @@ a {
 
 .report-header .meta a {
   word-break: break-all;
+}
+
+.description-block {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 16px 0;
+}
+.description-block h3 {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 0 0 6px;
+}
+.description-block p {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
 }
 
 .player-wrap {
@@ -74,17 +112,19 @@ a {
 .panel {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 12px;
-  min-height: 120px;
+  border-radius: 12px;
+  padding: 16px;
+  min-height: 140px;
 }
 
 .panel h2 {
-  font-size: 13px;
-  margin: 0 0 10px;
+  font-size: 12px;
+  margin: 0 0 12px;
+  padding-bottom: 8px;
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--line);
 }
 
 .panel ul {
@@ -143,9 +183,29 @@ a {
 }
 
 .state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
   text-align: center;
   padding: 80px 20px;
   color: var(--muted);
+}
+
+/* 載入動畫（PM-22） */
+.loading-spinner {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* rrweb Replayer 自製控制列（PM-13） */
@@ -174,4 +234,33 @@ a {
   font-size: 13px;
   font-family: monospace;
   white-space: nowrap;
+}
+
+/* 截圖面板（PM-16） */
+.panel-full {
+  margin: 12px 0;
+}
+.shots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.shot {
+  margin: 0;
+}
+.shot img {
+  max-width: 300px;
+  max-height: 200px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: zoom-in;
+  display: block;
+  transition: transform 0.2s;
+}
+.shot img:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+.shot figcaption {
+  margin-top: 4px;
 }

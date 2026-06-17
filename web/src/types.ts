@@ -14,6 +14,8 @@ export interface Report {
     duration?: number;
   }[];
   voiceTranscript: { text: string; timestamp: number; isFinal: boolean }[];
+  screenshots: { dataUrl: string; timestamp: number }[];
+  description: string;
   rrwebEvents: unknown[];
   created_at: string;
 }

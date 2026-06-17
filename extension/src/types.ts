@@ -34,7 +34,13 @@ export interface VoiceSegment {
   isFinal: boolean; // SpeechRecognition 的 isFinal
 }
 
-/** 一次完整錄製的打包結果 */
+/** 截圖（PM-18：截圖改為獨立功能，自行上傳一份報告） */
+export interface Screenshot {
+  dataUrl: string; // base64 PNG data URL（chrome.tabs.captureVisibleTab）
+  timestamp: number; // Date.now()
+}
+
+/** 一次完整錄製的打包結果（PM-18：錄製不再含截圖，截圖獨立上傳） */
 export interface RecordingPayload {
   rrwebEvents: unknown[];
   consoleLogs: ConsoleLog[];
@@ -69,7 +75,15 @@ export type ControlMessage =
   | { type: 'STOP_RECORDING' }
   | { type: 'CLEAR_RECORDING' }
   | { type: 'GET_STATE' }
-  | { type: 'GET_LAST_PAYLOAD' };
+  | { type: 'GET_LAST_PAYLOAD' }
+  | { type: 'CAPTURE_SCREENSHOT' }
+  | { type: 'SCREENSHOT_UPLOADED'; shareUrl: string; reportId: string }
+  // PM-19：截圖模式 overlay（background ↔ content）
+  | { type: 'START_SCREENSHOT' }
+  | { type: 'CAPTURE_SEGMENT' }
+  | { type: 'SCREENSHOT_READY'; dataUrl: string; pageUrl: string; pageTitle: string }
+  // PM-24：編輯頁確認上傳錄製報告
+  | { type: 'UPLOAD_REPORT'; description: string };
 
 /** background → popup 的狀態回應 */
 export interface StateResponse {
@@ -79,7 +93,7 @@ export interface StateResponse {
 }
 
 /** API base URL — 開發期 localhost，部署後改正式 URL */
-export const API_BASE = 'http://127.0.0.1:8787';
+export const API_BASE = 'https://bugezy-api.bugezy-api.workers.dev';
 
 /** 開發診斷 log 開關（PM-04 除錯用，全程印 [BugEzy] log） */
 export const BUGEZY_DEBUG = true;
@@ -105,6 +119,12 @@ export type InjectMessage =
 
 /** chrome.storage.local 的鍵 */
 export const STORAGE_KEY = 'bugezy:lastPayload';
+
+/** 錄製狀態鍵（background 持久化 + edit-report 讀摘要） */
+export const STATE_KEY = 'bugezy:state';
+
+/** 截圖獨立上傳後的最近一筆（給 popup 顯示連結） */
+export const LAST_SCREENSHOT_KEY = 'bugezy:lastScreenshot';
 
 /** 統一前綴的診斷 log */
 export function blog(...args: unknown[]): void {

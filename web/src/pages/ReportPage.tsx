@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import type { Report } from '../types';
 import RrwebReplay from '../components/RrwebPlayer';
+import ScreenshotPanel from '../components/ScreenshotPanel';
 import ConsolePanel from '../components/ConsolePanel';
 import NetworkPanel from '../components/NetworkPanel';
 import VoicePanel from '../components/VoicePanel';
@@ -34,34 +35,62 @@ export default function ReportPage() {
       .catch(() => setStatus('error'));
   }, [id]);
 
-  if (status === 'loading') return <div className="state">載入中…</div>;
+  if (status === 'loading')
+    return (
+      <div className="state">
+        <span className="loading-spinner"></span>
+        <div>載入中…</div>
+      </div>
+    );
   if (status === 'error' || !report) return <div className="state">找不到報告</div>;
 
   return (
-    <div className="report">
-      <header className="report-header">
-        <h1>🐛 {report.title || '（無標題）'}</h1>
-        <div className="meta">
-          <div>
-            URL：<a href={report.url} target="_blank" rel="noreferrer">{report.url}</a>
+    <>
+      <nav className="topbar">
+        <span className="topbar-brand">🐛 BugEzy</span>
+        <span className="topbar-title">Bug 報告</span>
+      </nav>
+
+      <div className="report">
+        <header className="report-header">
+          <h1>{report.title || '（無標題）'}</h1>
+          <div className="meta">
+            <div>
+              URL：<a href={report.url} target="_blank" rel="noreferrer">{report.url}</a>
+            </div>
+            <div>
+              {report.browser}
+              {report.screen_size ? ` ｜ ${report.screen_size}` : ''}
+            </div>
+            <div>{fmtDate(report.created_at)}</div>
           </div>
-          <div>
-            Browser：{report.browser}
-            {report.screen_size ? ` ｜ ${report.screen_size}` : ''}
+        </header>
+
+        {report.description && (
+          <div className="description-block">
+            <h3>💬 開發者描述</h3>
+            <p>{report.description}</p>
           </div>
-          <div>時間：{fmtDate(report.created_at)}</div>
+        )}
+
+        {report.screenshots?.length > 0 && (
+          <div className="panel-full">
+            <ScreenshotPanel screenshots={report.screenshots} />
+          </div>
+        )}
+
+        {report.rrwebEvents.length > 0 && (
+          <div className="player-wrap">
+            <RrwebReplay events={report.rrwebEvents} />
+          </div>
+        )}
+
+        <div className="panels">
+          <ConsolePanel logs={report.consoleLogs} />
+          <NetworkPanel errors={report.networkErrors} />
+          <VoicePanel transcript={report.voiceTranscript} />
         </div>
-      </header>
-
-      <div className="player-wrap">
-        <RrwebReplay events={report.rrwebEvents} />
       </div>
-
-      <div className="panels">
-        <ConsolePanel logs={report.consoleLogs} />
-        <NetworkPanel errors={report.networkErrors} />
-        <VoicePanel transcript={report.voiceTranscript} />
-      </div>
-    </div>
+    </>
   );
 }

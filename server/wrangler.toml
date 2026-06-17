@@ -10,3 +10,7 @@ SUPABASE_URL = "https://fpqlclltjreetlyhzlsd.supabase.co"
 [[r2_buckets]]
 binding = "R2"
 bucket_name = "bugezy-reports"
+
+# Workers AI（PM-25：語音記錄 AI 精簡）
+[ai]
+binding = "AI"

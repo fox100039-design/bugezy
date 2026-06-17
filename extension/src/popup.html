@@ -6,25 +6,39 @@
     <title>BugEzy</title>
     <style>
       :root {
-        color-scheme: light dark;
-        --bg: #ffffff;
-        --fg: #1a1a1a;
-        --muted: #6b7280;
-        --line: #e5e7eb;
-        --accent: #ef4444;
-        --accent-stop: #374151;
+        color-scheme: dark;
+        --bg: #0f0f1a;
+        --panel: #1a1a2e;
+        --line: #2a2a3e;
+        --fg: #f0f0f0;
+        --muted: #8b8fa3;
+        --accent: #7c3aed;
+        --accent-hover: #6d28d9;
+        --success: #10b981;
+        --danger: #ef4444;
       }
       * { box-sizing: border-box; }
       body {
-        width: 260px;
+        width: 320px;
         margin: 0;
-        padding: 14px;
-        font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+        padding: 16px;
+        font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
         background: var(--bg);
         color: var(--fg);
         font-size: 14px;
       }
-      h1 { font-size: 16px; margin: 0 0 12px; }
+
+      /* 品牌 Header */
+      .brand {
+        display: flex; align-items: center; gap: 8px;
+        padding-bottom: 12px; margin-bottom: 12px;
+        border-bottom: 1px solid var(--line);
+      }
+      .brand-icon { font-size: 24px; }
+      .brand-name { font-size: 18px; font-weight: 700; color: var(--accent); }
+      .brand-tag { font-size: 11px; color: var(--muted); margin-left: auto; }
+
+      /* 通用按鈕 */
       button {
         width: 100%;
         padding: 10px;
@@ -35,64 +49,121 @@
         color: #fff;
         cursor: pointer;
         margin-bottom: 8px;
+        transition: all 0.15s;
       }
-      button:disabled { opacity: 0.5; cursor: default; }
-      #startBtn { background: var(--accent); }
-      #stopBtn { background: var(--accent-stop); }
+      button:hover { filter: brightness(1.1); }
+      button:disabled { opacity: 0.5; cursor: default; filter: none; }
+      #stopBtn { background: var(--danger); }
       #copyBtn { background: #2563eb; }
-      #copyBtn.copied { background: #16a34a; }
-      #exportBtn { background: #7c3aed; }
-      #exportBtn.done { background: #16a34a; }
-      #clearBtn { background: #9ca3af; }
-      .hidden { display: none; }
-      .dot {
-        display: inline-block; width: 9px; height: 9px; border-radius: 50%;
-        background: var(--accent); margin-right: 6px;
-        animation: blink 1s steps(2, start) infinite;
+      #copyBtn.copied { background: var(--success); }
+      #exportBtn { background: var(--accent); }
+      #exportBtn.done { background: var(--success); }
+      #clearBtn { background: #4a4a5e; }
+
+      /* 兩大入口（漸層 + hover 上浮） */
+      .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 4px 0 8px; }
+      .main-action {
+        display: flex; flex-direction: column; align-items: center; gap: 6px;
+        padding: 20px 12px; border: none; border-radius: 12px;
+        color: #fff; cursor: pointer; transition: all 0.2s ease; width: auto; margin: 0;
       }
-      @keyframes blink { to { visibility: hidden; } }
-      .recline { color: var(--muted); font-variant-numeric: tabular-nums; margin: 2px 0 12px; }
-      .done-title { color: #16a34a; font-weight: 700; margin: 0 0 10px; }
-      .summary { border-top: 1px solid var(--line); padding-top: 10px; }
-      .summary h2 { font-size: 12px; color: var(--muted); margin: 0 0 6px; font-weight: 600; }
-      .row { display: flex; justify-content: space-between; padding: 2px 0; }
-      .row .val { font-weight: 600; }
-      .meta { color: var(--muted); font-size: 11px; word-break: break-all; margin: 6px 0 10px; }
+      .main-action:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3); filter: none; }
+      .main-action.record { background: linear-gradient(135deg, #7c3aed, #6d28d9); }
+      .main-action.screenshot { background: linear-gradient(135deg, #059669, #047857); }
+      .action-icon { font-size: 32px; }
+      .action-label { font-size: 15px; font-weight: 700; }
+      .action-desc { font-size: 11px; opacity: 0.8; }
+
+      .hidden { display: none; }
+
+      /* 錄製中：大計時器 + 脈動圓點 */
+      .recording-timer {
+        text-align: center; font-size: 36px; font-weight: 700;
+        font-family: ui-monospace, monospace; color: var(--danger); padding: 16px 0;
+      }
+      .rec-dot {
+        display: inline-block; width: 12px; height: 12px;
+        background: var(--danger); border-radius: 50%;
+        margin-right: 10px; vertical-align: middle; animation: pulse 1s infinite;
+      }
+      @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+      /* 完成摘要卡 */
+      .done-title { color: var(--success); font-weight: 700; font-size: 15px; margin: 0 0 10px; }
+      .summary-card {
+        background: var(--panel); border: 1px solid var(--line);
+        border-radius: 12px; padding: 14px; margin: 10px 0;
+      }
+      .summary-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
+      .summary-row .label { color: var(--muted); }
+      .summary-row .value { font-weight: 600; }
+
+      .meta { color: var(--muted); font-size: 11px; word-break: break-all; margin: 8px 0; }
+
+      /* 分享連結卡 */
+      .share-card {
+        background: var(--panel); border: 1px solid var(--accent);
+        border-radius: 12px; padding: 12px; margin: 10px 0;
+        align-items: center; gap: 8px;
+      }
+      .share-card a { font-size: 12px; word-break: break-all; color: #a78bfa; flex: 1; }
+      .link-btn {
+        width: auto; margin: 0; flex-shrink: 0;
+        background: var(--accent); border-radius: 6px; padding: 4px 10px; font-size: 12px;
+      }
     </style>
   </head>
   <body>
-    <h1>🐛 BugEzy</h1>
+    <div class="brand">
+      <span class="brand-icon">🐛</span>
+      <span class="brand-name">BugEzy</span>
+      <span class="brand-tag">語音 Bug 回報</span>
+    </div>
 
-    <!-- 狀態一：閒置 -->
+    <!-- 狀態一：閒置（兩個獨立入口） -->
     <section id="idleView" class="hidden">
-      <button id="startBtn">🔴 開始錄製</button>
+      <div class="action-grid">
+        <button id="startBtn" class="main-action record">
+          <span class="action-icon">🎬</span>
+          <span class="action-label">錄製</span>
+          <span class="action-desc">DOM + 語音 + Console</span>
+        </button>
+        <button id="screenshotBtn" class="main-action screenshot">
+          <span class="action-icon">📸</span>
+          <span class="action-label">截圖標注</span>
+          <span class="action-desc">快速擷取 + 畫重點</span>
+        </button>
+      </div>
+      <div id="lastScreenshot" class="meta" style="display:none;"></div>
     </section>
 
     <!-- 狀態二：錄製中 -->
     <section id="recordingView" class="hidden">
-      <div class="recline"><span class="dot"></span>錄製中… <span id="elapsed">00:00</span></div>
+      <div class="recording-timer"><span class="rec-dot"></span><span id="elapsed">00:00</span></div>
       <button id="stopBtn">⏹ 停止錄製</button>
     </section>
 
     <!-- 狀態三：錄製完成 -->
     <section id="doneView" class="hidden">
       <div class="done-title">✅ 錄製完成！</div>
-      <div class="summary">
-        <div class="row"><span>DOM 事件</span><span class="val" id="domCount">0</span></div>
-        <div class="row"><span>Console</span><span class="val" id="consoleCount">0</span></div>
-        <div class="row"><span>Network 錯誤</span><span class="val" id="networkCount">0</span></div>
-        <div class="row"><span>語音片段</span><span class="val" id="voiceCount">0</span></div>
-        <div class="row"><span>時間</span><span class="val" id="durationVal">0 秒</span></div>
+      <div class="summary-card">
+        <div class="summary-row"><span class="label">DOM 事件</span><span class="value" id="domCount">0</span></div>
+        <div class="summary-row"><span class="label">Console</span><span class="value" id="consoleCount">0</span></div>
+        <div class="summary-row"><span class="label">Network 錯誤</span><span class="value" id="networkCount">0</span></div>
+        <div class="summary-row"><span class="label">語音片段</span><span class="value" id="voiceCount">0</span></div>
+        <div class="summary-row"><span class="label">時間</span><span class="value" id="durationVal">0 秒</span></div>
         <div class="meta" id="pageUrl"></div>
       </div>
+
       <!-- 上傳狀態 -->
-      <div id="uploadArea" style="margin-top: 8px;">
+      <div id="uploadArea">
         <div id="uploadStatus" class="meta"></div>
-        <div id="shareUrlRow" style="display:none; margin-top: 6px;">
-          <a id="shareLink" href="#" target="_blank" style="color: #818cf8; word-break: break-all;"></a>
-          <button id="copyLinkBtn" style="margin-left: 8px; background: #7c3aed; color:#fff; border:none; border-radius:4px; padding:2px 8px; cursor:pointer; font-size:12px;">📋 複製連結</button>
+        <div id="shareUrlRow" class="share-card" style="display:none;">
+          <a id="shareLink" href="#" target="_blank"></a>
+          <button id="copyLinkBtn" class="link-btn">📋 複製連結</button>
         </div>
       </div>
+
       <button id="copyBtn">📋 複製 JSON</button>
       <button id="exportBtn">💾 匯出 JSON（給 AI 讀）</button>
       <button id="clearBtn">🗑️ 清除，重新錄製</button>
