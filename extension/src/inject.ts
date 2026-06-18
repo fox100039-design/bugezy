@@ -104,7 +104,11 @@ function main() {
     restartBtn.title = '重新啟動語音辨識';
     restartBtn.style.cssText =
       'pointer-events:auto;background:rgba(124,58,237,0.8);color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:16px;cursor:pointer;margin-left:12px;flex-shrink:0;vertical-align:middle;';
-    restartBtn.addEventListener('click', () => forceRestartVoice());
+    restartBtn.addEventListener('click', async () => {
+      restartBtn.disabled = true;
+      await forceRestartVoice();
+      restartBtn.disabled = false;
+    });
 
     bar.appendChild(textSpan);
     bar.appendChild(restartBtn);
@@ -161,6 +165,9 @@ function main() {
     if (el) el.textContent = text;
   }
 
+  // PM-33：自動重啟連續失敗計數（放在 createRecognition 外，建新實例不重置）
+  let autoRestartFails = 0;
+
   /**
    * PM-32：建立一個全新的 SpeechRecognition 實例（可重複呼叫）。
    * 每次都掛上「全新」的 event handlers，不複製舊實例的閉包——
@@ -206,14 +213,19 @@ function main() {
     };
 
     rec.onend = () => {
-      // 靜默自停 → 仍在錄製就自動重啟；失敗不再叫 showRestartButton（🔄 永遠在）
+      // 靜默自停 → 仍在錄製就自動重啟；連續失敗 3 次就停手，等使用者按 🔄
       if (voiceActive) {
         blog('SpeechRecognition onend → auto restart');
         try {
           rec.start();
+          autoRestartFails = 0; // 成功就歸零
         } catch {
-          blog('SpeechRecognition auto restart 失敗');
-          setCaptionText('⚠ 語音中斷，按 🔄 重啟');
+          autoRestartFails++;
+          blog(`auto restart 失敗 (第 ${autoRestartFails} 次)`);
+          if (autoRestartFails >= 3) {
+            setCaptionText('⚠ 語音中斷，按 🔄 重啟');
+            blog('auto restart 連續失敗 3 次，等待手動重啟');
+          }
         }
       }
     };
@@ -229,12 +241,19 @@ function main() {
     return rec;
   }
 
-  /** PM-32：手動強制重啟語音（永久 🔄 按鈕用）——建全新實例，不複製舊 handlers */
-  function forceRestartVoice() {
+  /**
+   * PM-33：手動強制重啟語音（永久 🔄 按鈕用）。
+   * Chrome 多次 onend→restart 後音訊管線會卡死，新實例也連不上麥克風；
+   * 因此先用 getUserMedia 刷新音訊連線（🔄 點擊是有效 user gesture，保證能過），
+   * 等 500ms 讓 Chrome 清理舊資源，再建全新的 SpeechRecognition。
+   */
+  async function forceRestartVoice() {
     blog('手動強制重啟語音');
     if (!voiceActive) return;
 
-    // 停掉舊的並丟棄
+    setCaptionText('🔄 重啟中...');
+
+    // Step 1：停掉舊的並丟棄
     try {
       recognition?.stop();
     } catch {
@@ -242,16 +261,31 @@ function main() {
     }
     recognition = null;
 
-    // 建全新的（全新 handlers）
+    // Step 2：用 getUserMedia 強制刷新瀏覽器音訊連線（拿到立刻釋放）
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((t) => t.stop());
+      blog('getUserMedia 刷新成功');
+    } catch (err) {
+      blog('getUserMedia 刷新失敗（麥克風可能被封鎖）', err);
+      setCaptionText('❌ 麥克風無法存取');
+      return;
+    }
+
+    // Step 3：等 500ms 讓 Chrome 清理舊的音訊資源
+    await new Promise((r) => setTimeout(r, 500));
+
+    // Step 4：建全新實例（全新 handlers）
     recognition = createRecognition();
     if (recognition) {
       try {
         recognition.start();
+        autoRestartFails = 0; // 手動重啟成功 → 重置自動重啟失敗計數
         setCaptionText('🔴 語音已重啟，繼續說...');
         blog('語音強制重啟成功');
       } catch (err) {
         blog('語音強制重啟失敗', err);
-        setCaptionText('❌ 語音重啟失敗');
+        setCaptionText('❌ 語音重啟失敗，請重新整理頁面');
       }
     }
   }
