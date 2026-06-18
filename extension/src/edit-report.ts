@@ -72,10 +72,8 @@ const markers: TimeMarker[] = [];
 let replayer: Replayer | null = null;
 let duration = 0; // 總時長（ms）
 let playing = false;
-// PM-40：mini player 放大/縮小（baseScale/basePageHeight 由 initMiniPlayer 的縮放計算回填）
+// PM-40/41：mini player 放大/縮小切換旗標
 let zoomed = false;
-let baseScale = 1;
-let basePageHeight = 0;
 
 function $opt<T extends HTMLElement>(id: string): T | null {
   return document.getElementById(id) as T | null;
@@ -132,9 +130,6 @@ function initMiniPlayer(events: unknown[]) {
     // 容器高度配合縮放後的高度（取代固定 aspect-ratio）
     container.style.height = `${pageHeight * scale}px`;
     container.style.overflow = 'hidden';
-    // PM-40：記住基準縮放與原始高度，供 🔍 放大按鈕切換
-    baseScale = scale;
-    basePageHeight = pageHeight;
   });
 
   duration = replayer.getMetaData().totalTime || 0;
@@ -169,17 +164,34 @@ function initMiniPlayer(events: unknown[]) {
     updateTimeDisplay(time);
   });
 
-  // 🔍 放大/縮小（PM-40）：在基準縮放與 2× 間切換；放大時容器可捲動看完整頁面
+  // 🔍 放大/縮小（PM-41）：容器物理變全寬（非 transform 拉 bar），scale 依新寬度重算 → 內容更清楚
   $opt('zoomBtn')?.addEventListener('click', () => {
     const iframe = container.querySelector('iframe');
     if (!iframe) return;
     zoomed = !zoomed;
-    const scale = zoomed ? baseScale * 2 : baseScale;
-    iframe.style.transform = `scale(${scale})`;
-    container.style.height = `${basePageHeight * scale}px`;
-    container.style.overflow = zoomed ? 'auto' : 'hidden';
+
+    // 原始頁面寬高（initMiniPlayer 已把原始尺寸 inline 寫進 iframe）
+    const pageWidth = parseInt(iframe.style.width) || 1920;
+    const pageHeight = parseInt(iframe.style.height) || 1080;
+
+    if (zoomed) {
+      container.style.maxWidth = '100%'; // 2x：撐滿編輯頁寬度
+      container.style.width = '100%';
+    } else {
+      container.style.maxWidth = '960px'; // 1x：回到 960px
+      container.style.width = '100%';
+    }
     const btn = $opt('zoomBtn');
     if (btn) btn.textContent = zoomed ? '🔍 1x' : '🔍 2x';
+
+    // 容器寬度變了 → 等版面重排後依新寬度重算 scale（overflow:hidden，不用拉 bar）
+    requestAnimationFrame(() => {
+      const newScale = container.clientWidth / pageWidth;
+      iframe.style.transform = `scale(${newScale})`;
+      iframe.style.transformOrigin = 'top left';
+      container.style.height = `${pageHeight * newScale}px`;
+      container.style.overflow = 'hidden';
+    });
   });
 
   // 📌 標記此刻（mousedown preventDefault 避免搶焦點）
