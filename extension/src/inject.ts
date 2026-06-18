@@ -648,8 +648,12 @@ function main() {
     return payload;
   }
 
+  // PM-37：READY 競爭條件——inject 若比 content 早載完，單次 READY 會丟失。
+  // 改為重複發 READY，收到 content 的 READY_ACK 才停。
+  let readyAcked = false;
+
   // ── 與 content.ts（ISOLATED world）溝通 ──────────────────
-  // to-inject 方向同時承載 START/STOP 指令（cmd）與 PM-36 的 VOICE_HISTORY 回填（kind）
+  // to-inject 方向同時承載 START/STOP 指令（cmd）與 PM-36 VOICE_HISTORY / PM-37 READY_ACK（kind）
   window.addEventListener('message', (e: MessageEvent) => {
     if (e.source !== window) return;
     const data = e.data as InjectCommand & { kind?: string; segments?: VoiceSegment[] };
@@ -672,9 +676,19 @@ function main() {
         if (panel) panel.scrollTop = panel.scrollHeight;
         blog('載入歷史語音', data.segments.length, '段');
       }
+    } else if (data.kind === 'READY_ACK') {
+      readyAcked = true; // PM-37：content 已收到 READY，可停止重複發送
+      blog('收到 READY_ACK');
     }
   });
 
-  // 載入即向 content.ts 報到，content 可據此確認 inject 是否存活
-  post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'READY' });
+  // 載入即向 content.ts 報到。PM-37：重複發 READY 直到 ACK，避免載入順序競爭丟失。
+  const readyInterval = setInterval(() => {
+    if (readyAcked) {
+      clearInterval(readyInterval);
+      return;
+    }
+    post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'READY' });
+  }, 100);
+  setTimeout(() => clearInterval(readyInterval), 5000); // 5 秒後一定停，避免無限發送
 }

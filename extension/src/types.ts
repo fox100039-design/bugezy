@@ -137,7 +137,9 @@ export type InjectMessage =
   | { source: typeof BUGEZY_SOURCE; dir: 'to-content'; kind: 'FLUSH_RRWEB'; events: unknown[] }
   // PM-36：inject 建面板後請求歷史語音（to-content）；content 讀 buffer 後回填（to-inject）
   | { source: typeof BUGEZY_SOURCE; dir: 'to-content'; kind: 'REQUEST_VOICE_HISTORY' }
-  | { source: typeof BUGEZY_SOURCE; dir: 'to-inject'; kind: 'VOICE_HISTORY'; segments: VoiceSegment[] };
+  | { source: typeof BUGEZY_SOURCE; dir: 'to-inject'; kind: 'VOICE_HISTORY'; segments: VoiceSegment[] }
+  // PM-37：content 收到 READY 後回 ACK，讓 inject 停止重複發 READY（解 READY 競爭條件）
+  | { source: typeof BUGEZY_SOURCE; dir: 'to-inject'; kind: 'READY_ACK' };
 
 /** chrome.storage.local 的鍵 */
 export const STORAGE_KEY = 'bugezy:lastPayload';

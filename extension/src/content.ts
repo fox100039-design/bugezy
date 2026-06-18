@@ -81,6 +81,8 @@ window.addEventListener('message', async (e: MessageEvent) => {
   if (data.kind === 'READY') {
     injectReady = true;
     blog('✓ inject 已報到（READY）');
+    // PM-37：回 ACK 讓 inject 停止重複發 READY（解載入順序競爭）
+    window.postMessage({ source: BUGEZY_SOURCE, dir: 'to-inject', kind: 'READY_ACK' }, '*');
     return;
   }
 
