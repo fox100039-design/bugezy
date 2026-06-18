@@ -130,3 +130,30 @@
   - 改動1（edit-report.ts AI 精簡成功後永久 disable）、改動2（inject.ts 語音中斷顯示重啟按鈕）皆驗證 TS 正確
   - 改動3（annotate.html 移除 AI 精簡按鈕）連帶造成 annotate.ts 仍 `$('summarizeBtn')` → 載入即 throw 使整頁失效 → 移除對應 JS 修復
   - tsc + build 通過；逐一驗證 annotate/edit-report 的 DOM ID 與 HTML 一致
+
+## 2026-06-18
+
+第 6 代「更好用」Day 4（PM-27~47）。重點：即時字幕雙區、編輯頁時間軸標記、跨頁錄製不丟資料、語音重啟穩定化、回放乾淨/原始 toggle。
+
+- PM-27：錄製即時字幕分兩區（底部 interim + 右上 `#bugezy-voice-panel` 堆疊 final，可收合）
+- PM-28：編輯頁時間軸標記（`@rrweb/replay` mini player + 📌 多時間點）；markers 全鏈 types/background/server/MCP/web；schema 加 `markers JSONB`；server 重新部署
+- PM-29：標記 UX — 按 📌 彈 `prompt` + 上傳保留無文字的時間點（移除 filter）
+- PM-30：字幕條改 flex + 永久 🔄 重啟按鈕 + `forceRestartVoice` + `setCaptionText`
+- PM-31：三 Bug — 右上面板誤點卡死（header `pointer-events:none`、僅收合鈕可點）/ mini player 放大 / 語音 append 保留 cursor（edit-report + annotate）
+- PM-32：抽 `createRecognition()` 工廠（全新 handlers）、刪 `showRestartButton`；修 🔄 重啟後語音死掉
+- PM-33：`forceRestartVoice` 改 async — `getUserMedia` 刷新 + 500ms + `autoRestartFails` 計數
+- PM-34：★跨頁不丟資料 — inject 即時 flush → content 轉發 → background `chrome.storage.local` buffer；STOP 時 `buildFullPayload()` 合併去重（voice/console/network/rrweb）
+- PM-35：content.ts 載入 `GET_STATE` 自動恢復錄製（跳頁後新頁補送 START）
+- PM-36：跳頁右上面板回填歷史語音（`REQUEST_VOICE_HISTORY` → `GET_VOICE_BUFFER` → `VOICE_HISTORY`）+ 恢復 poll 100→50ms
+- PM-37：修 READY 競爭條件（inject 每 100ms 重發 READY + content 回 `READY_ACK` 握手）
+- PM-38：修 mini player 放大鏡（依 rrweb Meta 原始解析度算 scale + 預載第一幀 + `mouseTail:false`）
+- PM-39：語音記錄 textarea 移除 `readonly`（可手動修錯字）
+- PM-40：語音面板下移 60→140px + mini player 🔍 2x 放大鈕
+- PM-41：放大改為容器物理全寬（`max-width:100%`）+ 重算 scale
+- PM-42：edit-report / annotate 補充說明語音套穩定模式（工廠 + getUserMedia + 失敗計數）
+- PM-43：放大時 `.wrap` 撐到 95vw；語音 `onend` 失敗改 getUserMedia 刷新建新實例
+- PM-44：rrweb `record()` 加 `block/ignoreSelector` 排除 BugEzy overlay；面板 140→200px
+- PM-45：`mouseTail:true`（回放看得到游標）
+- PM-46：回放「乾淨/原始」toggle — 移除 blockSelector、改在 edit-report 注入 CSS 到 Replayer iframe 控制顯示；MutationObserver 維持
+- PM-47：乾淨模式改 `setInterval` 每 200ms 補注入（移除 MutationObserver）；排查發現游標 `.replayer-mouse` 在 `.replayer-wrapper` 內（非 iframe 內）→ 縮放改套 `.replayer-wrapper` 讓游標可見對齊
+- 收工：文件同步（project_status §2/§6b、CHANGELOG、SKILL）+ commit

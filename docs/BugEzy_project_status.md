@@ -23,7 +23,7 @@
 | **③ 能存能看** | 後端 + 報告頁 | Cloudflare Workers + Supabase + R2 + React 報告頁 | ✅ 完成 |
 | **④ AI 能讀** | MCP Server | Pull 模式 8 Tool，AI 按需查詢 = **MVP 封測** | ✅ 完成 |
 | **⑤ 能收錢** | 付費上線 | Stripe 串接 + Chrome Web Store 上架 = **正式上線** | 待做 |
-| **⑥ 更好用** | UX 優化 | 即時字幕 overlay、隱私遮罩、AI 標題、Markdown 匯出 | 🔨 進行中（截圖三模式+標注+即時字幕+編輯頁+AI精簡） |
+| **⑥ 更好用** | UX 優化 | 即時字幕 overlay、隱私遮罩、AI 標題、Markdown 匯出 | 🔨 進行中（PM-47，截圖三模式+標注+即時字幕雙區+跨頁錄製+編輯頁+AI精簡+乾淨/原始toggle） |
 | **⑦ 規模化** | 多語 + 企業 | 日韓越語音、跨境除錯鏈、企業自託管 | 待做 |
 
 ---
@@ -247,6 +247,43 @@ FOX = 創辦人 + 決策者 + 手動驗收
 ### PM-26：Bug 修復 + 驗證
 - edit-report AI 精簡成功後永久 disable、inject 語音中斷顯示「🔄 重新啟動語音」按鈕（PM 手改，已驗 TS）
 - **抓出連帶 bug**：annotate.html 移除 AI 鈕後，annotate.ts 仍 `$('summarizeBtn')` → 載入即 throw 使整頁失效 → 移除對應 JS 修復
+
+---
+
+## §6b 第 6 代 Day 4（2026-06-18，PM-27~47）
+
+### 即時字幕雙區 + 標記（PM-27~31）
+- PM-27：錄製即時字幕分兩區——底部 interim + 右上 `#bugezy-voice-panel` 堆疊已確認 final（可收合）
+- PM-28：編輯頁時間軸標記——edit-report mini rrweb player（`@rrweb/replay`）+ 📌 多時間點，markers 全鏈（types/server/MCP/web）
+- PM-29：修標記 UX（按 📌 彈 `prompt` + 保留無文字的時間點）
+- PM-30：字幕條 flex 化 + 永久 🔄 重啟按鈕 + `forceRestartVoice`
+- PM-31：修三 Bug（右上面板誤點卡死→header `pointer-events:none` 僅收合鈕可點；mini player 放大；語音 append 保留 cursor）
+
+### 語音重啟穩定化（PM-32~33、42~43）
+- PM-32：抽 `createRecognition()` 工廠（全新 handlers，不複製舊閉包）、刪 `showRestartButton`
+- PM-33：🔄 改 async — `getUserMedia` 刷新音訊管線 + 500ms 延遲 + `autoRestartFails` 計數
+- PM-42：同模式套到 edit-report / annotate 補充說明語音（工廠 + getUserMedia + 失敗計數）
+- PM-43：語音 `onend` 連續失敗 3 次自動 getUserMedia 刷新重建（不必手動）
+
+### 跨頁錄製（PM-34~37）★架構
+- PM-34：即時 flush（inject→content→background `chrome.storage.local` buffer），STOP 時 `buildFullPayload()` 合併去重（四類）→ 頁面跳轉不丟資料
+- PM-35：content.ts 載入 `GET_STATE` 自動恢復錄製（新頁補送 START）
+- PM-36：跳頁右上面板回填歷史語音（`REQUEST_VOICE_HISTORY`/`GET_VOICE_BUFFER`/`VOICE_HISTORY`）+ poll 50ms
+- PM-37：修 READY 競爭條件（inject 重複發 READY + content 回 `READY_ACK` 握手）
+
+### 編輯頁 mini player 體驗（PM-38~41、44~47）
+- PM-38：修放大鏡——依 rrweb Meta 事件原始解析度算 `scale` + 預載第一幀 + `mouseTail:false`
+- PM-39：語音記錄 textarea 移除 `readonly`（可手動修錯字）
+- PM-40：語音面板下移（top 60→140px）+ mini player 🔍 2x 放大鈕
+- PM-41：放大改為容器物理全寬（`max-width:100%`）+ 重算 scale
+- PM-43(§1)：放大時 `.wrap` 也撐到 95vw，player 才真的變大
+- PM-44：rrweb `record()` 加 `block/ignoreSelector` 排除 BugEzy overlay（後於 PM-46 改回）；面板 top 140→200px
+- PM-45：`mouseTail:true`（回放看得到游標）
+- PM-46：回放「乾淨/原始」toggle——移除 blockSelector、改在 edit-report 注入 CSS 到 Replayer iframe 控制顯示
+- PM-47：乾淨模式改 `setInterval` 每 200ms 補注入（取代 MutationObserver）；**排查發現游標 `.replayer-mouse` 在 `.replayer-wrapper` 內、非 iframe 內** → 縮放改套 `.replayer-wrapper` 讓游標可見對齊
+
+### Server / Schema
+- `reports` 加 `markers JSONB`（PM-28，已 `ALTER TABLE`）；`/api/reports` 與 `/mcp` `get_report_overview` 回傳 markers
 
 ---
 
