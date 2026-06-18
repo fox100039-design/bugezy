@@ -148,13 +148,10 @@ function initMiniPlayer(events: unknown[]) {
 }
 
 function addMarker(sec: number) {
-  markers.push({ time_sec: sec, note: '' });
+  // PM-29：按 📌 立刻彈原生對話框問描述，使用者一定看得到
+  const note = window.prompt(`📌 ${formatSec(sec)} — 描述這個時間點的問題：`) ?? '';
+  markers.push({ time_sec: sec, note: note.trim() }); // 按取消 → 空描述，只留時間點
   renderMarkers();
-  // 自動 focus 到新標記的輸入框
-  window.setTimeout(() => {
-    const inputs = document.querySelectorAll<HTMLInputElement>('.marker-note');
-    inputs[inputs.length - 1]?.focus();
-  }, 50);
 }
 
 function renderMarkers() {
@@ -363,7 +360,7 @@ uploadBtn.addEventListener('click', async () => {
   const resp = (await chrome.runtime.sendMessage({
     type: 'UPLOAD_REPORT',
     description: descInput.value.trim(),
-    markers: markers.filter((m) => m.note.trim()), // 只保留有寫文字的標記
+    markers, // PM-29：保留所有標記（含無文字的，時間點本身就有價值）
   } satisfies ControlMessage)) as { ok: boolean; shareUrl?: string; error?: string };
 
   if (resp.ok && resp.shareUrl) {
