@@ -93,7 +93,7 @@ function initMiniPlayer(events: unknown[]) {
       root: container,
       skipInactive: true,
       showWarning: false,
-      mouseTail: false, // PM-38：關閉滑鼠軌跡，省資源
+      mouseTail: true, // PM-45：開啟滑鼠軌跡，回放才看得到游標移動
     });
   } catch (err) {
     blog('mini player 建立失敗', err);
