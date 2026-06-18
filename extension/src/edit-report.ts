@@ -173,12 +173,17 @@ function initMiniPlayer(events: unknown[]) {
     // 原始頁面寬高（initMiniPlayer 已把原始尺寸 inline 寫進 iframe）
     const pageWidth = parseInt(iframe.style.width) || 1920;
     const pageHeight = parseInt(iframe.style.height) || 1080;
+    const wrap = document.querySelector('.wrap') as HTMLElement | null;
 
     if (zoomed) {
-      container.style.maxWidth = '100%'; // 2x：撐滿編輯頁寬度
+      // 2x：連外層 .wrap 一起撐寬，player 才真的變大（不被 720px wrap 卡住）
+      if (wrap) wrap.style.maxWidth = '95vw';
+      container.style.maxWidth = '100%';
       container.style.width = '100%';
     } else {
-      container.style.maxWidth = '960px'; // 1x：回到 960px
+      // 1x：回到原始
+      if (wrap) wrap.style.maxWidth = '720px';
+      container.style.maxWidth = '960px';
       container.style.width = '100%';
     }
     const btn = $opt('zoomBtn');
@@ -372,8 +377,24 @@ function createEditRecognition(): SRInst | null {
       } catch {
         autoRestartFails++;
         if (autoRestartFails >= 3) {
-          voiceStatus.textContent = '⚠ 語音中斷，按 🎤 重新啟動';
-          stopVoice();
+          // PM-43：連續失敗 3 次 → getUserMedia 刷新音訊管線 + 建全新實例重啟
+          void (async () => {
+            try {
+              const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+              stream.getTracks().forEach((t) => t.stop());
+              await new Promise((r) => setTimeout(r, 300));
+              if (!listening) return; // 期間使用者已停止
+              recognition = createEditRecognition();
+              if (recognition) {
+                recognition.start();
+                autoRestartFails = 0;
+                voiceStatus.textContent = '🔴 語音已重啟...';
+              }
+            } catch {
+              voiceStatus.textContent = '⚠ 語音中斷，按 🎤 重新啟動';
+              stopVoice();
+            }
+          })();
         }
       }
     }

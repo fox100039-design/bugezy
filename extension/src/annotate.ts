@@ -253,7 +253,7 @@ function createAnnotateRecognition(): SRInst | null {
     }
   };
   rec.onend = () => {
-    // 靜默自停 → 仍在聽就重啟；連續失敗 3 次停手等手動
+    // 靜默自停 → 仍在聽就重啟；連續失敗 3 次改用 getUserMedia 刷新 + 新實例
     if (listening) {
       try {
         rec.start();
@@ -261,8 +261,24 @@ function createAnnotateRecognition(): SRInst | null {
       } catch {
         autoRestartFails++;
         if (autoRestartFails >= 3) {
-          captionText.textContent = '⚠ 語音中斷，按 🎤 重新啟動';
-          stopListening();
+          // PM-43：getUserMedia 刷新音訊管線 + 建全新實例重啟
+          void (async () => {
+            try {
+              const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+              stream.getTracks().forEach((t) => t.stop());
+              await new Promise((r) => setTimeout(r, 300));
+              if (!listening) return; // 期間使用者已停止
+              recognition = createAnnotateRecognition();
+              if (recognition) {
+                recognition.start();
+                autoRestartFails = 0;
+                captionText.textContent = '🔴 語音已重啟...';
+              }
+            } catch {
+              captionText.textContent = '⚠ 語音中斷，按 🎤 重新啟動';
+              stopListening();
+            }
+          })();
         }
       }
     }
