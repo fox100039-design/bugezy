@@ -123,7 +123,7 @@ function main() {
     const panel = document.createElement('div');
     panel.id = 'bugezy-voice-panel';
     panel.style.cssText =
-      'position:fixed;top:60px;right:12px;z-index:2147483647;pointer-events:none;width:260px;max-height:50vh;overflow-y:auto;background:rgba(0,0,0,0.8);border:1px solid rgba(124,58,237,0.5);border-radius:12px;padding:10px 14px;font-family:system-ui,sans-serif;font-size:14px;color:#eee;line-height:1.6;transition:opacity 0.3s;';
+      'position:fixed;top:140px;right:12px;z-index:2147483647;pointer-events:none;width:260px;max-height:50vh;overflow-y:auto;background:rgba(0,0,0,0.8);border:1px solid rgba(124,58,237,0.5);border-radius:12px;padding:10px 14px;font-family:system-ui,sans-serif;font-size:14px;color:#eee;line-height:1.6;transition:opacity 0.3s;'; // PM-40：60→140px 避免被書籤列/其他擴充遮擋
 
     // PM-31 Bug1：header 整列 pointer-events:none，只有收合按鈕本身可點，
     // 避免使用者誤點面板其他區域觸發奇怪行為導致頁面卡死。

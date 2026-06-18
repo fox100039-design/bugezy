@@ -72,6 +72,10 @@ const markers: TimeMarker[] = [];
 let replayer: Replayer | null = null;
 let duration = 0; // 總時長（ms）
 let playing = false;
+// PM-40：mini player 放大/縮小（baseScale/basePageHeight 由 initMiniPlayer 的縮放計算回填）
+let zoomed = false;
+let baseScale = 1;
+let basePageHeight = 0;
 
 function $opt<T extends HTMLElement>(id: string): T | null {
   return document.getElementById(id) as T | null;
@@ -128,6 +132,9 @@ function initMiniPlayer(events: unknown[]) {
     // 容器高度配合縮放後的高度（取代固定 aspect-ratio）
     container.style.height = `${pageHeight * scale}px`;
     container.style.overflow = 'hidden';
+    // PM-40：記住基準縮放與原始高度，供 🔍 放大按鈕切換
+    baseScale = scale;
+    basePageHeight = pageHeight;
   });
 
   duration = replayer.getMetaData().totalTime || 0;
@@ -160,6 +167,19 @@ function initMiniPlayer(events: unknown[]) {
     replayer.play(time);
     if (!playing) window.setTimeout(() => replayer?.pause(time), 50);
     updateTimeDisplay(time);
+  });
+
+  // 🔍 放大/縮小（PM-40）：在基準縮放與 2× 間切換；放大時容器可捲動看完整頁面
+  $opt('zoomBtn')?.addEventListener('click', () => {
+    const iframe = container.querySelector('iframe');
+    if (!iframe) return;
+    zoomed = !zoomed;
+    const scale = zoomed ? baseScale * 2 : baseScale;
+    iframe.style.transform = `scale(${scale})`;
+    container.style.height = `${basePageHeight * scale}px`;
+    container.style.overflow = zoomed ? 'auto' : 'hidden';
+    const btn = $opt('zoomBtn');
+    if (btn) btn.textContent = zoomed ? '🔍 1x' : '🔍 2x';
   });
 
   // 📌 標記此刻（mousedown preventDefault 避免搶焦點）
