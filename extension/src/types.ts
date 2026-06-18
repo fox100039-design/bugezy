@@ -90,7 +90,12 @@ export type ControlMessage =
   | { type: 'CAPTURE_SEGMENT' }
   | { type: 'SCREENSHOT_READY'; dataUrl: string; pageUrl: string; pageTitle: string }
   // PM-24：編輯頁確認上傳錄製報告（PM-28：帶上時間軸標記）
-  | { type: 'UPLOAD_REPORT'; description: string; markers?: TimeMarker[] };
+  | { type: 'UPLOAD_REPORT'; description: string; markers?: TimeMarker[] }
+  // PM-34：即時 flush（content → background 暫存，頁面跳轉不丟資料）
+  | { type: 'FLUSH_VOICE'; segment: VoiceSegment }
+  | { type: 'FLUSH_CONSOLE'; log: ConsoleLog }
+  | { type: 'FLUSH_NETWORK'; error: NetworkError }
+  | { type: 'FLUSH_RRWEB'; events: unknown[] };
 
 /** background → popup 的狀態回應 */
 export interface StateResponse {
@@ -122,7 +127,12 @@ export interface InjectCommand {
 export type InjectMessage =
   | { source: typeof BUGEZY_SOURCE; dir: 'to-content'; kind: 'READY' }
   | { source: typeof BUGEZY_SOURCE; dir: 'to-content'; kind: 'STARTED'; rrwebOk: boolean }
-  | { source: typeof BUGEZY_SOURCE; dir: 'to-content'; kind: 'RESULT'; payload: RecordingPayload };
+  | { source: typeof BUGEZY_SOURCE; dir: 'to-content'; kind: 'RESULT'; payload: RecordingPayload }
+  // PM-34：即時 flush（inject MAIN world → content ISOLATED world → background 暫存）
+  | { source: typeof BUGEZY_SOURCE; dir: 'to-content'; kind: 'FLUSH_VOICE'; segment: VoiceSegment }
+  | { source: typeof BUGEZY_SOURCE; dir: 'to-content'; kind: 'FLUSH_CONSOLE'; log: ConsoleLog }
+  | { source: typeof BUGEZY_SOURCE; dir: 'to-content'; kind: 'FLUSH_NETWORK'; error: NetworkError }
+  | { source: typeof BUGEZY_SOURCE; dir: 'to-content'; kind: 'FLUSH_RRWEB'; events: unknown[] };
 
 /** chrome.storage.local 的鍵 */
 export const STORAGE_KEY = 'bugezy:lastPayload';
@@ -132,6 +142,12 @@ export const STATE_KEY = 'bugezy:state';
 
 /** 截圖獨立上傳後的最近一筆（給 popup 顯示連結） */
 export const LAST_SCREENSHOT_KEY = 'bugezy:lastScreenshot';
+
+/** PM-34：錄製中即時 flush 的暫存 buffer（頁面跳轉不丟資料） */
+export const BUFFER_VOICE_KEY = 'bugezy:buffer:voice';
+export const BUFFER_CONSOLE_KEY = 'bugezy:buffer:console';
+export const BUFFER_NETWORK_KEY = 'bugezy:buffer:network';
+export const BUFFER_RRWEB_KEY = 'bugezy:buffer:rrweb';
 
 /** 統一前綴的診斷 log */
 export function blog(...args: unknown[]): void {

@@ -4,15 +4,81 @@
 
 import {
   API_BASE,
+  BUFFER_CONSOLE_KEY,
+  BUFFER_NETWORK_KEY,
+  BUFFER_RRWEB_KEY,
+  BUFFER_VOICE_KEY,
   LAST_SCREENSHOT_KEY,
   STATE_KEY,
   STORAGE_KEY,
   blog,
+  type ConsoleLog,
   type ControlMessage,
+  type NetworkError,
+  type RecordingPayload,
   type RecordingSummary,
   type StateResponse,
   type TimeMarker,
+  type VoiceSegment,
 } from './types';
+
+/** PM-34：錄製中即時 flush 暫存的所有 buffer key */
+const BUFFER_KEYS = [BUFFER_VOICE_KEY, BUFFER_CONSOLE_KEY, BUFFER_NETWORK_KEY, BUFFER_RRWEB_KEY];
+
+/** 去重小工具：依 keyFn 取唯一 */
+function dedupeBy<T>(arr: T[], keyFn: (x: T) => string): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const x of arr) {
+    const k = keyFn(x);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(x);
+  }
+  return out;
+}
+
+/**
+ * PM-34：把錄製期間即時 flush 到各 buffer 的資料，與 inject 在 STOP 時打包的
+ * 單頁 payload 合併成完整 payload。因每筆資料「即時 flush 進 buffer」+「inject
+ * 又在 RESULT 帶整包」兩條路徑都會帶到最終頁的資料，故四類都做去重避免重複。
+ */
+async function buildFullPayload(): Promise<RecordingPayload> {
+  const [voiceR, consoleR, networkR, rrwebR, payloadR] = await Promise.all([
+    chrome.storage.local.get(BUFFER_VOICE_KEY),
+    chrome.storage.local.get(BUFFER_CONSOLE_KEY),
+    chrome.storage.local.get(BUFFER_NETWORK_KEY),
+    chrome.storage.local.get(BUFFER_RRWEB_KEY),
+    chrome.storage.local.get(STORAGE_KEY),
+  ]);
+
+  const inj = payloadR[STORAGE_KEY] as Partial<RecordingPayload> | undefined;
+
+  const voiceTranscript = dedupeBy<VoiceSegment>(
+    [...((voiceR[BUFFER_VOICE_KEY] as VoiceSegment[]) ?? []), ...(inj?.voiceTranscript ?? [])],
+    (s) => `${s.timestamp}-${s.text}`,
+  );
+  const consoleLogs = dedupeBy<ConsoleLog>(
+    [...((consoleR[BUFFER_CONSOLE_KEY] as ConsoleLog[]) ?? []), ...(inj?.consoleLogs ?? [])],
+    (l) => `${l.timestamp}-${l.level}-${l.message}`,
+  );
+  const networkErrors = dedupeBy<NetworkError>(
+    [...((networkR[BUFFER_NETWORK_KEY] as NetworkError[]) ?? []), ...(inj?.networkErrors ?? [])],
+    (e) => `${e.timestamp}-${e.method}-${e.url}-${e.status}`,
+  );
+  const rrwebEvents = dedupeBy<unknown>(
+    [...((rrwebR[BUFFER_RRWEB_KEY] as unknown[]) ?? []), ...(inj?.rrwebEvents ?? [])],
+    (ev) => JSON.stringify(ev),
+  );
+
+  return {
+    rrwebEvents,
+    consoleLogs,
+    networkErrors,
+    voiceTranscript,
+    pageInfo: inj?.pageInfo ?? { url: '', title: '', browser: '', screenSize: '', timestamp: '' },
+  };
+}
 
 interface PersistedState {
   recording: boolean;
@@ -65,6 +131,13 @@ async function getActiveTab(): Promise<chrome.tabs.Tab | undefined> {
 async function startRecording(): Promise<StateResponse> {
   const tab = await getActiveTab();
   if (!tab?.id) throw new Error('找不到 active tab');
+  // PM-34：開錄前清空所有暫存 buffer，避免上一場殘留
+  await chrome.storage.local.set({
+    [BUFFER_VOICE_KEY]: [],
+    [BUFFER_CONSOLE_KEY]: [],
+    [BUFFER_NETWORK_KEY]: [],
+    [BUFFER_RRWEB_KEY]: [],
+  });
   // 語音改由 inject.ts（MAIN world）自行收集；截圖改為獨立功能（PM-18），不再混入錄製
   await chrome.tabs.sendMessage(tab.id, { type: 'START_RECORDING' } satisfies ControlMessage);
   const s = await setState({
@@ -90,7 +163,7 @@ async function stopRecording(): Promise<StateResponse> {
 }
 
 async function clearRecording(): Promise<StateResponse> {
-  await chrome.storage.local.remove([STORAGE_KEY, STATE_KEY]);
+  await chrome.storage.local.remove([STORAGE_KEY, STATE_KEY, ...BUFFER_KEYS]); // PM-34：一併清 buffer
   clearBadge();
   return toResponse(DEFAULT_STATE);
 }
@@ -164,6 +237,7 @@ async function uploadReport(
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
     const data = (await res.json()) as { report_id: string; share_url: string };
     blog('uploadReport: 上傳成功', data.share_url);
+    await chrome.storage.local.remove(BUFFER_KEYS); // PM-34：上傳成功清空暫存 buffer
     return { ok: true, shareUrl: data.share_url, reportId: data.report_id };
   } catch (err) {
     blog('uploadReport: 上傳失敗', err);
@@ -215,16 +289,30 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summ
           break;
         }
         case 'RECORDING_DONE': {
-          // content script 打包完成 → 回填摘要（PM-24：不直接上傳，改開編輯頁）
+          // content script 打包完成 → PM-34：合併 buffer + inject 單頁打包成完整 payload，
+          // 覆寫 STORAGE_KEY（供 edit-report 上傳），摘要計數也以合併後為準。
           const prev = await getState();
           const incoming = (msg as { summary: RecordingSummary }).summary;
+          const merged = await buildFullPayload();
+          await chrome.storage.local.set({ [STORAGE_KEY]: merged });
           const summary: RecordingSummary = {
             ...incoming,
+            domEvents: merged.rrwebEvents.length,
+            consoleLogs: merged.consoleLogs.length,
+            networkErrors: merged.networkErrors.length,
+            voiceSegments: merged.voiceTranscript.length,
+            pageInfo: merged.pageInfo,
             durationMs: prev.startedAt ? Date.now() - prev.startedAt : 0,
             uploadStatus: 'idle',
             shareUrl: null,
             uploadError: null,
           };
+          blog('RECORDING_DONE 合併完成', {
+            dom: merged.rrwebEvents.length,
+            console: merged.consoleLogs.length,
+            network: merged.networkErrors.length,
+            voice: merged.voiceTranscript.length,
+          });
           const s = await setState({ recording: false, startedAt: null, tabId: null, summary });
           clearBadge();
           await openEditReport(); // 開報告編輯頁，由使用者補描述後再上傳
@@ -234,6 +322,43 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summ
         case 'UPLOAD_REPORT': {
           const m = msg as { description: string; markers?: TimeMarker[] };
           sendResponse(await uploadReport(m.description, m.markers));
+          break;
+        }
+        // PM-34：即時 flush → 追加到對應 buffer（頁面跳轉時資料已落地）
+        case 'FLUSH_VOICE': {
+          const seg = (msg as { segment: VoiceSegment }).segment;
+          const r = await chrome.storage.local.get(BUFFER_VOICE_KEY);
+          const arr = (r[BUFFER_VOICE_KEY] as VoiceSegment[]) ?? [];
+          arr.push(seg);
+          await chrome.storage.local.set({ [BUFFER_VOICE_KEY]: arr });
+          sendResponse({ ok: true });
+          break;
+        }
+        case 'FLUSH_CONSOLE': {
+          const log = (msg as { log: ConsoleLog }).log;
+          const r = await chrome.storage.local.get(BUFFER_CONSOLE_KEY);
+          const arr = (r[BUFFER_CONSOLE_KEY] as ConsoleLog[]) ?? [];
+          arr.push(log);
+          await chrome.storage.local.set({ [BUFFER_CONSOLE_KEY]: arr });
+          sendResponse({ ok: true });
+          break;
+        }
+        case 'FLUSH_NETWORK': {
+          const error = (msg as { error: NetworkError }).error;
+          const r = await chrome.storage.local.get(BUFFER_NETWORK_KEY);
+          const arr = (r[BUFFER_NETWORK_KEY] as NetworkError[]) ?? [];
+          arr.push(error);
+          await chrome.storage.local.set({ [BUFFER_NETWORK_KEY]: arr });
+          sendResponse({ ok: true });
+          break;
+        }
+        case 'FLUSH_RRWEB': {
+          const evs = (msg as { events: unknown[] }).events;
+          const r = await chrome.storage.local.get(BUFFER_RRWEB_KEY);
+          const arr = (r[BUFFER_RRWEB_KEY] as unknown[]) ?? [];
+          arr.push(...evs);
+          await chrome.storage.local.set({ [BUFFER_RRWEB_KEY]: arr });
+          sendResponse({ ok: true });
           break;
         }
         default:

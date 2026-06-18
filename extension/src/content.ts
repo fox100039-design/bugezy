@@ -45,6 +45,24 @@ window.addEventListener('message', async (e: MessageEvent) => {
   const data = e.data as InjectMessage;
   if (!data || data.source !== BUGEZY_SOURCE || data.dir !== 'to-content') return;
 
+  // PM-34：即時 flush 訊息 → 轉發給 background 暫存到 chrome.storage.local
+  if (data.kind === 'FLUSH_VOICE') {
+    chrome.runtime.sendMessage({ type: 'FLUSH_VOICE', segment: data.segment });
+    return;
+  }
+  if (data.kind === 'FLUSH_CONSOLE') {
+    chrome.runtime.sendMessage({ type: 'FLUSH_CONSOLE', log: data.log });
+    return;
+  }
+  if (data.kind === 'FLUSH_NETWORK') {
+    chrome.runtime.sendMessage({ type: 'FLUSH_NETWORK', error: data.error });
+    return;
+  }
+  if (data.kind === 'FLUSH_RRWEB') {
+    chrome.runtime.sendMessage({ type: 'FLUSH_RRWEB', events: data.events });
+    return;
+  }
+
   if (data.kind === 'READY') {
     injectReady = true;
     blog('✓ inject 已報到（READY）');

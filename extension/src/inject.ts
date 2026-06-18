@@ -77,6 +77,9 @@ function main() {
   let events: unknown[] = [];
   let consoleLogs: ConsoleLog[] = [];
   let networkErrors: NetworkError[] = [];
+  // PM-34：rrweb 太頻繁，改每 5 秒批次 flush；其餘資料每筆即時 flush
+  let lastFlushedIndex = 0;
+  let rrwebFlushInterval: ReturnType<typeof setInterval> | null = null;
   // 語音辨識（PM-08：直接跑在 MAIN world，麥克風授權歸屬網站）
   let voiceSegments: VoiceSegment[] = [];
   let recognition: SRInstance | null = null;
@@ -191,7 +194,9 @@ function main() {
         if (e.results[i].isFinal) {
           const text = e.results[i][0].transcript.trim();
           if (text) {
-            voiceSegments.push({ text, timestamp: Date.now(), isFinal: true });
+            const seg: VoiceSegment = { text, timestamp: Date.now(), isFinal: true };
+            voiceSegments.push(seg); // 本地也存（同頁 STOP 用）
+            post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'FLUSH_VOICE', segment: seg }); // PM-34
             blog('voice segment:', text.slice(0, 40));
 
             // 右上面板：堆疊已確認文字（PM-27）
@@ -312,13 +317,17 @@ function main() {
   // ── A. Console 攔截（只抓 warn + error）──────────────────
   console.warn = (...args: unknown[]) => {
     if (recording) {
-      consoleLogs.push({ level: 'warn', message: stringifyArgs(args), timestamp: Date.now() });
+      const entry: ConsoleLog = { level: 'warn', message: stringifyArgs(args), timestamp: Date.now() };
+      consoleLogs.push(entry);
+      post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'FLUSH_CONSOLE', log: entry }); // PM-34
     }
     return originalWarn(...args);
   };
   console.error = (...args: unknown[]) => {
     if (recording) {
-      consoleLogs.push({ level: 'error', message: stringifyArgs(args), timestamp: Date.now() });
+      const entry: ConsoleLog = { level: 'error', message: stringifyArgs(args), timestamp: Date.now() };
+      consoleLogs.push(entry);
+      post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'FLUSH_CONSOLE', log: entry }); // PM-34
     }
     return originalError(...args);
   };
@@ -338,14 +347,16 @@ function main() {
         if (typeof input === 'string') url = input;
         else if (input instanceof URL) url = input.href;
         else url = (input as Request).url;
-        networkErrors.push({
+        const entry: NetworkError = {
           method: (init?.method || (input as Request).method || 'GET').toUpperCase(),
           url,
           status: response.status,
           responseBody: body.slice(0, 2000),
           timestamp: start,
           duration: Date.now() - start,
-        });
+        };
+        networkErrors.push(entry);
+        post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'FLUSH_NETWORK', error: entry }); // PM-34
       }
     } catch (err) {
       blog('fetch 攔截處理失敗（已忽略，不影響頁面）', err);
@@ -382,7 +393,7 @@ function main() {
       if (typeof body === 'string') meta.body = body.slice(0, 2000);
       this.addEventListener('loadend', () => {
         if (recording && this.status >= 400) {
-          networkErrors.push({
+          const entry: NetworkError = {
             method: meta.method,
             url: meta.url,
             status: this.status,
@@ -391,7 +402,9 @@ function main() {
               typeof this.responseText === 'string' ? this.responseText.slice(0, 2000) : undefined,
             timestamp: meta.start,
             duration: Date.now() - meta.start,
-          });
+          };
+          networkErrors.push(entry);
+          post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'FLUSH_NETWORK', error: entry }); // PM-34
         }
       });
     }
@@ -408,6 +421,7 @@ function main() {
     events = [];
     consoleLogs = [];
     networkErrors = [];
+    lastFlushedIndex = 0; // PM-34
     let rrwebOk = false;
     try {
       const stop = record({
@@ -422,6 +436,16 @@ function main() {
       // rrweb 啟動失敗不影響 console/network 攔截（recording 已為 true）
       blog('⚠ rrweb record() 拋錯，DOM 軌跡將為空，但 console/network 仍會收集', err);
     }
+
+    // PM-34：每 5 秒批次 flush 新增的 rrweb 事件給 background 暫存（頁面跳轉不丟）
+    if (rrwebFlushInterval !== null) clearInterval(rrwebFlushInterval);
+    rrwebFlushInterval = setInterval(() => {
+      if (events.length > lastFlushedIndex) {
+        const batch = events.slice(lastFlushedIndex);
+        lastFlushedIndex = events.length;
+        post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'FLUSH_RRWEB', events: batch });
+      }
+    }, 5000);
 
     // ── D. 語音辨識（需 user gesture 授權麥克風）──────────
     showCaptionBar(); // PM-24：錄製中浮動字幕
@@ -582,6 +606,16 @@ function main() {
         blog('rrweb stop 拋錯（已忽略）', err);
       }
       stopRrweb = null;
+    }
+    // PM-34：停掉定時器並 flush 最後一批 rrweb 事件
+    if (rrwebFlushInterval !== null) {
+      clearInterval(rrwebFlushInterval);
+      rrwebFlushInterval = null;
+    }
+    const finalBatch = events.slice(lastFlushedIndex);
+    if (finalBatch.length > 0) {
+      lastFlushedIndex = events.length;
+      post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'FLUSH_RRWEB', events: finalBatch });
     }
     // 停止語音辨識 + 移除即時字幕
     voiceActive = false;
