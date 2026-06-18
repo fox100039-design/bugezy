@@ -16,6 +16,12 @@ export interface Report {
   voiceTranscript: { text: string; timestamp: number; isFinal: boolean }[];
   screenshots: { dataUrl: string; timestamp: number }[];
   description: string;
+  markers?: TimeMarker[];
   rrwebEvents: unknown[];
   created_at: string;
+}
+
+export interface TimeMarker {
+  time_sec: number;
+  note: string;
 }

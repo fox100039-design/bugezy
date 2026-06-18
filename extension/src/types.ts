@@ -40,6 +40,12 @@ export interface Screenshot {
   timestamp: number; // Date.now()
 }
 
+/** 時間軸標記（PM-28：編輯頁在 mini player 上標記時間點 + 文字說明） */
+export interface TimeMarker {
+  time_sec: number; // 標記的播放秒數
+  note: string; // 該時間點的問題描述
+}
+
 /** 一次完整錄製的打包結果（PM-18：錄製不再含截圖，截圖獨立上傳） */
 export interface RecordingPayload {
   rrwebEvents: unknown[];
@@ -47,6 +53,7 @@ export interface RecordingPayload {
   networkErrors: NetworkError[];
   pageInfo: PageInfo;
   voiceTranscript: VoiceSegment[]; // 語音轉文字（content.ts 合併）
+  markers?: TimeMarker[]; // PM-28：時間軸標記（選填，向後相容）
 }
 
 /** 上傳狀態 */
@@ -82,8 +89,8 @@ export type ControlMessage =
   | { type: 'START_SCREENSHOT' }
   | { type: 'CAPTURE_SEGMENT' }
   | { type: 'SCREENSHOT_READY'; dataUrl: string; pageUrl: string; pageTitle: string }
-  // PM-24：編輯頁確認上傳錄製報告
-  | { type: 'UPLOAD_REPORT'; description: string };
+  // PM-24：編輯頁確認上傳錄製報告（PM-28：帶上時間軸標記）
+  | { type: 'UPLOAD_REPORT'; description: string; markers?: TimeMarker[] };
 
 /** background → popup 的狀態回應 */
 export interface StateResponse {

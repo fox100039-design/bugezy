@@ -49,6 +49,10 @@ interface Screenshot {
   dataUrl: string;
   timestamp: number;
 }
+interface TimeMarker {
+  time_sec: number;
+  note: string;
+}
 interface RecordingPayload {
   rrwebEvents: unknown[];
   consoleLogs: ConsoleLog[];
@@ -57,6 +61,7 @@ interface RecordingPayload {
   pageInfo: PageInfo;
   screenshots: Screenshot[];
   description?: string;
+  markers?: TimeMarker[]; // PM-28：時間軸標記
 }
 
 // ── CORS（MVP 先全開，第 5 代再收緊）────────────────────
@@ -155,6 +160,7 @@ async function createReport(request: Request, env: Env, origin: string): Promise
     network_errors: payload.networkErrors ?? [],
     voice_transcript: payload.voiceTranscript ?? [],
     description: payload.description ?? '',
+    markers: payload.markers ?? [], // PM-28：時間軸標記
   };
 
   const { error } = await supa(env).from('reports').insert(row);
@@ -204,6 +210,7 @@ async function getReport(reportId: string, env: Env): Promise<Response> {
     networkErrors: data.network_errors,
     voiceTranscript: data.voice_transcript,
     description: data.description ?? '',
+    markers: data.markers ?? [], // PM-28：時間軸標記
     rrwebEvents,
     screenshots,
     created_at: data.created_at,
@@ -261,7 +268,7 @@ async function summarizeText(request: Request, env: Env): Promise<Response> {
 
 // ── MCP Server（8 Tool，直接讀 Supabase/R2，不繞 HTTP）──────
 const META_COLS =
-  'report_id, url, title, browser, screen_size, console_count, network_count, voice_count, rrweb_count, screenshot_count, description, created_at';
+  'report_id, url, title, browser, screen_size, console_count, network_count, voice_count, rrweb_count, screenshot_count, description, markers, created_at';
 
 function txt(data: unknown) {
   const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);

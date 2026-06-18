@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS reports (
   network_errors JSONB DEFAULT '[]',
   voice_transcript JSONB DEFAULT '[]',
   description   TEXT DEFAULT '',
+  markers       JSONB DEFAULT '[]',
   created_at    TIMESTAMPTZ DEFAULT now()
 );
 
@@ -29,3 +30,6 @@ ALTER TABLE reports ADD COLUMN IF NOT EXISTS screenshots_r2_key TEXT;
 
 -- ── PM-20：開發者文字描述 ──
 ALTER TABLE reports ADD COLUMN IF NOT EXISTS description TEXT DEFAULT '';
+
+-- ── PM-28：時間軸標記（mini player 標記時間點 + 文字說明）──
+ALTER TABLE reports ADD COLUMN IF NOT EXISTS markers JSONB DEFAULT '[]';

@@ -23,6 +23,7 @@ interface ReportData {
   consoleLogs: unknown[];
   networkErrors: unknown[];
   voiceTranscript: unknown[];
+  markers?: Array<{ time_sec: number; note: string }>;
   rrwebEvents: Array<{ type?: number; timestamp?: number }>;
   created_at: string;
 }
@@ -148,6 +149,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         network_count: report.networkErrors.length,
         voice_count: report.voiceTranscript.length,
         rrweb_count: report.rrwebEvents.length,
+        markers: report.markers ?? [], // PM-28：時間軸標記（AI 可讀）
         created_at: report.created_at,
       });
     case 'get_console_logs':

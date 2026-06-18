@@ -11,6 +11,7 @@ import {
   type ControlMessage,
   type RecordingSummary,
   type StateResponse,
+  type TimeMarker,
 } from './types';
 
 interface PersistedState {
@@ -147,11 +148,13 @@ async function openEditReport(): Promise<void> {
  */
 async function uploadReport(
   description: string,
+  markers?: TimeMarker[],
 ): Promise<{ ok: boolean; shareUrl?: string; reportId?: string; error?: string }> {
   const r = await chrome.storage.local.get(STORAGE_KEY);
   const payload = r[STORAGE_KEY];
   if (!payload) return { ok: false, error: '沒有報告資料' };
   payload.description = description ?? '';
+  payload.markers = markers ?? []; // PM-28：時間軸標記
   try {
     const res = await fetch(`${API_BASE}/api/reports`, {
       method: 'POST',
@@ -229,8 +232,8 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summ
           break;
         }
         case 'UPLOAD_REPORT': {
-          const m = msg as { description: string };
-          sendResponse(await uploadReport(m.description));
+          const m = msg as { description: string; markers?: TimeMarker[] };
+          sendResponse(await uploadReport(m.description, m.markers));
           break;
         }
         default:

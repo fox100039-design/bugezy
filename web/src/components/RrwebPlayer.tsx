@@ -1,13 +1,15 @@
 import { useRef, useEffect, useState, type ChangeEvent } from 'react';
 import { Replayer } from '@rrweb/replay';
 import '@rrweb/replay/dist/style.css';
+import type { TimeMarker } from '../types';
 
 interface Props {
   events: unknown[];
+  markers?: TimeMarker[];
 }
 
 // 用底層 Replayer class（非 Svelte 的 rrweb-player）+ 自製控制列，100% 可控
-export default function RrwebReplay({ events }: Props) {
+export default function RrwebReplay({ events, markers }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const replayerRef = useRef<Replayer | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -115,6 +117,19 @@ export default function RrwebReplay({ events }: Props) {
     return `${m}:${String(sec).padStart(2, '0')}`;
   };
 
+  // 點擊標記時間戳 → 跳到對應播放位置（PM-28）
+  const seekTo = (ms: number) => {
+    const r = replayerRef.current;
+    if (!r) return;
+    r.play(ms);
+    setTimeout(() => r.pause(ms), 50);
+    setProgress(ms);
+    setPlaying(false);
+    cancelAnimationFrame(rafRef.current);
+  };
+
+  const validMarkers = (markers ?? []).filter((m) => m.note.trim());
+
   return (
     <div>
       <div ref={containerRef} style={{ overflow: 'hidden', maxWidth: '800px' }} />
@@ -134,6 +149,23 @@ export default function RrwebReplay({ events }: Props) {
           {fmtTime(progress)} / {fmtTime(duration)}
         </span>
       </div>
+
+      {validMarkers.length > 0 && (
+        <div className="marker-list">
+          <h3 className="marker-list-title">📌 時間軸標記</h3>
+          {validMarkers
+            .slice()
+            .sort((a, b) => a.time_sec - b.time_sec)
+            .map((m, i) => (
+              <div className="marker-row" key={i}>
+                <button className="marker-time-btn" onClick={() => seekTo(m.time_sec * 1000)}>
+                  {fmtTime(m.time_sec * 1000)}
+                </button>
+                <span className="marker-note-text">{m.note}</span>
+              </div>
+            ))}
+        </div>
+      )}
     </div>
   );
 }

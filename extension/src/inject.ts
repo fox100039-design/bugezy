@@ -92,10 +92,41 @@ function main() {
     bar.textContent = '🔴 錄製中，可以用中文描述問題...';
     document.body.appendChild(bar);
     captionBar = bar;
+
+    // ── 右上角已確認文字面板（PM-27：堆疊顯示 final，使用者看得到已收錄內容）──
+    document.getElementById('bugezy-voice-panel')?.remove();
+    const panel = document.createElement('div');
+    panel.id = 'bugezy-voice-panel';
+    panel.style.cssText =
+      'position:fixed;top:60px;right:12px;z-index:2147483647;pointer-events:none;width:260px;max-height:50vh;overflow-y:auto;background:rgba(0,0,0,0.8);border:1px solid rgba(124,58,237,0.5);border-radius:12px;padding:10px 14px;font-family:system-ui,sans-serif;font-size:14px;color:#eee;line-height:1.6;transition:opacity 0.3s;';
+
+    const header = document.createElement('div');
+    header.style.cssText =
+      'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.15);pointer-events:auto;cursor:pointer;';
+    header.innerHTML =
+      '<span style="font-size:12px;color:#a78bfa;">📝 語音記錄</span><span id="bugezy-panel-toggle" style="font-size:12px;color:#888;">▼ 收合</span>';
+
+    const content = document.createElement('div');
+    content.id = 'bugezy-voice-content';
+    content.style.cssText = 'white-space:pre-wrap;word-break:break-word;';
+
+    panel.appendChild(header);
+    panel.appendChild(content);
+    document.body.appendChild(panel);
+
+    // 收合 / 展開 toggle
+    let collapsed = false;
+    header.addEventListener('click', () => {
+      collapsed = !collapsed;
+      content.style.display = collapsed ? 'none' : 'block';
+      const toggle = document.getElementById('bugezy-panel-toggle');
+      if (toggle) toggle.textContent = collapsed ? '▶ 展開' : '▼ 收合';
+    });
   }
   function hideCaptionBar() {
     captionBar?.remove();
     captionBar = null;
+    document.getElementById('bugezy-voice-panel')?.remove();
   }
 
   /** 語音中斷時在字幕條顯示重新啟動按鈕 */
@@ -411,6 +442,14 @@ function main() {
             if (text) {
               voiceSegments.push({ text, timestamp: Date.now(), isFinal: true });
               blog('voice segment:', text.slice(0, 40));
+              // PM-27：確認文字堆疊到右上面板，並自動捲到最新
+              const voiceContent = document.getElementById('bugezy-voice-content');
+              if (voiceContent) {
+                voiceContent.textContent += (voiceContent.textContent ? '\n' : '') + text;
+                const panel = document.getElementById('bugezy-voice-panel');
+                if (panel) panel.scrollTop = panel.scrollHeight;
+              }
+              // 底部字幕顯示確認（短暫）後回到聆聽中
               if (captionBar) {
                 captionBar.textContent = `✅ ${text}`;
                 window.setTimeout(() => {

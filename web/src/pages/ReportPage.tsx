@@ -81,7 +81,7 @@ export default function ReportPage() {
 
         {report.rrwebEvents.length > 0 && (
           <div className="player-wrap">
-            <RrwebReplay events={report.rrwebEvents} />
+            <RrwebReplay events={report.rrwebEvents} markers={report.markers} />
           </div>
         )}
 
