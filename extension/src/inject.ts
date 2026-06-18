@@ -118,28 +118,36 @@ function main() {
     panel.style.cssText =
       'position:fixed;top:60px;right:12px;z-index:2147483647;pointer-events:none;width:260px;max-height:50vh;overflow-y:auto;background:rgba(0,0,0,0.8);border:1px solid rgba(124,58,237,0.5);border-radius:12px;padding:10px 14px;font-family:system-ui,sans-serif;font-size:14px;color:#eee;line-height:1.6;transition:opacity 0.3s;';
 
+    // PM-31 Bug1：header 整列 pointer-events:none，只有收合按鈕本身可點，
+    // 避免使用者誤點面板其他區域觸發奇怪行為導致頁面卡死。
     const header = document.createElement('div');
     header.style.cssText =
-      'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.15);pointer-events:auto;cursor:pointer;';
-    header.innerHTML =
-      '<span style="font-size:12px;color:#a78bfa;">📝 語音記錄</span><span id="bugezy-panel-toggle" style="font-size:12px;color:#888;">▼ 收合</span>';
+      'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.15);pointer-events:none;';
+    header.innerHTML = '<span style="font-size:12px;color:#a78bfa;">📝 語音記錄</span>';
 
     const content = document.createElement('div');
     content.id = 'bugezy-voice-content';
     content.style.cssText = 'white-space:pre-wrap;word-break:break-word;';
 
+    // 收合按鈕獨立，只有它是 pointer-events:auto
+    let collapsed = false;
+    const toggleBtn = document.createElement('button');
+    toggleBtn.id = 'bugezy-panel-toggle';
+    toggleBtn.textContent = '▼';
+    toggleBtn.title = '收合/展開';
+    toggleBtn.style.cssText =
+      'pointer-events:auto;background:rgba(124,58,237,0.6);border:none;border-radius:4px;color:#fff;font-size:12px;padding:2px 8px;cursor:pointer;';
+    toggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      collapsed = !collapsed;
+      content.style.display = collapsed ? 'none' : 'block';
+      toggleBtn.textContent = collapsed ? '▶' : '▼';
+    });
+    header.appendChild(toggleBtn);
+
     panel.appendChild(header);
     panel.appendChild(content);
     document.body.appendChild(panel);
-
-    // 收合 / 展開 toggle
-    let collapsed = false;
-    header.addEventListener('click', () => {
-      collapsed = !collapsed;
-      content.style.display = collapsed ? 'none' : 'block';
-      const toggle = document.getElementById('bugezy-panel-toggle');
-      if (toggle) toggle.textContent = collapsed ? '▶ 展開' : '▼ 收合';
-    });
   }
   function hideCaptionBar() {
     captionBar?.remove();

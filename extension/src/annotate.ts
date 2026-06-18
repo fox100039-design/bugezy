@@ -229,7 +229,14 @@ function startListening() {
       const res = e.results[i];
       const text = res[0].transcript;
       if (res.isFinal) {
+        // PM-31 Bug4：append 到末端，但若 cursor 原本不在末端則保留原位（不干擾中間編輯）
+        const cursorPos = descInput.selectionStart;
+        const isAtEnd = cursorPos === descInput.value.length;
         descInput.value += text; // 確定的文字 → 文字框
+        if (!isAtEnd) {
+          descInput.selectionStart = cursorPos;
+          descInput.selectionEnd = cursorPos;
+        }
         captionText.textContent = `✅ ${text}`;
         window.setTimeout(() => {
           if (listening) captionText.textContent = '🔴 聆聽中...';

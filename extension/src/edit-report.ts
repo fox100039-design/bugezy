@@ -99,6 +99,13 @@ function initMiniPlayer(events: unknown[]) {
     return;
   }
 
+  // PM-31 Bug3：讓 Replayer 的 iframe 填滿放大後的容器（960px / 16:9）
+  const iframe = container.querySelector('iframe');
+  if (iframe) {
+    iframe.style.width = '100%';
+    iframe.style.height = '100%';
+  }
+
   duration = replayer.getMetaData().totalTime || 0;
   const seekBar = $opt<HTMLInputElement>('markerSeek');
   if (seekBar) seekBar.max = String(duration);
@@ -288,8 +295,18 @@ voiceBtn.addEventListener('click', () => {
     let interim = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const res = e.results[i];
-      if (res.isFinal) descInput.value += res[0].transcript;
-      else interim = res[0].transcript;
+      if (res.isFinal) {
+        // PM-31 Bug4：append 到末端，但若 cursor 原本不在末端則保留原位（不干擾中間編輯）
+        const cursorPos = descInput.selectionStart;
+        const isAtEnd = cursorPos === descInput.value.length;
+        descInput.value += res[0].transcript;
+        if (!isAtEnd) {
+          descInput.selectionStart = cursorPos;
+          descInput.selectionEnd = cursorPos;
+        }
+      } else {
+        interim = res[0].transcript;
+      }
     }
     voiceStatus.textContent = interim ? `🔴 ${interim}` : '🔴 聆聽中...';
   };
