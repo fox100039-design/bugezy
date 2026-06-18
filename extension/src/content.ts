@@ -13,6 +13,7 @@ import {
   type InjectMessage,
   type RecordingPayload,
   type RecordingSummary,
+  type StateResponse,
 } from './types';
 
 blog('content loaded（ISOLATED world）', location.href);
@@ -103,6 +104,31 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
   }
   return true;
 });
+
+// PM-35：頁面載入時自動恢復錄製。
+// 使用者跳頁後新頁面是全新的 content + inject，本來不知道仍在錄製中。
+// 載入時主動問 background 狀態，若 recording=true 就等 inject READY 後補送 START。
+(async () => {
+  try {
+    const state = (await chrome.runtime.sendMessage({ type: 'GET_STATE' })) as StateResponse | undefined;
+    if (!state?.recording) return;
+    blog('偵測到正在錄製中，自動恢復 inject 錄製');
+    const waitForInject = (retries = 0) => {
+      if (injectReady) {
+        sendToInject('START'); // inject 全新（recording=false）會正常啟動
+        blog('已送 START 給 inject（跳頁恢復）');
+      } else if (retries < 30) {
+        // inject 尚未 READY，等 100ms 再試（最多 3 秒）
+        setTimeout(() => waitForInject(retries + 1), 100);
+      } else {
+        blog('⚠ inject 未就緒，跳頁恢復失敗');
+      }
+    };
+    waitForInject();
+  } catch {
+    // GET_STATE 失敗（background 未就緒），忽略
+  }
+})();
 
 // ════════════════════════════════════════════════════════════
 // PM-19：截圖模式 overlay（整頁 / 區域兩點可捲動 / 自由形狀）
