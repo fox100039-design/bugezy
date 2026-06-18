@@ -428,15 +428,12 @@ function main() {
     lastFlushedIndex = 0; // PM-34
     let rrwebOk = false;
     try {
-      // PM-44：排除 BugEzy 自己注入的 overlay DOM，回放時不會看到自家字幕條/語音面板
-      const BUGEZY_SELECTORS =
-        '#bugezy-live-caption, #bugezy-voice-panel, #bugezy-mic-overlay, #bugezy-voice-restart, #bugezy-ss-toolbar, #bugezy-ss-overlay, #bugezy-ss-canvas';
+      // PM-46：不再用 blockSelector 排除 BugEzy overlay（改由編輯頁「乾淨/原始」toggle
+      // 注入 CSS 控制顯示），這樣使用者可自由切換要不要看自家字幕/面板。
       const stop = record({
         emit(event) {
           events.push(event);
         },
-        blockSelector: BUGEZY_SELECTORS, // 匹配元素記為空白方塊，不錄內容
-        ignoreSelector: BUGEZY_SELECTORS, // 忽略其屬性/輸入變更
       });
       stopRrweb = stop ?? null;
       rrwebOk = stopRrweb !== null;

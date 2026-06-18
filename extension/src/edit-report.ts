@@ -213,6 +213,75 @@ function initMiniPlayer(events: unknown[]) {
     }
     addMarker(sec);
   });
+
+  // PM-46：乾淨/原始畫面 toggle（注入 CSS 到 Replayer iframe 控制 BugEzy overlay 顯示）
+  initCleanModeToggle(container);
+}
+
+// PM-46：隱藏 BugEzy 注入 overlay 的 CSS（注入到回放 iframe 內）
+const BUGEZY_HIDE_CSS = `
+  #bugezy-live-caption,
+  #bugezy-voice-panel,
+  #bugezy-voice-restart,
+  #bugezy-mic-overlay,
+  #bugezy-caption-text,
+  #bugezy-panel-toggle {
+    display: none !important;
+  }
+`;
+
+function initCleanModeToggle(container: HTMLElement) {
+  const checkbox = document.getElementById('cleanMode') as HTMLInputElement | null;
+  if (!checkbox) return;
+
+  function applyCleanMode(clean: boolean) {
+    const iframe = container.querySelector('iframe') as HTMLIFrameElement | null;
+    const doc = iframe?.contentDocument;
+    if (!doc) return;
+    const styleId = 'bugezy-clean-style';
+    const existing = doc.getElementById(styleId);
+    if (clean) {
+      if (!existing) {
+        const style = doc.createElement('style');
+        style.id = styleId;
+        style.textContent = BUGEZY_HIDE_CSS;
+        doc.head.appendChild(style);
+      }
+    } else {
+      existing?.remove();
+    }
+  }
+
+  // 等 Replayer iframe 有 contentDocument 後套用預設（乾淨模式開啟）
+  const waitAndApply = () => {
+    const iframe = container.querySelector('iframe') as HTMLIFrameElement | null;
+    if (iframe?.contentDocument) applyCleanMode(checkbox.checked);
+    else window.setTimeout(waitAndApply, 200);
+  };
+  window.setTimeout(waitAndApply, 500);
+
+  // 切換：更新標籤文字 + 套用
+  checkbox.addEventListener('change', () => {
+    const label = checkbox.nextElementSibling as HTMLElement | null;
+    if (label) label.textContent = checkbox.checked ? '🧹 乾淨模式' : '📋 原始模式';
+    applyCleanMode(checkbox.checked);
+  });
+
+  // rrweb 回放/seek 會重建 iframe DOM，可能移除我們的 style → MutationObserver 持續補回
+  const observer = new MutationObserver(() => {
+    if (!checkbox.checked) return;
+    const iframe = container.querySelector('iframe') as HTMLIFrameElement | null;
+    if (iframe?.contentDocument && !iframe.contentDocument.getElementById('bugezy-clean-style')) {
+      applyCleanMode(true);
+    }
+  });
+  const startObserving = () => {
+    const iframe = container.querySelector('iframe') as HTMLIFrameElement | null;
+    const head = iframe?.contentDocument?.head;
+    if (head) observer.observe(head, { childList: true });
+    else window.setTimeout(startObserving, 500);
+  };
+  startObserving();
 }
 
 function addMarker(sec: number) {

@@ -73,6 +73,13 @@
         border: 1px solid var(--line); cursor: pointer;
       }
       .btn-accent { background: var(--accent); border-color: var(--accent); font-weight: 600; }
+      /* 乾淨/原始 toggle（PM-46） */
+      .toggle-label {
+        display: flex; align-items: center; gap: 4px;
+        font-size: 13px; color: #aaa; cursor: pointer; user-select: none;
+        white-space: nowrap;
+      }
+      .toggle-label input[type='checkbox'] { accent-color: #7c3aed; }
       .time-display { font-family: monospace; color: var(--muted); font-size: 12px; white-space: nowrap; }
       .marker-list { margin-top: 8px; }
       .marker-item {
@@ -117,6 +124,10 @@
             <input type="range" id="markerSeek" min="0" max="100" value="0" style="flex:1;" />
             <span id="markerTime" class="time-display">0:00 / 0:00</span>
             <button id="zoomBtn" class="btn btn-sm" title="放大/縮小">🔍 2x</button>
+            <label id="cleanToggle" class="toggle-label" title="切換乾淨/原始畫面">
+              <input type="checkbox" id="cleanMode" checked />
+              <span>🧹 乾淨模式</span>
+            </label>
             <button id="addMarkerBtn" class="btn btn-sm btn-accent">📌 標記此刻</button>
           </div>
         </div>
