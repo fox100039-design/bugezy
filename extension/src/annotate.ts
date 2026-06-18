@@ -215,9 +215,11 @@ let listening = false;
 const captionText = $('captionText');
 const liveCaptions = $('liveCaptions');
 
-// PM-21：載入即自動聽。final → 寫入文字框，interim → 即時字幕（浮在畫布上）
-function startListening() {
-  if (!SR || listening) return;
+// PM-42：套用 inject.ts PM-32/33 穩定模式——工廠建全新實例 + onend 失敗計數。
+let autoRestartFails = 0;
+
+function createAnnotateRecognition(): SRInst | null {
+  if (!SR) return null;
   const rec = new SR();
   rec.lang = 'zh-TW';
   rec.continuous = true;
@@ -251,12 +253,17 @@ function startListening() {
     }
   };
   rec.onend = () => {
-    // 靜默自停 → 仍在聽就重啟
+    // 靜默自停 → 仍在聽就重啟；連續失敗 3 次停手等手動
     if (listening) {
       try {
         rec.start();
+        autoRestartFails = 0;
       } catch {
-        /* 忽略 */
+        autoRestartFails++;
+        if (autoRestartFails >= 3) {
+          captionText.textContent = '⚠ 語音中斷，按 🎤 重新啟動';
+          stopListening();
+        }
       }
     }
   };
@@ -265,8 +272,24 @@ function startListening() {
     if (e.error === 'not-allowed' || e.error === 'service-not-allowed') stopListening();
   };
 
-  recognition = rec;
-  rec.start();
+  return rec;
+}
+
+// PM-21：載入即自動聽。final → 寫入文字框，interim → 即時字幕（浮在畫布上）
+async function startListening() {
+  if (!SR || listening) return;
+  // PM-42：先用 getUserMedia 刷新音訊管線
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach((t) => t.stop());
+  } catch {
+    voiceStatus.textContent = '❌ 麥克風無法存取';
+    return;
+  }
+  autoRestartFails = 0;
+  recognition = createAnnotateRecognition();
+  if (!recognition) return;
+  recognition.start();
   listening = true;
   voiceInputBtn.classList.add('listening');
   voiceInputBtn.textContent = '⏹';

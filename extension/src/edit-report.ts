@@ -334,19 +334,16 @@ function stopVoice() {
   voiceStatus.textContent = '';
 }
 
-voiceBtn.addEventListener('click', () => {
-  if (!SR) {
-    voiceStatus.textContent = '此瀏覽器不支援語音辨識';
-    return;
-  }
-  if (listening) {
-    stopVoice();
-    return;
-  }
+// PM-42：套用 inject.ts PM-32/33 的穩定模式——工廠建全新實例 + onend 失敗計數。
+let autoRestartFails = 0;
+
+function createEditRecognition(): SRInst | null {
+  if (!SR) return null;
   const rec = new SR();
   rec.lang = 'zh-TW';
   rec.continuous = true;
   rec.interimResults = true;
+
   rec.onresult = (e: SREvt) => {
     let interim = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -366,25 +363,58 @@ voiceBtn.addEventListener('click', () => {
     }
     voiceStatus.textContent = interim ? `🔴 ${interim}` : '🔴 聆聽中...';
   };
+
   rec.onend = () => {
     if (listening) {
       try {
         rec.start();
+        autoRestartFails = 0; // 成功歸零
       } catch {
-        /* 忽略 */
+        autoRestartFails++;
+        if (autoRestartFails >= 3) {
+          voiceStatus.textContent = '⚠ 語音中斷，按 🎤 重新啟動';
+          stopVoice();
+        }
       }
     }
   };
+
   rec.onerror = (e: SRErr) => {
     voiceStatus.textContent = `語音錯誤：${e.error}`;
     if (e.error === 'not-allowed' || e.error === 'service-not-allowed') stopVoice();
   };
-  recognition = rec;
-  rec.start();
-  listening = true;
-  voiceBtn.classList.add('listening');
-  voiceBtn.textContent = '⏹';
-  voiceStatus.textContent = '🔴 聆聽中...';
+
+  return rec;
+}
+
+voiceBtn.addEventListener('click', async () => {
+  if (!SR) {
+    voiceStatus.textContent = '此瀏覽器不支援語音辨識';
+    return;
+  }
+  if (listening) {
+    stopVoice();
+    return;
+  }
+
+  // PM-42：先用 getUserMedia 刷新音訊管線（edit-report 是 extension page，非 user-gesture 問題）
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach((t) => t.stop());
+  } catch {
+    voiceStatus.textContent = '❌ 麥克風無法存取';
+    return;
+  }
+
+  autoRestartFails = 0;
+  recognition = createEditRecognition();
+  if (recognition) {
+    recognition.start();
+    listening = true;
+    voiceBtn.classList.add('listening');
+    voiceBtn.textContent = '⏹';
+    voiceStatus.textContent = '🔴 聆聽中...';
+  }
 });
 
 // ── AI 精簡：把語音記錄精簡成重點，替換語音記錄欄（成功後永久 disable）──
