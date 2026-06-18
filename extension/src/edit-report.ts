@@ -91,6 +91,7 @@ function initMiniPlayer(events: unknown[]) {
       root: container,
       skipInactive: true,
       showWarning: false,
+      mouseTail: false, // PM-38：關閉滑鼠軌跡，省資源
     });
   } catch (err) {
     blog('mini player 建立失敗', err);
@@ -99,12 +100,35 @@ function initMiniPlayer(events: unknown[]) {
     return;
   }
 
-  // PM-31 Bug3：讓 Replayer 的 iframe 填滿放大後的容器（960px / 16:9）
-  const iframe = container.querySelector('iframe');
-  if (iframe) {
-    iframe.style.width = '100%';
-    iframe.style.height = '100%';
+  // PM-38：預載第一幀，避免點播放時卡在開頭的 FullSnapshot 解析
+  try {
+    replayer.play(0);
+    replayer.pause(0);
+  } catch {
+    /* 忽略 */
   }
+
+  // PM-38：rrweb 以原始解析度渲染（如 1600x900），容器只有 960px → 不縮放會像
+  // 放大鏡只看到左上角。等 iframe 渲染後依錄製原始尺寸算縮放比，用 transform 縮到容器寬。
+  requestAnimationFrame(() => {
+    const iframe = container.querySelector('iframe');
+    if (!iframe) return;
+    const metaEvent = (
+      events as Array<{ type?: number; data?: { width?: number; height?: number } }>
+    ).find((e) => e.type === 4); // type 4 = Meta，帶原始頁面寬高
+    const pageWidth = metaEvent?.data?.width || 1920;
+    const pageHeight = metaEvent?.data?.height || 1080;
+    const containerWidth = container.clientWidth;
+    const scale = containerWidth / pageWidth;
+    iframe.style.width = `${pageWidth}px`;
+    iframe.style.height = `${pageHeight}px`;
+    iframe.style.transform = `scale(${scale})`;
+    iframe.style.transformOrigin = 'top left';
+    iframe.style.border = 'none';
+    // 容器高度配合縮放後的高度（取代固定 aspect-ratio）
+    container.style.height = `${pageHeight * scale}px`;
+    container.style.overflow = 'hidden';
+  });
 
   duration = replayer.getMetaData().totalTime || 0;
   const seekBar = $opt<HTMLInputElement>('markerSeek');
