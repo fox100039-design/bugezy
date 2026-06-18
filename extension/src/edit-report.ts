@@ -124,9 +124,12 @@ function initMiniPlayer(events: unknown[]) {
     const scale = containerWidth / pageWidth;
     iframe.style.width = `${pageWidth}px`;
     iframe.style.height = `${pageHeight}px`;
-    iframe.style.transform = `scale(${scale})`;
-    iframe.style.transformOrigin = 'top left';
     iframe.style.border = 'none';
+    // PM-47：縮放整個 .replayer-wrapper（含 .replayer-mouse 游標 + tail），而非只縮 iframe，
+    // 否則游標停在原始座標被容器裁掉而看不見。
+    const scaleTarget = (container.querySelector('.replayer-wrapper') as HTMLElement | null) ?? iframe;
+    scaleTarget.style.transform = `scale(${scale})`;
+    scaleTarget.style.transformOrigin = 'top left';
     // 容器高度配合縮放後的高度（取代固定 aspect-ratio）
     container.style.height = `${pageHeight * scale}px`;
     container.style.overflow = 'hidden';
@@ -192,8 +195,11 @@ function initMiniPlayer(events: unknown[]) {
     // 容器寬度變了 → 等版面重排後依新寬度重算 scale（overflow:hidden，不用拉 bar）
     requestAnimationFrame(() => {
       const newScale = container.clientWidth / pageWidth;
-      iframe.style.transform = `scale(${newScale})`;
-      iframe.style.transformOrigin = 'top left';
+      // PM-47：縮放 .replayer-wrapper（含游標），不只 iframe
+      const scaleTarget =
+        (container.querySelector('.replayer-wrapper') as HTMLElement | null) ?? iframe;
+      scaleTarget.style.transform = `scale(${newScale})`;
+      scaleTarget.style.transformOrigin = 'top left';
       container.style.height = `${pageHeight * newScale}px`;
       container.style.overflow = 'hidden';
     });
@@ -230,25 +236,43 @@ const BUGEZY_HIDE_CSS = `
   }
 `;
 
+// PM-47：rrweb seek/快轉會重建 iframe DOM 移除注入的 style，MutationObserver 不夠即時，
+// 改為 setInterval 每 200ms 檢查並補回，更可靠。
+let cleanModeInterval: ReturnType<typeof setInterval> | null = null;
+
+function injectCleanCSS(iframe: HTMLIFrameElement | null) {
+  const doc = iframe?.contentDocument;
+  if (!doc) return;
+  if (!doc.getElementById('bugezy-clean-style')) {
+    const style = doc.createElement('style');
+    style.id = 'bugezy-clean-style';
+    style.textContent = BUGEZY_HIDE_CSS;
+    doc.head?.appendChild(style);
+  }
+}
+
+function removeCleanCSS(iframe: HTMLIFrameElement | null) {
+  iframe?.contentDocument?.getElementById('bugezy-clean-style')?.remove();
+}
+
 function initCleanModeToggle(container: HTMLElement) {
   const checkbox = document.getElementById('cleanMode') as HTMLInputElement | null;
   if (!checkbox) return;
 
   function applyCleanMode(clean: boolean) {
     const iframe = container.querySelector('iframe') as HTMLIFrameElement | null;
-    const doc = iframe?.contentDocument;
-    if (!doc) return;
-    const styleId = 'bugezy-clean-style';
-    const existing = doc.getElementById(styleId);
+    if (cleanModeInterval) {
+      clearInterval(cleanModeInterval);
+      cleanModeInterval = null;
+    }
     if (clean) {
-      if (!existing) {
-        const style = doc.createElement('style');
-        style.id = styleId;
-        style.textContent = BUGEZY_HIDE_CSS;
-        doc.head.appendChild(style);
-      }
+      injectCleanCSS(iframe);
+      // 持續每 200ms 補注入（seek/快轉重建 iframe DOM 後也維持乾淨）
+      cleanModeInterval = setInterval(() => {
+        injectCleanCSS(container.querySelector('iframe') as HTMLIFrameElement | null);
+      }, 200);
     } else {
-      existing?.remove();
+      removeCleanCSS(iframe);
     }
   }
 
@@ -267,21 +291,10 @@ function initCleanModeToggle(container: HTMLElement) {
     applyCleanMode(checkbox.checked);
   });
 
-  // rrweb 回放/seek 會重建 iframe DOM，可能移除我們的 style → MutationObserver 持續補回
-  const observer = new MutationObserver(() => {
-    if (!checkbox.checked) return;
-    const iframe = container.querySelector('iframe') as HTMLIFrameElement | null;
-    if (iframe?.contentDocument && !iframe.contentDocument.getElementById('bugezy-clean-style')) {
-      applyCleanMode(true);
-    }
+  // 頁面卸載時清掉 interval
+  window.addEventListener('beforeunload', () => {
+    if (cleanModeInterval) clearInterval(cleanModeInterval);
   });
-  const startObserving = () => {
-    const iframe = container.querySelector('iframe') as HTMLIFrameElement | null;
-    const head = iframe?.contentDocument?.head;
-    if (head) observer.observe(head, { childList: true });
-    else window.setTimeout(startObserving, 500);
-  };
-  startObserving();
 }
 
 function addMarker(sec: number) {
