@@ -64,6 +64,20 @@ window.addEventListener('message', async (e: MessageEvent) => {
     return;
   }
 
+  // PM-36：inject 要歷史語音 → 跟 background 拿 buffer → 回填給 inject（to-inject）
+  if (data.kind === 'REQUEST_VOICE_HISTORY') {
+    chrome.runtime.sendMessage({ type: 'GET_VOICE_BUFFER' }, (response) => {
+      const segments = (response as { segments?: unknown[] } | undefined)?.segments;
+      if (segments && segments.length > 0) {
+        window.postMessage(
+          { source: BUGEZY_SOURCE, dir: 'to-inject', kind: 'VOICE_HISTORY', segments },
+          '*',
+        );
+      }
+    });
+    return;
+  }
+
   if (data.kind === 'READY') {
     injectReady = true;
     blog('✓ inject 已報到（READY）');
@@ -117,9 +131,9 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
       if (injectReady) {
         sendToInject('START'); // inject 全新（recording=false）會正常啟動
         blog('已送 START 給 inject（跳頁恢復）');
-      } else if (retries < 30) {
-        // inject 尚未 READY，等 100ms 再試（最多 3 秒）
-        setTimeout(() => waitForInject(retries + 1), 100);
+      } else if (retries < 40) {
+        // PM-36：inject 尚未 READY，縮短為每 50ms 再試（最多 40×50ms = 2 秒），恢復更滑順
+        setTimeout(() => waitForInject(retries + 1), 50);
       } else {
         blog('⚠ inject 未就緒，跳頁恢復失敗');
       }

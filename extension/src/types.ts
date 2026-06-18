@@ -95,7 +95,9 @@ export type ControlMessage =
   | { type: 'FLUSH_VOICE'; segment: VoiceSegment }
   | { type: 'FLUSH_CONSOLE'; log: ConsoleLog }
   | { type: 'FLUSH_NETWORK'; error: NetworkError }
-  | { type: 'FLUSH_RRWEB'; events: unknown[] };
+  | { type: 'FLUSH_RRWEB'; events: unknown[] }
+  // PM-36：跳頁恢復時讀回已累積語音 buffer，填回右上面板
+  | { type: 'GET_VOICE_BUFFER' };
 
 /** background → popup 的狀態回應 */
 export interface StateResponse {
@@ -132,7 +134,10 @@ export type InjectMessage =
   | { source: typeof BUGEZY_SOURCE; dir: 'to-content'; kind: 'FLUSH_VOICE'; segment: VoiceSegment }
   | { source: typeof BUGEZY_SOURCE; dir: 'to-content'; kind: 'FLUSH_CONSOLE'; log: ConsoleLog }
   | { source: typeof BUGEZY_SOURCE; dir: 'to-content'; kind: 'FLUSH_NETWORK'; error: NetworkError }
-  | { source: typeof BUGEZY_SOURCE; dir: 'to-content'; kind: 'FLUSH_RRWEB'; events: unknown[] };
+  | { source: typeof BUGEZY_SOURCE; dir: 'to-content'; kind: 'FLUSH_RRWEB'; events: unknown[] }
+  // PM-36：inject 建面板後請求歷史語音（to-content）；content 讀 buffer 後回填（to-inject）
+  | { source: typeof BUGEZY_SOURCE; dir: 'to-content'; kind: 'REQUEST_VOICE_HISTORY' }
+  | { source: typeof BUGEZY_SOURCE; dir: 'to-inject'; kind: 'VOICE_HISTORY'; segments: VoiceSegment[] };
 
 /** chrome.storage.local 的鍵 */
 export const STORAGE_KEY = 'bugezy:lastPayload';

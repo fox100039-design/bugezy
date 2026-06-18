@@ -361,6 +361,12 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summ
           sendResponse({ ok: true });
           break;
         }
+        // PM-36：回傳已累積的語音 buffer，供跳頁恢復時回填右上面板
+        case 'GET_VOICE_BUFFER': {
+          const r = await chrome.storage.local.get(BUFFER_VOICE_KEY);
+          sendResponse({ segments: (r[BUFFER_VOICE_KEY] as VoiceSegment[]) ?? [] });
+          break;
+        }
         default:
           sendResponse({ ok: false, error: 'unknown message' });
       }

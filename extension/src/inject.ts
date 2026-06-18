@@ -155,6 +155,10 @@ function main() {
     panel.appendChild(header);
     panel.appendChild(content);
     document.body.appendChild(panel);
+
+    // PM-36：建完面板後請 content 從 background buffer 取回歷史語音，填回面板
+    // （跳頁恢復時面板才不會是空的）
+    post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'REQUEST_VOICE_HISTORY' });
   }
   function hideCaptionBar() {
     captionBar?.remove();
@@ -645,9 +649,10 @@ function main() {
   }
 
   // ── 與 content.ts（ISOLATED world）溝通 ──────────────────
+  // to-inject 方向同時承載 START/STOP 指令（cmd）與 PM-36 的 VOICE_HISTORY 回填（kind）
   window.addEventListener('message', (e: MessageEvent) => {
     if (e.source !== window) return;
-    const data = e.data as InjectCommand;
+    const data = e.data as InjectCommand & { kind?: string; segments?: VoiceSegment[] };
     if (!data || data.source !== BUGEZY_SOURCE || data.dir !== 'to-inject') return;
 
     if (data.cmd === 'START') {
@@ -658,6 +663,15 @@ function main() {
       blog('收到 STOP 指令');
       const payload = stopRecording();
       post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'RESULT', payload });
+    } else if (data.kind === 'VOICE_HISTORY') {
+      // PM-36：收到歷史語音 → 填入右上面板（跳頁恢復時不再是空的）
+      const voiceContent = document.getElementById('bugezy-voice-content');
+      if (voiceContent && data.segments && data.segments.length > 0) {
+        voiceContent.textContent = data.segments.map((s) => s.text).join('\n');
+        const panel = document.getElementById('bugezy-voice-panel');
+        if (panel) panel.scrollTop = panel.scrollHeight;
+        blog('載入歷史語音', data.segments.length, '段');
+      }
     }
   });
 
