@@ -123,7 +123,7 @@ function main() {
     const panel = document.createElement('div');
     panel.id = 'bugezy-voice-panel';
     panel.style.cssText =
-      'position:fixed;top:140px;right:12px;z-index:2147483647;pointer-events:none;width:260px;max-height:50vh;overflow-y:auto;background:rgba(0,0,0,0.8);border:1px solid rgba(124,58,237,0.5);border-radius:12px;padding:10px 14px;font-family:system-ui,sans-serif;font-size:14px;color:#eee;line-height:1.6;transition:opacity 0.3s;'; // PM-40：60→140px 避免被書籤列/其他擴充遮擋
+      'position:fixed;top:200px;right:12px;z-index:2147483647;pointer-events:none;width:260px;max-height:50vh;overflow-y:auto;background:rgba(0,0,0,0.8);border:1px solid rgba(124,58,237,0.5);border-radius:12px;padding:10px 14px;font-family:system-ui,sans-serif;font-size:14px;color:#eee;line-height:1.6;transition:opacity 0.3s;'; // PM-40/44：60→140→200px 避免被書籤列/其他擴充遮擋
 
     // PM-31 Bug1：header 整列 pointer-events:none，只有收合按鈕本身可點，
     // 避免使用者誤點面板其他區域觸發奇怪行為導致頁面卡死。
@@ -428,10 +428,15 @@ function main() {
     lastFlushedIndex = 0; // PM-34
     let rrwebOk = false;
     try {
+      // PM-44：排除 BugEzy 自己注入的 overlay DOM，回放時不會看到自家字幕條/語音面板
+      const BUGEZY_SELECTORS =
+        '#bugezy-live-caption, #bugezy-voice-panel, #bugezy-mic-overlay, #bugezy-voice-restart, #bugezy-ss-toolbar, #bugezy-ss-overlay, #bugezy-ss-canvas';
       const stop = record({
         emit(event) {
           events.push(event);
         },
+        blockSelector: BUGEZY_SELECTORS, // 匹配元素記為空白方塊，不錄內容
+        ignoreSelector: BUGEZY_SELECTORS, // 忽略其屬性/輸入變更
       });
       stopRrweb = stop ?? null;
       rrwebOk = stopRrweb !== null;
