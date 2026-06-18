@@ -87,9 +87,27 @@ function main() {
     document.getElementById('bugezy-live-caption')?.remove();
     const bar = document.createElement('div');
     bar.id = 'bugezy-live-caption';
+    // PM-30：改 flex 佈局，bar 本體 pointer-events:none，內部按鈕 auto
     bar.style.cssText =
-      'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);z-index:2147483647;pointer-events:none;background:rgba(0,0,0,0.85);color:#fff;padding:12px 28px;border-radius:12px;font-size:22px;max-width:80%;text-align:center;font-family:system-ui,sans-serif;transition:opacity 0.3s;letter-spacing:0.5px;';
-    bar.textContent = '🔴 錄製中，可以用中文描述問題...';
+      'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);z-index:2147483647;pointer-events:none;background:rgba(0,0,0,0.85);color:#fff;padding:12px 28px;border-radius:12px;font-size:22px;max-width:80%;font-family:system-ui,sans-serif;transition:opacity 0.3s;letter-spacing:0.5px;display:flex;align-items:center;gap:8px;';
+
+    // 文字部分用 span 包裹（PM-30：更新字幕只動這個 span，避免清掉 🔄 按鈕）
+    const textSpan = document.createElement('span');
+    textSpan.id = 'bugezy-caption-text';
+    textSpan.style.cssText = 'flex:1;pointer-events:none;text-align:center;';
+    textSpan.textContent = '🔴 錄製中，可以用中文描述問題...';
+
+    // 永久重啟按鈕（PM-30：靜默中斷時使用者隨時可手動重啟）
+    const restartBtn = document.createElement('button');
+    restartBtn.id = 'bugezy-voice-restart';
+    restartBtn.textContent = '🔄';
+    restartBtn.title = '重新啟動語音辨識';
+    restartBtn.style.cssText =
+      'pointer-events:auto;background:rgba(124,58,237,0.8);color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:16px;cursor:pointer;margin-left:12px;flex-shrink:0;vertical-align:middle;';
+    restartBtn.addEventListener('click', () => forceRestartVoice());
+
+    bar.appendChild(textSpan);
+    bar.appendChild(restartBtn);
     document.body.appendChild(bar);
     captionBar = bar;
 
@@ -127,6 +145,44 @@ function main() {
     captionBar?.remove();
     captionBar = null;
     document.getElementById('bugezy-voice-panel')?.remove();
+  }
+
+  /** PM-30：更新字幕文字只動 textSpan，保留 🔄 按鈕不被清掉 */
+  function setCaptionText(text: string) {
+    const el = document.getElementById('bugezy-caption-text');
+    if (el) el.textContent = text;
+  }
+
+  /** PM-30：手動強制重啟語音（永久 🔄 按鈕用，靜默中斷時隨時可按）*/
+  function forceRestartVoice() {
+    blog('手動強制重啟語音');
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR || !voiceActive) return;
+
+    // 停掉舊的
+    try {
+      recognition?.stop();
+    } catch {
+      /* 忽略 */
+    }
+
+    // 建新的實例，沿用既有 event handlers（指向外層 voiceSegments 等）
+    try {
+      const newRec = new SR() as SRInstance;
+      newRec.lang = 'zh-TW';
+      newRec.continuous = true;
+      newRec.interimResults = false;
+      newRec.onresult = recognition!.onresult;
+      newRec.onend = recognition!.onend;
+      newRec.onerror = recognition!.onerror;
+      recognition = newRec;
+      newRec.start();
+      setCaptionText('🔴 語音已重啟，繼續說...');
+      blog('語音強制重啟成功');
+    } catch (err) {
+      blog('語音強制重啟失敗', err);
+      setCaptionText('❌ 語音重啟失敗');
+    }
   }
 
   /** 語音中斷時在字幕條顯示重新啟動按鈕 */
@@ -451,9 +507,9 @@ function main() {
               }
               // 底部字幕顯示確認（短暫）後回到聆聽中
               if (captionBar) {
-                captionBar.textContent = `✅ ${text}`;
+                setCaptionText(`✅ ${text}`);
                 window.setTimeout(() => {
-                  if (recording && captionBar) captionBar.textContent = '🔴 聆聽中...';
+                  if (recording && captionBar) setCaptionText('🔴 聆聽中...');
                 }, 1500);
               }
             }
@@ -461,7 +517,7 @@ function main() {
             interim = result[0].transcript;
           }
         }
-        if (interim && captionBar) captionBar.textContent = `🔴 ${interim}`;
+        if (interim && captionBar) setCaptionText(`🔴 ${interim}`);
       };
 
       rec.onend = () => {
