@@ -161,79 +161,99 @@ function main() {
     if (el) el.textContent = text;
   }
 
-  /** PM-30：手動強制重啟語音（永久 🔄 按鈕用，靜默中斷時隨時可按）*/
+  /**
+   * PM-32：建立一個全新的 SpeechRecognition 實例（可重複呼叫）。
+   * 每次都掛上「全新」的 event handlers，不複製舊實例的閉包——
+   * 這正是修掉「按 🔄 重啟後語音死掉」的關鍵（舊作法複製已失效的 handler）。
+   */
+  function createRecognition(): SRInstance | null {
+    const win = window as unknown as {
+      SpeechRecognition?: SRCtor;
+      webkitSpeechRecognition?: SRCtor;
+    };
+    const SR = win.SpeechRecognition || win.webkitSpeechRecognition;
+    if (!SR) return null;
+
+    const rec = new SR();
+    rec.lang = 'zh-TW';
+    rec.continuous = true;
+    rec.interimResults = false;
+
+    rec.onresult = (e: SREvent) => {
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) {
+          const text = e.results[i][0].transcript.trim();
+          if (text) {
+            voiceSegments.push({ text, timestamp: Date.now(), isFinal: true });
+            blog('voice segment:', text.slice(0, 40));
+
+            // 右上面板：堆疊已確認文字（PM-27）
+            const voiceContent = document.getElementById('bugezy-voice-content');
+            if (voiceContent) {
+              voiceContent.textContent += (voiceContent.textContent ? '\n' : '') + text;
+              const panel = document.getElementById('bugezy-voice-panel');
+              if (panel) panel.scrollTop = panel.scrollHeight;
+            }
+
+            // 底部字幕：短暫顯示確認後回到聆聽中
+            setCaptionText(`✅ ${text}`);
+            window.setTimeout(() => {
+              if (voiceActive) setCaptionText('🔴 聆聽中...');
+            }, 1500);
+          }
+        }
+      }
+    };
+
+    rec.onend = () => {
+      // 靜默自停 → 仍在錄製就自動重啟；失敗不再叫 showRestartButton（🔄 永遠在）
+      if (voiceActive) {
+        blog('SpeechRecognition onend → auto restart');
+        try {
+          rec.start();
+        } catch {
+          blog('SpeechRecognition auto restart 失敗');
+          setCaptionText('⚠ 語音中斷，按 🔄 重啟');
+        }
+      }
+    };
+
+    rec.onerror = (e: SRErrorEvent) => {
+      blog('SpeechRecognition error:', e.error, e.message || '');
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        voiceActive = false;
+        setCaptionText('❌ 麥克風被拒絕');
+      }
+    };
+
+    return rec;
+  }
+
+  /** PM-32：手動強制重啟語音（永久 🔄 按鈕用）——建全新實例，不複製舊 handlers */
   function forceRestartVoice() {
     blog('手動強制重啟語音');
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR || !voiceActive) return;
+    if (!voiceActive) return;
 
-    // 停掉舊的
+    // 停掉舊的並丟棄
     try {
       recognition?.stop();
     } catch {
       /* 忽略 */
     }
+    recognition = null;
 
-    // 建新的實例，沿用既有 event handlers（指向外層 voiceSegments 等）
-    try {
-      const newRec = new SR() as SRInstance;
-      newRec.lang = 'zh-TW';
-      newRec.continuous = true;
-      newRec.interimResults = false;
-      newRec.onresult = recognition!.onresult;
-      newRec.onend = recognition!.onend;
-      newRec.onerror = recognition!.onerror;
-      recognition = newRec;
-      newRec.start();
-      setCaptionText('🔴 語音已重啟，繼續說...');
-      blog('語音強制重啟成功');
-    } catch (err) {
-      blog('語音強制重啟失敗', err);
-      setCaptionText('❌ 語音重啟失敗');
-    }
-  }
-
-  /** 語音中斷時在字幕條顯示重新啟動按鈕 */
-  function showRestartButton() {
-    if (!captionBar || !voiceActive) return;
-    captionBar.style.pointerEvents = 'auto'; // 暫時允許點擊
-    captionBar.innerHTML = '';
-    
-    const text = document.createElement('span');
-    text.textContent = '⚠ 語音已中斷 ';
-    text.style.cssText = 'pointer-events:none;';
-    
-    const btn = document.createElement('button');
-    btn.textContent = '🔄 重新啟動語音';
-    btn.style.cssText = 'pointer-events:auto;background:#7c3aed;color:#fff;border:none;border-radius:8px;padding:6px 16px;font-size:18px;cursor:pointer;font-weight:600;margin-left:8px;';
-    btn.addEventListener('click', () => {
-      blog('手動重啟 SpeechRecognition');
-      captionBar!.style.pointerEvents = 'none';
-      captionBar!.textContent = '🔴 重新啟動中...';
-      // 建新的 recognition 實例
-      const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (!SR) return;
+    // 建全新的（全新 handlers）
+    recognition = createRecognition();
+    if (recognition) {
       try {
-        const newRec = new SR() as SRInstance;
-        newRec.lang = 'zh-TW';
-        newRec.continuous = true;
-        newRec.interimResults = false;
-        // 複製 event handlers（指向外層的 voiceSegments 等）
-        newRec.onresult = recognition!.onresult;
-        newRec.onend = recognition!.onend;
-        newRec.onerror = recognition!.onerror;
-        recognition = newRec;
-        newRec.start();
-        captionBar!.textContent = '🔴 聆聽中...';
-        blog('SpeechRecognition 手動重啟成功');
+        recognition.start();
+        setCaptionText('🔴 語音已重啟，繼續說...');
+        blog('語音強制重啟成功');
       } catch (err) {
-        blog('手動重啟也失敗', err);
-        captionBar!.textContent = '❌ 語音無法使用';
+        blog('語音強制重啟失敗', err);
+        setCaptionText('❌ 語音重啟失敗');
       }
-    });
-    
-    captionBar.appendChild(text);
-    captionBar.appendChild(btn);
+    }
   }
 
   // 保留原始參考（只 patch 一次，靠 recording 旗標決定是否收集）
@@ -490,72 +510,20 @@ function main() {
     });
   }
 
-  function initSpeechRecognition(SR: SRCtor) {
+  // PM-32：實際啟動語音——統一走 createRecognition() 工廠（與 🔄 重啟同一條路徑）。
+  // 保留 SRCtor 參數讓上游 tryStartVoice / 授權浮層的呼叫端不必更動。
+  function initSpeechRecognition(_SR: SRCtor) {
+    recognition = createRecognition();
+    if (!recognition) {
+      blog('⚠ SpeechRecognition 建立失敗（不支援）');
+      voiceActive = false;
+      return;
+    }
     try {
-      const rec = new SR();
-      rec.lang = 'zh-TW';
-      rec.continuous = true;
-      rec.interimResults = true; // PM-24：要 interim 才能做即時字幕
-
-      rec.onresult = (e: SREvent) => {
-        let interim = '';
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          const result = e.results[i];
-          if (result.isFinal) {
-            const text = result[0].transcript.trim();
-            if (text) {
-              voiceSegments.push({ text, timestamp: Date.now(), isFinal: true });
-              blog('voice segment:', text.slice(0, 40));
-              // PM-27：確認文字堆疊到右上面板，並自動捲到最新
-              const voiceContent = document.getElementById('bugezy-voice-content');
-              if (voiceContent) {
-                voiceContent.textContent += (voiceContent.textContent ? '\n' : '') + text;
-                const panel = document.getElementById('bugezy-voice-panel');
-                if (panel) panel.scrollTop = panel.scrollHeight;
-              }
-              // 底部字幕顯示確認（短暫）後回到聆聽中
-              if (captionBar) {
-                setCaptionText(`✅ ${text}`);
-                window.setTimeout(() => {
-                  if (recording && captionBar) setCaptionText('🔴 聆聽中...');
-                }, 1500);
-              }
-            }
-          } else {
-            interim = result[0].transcript;
-          }
-        }
-        if (interim && captionBar) setCaptionText(`🔴 ${interim}`);
-      };
-
-      rec.onend = () => {
-        // Web Speech API 靜默幾秒會自動停，仍在錄製中就重啟以持續收音
-        if (voiceActive) {
-          blog('SpeechRecognition onend → auto restart');
-          try {
-            rec.start();
-          } catch {
-            // 重啟失敗 → 顯示手動重啟按鈕
-            blog('SpeechRecognition restart 失敗，顯示重啟按鈕');
-            showRestartButton();
-          }
-        }
-      };
-
-      rec.onerror = (e: SRErrorEvent) => {
-        blog('SpeechRecognition error:', e.error, e.message || '');
-        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-          voiceActive = false;
-          recognition = null;
-          blog('麥克風被拒絕，語音停用');
-        }
-      };
-
-      recognition = rec;
-      rec.start();
+      recognition.start();
       blog('SpeechRecognition started (zh-TW)');
     } catch (err) {
-      blog('⚠ SpeechRecognition 建立失敗', err);
+      blog('⚠ SpeechRecognition start 失敗', err);
       recognition = null;
       voiceActive = false;
     }
