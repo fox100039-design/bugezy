@@ -21,7 +21,7 @@ blog('content loaded（ISOLATED world）', location.href);
 
 let injectReady = false;
 
-function sendToInject(cmd: 'START' | 'STOP', keyboardMode?: boolean) {
+function sendToInject(cmd: 'START' | 'STOP' | 'REWIND', keyboardMode?: boolean) {
   const msg: InjectCommand = { source: BUGEZY_SOURCE, dir: 'to-inject', cmd, keyboardMode };
   blog(`→ 轉送 ${cmd} 給 inject（injectReady=${injectReady}, keyboardMode=${keyboardMode === true}）`);
   window.postMessage(msg, '*');
@@ -105,6 +105,19 @@ window.addEventListener('message', async (e: MessageEvent) => {
       chrome.runtime.sendMessage({ type: 'RECORDING_DONE', summary: summarize(payload) });
     });
   }
+
+  // PM-50：⏪ 回溯打包結果 → 存 storage 後通知 background 開編輯頁
+  if (data.kind === 'REWIND_RESULT') {
+    const payload = data.payload;
+    blog('✓ 收到 REWIND 打包資料', {
+      dom: payload.rrwebEvents.length,
+      console: payload.consoleLogs.length,
+      network: payload.networkErrors.length,
+    });
+    chrome.storage.local.set({ [STORAGE_KEY]: payload }, () => {
+      chrome.runtime.sendMessage({ type: 'REWIND_DONE', summary: summarize(payload) });
+    });
+  }
 });
 
 // background → content：控制指令
@@ -120,6 +133,9 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
     sendResponse({ ok: true });
   } else if (msg.type === 'START_SCREENSHOT') {
     injectScreenshotOverlay();
+    sendResponse({ ok: true });
+  } else if (msg.type === 'REWIND_30S') {
+    sendToInject('REWIND'); // PM-50：請 inject 打包背景緩存
     sendResponse({ ok: true });
   }
   return true;

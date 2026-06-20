@@ -61,7 +61,7 @@
       #clearBtn { background: #4a4a5e; }
 
       /* 兩大入口（漸層 + hover 上浮） */
-      .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 4px 0 8px; }
+      .action-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 4px 0 8px; }
       .main-action {
         display: flex; flex-direction: column; align-items: center; gap: 6px;
         padding: 20px 12px; border: none; border-radius: 12px;
@@ -69,6 +69,7 @@
       }
       .main-action:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3); filter: none; }
       .main-action.record { background: linear-gradient(135deg, #7c3aed, #6d28d9); }
+      .main-action.rewind { background: linear-gradient(135deg, #f59e0b, #d97706); }
       .main-action.screenshot { background: linear-gradient(135deg, #059669, #047857); }
       .action-icon { font-size: 32px; }
       .action-label { font-size: 15px; font-weight: 700; }
@@ -135,6 +136,11 @@
           <span class="action-icon">🎬</span>
           <span class="action-label">錄製</span>
           <span class="action-desc">DOM + 語音 + Console</span>
+        </button>
+        <button id="rewindBtn" class="main-action rewind">
+          <span class="action-icon">⏪</span>
+          <span class="action-label">回溯 30s</span>
+          <span class="action-desc">抓剛才的 Bug</span>
         </button>
         <button id="screenshotBtn" class="main-action screenshot">
           <span class="action-icon">📸</span>

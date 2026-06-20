@@ -49,6 +49,21 @@ keyboardMode.addEventListener('change', () => {
   chrome.storage.local.set({ [KEYBOARD_MODE_KEY]: keyboardMode.checked });
 });
 
+// PM-50：⏪ 回溯 30 秒 — 打包背景緩存（不需先按錄製）
+const rewindBtn = $<HTMLButtonElement>('rewindBtn');
+rewindBtn.addEventListener('click', async () => {
+  const label = rewindBtn.querySelector<HTMLElement>('.action-label');
+  rewindBtn.disabled = true;
+  if (label) label.textContent = '⏪ 擷取中...';
+  try {
+    await send('REWIND_30S');
+  } catch (err) {
+    console.error('[BugEzy popup] rewind failed', err);
+  }
+  rewindBtn.disabled = false;
+  if (label) label.textContent = '回溯 30s';
+});
+
 let startedAt: number | null = null;
 let tick: number | undefined;
 let uploadPoll: number | undefined;

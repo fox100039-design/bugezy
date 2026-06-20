@@ -324,6 +324,33 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summ
           sendResponse(await uploadReport(m.description, m.markers));
           break;
         }
+        // PM-50：⏪ 回溯——通知 active tab 的 content 打包背景緩存
+        case 'REWIND_30S': {
+          const tab = await getActiveTab();
+          if (tab?.id) {
+            await chrome.tabs.sendMessage(tab.id, { type: 'REWIND_30S' } satisfies ControlMessage);
+            sendResponse({ ok: true });
+          } else {
+            sendResponse({ ok: false, error: '找不到 active tab' });
+          }
+          break;
+        }
+        case 'REWIND_DONE': {
+          // 回溯 payload 已由 content 寫進 STORAGE_KEY；回填摘要後開編輯頁（同 RECORDING_DONE）
+          const incoming = (msg as { summary: RecordingSummary }).summary;
+          const summary: RecordingSummary = {
+            ...incoming,
+            durationMs: 30000, // 回溯視窗約 30 秒
+            uploadStatus: 'idle',
+            shareUrl: null,
+            uploadError: null,
+          };
+          const s = await setState({ recording: false, startedAt: null, tabId: null, summary });
+          clearBadge();
+          await openEditReport();
+          sendResponse(toResponse(s));
+          break;
+        }
         // PM-34：即時 flush → 追加到對應 buffer（頁面跳轉時資料已落地）
         case 'FLUSH_VOICE': {
           const seg = (msg as { segment: VoiceSegment }).segment;

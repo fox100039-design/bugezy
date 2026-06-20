@@ -86,6 +86,46 @@ function main() {
   let voiceActive = false;
   let captionBar: HTMLDivElement | null = null; // PM-24：錄製中即時字幕
 
+  // ===== PM-50：背景循環緩存（⏪ 回溯最近 30 秒，不需先按錄製）=====
+  const REWIND_WINDOW = 30_000;
+  let bgEvents: { data: unknown; timestamp: number }[] = [];
+  let bgConsoleLogs: { data: ConsoleLog; timestamp: number }[] = [];
+  let bgNetworkErrors: { data: NetworkError; timestamp: number }[] = [];
+  let bgStopRrweb: (() => void) | null = null;
+
+  /** 啟動 / 重啟背景 rrweb 緩存（與「錄製用 rrweb」互斥，同頁不能同時跑兩個 record）。*/
+  function startBackgroundBuffer() {
+    bgEvents = [];
+    bgConsoleLogs = [];
+    bgNetworkErrors = [];
+    try {
+      const stop = record({
+        emit(event) {
+          const ts = (event as { timestamp?: number }).timestamp || Date.now();
+          bgEvents.push({ data: event, timestamp: ts });
+        },
+        // PM-50：週期性 FullSnapshot，循環裁切後仍有可回放的起點（否則只剩 incremental 無法回放）
+        checkoutEveryNms: REWIND_WINDOW,
+      });
+      bgStopRrweb = stop ?? null;
+      blog('背景緩存 rrweb 已啟動');
+    } catch (err) {
+      blog('⚠ 背景 rrweb 啟動失敗', err);
+      bgStopRrweb = null;
+    }
+  }
+
+  // 每 5 秒裁掉超過視窗的舊資料（循環 buffer）
+  window.setInterval(() => {
+    const cutoff = Date.now() - REWIND_WINDOW;
+    bgEvents = bgEvents.filter((e) => e.timestamp > cutoff);
+    bgConsoleLogs = bgConsoleLogs.filter((e) => e.timestamp > cutoff);
+    bgNetworkErrors = bgNetworkErrors.filter((e) => e.timestamp > cutoff);
+  }, 5000);
+
+  // inject 載入即開始背景緩存（不需等使用者按錄製）
+  startBackgroundBuffer();
+
   function showCaptionBar() {
     document.getElementById('bugezy-live-caption')?.remove();
     const bar = document.createElement('div');
@@ -331,17 +371,20 @@ function main() {
   }
 
   // ── A. Console 攔截（只抓 warn + error）──────────────────
+  // PM-50：永遠存背景 buffer（回溯用）；recording 時也存錄製 buffer + flush。
   console.warn = (...args: unknown[]) => {
+    const entry: ConsoleLog = { level: 'warn', message: stringifyArgs(args), timestamp: Date.now() };
+    bgConsoleLogs.push({ data: entry, timestamp: entry.timestamp });
     if (recording) {
-      const entry: ConsoleLog = { level: 'warn', message: stringifyArgs(args), timestamp: Date.now() };
       consoleLogs.push(entry);
       post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'FLUSH_CONSOLE', log: entry }); // PM-34
     }
     return originalWarn(...args);
   };
   console.error = (...args: unknown[]) => {
+    const entry: ConsoleLog = { level: 'error', message: stringifyArgs(args), timestamp: Date.now() };
+    bgConsoleLogs.push({ data: entry, timestamp: entry.timestamp });
     if (recording) {
-      const entry: ConsoleLog = { level: 'error', message: stringifyArgs(args), timestamp: Date.now() };
       consoleLogs.push(entry);
       post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'FLUSH_CONSOLE', log: entry }); // PM-34
     }
@@ -349,12 +392,13 @@ function main() {
   };
 
   // ── B. Network 攔截 — fetch（只抓 4xx / 5xx）─────────────
+  // PM-50：永遠存背景 buffer；recording 時也存錄製 buffer + flush。
   window.fetch = async (...args: Parameters<typeof fetch>) => {
     const start = Date.now();
     const [input, init] = args;
     const response = await originalFetch(...args);
     try {
-      if (recording && response.status >= 400) {
+      if (response.status >= 400) {
         const body = await response
           .clone()
           .text()
@@ -371,8 +415,11 @@ function main() {
           timestamp: start,
           duration: Date.now() - start,
         };
-        networkErrors.push(entry);
-        post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'FLUSH_NETWORK', error: entry }); // PM-34
+        bgNetworkErrors.push({ data: entry, timestamp: entry.timestamp });
+        if (recording) {
+          networkErrors.push(entry);
+          post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'FLUSH_NETWORK', error: entry }); // PM-34
+        }
       }
     } catch (err) {
       blog('fetch 攔截處理失敗（已忽略，不影響頁面）', err);
@@ -408,7 +455,7 @@ function main() {
       meta.start = Date.now();
       if (typeof body === 'string') meta.body = body.slice(0, 2000);
       this.addEventListener('loadend', () => {
-        if (recording && this.status >= 400) {
+        if (this.status >= 400) {
           const entry: NetworkError = {
             method: meta.method,
             url: meta.url,
@@ -419,8 +466,11 @@ function main() {
             timestamp: meta.start,
             duration: Date.now() - meta.start,
           };
-          networkErrors.push(entry);
-          post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'FLUSH_NETWORK', error: entry }); // PM-34
+          bgNetworkErrors.push({ data: entry, timestamp: entry.timestamp }); // PM-50：永遠存背景 buffer
+          if (recording) {
+            networkErrors.push(entry);
+            post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'FLUSH_NETWORK', error: entry }); // PM-34
+          }
         }
       });
     }
@@ -433,6 +483,17 @@ function main() {
       blog('START 重複呼叫，已在錄製中');
       return stopRrweb !== null;
     }
+    // PM-50：停掉背景 rrweb（同頁不能同時跑兩個 record），切換到錄製用 rrweb
+    if (bgStopRrweb) {
+      try {
+        bgStopRrweb();
+      } catch (err) {
+        blog('停止背景 rrweb 拋錯（已忽略）', err);
+      }
+      bgStopRrweb = null;
+      blog('已停止背景 rrweb（切換到錄製模式）');
+    }
+
     recording = true;
     events = [];
     consoleLogs = [];
@@ -666,6 +727,8 @@ function main() {
       network: payload.networkErrors.length,
       voice: payload.voiceTranscript.length,
     });
+    // PM-50：錄製結束後重啟背景緩存（回到「隨時可回溯」狀態）
+    startBackgroundBuffer();
     return payload;
   }
 
@@ -688,6 +751,22 @@ function main() {
       blog('收到 STOP 指令');
       const payload = stopRecording();
       post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'RESULT', payload });
+    } else if (data.cmd === 'REWIND') {
+      // PM-50：打包背景緩存（最近 30 秒），不影響背景緩存持續運作
+      blog('收到 REWIND 指令，打包最近 30 秒');
+      const payload: RecordingPayload = {
+        rrwebEvents: bgEvents.map((e) => e.data),
+        consoleLogs: bgConsoleLogs.map((e) => e.data),
+        networkErrors: bgNetworkErrors.map((e) => e.data),
+        pageInfo: buildPageInfo(),
+        voiceTranscript: [], // 回溯沒有語音
+      };
+      blog('REWIND 打包', {
+        dom: payload.rrwebEvents.length,
+        console: payload.consoleLogs.length,
+        network: payload.networkErrors.length,
+      });
+      post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'REWIND_RESULT', payload });
     } else if (data.kind === 'VOICE_HISTORY') {
       // PM-36：收到歷史語音 → 填入右上面板（跳頁恢復時不再是空的）
       const voiceContent = document.getElementById('bugezy-voice-content');

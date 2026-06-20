@@ -97,7 +97,10 @@ export type ControlMessage =
   | { type: 'FLUSH_NETWORK'; error: NetworkError }
   | { type: 'FLUSH_RRWEB'; events: unknown[] }
   // PM-36：跳頁恢復時讀回已累積語音 buffer，填回右上面板
-  | { type: 'GET_VOICE_BUFFER' };
+  | { type: 'GET_VOICE_BUFFER' }
+  // PM-50：⏪ 30 秒回溯（背景緩存打包成報告）
+  | { type: 'REWIND_30S' }
+  | { type: 'REWIND_DONE'; summary: RecordingSummary };
 
 /** background → popup 的狀態回應 */
 export interface StateResponse {
@@ -118,11 +121,11 @@ export const BUGEZY_DEBUG = true;
  */
 export const BUGEZY_SOURCE = 'bugezy';
 
-/** content → inject：控制錄製（PM-49：START 帶 keyboardMode 決定是否跳過語音） */
+/** content → inject：控制錄製（PM-49：START 帶 keyboardMode；PM-50：REWIND 打包背景緩存） */
 export interface InjectCommand {
   source: typeof BUGEZY_SOURCE;
   dir: 'to-inject';
-  cmd: 'START' | 'STOP';
+  cmd: 'START' | 'STOP' | 'REWIND';
   keyboardMode?: boolean;
 }
 
@@ -140,7 +143,9 @@ export type InjectMessage =
   | { source: typeof BUGEZY_SOURCE; dir: 'to-content'; kind: 'REQUEST_VOICE_HISTORY' }
   | { source: typeof BUGEZY_SOURCE; dir: 'to-inject'; kind: 'VOICE_HISTORY'; segments: VoiceSegment[] }
   // PM-37：content 收到 READY 後回 ACK，讓 inject 停止重複發 READY（解 READY 競爭條件）
-  | { source: typeof BUGEZY_SOURCE; dir: 'to-inject'; kind: 'READY_ACK' };
+  | { source: typeof BUGEZY_SOURCE; dir: 'to-inject'; kind: 'READY_ACK' }
+  // PM-50：inject 打包背景緩存（最近 30 秒）回傳給 content
+  | { source: typeof BUGEZY_SOURCE; dir: 'to-content'; kind: 'REWIND_RESULT'; payload: RecordingPayload };
 
 /** chrome.storage.local 的鍵 */
 export const STORAGE_KEY = 'bugezy:lastPayload';
