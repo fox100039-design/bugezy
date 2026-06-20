@@ -82,6 +82,298 @@ function supa(env: Env): SupabaseClient {
   return createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY);
 }
 
+function html(body: string): Response {
+  return new Response(body, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+}
+
+// ── PM-48：測試專頁（Test Harness）──────────────────────────
+// 共用 CSS（page1 與 page2/3 shell 共用，單一來源）
+const TEST_STYLE = `
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: system-ui, "Microsoft JhengHei", sans-serif;
+      background: #f5f5f5; color: #333; padding: 20px;
+      max-width: 960px; margin: 0 auto;
+    }
+    h1 { color: #7c3aed; margin-bottom: 8px; }
+    .subtitle { color: #888; margin-bottom: 24px; }
+
+    .section {
+      background: #fff; border-radius: 12px; padding: 20px;
+      margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .section h2 { font-size: 16px; margin-bottom: 12px; color: #555; }
+
+    .btn-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+
+    button {
+      padding: 10px 16px; border: none; border-radius: 8px;
+      font-size: 14px; cursor: pointer; font-weight: 500;
+      transition: all 0.15s;
+    }
+    button:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+
+    .btn-error { background: #ef4444; color: #fff; }
+    .btn-warn { background: #f59e0b; color: #fff; }
+    .btn-network { background: #3b82f6; color: #fff; }
+    .btn-dom { background: #10b981; color: #fff; }
+    .btn-nav { background: #7c3aed; color: #fff; }
+
+    .output {
+      background: #1a1a2e; color: #0f0; padding: 12px;
+      border-radius: 8px; font-family: monospace; font-size: 13px;
+      min-height: 60px; margin-top: 12px; white-space: pre-wrap;
+      max-height: 200px; overflow-y: auto;
+    }
+
+    .test-area {
+      border: 2px dashed #ddd; border-radius: 12px;
+      padding: 20px; text-align: center; margin-top: 12px;
+    }
+    .test-area img { max-width: 300px; border-radius: 8px; margin: 8px; }
+
+    .nav-links { display: flex; gap: 12px; margin-top: 12px; }
+    .nav-links a {
+      display: inline-block; padding: 10px 20px;
+      background: #7c3aed; color: #fff; text-decoration: none;
+      border-radius: 8px; font-weight: 600;
+    }
+    .nav-links a:hover { background: #6d28d9; }
+
+    #animBox {
+      width: 80px; height: 80px; background: #7c3aed;
+      border-radius: 12px; transition: all 0.5s;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-weight: bold; margin-top: 12px;
+    }
+
+    .page-id {
+      position: fixed; top: 10px; right: 10px;
+      background: #7c3aed; color: #fff; padding: 6px 14px;
+      border-radius: 20px; font-size: 13px; font-weight: 600;
+    }
+`;
+
+/** page2/page3 共用骨架（同 head/style，內容不同） */
+function testShell(pageId: string, inner: string): string {
+  return `<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8">
+  <title>🧪 BugEzy 測試頁</title>
+  <style>${TEST_STYLE}</style>
+</head>
+<body>
+  <div class="page-id">${pageId}</div>
+${inner}
+</body>
+</html>`;
+}
+
+const TEST_PAGE_1 = `<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8">
+  <title>🧪 BugEzy 測試頁</title>
+  <style>${TEST_STYLE}</style>
+</head>
+<body>
+  <div class="page-id">📍 測試頁 1</div>
+
+  <h1>🧪 BugEzy 測試頁</h1>
+  <p class="subtitle">用這個頁面測試 BugEzy 的各項功能。每個按鈕觸發可預測的事件。</p>
+
+  <!-- Console 測試 -->
+  <div class="section">
+    <h2>🖥 Console 測試</h2>
+    <div class="btn-grid">
+      <button class="btn-error" onclick="console.error('❌ [TEST] TypeError: Cannot read property of undefined')">觸發 console.error</button>
+      <button class="btn-warn" onclick="console.warn('⚠ [TEST] Deprecated API usage detected')">觸發 console.warn</button>
+      <button class="btn-error" onclick="console.error('❌ [TEST] Uncaught ReferenceError: foo is not defined')">觸發 ReferenceError</button>
+      <button class="btn-error" onclick="try{null.toString()}catch(e){console.error('❌ [TEST]',e.message)}">觸發真實 TypeError</button>
+    </div>
+    <div class="output" id="consoleOutput">Console 輸出會顯示在這裡...</div>
+  </div>
+
+  <!-- Network 測試 -->
+  <div class="section">
+    <h2>🌐 Network 測試</h2>
+    <div class="btn-grid">
+      <button class="btn-network" onclick="testFetch(404)">觸發 fetch 404</button>
+      <button class="btn-network" onclick="testFetch(500)">觸發 fetch 500</button>
+      <button class="btn-network" onclick="testFetch(403)">觸發 fetch 403</button>
+      <button class="btn-network" onclick="testXHR(404)">觸發 XHR 404</button>
+    </div>
+    <div class="output" id="networkOutput">Network 結果會顯示在這裡...</div>
+  </div>
+
+  <!-- DOM 變化測試 -->
+  <div class="section">
+    <h2>🎨 DOM 變化測試（rrweb 會錄到）</h2>
+    <div class="btn-grid">
+      <button class="btn-dom" onclick="addElement()">新增 DOM 元素</button>
+      <button class="btn-dom" onclick="removeElement()">移除 DOM 元素</button>
+      <button class="btn-dom" onclick="toggleAnimation()">切換動畫</button>
+      <button class="btn-dom" onclick="changeColors()">隨機變色</button>
+    </div>
+    <div id="animBox">動畫</div>
+    <div class="test-area" id="domArea">
+      <p>DOM 測試區域 — 新增的元素會出現在這裡</p>
+    </div>
+  </div>
+
+  <!-- 截圖測試 -->
+  <div class="section">
+    <h2>📸 截圖測試區域</h2>
+    <p>用 BugEzy 截圖功能擷取這個區域，測試三種模式。</p>
+    <div class="test-area">
+      <p style="font-size: 24px; color: #7c3aed;">🎯 這段文字應該出現在截圖中</p>
+      <p>小字測試 — 驗證截圖解析度是否足夠</p>
+      <div style="display:flex;gap:8px;justify-content:center;margin-top:12px;">
+        <div style="width:60px;height:60px;background:#ef4444;border-radius:8px;"></div>
+        <div style="width:60px;height:60px;background:#f59e0b;border-radius:8px;"></div>
+        <div style="width:60px;height:60px;background:#10b981;border-radius:8px;"></div>
+        <div style="width:60px;height:60px;background:#3b82f6;border-radius:8px;"></div>
+        <div style="width:60px;height:60px;background:#7c3aed;border-radius:8px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 跨頁跳轉測試 -->
+  <div class="section">
+    <h2>🔗 跨頁跳轉測試</h2>
+    <p>點擊連結跳到其他測試頁，驗證跨頁錄製 + 語音保留。</p>
+    <div class="nav-links">
+      <a href="/test/page2">跳到測試頁 2 →</a>
+      <a href="/test/page3">跳到測試頁 3 →</a>
+    </div>
+  </div>
+
+  <!-- 輸入測試 -->
+  <div class="section">
+    <h2>⌨️ 輸入測試</h2>
+    <input type="text" placeholder="測試文字輸入..." style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;margin-bottom:8px;">
+    <textarea placeholder="測試多行輸入..." rows="3" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;"></textarea>
+  </div>
+
+  <script>
+    // Console 輸出攔截（頁面顯示用）
+    const consoleOutput = document.getElementById('consoleOutput');
+    const origError = console.error;
+    const origWarn = console.warn;
+    console.error = (...args) => {
+      consoleOutput.textContent += '❌ ' + args.join(' ') + '\\n';
+      consoleOutput.scrollTop = consoleOutput.scrollHeight;
+      origError(...args);
+    };
+    console.warn = (...args) => {
+      consoleOutput.textContent += '⚠ ' + args.join(' ') + '\\n';
+      consoleOutput.scrollTop = consoleOutput.scrollHeight;
+      origWarn(...args);
+    };
+
+    // Network 測試
+    const networkOutput = document.getElementById('networkOutput');
+    async function testFetch(status) {
+      try {
+        const res = await fetch('/test/api/' + status);
+        networkOutput.textContent += (res.ok ? '✅' : '❌') + ' fetch ' + status + ': ' + res.statusText + '\\n';
+      } catch (e) {
+        networkOutput.textContent += '❌ fetch error: ' + e.message + '\\n';
+      }
+      networkOutput.scrollTop = networkOutput.scrollHeight;
+    }
+    function testXHR(status) {
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', '/test/api/' + status);
+      xhr.onload = () => {
+        networkOutput.textContent += (xhr.status < 400 ? '✅' : '❌') + ' XHR ' + xhr.status + '\\n';
+        networkOutput.scrollTop = networkOutput.scrollHeight;
+      };
+      xhr.send();
+    }
+
+    // DOM 測試
+    let domCount = 0;
+    function addElement() {
+      domCount++;
+      const el = document.createElement('div');
+      el.className = 'dom-item';
+      el.style.cssText = 'display:inline-block;padding:8px 16px;margin:4px;background:#e0e7ff;border-radius:6px;font-size:13px;';
+      el.textContent = '元素 #' + domCount;
+      document.getElementById('domArea').appendChild(el);
+    }
+    function removeElement() {
+      const items = document.querySelectorAll('.dom-item');
+      if (items.length) items[items.length - 1].remove();
+    }
+    let animating = false;
+    function toggleAnimation() {
+      const box = document.getElementById('animBox');
+      animating = !animating;
+      if (animating) {
+        box.style.transform = 'rotate(180deg) scale(1.5)';
+        box.style.background = '#ef4444';
+        box.textContent = '轉！';
+      } else {
+        box.style.transform = 'none';
+        box.style.background = '#7c3aed';
+        box.textContent = '動畫';
+      }
+    }
+    function changeColors() {
+      document.querySelectorAll('.section').forEach(s => {
+        s.style.borderLeft = '4px solid ' + '#' + Math.floor(Math.random()*16777215).toString(16);
+      });
+    }
+  </script>
+</body>
+</html>`;
+
+const TEST_PAGE_2 = testShell(
+  '📍 測試頁 2',
+  `  <h1>🧪 測試頁 2</h1>
+  <p class="subtitle">跨頁錄製測試 — 第二頁。從頁面 1 跳來，語音/資料應保留。</p>
+
+  <div class="section">
+    <h2>🖥 Console 測試</h2>
+    <div class="btn-grid">
+      <button class="btn-error" onclick="console.error('❌ [TEST page2] Error triggered on page 2')">觸發 console.error</button>
+      <button class="btn-warn" onclick="console.warn('⚠ [TEST page2] Warning on page 2')">觸發 console.warn</button>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🔗 跨頁跳轉</h2>
+    <div class="nav-links">
+      <a href="/test">← 回到頁面 1</a>
+      <a href="/test/page3">前往頁面 3 →</a>
+    </div>
+  </div>`,
+);
+
+const TEST_PAGE_3 = testShell(
+  '📍 測試頁 3',
+  `  <h1>🧪 測試頁 3</h1>
+  <p class="subtitle">跨頁錄製測試 — 第三頁。長內容區域，可測捲動截圖。</p>
+
+  <div class="section">
+    <h2>🔗 跨頁跳轉</h2>
+    <div class="nav-links">
+      <a href="/test">← 回到頁面 1</a>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📜 長內容區域（測捲動截圖）</h2>
+${Array.from(
+  { length: 20 },
+  (_, i) =>
+    `    <p style="padding:10px 0;border-bottom:1px solid #eee;">第 ${i + 1} 段測試內容 — 這是一段可捲動的長文字，用來驗證 BugEzy 區域截圖跨 viewport 拼接是否正確。Lorem ipsum 測試 ${i + 1}。</p>`,
+).join('\n')}
+  </div>`,
+);
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (request.method === 'OPTIONS') {
@@ -95,6 +387,20 @@ export default {
     if (path === '/mcp' || path.startsWith('/mcp/')) {
       const handler = createMcpHandler(createMcpServer(env), { route: '/mcp' });
       return handler(request, env, ctx);
+    }
+
+    // PM-48：測試專頁（Test Harness）— 可預測的 Bug 場景，供 BugEzy 測試用
+    if (request.method === 'GET' && path === '/test') return html(TEST_PAGE_1);
+    if (request.method === 'GET' && path === '/test/page2') return html(TEST_PAGE_2);
+    if (request.method === 'GET' && path === '/test/page3') return html(TEST_PAGE_3);
+    // /test/api/:status — 回傳指定 HTTP status（觸發 4xx/5xx 給 Network 攔截）
+    if (path.startsWith('/test/api/')) {
+      const parsed = parseInt(path.split('/').pop() || '200', 10);
+      const status = Number.isFinite(parsed) && parsed >= 100 && parsed <= 599 ? parsed : 200;
+      return new Response(JSON.stringify({ error: `Test ${status} response` }), {
+        status,
+        headers: { 'Content-Type': 'application/json', ...CORS },
+      });
     }
 
     try {
