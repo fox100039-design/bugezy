@@ -21,9 +21,9 @@
 | **① 能錄能存** | Chrome 擴充骨架 | rrweb DOM + Console + Network 攔截 → 打包 JSON | ✅ 完成 |
 | **② 能聽能說** | 語音辨識 | Web Speech API 中文即時轉文字，收進 payload | ✅ 完成 |
 | **③ 能存能看** | 後端 + 報告頁 | Cloudflare Workers + Supabase + R2 + React 報告頁 | ✅ 完成 |
-| **④ AI 能讀** | MCP Server | Pull 模式 8 Tool，AI 按需查詢 = **MVP 封測** | ✅ 完成 |
+| **④ AI 能讀** | MCP Server | Pull 模式 10 Tool（+ get_live_errors / get_terminal_logs），AI 按需查詢 = **MVP 封測** | ✅ 完成 |
 | **⑤ 能收錢** | 付費上線 | Stripe 串接 + Chrome Web Store 上架 = **正式上線** | 待做 |
-| **⑥ 更好用** | UX 優化 | 即時字幕 overlay、隱私遮罩、AI 標題、Markdown 匯出 | 🔨 進行中（PM-47，截圖三模式+標注+即時字幕雙區+跨頁錄製+編輯頁+AI精簡+乾淨/原始toggle） |
+| **⑥ 更好用** | UX 優化 + 多模式 | 六種模式（錄製/回溯/截圖/即時監控/鍵盤/終端機CLI）+ 截圖三模式 + 即時字幕雙區 + 跨頁錄製 + 編輯頁時間軸標記 + AI精簡 + 乾淨toggle | 🔨 進行中（PM-53） |
 | **⑦ 規模化** | 多語 + 企業 | 日韓越語音、跨境除錯鏈、企業自託管 | 待做 |
 
 ---
@@ -284,6 +284,24 @@ FOX = 創辦人 + 決策者 + 手動驗收
 
 ### Server / Schema
 - `reports` 加 `markers JSONB`（PM-28，已 `ALTER TABLE`）；`/api/reports` 與 `/mcp` `get_report_overview` 回傳 markers
+
+---
+
+## §6c 第 6 代 Day 5（2026-06-20，PM-48~53）— 多模式 + CLI
+
+**六種使用模式**：🎬 錄製 / ⏪ 30秒回溯 / 📸 截圖標注 / 🔍 即時監控 / 🔇 鍵盤模式 / 🖥 終端機 CLI。
+
+- **PM-48：測試專頁**（server）— `GET /test`、`/test/page2`、`/test/page3`（長內容測捲動）、`/test/api/:status`（觸發 4xx/5xx）。可預測的 Bug 場景，之後測試都用它。
+- **PM-49：鍵盤模式 toggle**（關閉語音）— popup 開關（`KEYBOARD_MODE_KEY`），inject START 帶 `keyboardMode` 跳過語音改顯示提示條；annotate/edit-report 也檢查。適合吵雜/不便說話環境。
+- **PM-50：⏪ 30 秒回溯**（核心 inject 背景循環緩存）— inject 載入即背景緩存 rrweb（`checkoutEveryNms`）+ console/network（永遠攔截，30s 環形 buffer）；按「⏪ 回溯」打包最近 30s → edit-report，不必預先按錄製。錄製時停背景 rrweb、停止後重啟。
+- **PM-51：🔍 即時監控**（AI 隨時查當前頁 error）— popup toggle → background 每 10s 推 live errors → `POST /api/live-errors` → MCP `get_live_errors`。**不產報告、不上傳、token 極低**。架構修正：規格全域 Map 跨 isolate 不共享（實測 stale）→ 改 **R2 單一物件**（強讀後寫一致）。
+- **PM-52：即時監控視覺回饋** — 頁面右下浮動 badge（綠✓/紅數字 + 閃動）+ 點擊展開 error 清單；擴充圖示 badge 數字（非錄製時）。
+- **PM-53：🖥 終端機 CLI Agent**（新建 `cli/`）— `npx bugezy-watch -- <command>` 包住開發指令，透傳輸出 + 攔截 stderr/throw/crash → `POST /api/terminal-logs` → MCP `get_terminal_logs`。
+
+### Server / MCP
+- 新增端點：`/test*`、`/api/live-errors`（POST/GET，R2）、`/api/terminal-logs`（POST/GET，R2）。
+- MCP Tool 由 8 → **10**：加 `get_live_errors`、`get_terminal_logs`（皆讀 R2，跨 isolate 一致）。
+- 新增子專案 `cli/`（@bugezy/cli，TypeScript + tsx，`bin: bugezy-watch`）。
 
 ---
 

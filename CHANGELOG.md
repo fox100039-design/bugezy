@@ -157,3 +157,15 @@
 - PM-46：回放「乾淨/原始」toggle — 移除 blockSelector、改在 edit-report 注入 CSS 到 Replayer iframe 控制顯示；MutationObserver 維持
 - PM-47：乾淨模式改 `setInterval` 每 200ms 補注入（移除 MutationObserver）；排查發現游標 `.replayer-mouse` 在 `.replayer-wrapper` 內（非 iframe 內）→ 縮放改套 `.replayer-wrapper` 讓游標可見對齊
 - 收工：文件同步（project_status §2/§6b、CHANGELOG、SKILL）+ commit
+
+## 2026-06-20
+
+第 6 代 Day 5（PM-48~53）。重點：測試專頁、六種使用模式（錄製/回溯/截圖/即時監控/鍵盤/終端機CLI）、MCP 由 8→10 tool、新增 `cli/` 子專案。
+
+- PM-48：測試專頁 Test Harness（server）— `GET /test`、`/test/page2`、`/test/page3`（20 段長內容測捲動）、`/test/api/:status`（回指定 HTTP status 觸發 4xx/5xx）；抽 `TEST_STYLE` + `testShell()`；已部署 + curl 驗證
+- PM-49：🔇 鍵盤模式 toggle（關閉語音）— `KEYBOARD_MODE_KEY`；popup 開關、`InjectCommand.keyboardMode`、inject START 跳過語音改顯示提示條、content 帶旗標（含 PM-35 跨頁恢復）、annotate/edit-report 一併檢查
+- PM-50：⏪ 30 秒回溯（核心：inject 背景循環緩存）— 載入即背景 rrweb（`checkoutEveryNms`）+ console/network 永遠攔截、30s 環形 buffer；按⏪打包最近 30s → edit-report；錄製時停背景 rrweb、停止後重啟；types `REWIND_30S/REWIND_DONE/cmd:REWIND/REWIND_RESULT`；popup 三欄加橘色「⏪ 回溯 30s」
+- PM-51：🔍 即時監控（AI 經 MCP 查當前頁 error）— popup toggle → background 每 10s 推 → `POST /api/live-errors` → MCP `get_live_errors`；不產報告/不上傳/token 極低。**架構修正**：規格全域 Map 跨 isolate 不共享（實測 POST 後 GET 仍 stale）→ 改 R2 單一物件（強讀後寫一致）；已部署 + curl 驗證
+- PM-52：即時監控視覺回饋 — inject 頁面右下浮動 badge（綠✓/紅數字 + 閃動）+ 點擊展開 error 清單（escapeHtml 防注入）；攔截時 `updateMonitorBadge`；background 擴充圖示 badge 數字（非錄製時，`syncBadge` 還原）；`SET_MONITOR_BADGE`/`SHOW_MONITOR`/`HIDE_MONITOR` 串接
+- PM-53：🖥 終端機 CLI Agent（新建 `cli/`）— `npx bugezy-watch -- <command>` 包住開發指令，stdout/stderr 透傳 + `ERROR_PATTERNS` 攔截 stderr/throw/crash、環形 buffer、每 10s + exit flush；`POST/GET /api/terminal-logs`（R2）+ MCP `get_terminal_logs`；已部署 + 端到端實測（CLI→API→GET stale:false）；devDeps 補 `@types/node`
+- 收工：文件同步（project_status §2/§6c、CHANGELOG、SKILL）+ commit
