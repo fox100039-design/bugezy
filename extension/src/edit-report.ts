@@ -5,6 +5,7 @@ import { Replayer } from '@rrweb/replay';
 import '@rrweb/replay/dist/style.css';
 import {
   API_BASE,
+  KEYBOARD_MODE_KEY,
   STATE_KEY,
   STORAGE_KEY,
   blog,
@@ -517,6 +518,14 @@ voiceBtn.addEventListener('click', async () => {
     voiceBtn.classList.add('listening');
     voiceBtn.textContent = '⏹';
     voiceStatus.textContent = '🔴 聆聽中...';
+  }
+});
+
+// PM-49：鍵盤模式 → 隱藏補充說明的 🎤 按鈕
+chrome.storage.local.get(KEYBOARD_MODE_KEY, (r) => {
+  if (r[KEYBOARD_MODE_KEY] === true) {
+    voiceBtn.style.display = 'none';
+    voiceStatus.textContent = '🔇 鍵盤模式';
   }
 });
 

@@ -166,6 +166,18 @@ function main() {
     document.getElementById('bugezy-voice-panel')?.remove();
   }
 
+  /** PM-49：鍵盤模式提示條（語音關閉，僅告知錄製中） */
+  function showKeyboardModeBar() {
+    document.getElementById('bugezy-live-caption')?.remove();
+    const bar = document.createElement('div');
+    bar.id = 'bugezy-live-caption';
+    bar.style.cssText =
+      'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);z-index:2147483647;pointer-events:none;background:rgba(0,0,0,0.85);color:#fff;padding:12px 28px;border-radius:12px;font-size:18px;font-family:system-ui,sans-serif;';
+    bar.textContent = '🔇 鍵盤模式 — 錄製中（語音已關閉）';
+    document.body.appendChild(bar);
+    captionBar = bar;
+  }
+
   /** PM-30：更新字幕文字只動 textSpan，保留 🔄 按鈕不被清掉 */
   function setCaptionText(text: string) {
     const el = document.getElementById('bugezy-caption-text');
@@ -416,7 +428,7 @@ function main() {
   };
 
   // ── 控制：開始 / 停止 ─────────────────────────────────────
-  function startRecording(): boolean {
+  function startRecording(options?: { keyboardMode?: boolean }): boolean {
     if (recording) {
       blog('START 重複呼叫，已在錄製中');
       return stopRrweb !== null;
@@ -454,22 +466,29 @@ function main() {
     }, 5000);
 
     // ── D. 語音辨識（需 user gesture 授權麥克風）──────────
-    showCaptionBar(); // PM-24：錄製中浮動字幕
     voiceSegments = [];
-    voiceActive = true;
-    const win = window as unknown as {
-      SpeechRecognition?: SRCtor;
-      webkitSpeechRecognition?: SRCtor;
-    };
-    const SR = win.SpeechRecognition || win.webkitSpeechRecognition;
-    if (SR) {
-      tryStartVoice(SR);
-    } else {
-      blog('⚠ 此瀏覽器不支援 SpeechRecognition，語音不可用');
+    if (options?.keyboardMode) {
+      // PM-49：鍵盤模式 — 完全跳過語音，只顯示簡單提示條（rrweb/console/network 照常）
+      blog('鍵盤模式：跳過語音初始化');
       voiceActive = false;
+      showKeyboardModeBar();
+    } else {
+      showCaptionBar(); // PM-24：錄製中浮動字幕
+      voiceActive = true;
+      const win = window as unknown as {
+        SpeechRecognition?: SRCtor;
+        webkitSpeechRecognition?: SRCtor;
+      };
+      const SR = win.SpeechRecognition || win.webkitSpeechRecognition;
+      if (SR) {
+        tryStartVoice(SR);
+      } else {
+        blog('⚠ 此瀏覽器不支援 SpeechRecognition，語音不可用');
+        voiceActive = false;
+      }
     }
 
-    blog('START：開始錄製');
+    blog('START：開始錄製', options?.keyboardMode ? '(鍵盤模式)' : '');
     return rrwebOk;
   }
 
@@ -662,8 +681,8 @@ function main() {
     if (!data || data.source !== BUGEZY_SOURCE || data.dir !== 'to-inject') return;
 
     if (data.cmd === 'START') {
-      blog('收到 START 指令');
-      const rrwebOk = startRecording();
+      blog('收到 START 指令', data.keyboardMode ? '(鍵盤模式)' : '');
+      const rrwebOk = startRecording({ keyboardMode: data.keyboardMode === true });
       post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'STARTED', rrwebOk });
     } else if (data.cmd === 'STOP') {
       blog('收到 STOP 指令');

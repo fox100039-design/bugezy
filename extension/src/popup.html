@@ -76,6 +76,14 @@
 
       .hidden { display: none; }
 
+      /* 鍵盤模式 toggle（PM-49） */
+      .mode-toggle { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+      .toggle-row {
+        display: flex; justify-content: space-between; align-items: center;
+        font-size: 13px; color: var(--muted); cursor: pointer;
+      }
+      .toggle-row input[type='checkbox'] { accent-color: var(--accent); width: 18px; height: 18px; }
+
       /* 錄製中：大計時器 + 脈動圓點 */
       .recording-timer {
         text-align: center; font-size: 36px; font-weight: 700;
@@ -135,6 +143,12 @@
         </button>
       </div>
       <div id="lastScreenshot" class="meta" style="display:none;"></div>
+      <div class="mode-toggle">
+        <label class="toggle-row">
+          <span>🔇 鍵盤模式（關閉語音）</span>
+          <input type="checkbox" id="keyboardMode" />
+        </label>
+      </div>
     </section>
 
     <!-- 狀態二：錄製中 -->

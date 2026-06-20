@@ -2,6 +2,7 @@
 // 與 background service worker 溝通：開始/停止/清除、輪詢狀態、顯示摘要、複製 JSON。
 
 import {
+  KEYBOARD_MODE_KEY,
   LAST_SCREENSHOT_KEY,
   type RecordingPayload,
   type RecordingSummary,
@@ -38,6 +39,15 @@ const uploadStatusEl = $('uploadStatus');
 const shareUrlRow = $('shareUrlRow');
 const shareLink = $<HTMLAnchorElement>('shareLink');
 const copyLinkBtn = $<HTMLButtonElement>('copyLinkBtn');
+
+// PM-49：鍵盤模式 toggle（關閉語音）— 狀態存 chrome.storage.local
+const keyboardMode = $<HTMLInputElement>('keyboardMode');
+chrome.storage.local.get(KEYBOARD_MODE_KEY, (r) => {
+  keyboardMode.checked = r[KEYBOARD_MODE_KEY] === true;
+});
+keyboardMode.addEventListener('change', () => {
+  chrome.storage.local.set({ [KEYBOARD_MODE_KEY]: keyboardMode.checked });
+});
 
 let startedAt: number | null = null;
 let tick: number | undefined;

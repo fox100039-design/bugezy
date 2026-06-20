@@ -118,11 +118,12 @@ export const BUGEZY_DEBUG = true;
  */
 export const BUGEZY_SOURCE = 'bugezy';
 
-/** content → inject：控制錄製 */
+/** content → inject：控制錄製（PM-49：START 帶 keyboardMode 決定是否跳過語音） */
 export interface InjectCommand {
   source: typeof BUGEZY_SOURCE;
   dir: 'to-inject';
   cmd: 'START' | 'STOP';
+  keyboardMode?: boolean;
 }
 
 /** inject → content：狀態回報（握手 / 開始確認）與打包資料 */
@@ -149,6 +150,9 @@ export const STATE_KEY = 'bugezy:state';
 
 /** 截圖獨立上傳後的最近一筆（給 popup 顯示連結） */
 export const LAST_SCREENSHOT_KEY = 'bugezy:lastScreenshot';
+
+/** PM-49：鍵盤模式（關閉所有語音）開關，存 chrome.storage.local */
+export const KEYBOARD_MODE_KEY = 'bugezy:keyboardMode';
 
 /** PM-34：錄製中即時 flush 的暫存 buffer（頁面跳轉不丟資料） */
 export const BUFFER_VOICE_KEY = 'bugezy:buffer:voice';

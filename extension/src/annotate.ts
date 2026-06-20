@@ -4,7 +4,7 @@
 // 工具：✏️ 畫筆(freehand) / ➡️ 箭頭 / ⬜ 框框 / 📝 文字
 // undo：history stack（每次操作前 snapshot），clear：還原底圖。
 
-import { API_BASE, blog, type ControlMessage } from './types';
+import { API_BASE, KEYBOARD_MODE_KEY, blog, type ControlMessage } from './types';
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -341,7 +341,14 @@ voiceInputBtn.addEventListener('click', () => {
 });
 
 // 載入後自動開始聽（延遲等 canvas 渲染 + 麥克風授權）
-window.setTimeout(() => startListening(), 800);
+// PM-49：鍵盤模式則不自動啟動語音
+chrome.storage.local.get(KEYBOARD_MODE_KEY, (r) => {
+  if (r[KEYBOARD_MODE_KEY] === true) {
+    voiceStatus.textContent = '🔇 鍵盤模式（語音已關閉）';
+  } else {
+    window.setTimeout(() => startListening(), 800);
+  }
+});
 
 // ── 儲存（PM-18：截圖獨立上傳為一份報告）/ 取消 ──────────
 saveBtn.addEventListener('click', async () => {
