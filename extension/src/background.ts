@@ -245,6 +245,45 @@ async function uploadReport(
   }
 }
 
+// ── PM-51：即時監控 — 每 10 秒把 active tab 的 live errors 推送到 API 暫存 ──
+let monitorInterval: ReturnType<typeof setInterval> | null = null;
+
+function startMonitoring() {
+  if (monitorInterval) return;
+  monitorInterval = setInterval(async () => {
+    try {
+      const tab = await getActiveTab();
+      if (!tab?.id) return;
+      const result = (await chrome.tabs.sendMessage(tab.id, {
+        type: 'GET_LIVE_ERRORS',
+      } satisfies ControlMessage)) as { consoleLogs?: unknown[]; networkErrors?: unknown[] } | undefined;
+      if (!result) return;
+      await fetch(`${API_BASE}/api/live-errors`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: tab.url,
+          title: tab.title,
+          consoleLogs: result.consoleLogs ?? [],
+          networkErrors: result.networkErrors ?? [],
+          timestamp: Date.now(),
+        }),
+      });
+    } catch (err) {
+      blog('即時監控推送失敗（已忽略）', err);
+    }
+  }, 10000);
+  blog('即時監控已啟動');
+}
+
+function stopMonitoring() {
+  if (monitorInterval) {
+    clearInterval(monitorInterval);
+    monitorInterval = null;
+  }
+  blog('即時監控已停止');
+}
+
 chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summary?: RecordingSummary }, _sender, sendResponse) => {
   (async () => {
     try {
@@ -351,6 +390,15 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summ
           sendResponse(toResponse(s));
           break;
         }
+        // PM-51：即時監控開關
+        case 'START_MONITORING':
+          startMonitoring();
+          sendResponse({ ok: true });
+          break;
+        case 'STOP_MONITORING':
+          stopMonitoring();
+          sendResponse({ ok: true });
+          break;
         // PM-34：即時 flush → 追加到對應 buffer（頁面跳轉時資料已落地）
         case 'FLUSH_VOICE': {
           const seg = (msg as { segment: VoiceSegment }).segment;

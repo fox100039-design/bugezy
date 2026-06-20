@@ -86,6 +86,29 @@ function html(body: string): Response {
   return new Response(body, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
 }
 
+// ── PM-51：即時監控 live errors 暫存 ────────────────────────
+// 改用 R2 單一物件（非全域 Map）：擴充 POST 與雲端 MCP GET 通常落在不同 Worker isolate，
+// per-isolate Map 不共享（實測 POST 後即時 GET 仍 stale）；R2 對單一 key 有強讀後寫一致性，
+// 才能讓「擴充推送 → AI 查」真的拿到資料。POST 覆蓋最新一筆，>30 秒視為過期（stale）。
+const LIVE_ERRORS_KEY = 'live-errors/latest.json';
+interface LiveErrors {
+  url?: string;
+  title?: string;
+  consoleLogs: unknown[];
+  networkErrors: unknown[];
+  timestamp?: number;
+  updatedAt: number;
+}
+
+async function readLiveErrors(env: Env): Promise<Record<string, unknown>> {
+  const obj = await env.R2.get(LIVE_ERRORS_KEY);
+  const data = obj ? ((await obj.json()) as LiveErrors) : null;
+  if (!data || Date.now() - data.updatedAt > 30_000) {
+    return { consoleLogs: [], networkErrors: [], stale: true };
+  }
+  return { ...data, stale: false };
+}
+
 // ── PM-48：測試專頁（Test Harness）──────────────────────────
 // 共用 CSS（page1 與 page2/3 shell 共用，單一來源）
 const TEST_STYLE = `
@@ -404,6 +427,25 @@ export default {
     }
 
     try {
+      // PM-51：即時監控暫存（POST 覆蓋最新；GET 讀最新，>30s 視為過期）
+      if (request.method === 'POST' && path === '/api/live-errors') {
+        const data = (await request.json().catch(() => ({}))) as Partial<LiveErrors>;
+        const entry: LiveErrors = {
+          url: data.url,
+          title: data.title,
+          consoleLogs: Array.isArray(data.consoleLogs) ? data.consoleLogs : [],
+          networkErrors: Array.isArray(data.networkErrors) ? data.networkErrors : [],
+          timestamp: data.timestamp,
+          updatedAt: Date.now(),
+        };
+        await env.R2.put(LIVE_ERRORS_KEY, JSON.stringify(entry), {
+          httpMetadata: { contentType: 'application/json' },
+        });
+        return json({ ok: true });
+      }
+      if (request.method === 'GET' && path === '/api/live-errors') {
+        return json(await readLiveErrors(env));
+      }
       if (request.method === 'POST' && path === '/api/summarize') {
         return await summarizeText(request, env);
       }
@@ -725,6 +767,20 @@ function createMcpServer(env: Env): McpServer {
       const obj = await env.R2.get(meta.rrweb_r2_key as string);
       if (!obj) return txt('R2 檔案不存在');
       return txt(await obj.text());
+    },
+  );
+
+  // Tool 9（PM-51）: get_live_errors — 不需錄製，讀當前頁面即時 console/network errors
+  server.tool(
+    'get_live_errors',
+    '取得當前頁面的即時 Console/Network 錯誤（背景監控，不需錄製或上傳，token 極低）。Live console/network errors of the current page (no recording needed).',
+    {},
+    async () => {
+      const data = await readLiveErrors(env);
+      if (data.stale) {
+        return txt('即時監控未啟用或資料已過期（>30 秒）。請在 BugEzy popup 開啟「🔍 即時監控」後再查。');
+      }
+      return txt(data);
     },
   );
 

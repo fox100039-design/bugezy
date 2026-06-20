@@ -84,6 +84,7 @@
         font-size: 13px; color: var(--muted); cursor: pointer;
       }
       .toggle-row input[type='checkbox'] { accent-color: var(--accent); width: 18px; height: 18px; }
+      .toggle-row + .toggle-row { margin-top: 8px; }
 
       /* 錄製中：大計時器 + 脈動圓點 */
       .recording-timer {
@@ -150,6 +151,10 @@
       </div>
       <div id="lastScreenshot" class="meta" style="display:none;"></div>
       <div class="mode-toggle">
+        <label class="toggle-row">
+          <span>🔍 即時監控（AI 可查 error）</span>
+          <input type="checkbox" id="monitorMode" />
+        </label>
         <label class="toggle-row">
           <span>🔇 鍵盤模式（關閉語音）</span>
           <input type="checkbox" id="keyboardMode" />

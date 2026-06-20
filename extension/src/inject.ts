@@ -767,6 +767,15 @@ function main() {
         network: payload.networkErrors.length,
       });
       post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'REWIND_RESULT', payload });
+    } else if (data.cmd === 'GET_LIVE_ERRORS') {
+      // PM-51：回傳背景 buffer 的即時 console/network errors（即時監控用，不打包報告）
+      post({
+        source: BUGEZY_SOURCE,
+        dir: 'to-content',
+        kind: 'LIVE_ERRORS_RESULT',
+        consoleLogs: bgConsoleLogs.map((e) => e.data),
+        networkErrors: bgNetworkErrors.map((e) => e.data),
+      });
     } else if (data.kind === 'VOICE_HISTORY') {
       // PM-36：收到歷史語音 → 填入右上面板（跳頁恢復時不再是空的）
       const voiceContent = document.getElementById('bugezy-voice-content');

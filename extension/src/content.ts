@@ -21,7 +21,7 @@ blog('content loaded（ISOLATED world）', location.href);
 
 let injectReady = false;
 
-function sendToInject(cmd: 'START' | 'STOP' | 'REWIND', keyboardMode?: boolean) {
+function sendToInject(cmd: 'START' | 'STOP' | 'REWIND' | 'GET_LIVE_ERRORS', keyboardMode?: boolean) {
   const msg: InjectCommand = { source: BUGEZY_SOURCE, dir: 'to-inject', cmd, keyboardMode };
   blog(`→ 轉送 ${cmd} 給 inject（injectReady=${injectReady}, keyboardMode=${keyboardMode === true}）`);
   window.postMessage(msg, '*');
@@ -137,6 +137,24 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
   } else if (msg.type === 'REWIND_30S') {
     sendToInject('REWIND'); // PM-50：請 inject 打包背景緩存
     sendResponse({ ok: true });
+  } else if (msg.type === 'GET_LIVE_ERRORS') {
+    // PM-51：向 inject 要背景 buffer 的即時 errors（Promise + 一次性 listener + 2 秒超時）
+    let done = false;
+    const finish = (result: { consoleLogs: unknown[]; networkErrors: unknown[] }) => {
+      if (done) return;
+      done = true;
+      window.removeEventListener('message', handler);
+      sendResponse(result);
+    };
+    const handler = (e: MessageEvent) => {
+      const d = e.data as InjectMessage & { consoleLogs?: unknown[]; networkErrors?: unknown[] };
+      if (e.source === window && d?.source === BUGEZY_SOURCE && d?.kind === 'LIVE_ERRORS_RESULT') {
+        finish({ consoleLogs: d.consoleLogs ?? [], networkErrors: d.networkErrors ?? [] });
+      }
+    };
+    window.addEventListener('message', handler);
+    sendToInject('GET_LIVE_ERRORS');
+    setTimeout(() => finish({ consoleLogs: [], networkErrors: [] }), 2000);
   }
   return true;
 });

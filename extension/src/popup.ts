@@ -4,6 +4,7 @@
 import {
   KEYBOARD_MODE_KEY,
   LAST_SCREENSHOT_KEY,
+  MONITOR_MODE_KEY,
   type RecordingPayload,
   type RecordingSummary,
   type StateResponse,
@@ -47,6 +48,17 @@ chrome.storage.local.get(KEYBOARD_MODE_KEY, (r) => {
 });
 keyboardMode.addEventListener('change', () => {
   chrome.storage.local.set({ [KEYBOARD_MODE_KEY]: keyboardMode.checked });
+});
+
+// PM-51：即時監控 toggle — 開啟 → background 每 10s 推 live errors 給 AI 查
+const monitorMode = $<HTMLInputElement>('monitorMode');
+chrome.storage.local.get(MONITOR_MODE_KEY, (r) => {
+  monitorMode.checked = r[MONITOR_MODE_KEY] === true;
+});
+monitorMode.addEventListener('change', async () => {
+  const enabled = monitorMode.checked;
+  await chrome.storage.local.set({ [MONITOR_MODE_KEY]: enabled });
+  await send(enabled ? 'START_MONITORING' : 'STOP_MONITORING');
 });
 
 // PM-50：⏪ 回溯 30 秒 — 打包背景緩存（不需先按錄製）

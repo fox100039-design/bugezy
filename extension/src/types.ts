@@ -100,7 +100,11 @@ export type ControlMessage =
   | { type: 'GET_VOICE_BUFFER' }
   // PM-50：⏪ 30 秒回溯（背景緩存打包成報告）
   | { type: 'REWIND_30S' }
-  | { type: 'REWIND_DONE'; summary: RecordingSummary };
+  | { type: 'REWIND_DONE'; summary: RecordingSummary }
+  // PM-51：🔍 即時監控（AI 透過 MCP 隨時查當前頁面 error）
+  | { type: 'GET_LIVE_ERRORS' }
+  | { type: 'START_MONITORING' }
+  | { type: 'STOP_MONITORING' };
 
 /** background → popup 的狀態回應 */
 export interface StateResponse {
@@ -121,11 +125,11 @@ export const BUGEZY_DEBUG = true;
  */
 export const BUGEZY_SOURCE = 'bugezy';
 
-/** content → inject：控制錄製（PM-49：START 帶 keyboardMode；PM-50：REWIND 打包背景緩存） */
+/** content → inject：控制錄製（PM-49 keyboardMode；PM-50 REWIND；PM-51 GET_LIVE_ERRORS） */
 export interface InjectCommand {
   source: typeof BUGEZY_SOURCE;
   dir: 'to-inject';
-  cmd: 'START' | 'STOP' | 'REWIND';
+  cmd: 'START' | 'STOP' | 'REWIND' | 'GET_LIVE_ERRORS';
   keyboardMode?: boolean;
 }
 
@@ -145,7 +149,15 @@ export type InjectMessage =
   // PM-37：content 收到 READY 後回 ACK，讓 inject 停止重複發 READY（解 READY 競爭條件）
   | { source: typeof BUGEZY_SOURCE; dir: 'to-inject'; kind: 'READY_ACK' }
   // PM-50：inject 打包背景緩存（最近 30 秒）回傳給 content
-  | { source: typeof BUGEZY_SOURCE; dir: 'to-content'; kind: 'REWIND_RESULT'; payload: RecordingPayload };
+  | { source: typeof BUGEZY_SOURCE; dir: 'to-content'; kind: 'REWIND_RESULT'; payload: RecordingPayload }
+  // PM-51：inject 回傳當前頁面即時 console/network errors
+  | {
+      source: typeof BUGEZY_SOURCE;
+      dir: 'to-content';
+      kind: 'LIVE_ERRORS_RESULT';
+      consoleLogs: ConsoleLog[];
+      networkErrors: NetworkError[];
+    };
 
 /** chrome.storage.local 的鍵 */
 export const STORAGE_KEY = 'bugezy:lastPayload';
@@ -158,6 +170,9 @@ export const LAST_SCREENSHOT_KEY = 'bugezy:lastScreenshot';
 
 /** PM-49：鍵盤模式（關閉所有語音）開關，存 chrome.storage.local */
 export const KEYBOARD_MODE_KEY = 'bugezy:keyboardMode';
+
+/** PM-51：即時監控模式（背景每 10s 推送 live errors 到 API）開關 */
+export const MONITOR_MODE_KEY = 'bugezy:monitorMode';
 
 /** PM-34：錄製中即時 flush 的暫存 buffer（頁面跳轉不丟資料） */
 export const BUFFER_VOICE_KEY = 'bugezy:buffer:voice';
