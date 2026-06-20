@@ -126,6 +126,81 @@ function main() {
   // inject 載入即開始背景緩存（不需等使用者按錄製）
   startBackgroundBuffer();
 
+  // ===== PM-52：即時監控視覺回饋（頁面右下角浮動 badge + error 清單）=====
+  let monitorBadge: HTMLElement | null = null;
+
+  function escapeHtml(s: string): string {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function showMonitorBadge() {
+    if (monitorBadge) return;
+    const badge = document.createElement('div');
+    badge.id = 'bugezy-monitor-badge';
+    badge.style.cssText =
+      'position:fixed;bottom:20px;right:20px;z-index:2147483647;pointer-events:auto;min-width:48px;height:48px;background:#1a1a2e;border:2px solid #10b981;border-radius:24px;display:flex;align-items:center;justify-content:center;gap:4px;padding:0 14px;font-family:system-ui,sans-serif;font-size:14px;font-weight:700;color:#10b981;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,0.3);transition:all 0.3s;';
+    badge.textContent = '🐛 ✓';
+    badge.title = 'BugEzy 即時監控中 — 目前無錯誤';
+    badge.addEventListener('click', () => toggleErrorPanel());
+    document.body.appendChild(badge);
+    monitorBadge = badge;
+    updateMonitorBadge(); // 立即反映目前計數
+  }
+
+  function updateMonitorBadge() {
+    if (!monitorBadge) return; // 未開監控就是 no-op（攔截時每次呼叫也便宜）
+    const total = bgConsoleLogs.length + bgNetworkErrors.length;
+    if (total === 0) {
+      monitorBadge.style.borderColor = '#10b981';
+      monitorBadge.style.color = '#10b981';
+      monitorBadge.textContent = '🐛 ✓';
+      monitorBadge.title = 'BugEzy 即時監控中 — 目前無錯誤';
+    } else {
+      monitorBadge.style.borderColor = '#ef4444';
+      monitorBadge.style.color = '#ef4444';
+      monitorBadge.textContent = `🐛 ${total}`;
+      monitorBadge.title = `BugEzy 偵測到 ${total} 個錯誤`;
+      monitorBadge.style.transform = 'scale(1.2)'; // 閃動提醒
+      window.setTimeout(() => {
+        if (monitorBadge) monitorBadge.style.transform = 'scale(1)';
+      }, 300);
+    }
+  }
+
+  function hideMonitorBadge() {
+    monitorBadge?.remove();
+    monitorBadge = null;
+    document.getElementById('bugezy-error-panel')?.remove();
+  }
+
+  /** 點 badge 展開 / 收合即時 error 清單 */
+  function toggleErrorPanel() {
+    const existing = document.getElementById('bugezy-error-panel');
+    if (existing) {
+      existing.remove();
+      return;
+    }
+    const panel = document.createElement('div');
+    panel.id = 'bugezy-error-panel';
+    panel.style.cssText =
+      'position:fixed;bottom:80px;right:20px;z-index:2147483647;width:360px;max-height:400px;overflow-y:auto;background:#1a1a2e;border:1px solid #2a2a3e;border-radius:12px;padding:12px;box-shadow:0 8px 32px rgba(0,0,0,0.4);font-family:system-ui,sans-serif;font-size:13px;color:#eee;pointer-events:auto;';
+    let panelHtml = '<div style="font-weight:600;margin-bottom:8px;color:#a78bfa;">🐛 即時監控錯誤</div>';
+    const cLogs = bgConsoleLogs.map((e) => e.data);
+    cLogs.forEach((log) => {
+      const color = log.level === 'error' ? '#ef4444' : '#f59e0b';
+      panelHtml += `<div style="padding:4px 0;border-bottom:1px solid #2a2a3e;"><span style="color:${color};font-weight:600;">${log.level === 'error' ? '❌' : '⚠'}</span><span style="color:#ccc;margin-left:4px;">${escapeHtml(log.message.slice(0, 120))}</span></div>`;
+    });
+    const nErrs = bgNetworkErrors.map((e) => e.data);
+    nErrs.forEach((err) => {
+      panelHtml += `<div style="padding:4px 0;border-bottom:1px solid #2a2a3e;"><span style="color:#3b82f6;font-weight:600;">🌐 ${err.status}</span><span style="color:#ccc;margin-left:4px;">${err.method} ${escapeHtml(err.url.slice(0, 80))}</span></div>`;
+    });
+    if (!cLogs.length && !nErrs.length) {
+      panelHtml += '<div style="color:#888;text-align:center;padding:12px;">✓ 目前無錯誤</div>';
+    }
+    panel.innerHTML = panelHtml;
+    document.body.appendChild(panel);
+  }
+
   function showCaptionBar() {
     document.getElementById('bugezy-live-caption')?.remove();
     const bar = document.createElement('div');
@@ -375,6 +450,7 @@ function main() {
   console.warn = (...args: unknown[]) => {
     const entry: ConsoleLog = { level: 'warn', message: stringifyArgs(args), timestamp: Date.now() };
     bgConsoleLogs.push({ data: entry, timestamp: entry.timestamp });
+    updateMonitorBadge(); // PM-52
     if (recording) {
       consoleLogs.push(entry);
       post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'FLUSH_CONSOLE', log: entry }); // PM-34
@@ -384,6 +460,7 @@ function main() {
   console.error = (...args: unknown[]) => {
     const entry: ConsoleLog = { level: 'error', message: stringifyArgs(args), timestamp: Date.now() };
     bgConsoleLogs.push({ data: entry, timestamp: entry.timestamp });
+    updateMonitorBadge(); // PM-52
     if (recording) {
       consoleLogs.push(entry);
       post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'FLUSH_CONSOLE', log: entry }); // PM-34
@@ -416,6 +493,7 @@ function main() {
           duration: Date.now() - start,
         };
         bgNetworkErrors.push({ data: entry, timestamp: entry.timestamp });
+        updateMonitorBadge(); // PM-52
         if (recording) {
           networkErrors.push(entry);
           post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'FLUSH_NETWORK', error: entry }); // PM-34
@@ -467,6 +545,7 @@ function main() {
             duration: Date.now() - meta.start,
           };
           bgNetworkErrors.push({ data: entry, timestamp: entry.timestamp }); // PM-50：永遠存背景 buffer
+          updateMonitorBadge(); // PM-52
           if (recording) {
             networkErrors.push(entry);
             post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'FLUSH_NETWORK', error: entry }); // PM-34
@@ -776,6 +855,10 @@ function main() {
         consoleLogs: bgConsoleLogs.map((e) => e.data),
         networkErrors: bgNetworkErrors.map((e) => e.data),
       });
+    } else if (data.cmd === 'SHOW_MONITOR') {
+      showMonitorBadge(); // PM-52：開即時監控 → 顯示頁面浮動 badge
+    } else if (data.cmd === 'HIDE_MONITOR') {
+      hideMonitorBadge();
     } else if (data.kind === 'VOICE_HISTORY') {
       // PM-36：收到歷史語音 → 填入右上面板（跳頁恢復時不再是空的）
       const voiceContent = document.getElementById('bugezy-voice-content');

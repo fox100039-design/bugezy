@@ -104,7 +104,9 @@ export type ControlMessage =
   // PM-51：🔍 即時監控（AI 透過 MCP 隨時查當前頁面 error）
   | { type: 'GET_LIVE_ERRORS' }
   | { type: 'START_MONITORING' }
-  | { type: 'STOP_MONITORING' };
+  | { type: 'STOP_MONITORING' }
+  // PM-52：通知 content/inject 顯示/隱藏頁面浮動監控 badge
+  | { type: 'SET_MONITOR_BADGE'; show: boolean };
 
 /** background → popup 的狀態回應 */
 export interface StateResponse {
@@ -125,11 +127,11 @@ export const BUGEZY_DEBUG = true;
  */
 export const BUGEZY_SOURCE = 'bugezy';
 
-/** content → inject：控制錄製（PM-49 keyboardMode；PM-50 REWIND；PM-51 GET_LIVE_ERRORS） */
+/** content → inject：控制（PM-49 keyboardMode；PM-50 REWIND；PM-51 GET_LIVE_ERRORS；PM-52 SHOW/HIDE_MONITOR） */
 export interface InjectCommand {
   source: typeof BUGEZY_SOURCE;
   dir: 'to-inject';
-  cmd: 'START' | 'STOP' | 'REWIND' | 'GET_LIVE_ERRORS';
+  cmd: 'START' | 'STOP' | 'REWIND' | 'GET_LIVE_ERRORS' | 'SHOW_MONITOR' | 'HIDE_MONITOR';
   keyboardMode?: boolean;
 }
 

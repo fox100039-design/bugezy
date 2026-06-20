@@ -269,6 +269,16 @@ function startMonitoring() {
           timestamp: Date.now(),
         }),
       });
+      // PM-52：擴充圖示 badge 顯示 error 數（錄製中讓 REC badge 優先，不覆蓋）
+      const total = (result.consoleLogs?.length ?? 0) + (result.networkErrors?.length ?? 0);
+      if (!(await getState()).recording) {
+        if (total > 0) {
+          chrome.action.setBadgeText({ text: String(total) });
+          chrome.action.setBadgeBackgroundColor({ color: '#ef4444' });
+        } else {
+          chrome.action.setBadgeText({ text: '' });
+        }
+      }
     } catch (err) {
       blog('即時監控推送失敗（已忽略）', err);
     }
@@ -281,6 +291,7 @@ function stopMonitoring() {
     clearInterval(monitorInterval);
     monitorInterval = null;
   }
+  void syncBadge(); // PM-52：還原 badge（錄製中回 REC、否則清空），不誤清 REC
   blog('即時監控已停止');
 }
 
@@ -390,15 +401,29 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summ
           sendResponse(toResponse(s));
           break;
         }
-        // PM-51：即時監控開關
-        case 'START_MONITORING':
+        // PM-51/52：即時監控開關 + 通知頁面顯示/隱藏浮動 badge
+        case 'START_MONITORING': {
           startMonitoring();
+          const tab = await getActiveTab();
+          if (tab?.id) {
+            await chrome.tabs
+              .sendMessage(tab.id, { type: 'SET_MONITOR_BADGE', show: true } satisfies ControlMessage)
+              .catch(() => {}); // 該頁無 content（如 chrome://）忽略
+          }
           sendResponse({ ok: true });
           break;
-        case 'STOP_MONITORING':
+        }
+        case 'STOP_MONITORING': {
           stopMonitoring();
+          const tab = await getActiveTab();
+          if (tab?.id) {
+            await chrome.tabs
+              .sendMessage(tab.id, { type: 'SET_MONITOR_BADGE', show: false } satisfies ControlMessage)
+              .catch(() => {});
+          }
           sendResponse({ ok: true });
           break;
+        }
         // PM-34：即時 flush → 追加到對應 buffer（頁面跳轉時資料已落地）
         case 'FLUSH_VOICE': {
           const seg = (msg as { segment: VoiceSegment }).segment;

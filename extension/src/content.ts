@@ -21,7 +21,10 @@ blog('content loaded（ISOLATED world）', location.href);
 
 let injectReady = false;
 
-function sendToInject(cmd: 'START' | 'STOP' | 'REWIND' | 'GET_LIVE_ERRORS', keyboardMode?: boolean) {
+function sendToInject(
+  cmd: 'START' | 'STOP' | 'REWIND' | 'GET_LIVE_ERRORS' | 'SHOW_MONITOR' | 'HIDE_MONITOR',
+  keyboardMode?: boolean,
+) {
   const msg: InjectCommand = { source: BUGEZY_SOURCE, dir: 'to-inject', cmd, keyboardMode };
   blog(`→ 轉送 ${cmd} 給 inject（injectReady=${injectReady}, keyboardMode=${keyboardMode === true}）`);
   window.postMessage(msg, '*');
@@ -155,6 +158,10 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
     window.addEventListener('message', handler);
     sendToInject('GET_LIVE_ERRORS');
     setTimeout(() => finish({ consoleLogs: [], networkErrors: [] }), 2000);
+  } else if (msg.type === 'SET_MONITOR_BADGE') {
+    // PM-52：轉發給 inject 顯示/隱藏頁面浮動 badge
+    sendToInject(msg.show ? 'SHOW_MONITOR' : 'HIDE_MONITOR');
+    sendResponse({ ok: true });
   }
   return true;
 });
