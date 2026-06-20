@@ -109,6 +109,18 @@ async function readLiveErrors(env: Env): Promise<Record<string, unknown>> {
   return { ...data, stale: false };
 }
 
+// ── PM-53：終端機 CLI agent 日誌暫存（R2 單一物件，同 live-errors 跨 isolate 一致）──
+const TERMINAL_LOGS_KEY = 'terminal-logs/latest.json';
+
+async function readTerminalLogs(env: Env): Promise<Record<string, unknown>> {
+  const obj = await env.R2.get(TERMINAL_LOGS_KEY);
+  const data = obj ? ((await obj.json()) as { updatedAt?: number }) : null;
+  if (!data || !data.updatedAt || Date.now() - data.updatedAt > 30_000) {
+    return { logs: [], stale: true };
+  }
+  return { ...data, stale: false };
+}
+
 // ── PM-48：測試專頁（Test Harness）──────────────────────────
 // 共用 CSS（page1 與 page2/3 shell 共用，單一來源）
 const TEST_STYLE = `
@@ -446,6 +458,17 @@ export default {
       if (request.method === 'GET' && path === '/api/live-errors') {
         return json(await readLiveErrors(env));
       }
+      // PM-53：終端機 CLI agent 日誌（POST 覆蓋最新；GET 讀最新，>30s 視為過期）
+      if (request.method === 'POST' && path === '/api/terminal-logs') {
+        const data = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+        await env.R2.put(TERMINAL_LOGS_KEY, JSON.stringify({ ...data, updatedAt: Date.now() }), {
+          httpMetadata: { contentType: 'application/json' },
+        });
+        return json({ ok: true });
+      }
+      if (request.method === 'GET' && path === '/api/terminal-logs') {
+        return json(await readTerminalLogs(env));
+      }
       if (request.method === 'POST' && path === '/api/summarize') {
         return await summarizeText(request, env);
       }
@@ -779,6 +802,20 @@ function createMcpServer(env: Env): McpServer {
       const data = await readLiveErrors(env);
       if (data.stale) {
         return txt('即時監控未啟用或資料已過期（>30 秒）。請在 BugEzy popup 開啟「🔍 即時監控」後再查。');
+      }
+      return txt(data);
+    },
+  );
+
+  // Tool 10（PM-53）: get_terminal_logs — 終端機 stderr/throw/crash（需跑 npx bugezy-watch）
+  server.tool(
+    'get_terminal_logs',
+    '取得終端機的即時錯誤日誌（stderr/throw/crash）。開發者需執行 npx bugezy-watch -- <command>。Terminal error logs.',
+    {},
+    async () => {
+      const data = await readTerminalLogs(env);
+      if (data.stale) {
+        return txt('終端機 Agent 未啟動或資料已過期（>30 秒）。請在終端機執行：npx bugezy-watch -- npm run dev');
       }
       return txt(data);
     },
