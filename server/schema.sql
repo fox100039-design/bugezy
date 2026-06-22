@@ -33,3 +33,14 @@ ALTER TABLE reports ADD COLUMN IF NOT EXISTS description TEXT DEFAULT '';
 
 -- ── PM-28：時間軸標記（mini player 標記時間點 + 文字說明）──
 ALTER TABLE reports ADD COLUMN IF NOT EXISTS markers JSONB DEFAULT '[]';
+
+-- ── PM-56：MCP 月度使用量統計（每次 MCP 呼叫記一筆，供 /api/usage/monthly 彙總）──
+CREATE TABLE IF NOT EXISTS mcp_usage (
+  id SERIAL PRIMARY KEY,
+  tool_name TEXT NOT NULL,
+  tokens_estimated INT NOT NULL,
+  chrome_tokens_estimated INT NOT NULL,
+  report_id TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_mcp_usage_created ON mcp_usage (created_at);

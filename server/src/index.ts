@@ -469,6 +469,10 @@ export default {
       if (request.method === 'GET' && path === '/api/terminal-logs') {
         return json(await readTerminalLogs(env));
       }
+      // PM-56：當月 MCP 使用量統計
+      if (request.method === 'GET' && path === '/api/usage/monthly') {
+        return json(await getMonthlyUsage(env));
+      }
       if (request.method === 'POST' && path === '/api/summarize') {
         return await summarizeText(request, env);
       }
@@ -689,16 +693,89 @@ function formatTokenFooter(est: TokenEstimate): string {
   return `\n\n---\n📊 Token 估算：~${est.bugezyTokens.toLocaleString()} tokens ≈ $${est.bugezyUSD}\n💡 同場景 Claude in Chrome：~${est.chromeTokens.toLocaleString()} tokens ≈ $${est.chromeUSD}\n✅ BugEzy 為你省了 ${est.savedPercent}%`;
 }
 
-/** 同 txt()，但在資料後附上 token 估算 footer（PM-54，給 tool 的「資料回應」用） */
-function txtWithTokens(data: unknown, toolName: string) {
-  const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
-  const est = estimateTokens(text, toolName);
-  return { content: [{ type: 'text' as const, text: text + formatTokenFooter(est) }] };
+// ── PM-56：月度使用量統計（每次 MCP 呼叫記錄到 Supabase mcp_usage 表）──
+async function logMcpUsage(
+  env: Env,
+  toolName: string,
+  est: TokenEstimate,
+  reportId?: string,
+): Promise<void> {
+  try {
+    await fetch(`${env.SUPABASE_URL}/rest/v1/mcp_usage`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: env.SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${env.SUPABASE_ANON_KEY}`,
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({
+        tool_name: toolName,
+        tokens_estimated: est.bugezyTokens,
+        chrome_tokens_estimated: est.chromeTokens,
+        report_id: reportId ?? null,
+      }),
+    });
+  } catch {
+    // 記錄失敗不影響 MCP 回應
+  }
+}
+
+/** 當月 MCP 使用量彙總（GET /api/usage/monthly 與 MCP get_usage_stats 共用） */
+async function getMonthlyUsage(env: Env): Promise<Record<string, unknown>> {
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const res = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/mcp_usage?select=tool_name,tokens_estimated,chrome_tokens_estimated&created_at=gte.${monthStart}`,
+    {
+      headers: { apikey: env.SUPABASE_ANON_KEY, Authorization: `Bearer ${env.SUPABASE_ANON_KEY}` },
+    },
+  );
+  const rows = (await res.json().catch(() => [])) as Array<{
+    tool_name: string;
+    tokens_estimated: number;
+    chrome_tokens_estimated: number;
+  }>;
+
+  let totalCalls = 0;
+  let totalTokens = 0;
+  let totalChromeTokens = 0;
+  const byTool: Record<string, { calls: number; tokens: number }> = {};
+  for (const row of Array.isArray(rows) ? rows : []) {
+    totalCalls++;
+    totalTokens += row.tokens_estimated;
+    totalChromeTokens += row.chrome_tokens_estimated;
+    const t = row.tool_name;
+    if (!byTool[t]) byTool[t] = { calls: 0, tokens: 0 };
+    byTool[t].calls++;
+    byTool[t].tokens += row.tokens_estimated;
+  }
+
+  const savedTokens = totalChromeTokens - totalTokens;
+  return {
+    month: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
+    totalCalls,
+    totalTokens,
+    totalChromeTokens,
+    totalUSD: ((totalTokens * 8) / 1_000_000).toFixed(4),
+    savedTokens,
+    savedUSD: ((savedTokens * 8) / 1_000_000).toFixed(4),
+    savedPercent: totalChromeTokens > 0 ? Math.round((1 - totalTokens / totalChromeTokens) * 100) : 0,
+    byTool,
+  };
 }
 
 function createMcpServer(env: Env): McpServer {
   const server = new McpServer({ name: 'BugEzy', version: '0.1.0' });
   const supabase = () => supa(env);
+
+  /** 同 txt() + token footer（PM-54）+ 背景記錄使用量到 Supabase（PM-56，不 await）。 */
+  const txtWithTokens = (data: unknown, toolName: string, reportId?: string) => {
+    const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+    const est = estimateTokens(text, toolName);
+    void logMcpUsage(env, toolName, est, reportId); // 背景寫入，不拖慢回應
+    return { content: [{ type: 'text' as const, text: text + formatTokenFooter(est) }] };
+  };
 
   // Tool 1: list_reports
   server.tool(
@@ -731,7 +808,7 @@ function createMcpServer(env: Env): McpServer {
         .eq('report_id', args.report_id)
         .single();
       if (error || !data) return txt('找不到報告');
-      return txtWithTokens(data, 'get_report_overview');
+      return txtWithTokens(data, 'get_report_overview', args.report_id);
     },
   );
 
@@ -747,7 +824,7 @@ function createMcpServer(env: Env): McpServer {
         .eq('report_id', args.report_id)
         .single();
       if (error || !data) return txt('找不到報告');
-      return txtWithTokens(data.console_logs, 'get_console_logs');
+      return txtWithTokens(data.console_logs, 'get_console_logs', args.report_id);
     },
   );
 
@@ -763,7 +840,7 @@ function createMcpServer(env: Env): McpServer {
         .eq('report_id', args.report_id)
         .single();
       if (error || !data) return txt('找不到報告');
-      return txtWithTokens(data.network_errors, 'get_network_errors');
+      return txtWithTokens(data.network_errors, 'get_network_errors', args.report_id);
     },
   );
 
@@ -779,7 +856,7 @@ function createMcpServer(env: Env): McpServer {
         .eq('report_id', args.report_id)
         .single();
       if (error || !data) return txt('找不到報告');
-      return txtWithTokens(data.voice_transcript, 'get_voice_transcript');
+      return txtWithTokens(data.voice_transcript, 'get_voice_transcript', args.report_id);
     },
   );
 
@@ -795,7 +872,7 @@ function createMcpServer(env: Env): McpServer {
         .eq('report_id', args.report_id)
         .single();
       if (error || !data) return txt('找不到報告');
-      return txtWithTokens(data, 'get_page_info');
+      return txtWithTokens(data, 'get_page_info', args.report_id);
     },
   );
 
@@ -821,7 +898,11 @@ function createMcpServer(env: Env): McpServer {
       }
       const ts = events.map((e) => e.timestamp ?? 0).filter((t) => t > 0);
       const duration_ms = ts.length >= 2 ? Math.max(...ts) - Math.min(...ts) : 0;
-      return txtWithTokens({ event_count: events.length, duration_ms, event_types }, 'get_rrweb_summary');
+      return txtWithTokens(
+        { event_count: events.length, duration_ms, event_types },
+        'get_rrweb_summary',
+        args.report_id,
+      );
     },
   );
 
@@ -839,7 +920,7 @@ function createMcpServer(env: Env): McpServer {
       if (!meta?.rrweb_r2_key) return txt('無 DOM 軌跡');
       const obj = await env.R2.get(meta.rrweb_r2_key as string);
       if (!obj) return txt('R2 檔案不存在');
-      return txtWithTokens(await obj.text(), 'get_rrweb_events');
+      return txtWithTokens(await obj.text(), 'get_rrweb_events', args.report_id);
     },
   );
 
@@ -868,6 +949,35 @@ function createMcpServer(env: Env): McpServer {
         return txt('終端機 Agent 未啟動或資料已過期（>30 秒）。請在終端機執行：npx bugezy-watch -- npm run dev');
       }
       return txtWithTokens(data, 'get_terminal_logs');
+    },
+  );
+
+  // Tool 11（PM-56）: get_usage_stats — 當月 MCP 使用量 + 省了多少
+  server.tool(
+    'get_usage_stats',
+    '取得當月的 MCP 使用量統計（呼叫次數、token 消耗、省了多少）。Monthly MCP usage stats.',
+    {},
+    async () => {
+      const data = (await getMonthlyUsage(env)) as {
+        month: string;
+        totalCalls: number;
+        totalTokens: number;
+        totalChromeTokens: number;
+        totalUSD: string;
+        savedTokens: number;
+        savedUSD: string;
+        savedPercent: number;
+      };
+      const text =
+        `📊 ${data.month} 月度使用報告\n` +
+        `MCP 呼叫次數：${data.totalCalls} 次\n` +
+        `BugEzy Token 消耗：~${data.totalTokens.toLocaleString()} tokens ≈ $${data.totalUSD}\n` +
+        `同場景 Claude in Chrome：~${data.totalChromeTokens.toLocaleString()} tokens\n` +
+        `省下的 Token：~${data.savedTokens.toLocaleString()} tokens ≈ $${data.savedUSD}\n` +
+        `節省比例：${data.savedPercent}%`;
+      const est = estimateTokens(text, 'get_usage_stats');
+      void logMcpUsage(env, 'get_usage_stats', est);
+      return { content: [{ type: 'text' as const, text: text + formatTokenFooter(est) }] };
     },
   );
 
