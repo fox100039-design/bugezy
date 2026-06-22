@@ -57,7 +57,7 @@ Chrome 擴充（Manifest V3 + TypeScript + esbuild）
 - 資料庫：Supabase PostgreSQL + Auth（✅ reports 表上線；Auth 待第 5 代）
 - 檔案儲存：Cloudflare R2（✅ rrweb + screenshots 大檔）
 - Web 報告頁：React + Vite（✅ `@rrweb/replay` 回放 + 四面板 + 深色主題）
-- MCP Server：stdio（`mcp-server/`）+ Workers `/mcp`（**10 Tool**，加 `get_live_errors`/`get_terminal_logs`）（✅ 已驗證）
+- MCP Server：stdio（`mcp-server/`）+ Workers `/mcp`（**12 Tool**，加 `get_live_errors`/`get_terminal_logs`/`get_screenshots`/`get_usage_stats`；每次回應附 token 省錢 footer）（✅ 已驗證）
 - 截圖標注：annotate.html canvas（畫筆/箭頭/框/文字）+ 三擷取模式 + 即時字幕（✅ 第 6 代）
 - AI 精簡：Cloudflare Workers AI `@cf/meta/llama-3.3-70b-instruct-fp8-fast`（✅ 已部署）
 - 跨頁錄製：inject 即時 flush → background `chrome.storage.local` buffer → STOP 合併去重（PM-34~37，頁面跳轉不丟資料）
@@ -67,6 +67,8 @@ Chrome 擴充（Manifest V3 + TypeScript + esbuild）
 - 🖥 終端機 CLI：`cli/` `npx bugezy-watch -- <command>` 攔截 stderr/throw/crash → R2 → MCP `get_terminal_logs`（PM-53）
 - 測試專頁：server `GET /test` + page2/3 + `/test/api/:status`（可預測 Bug 場景，PM-48）
 - 即時監控/終端機暫存：Cloudflare R2 單一物件（非全域 Map — 跨 Worker isolate 才一致）
+- Token 省錢透明度：MCP 每次回應附 token 估算 + 對比 Claude in Chrome 省錢 %（PM-54）；edit-report 上傳前各區塊估算（PM-55）；Supabase `mcp_usage` 月度統計 `GET /api/usage/monthly` + MCP `get_usage_stats`（PM-56，記錄要 await 否則 Workers 提前終止丟寫入）
+- 報告頁：Server 直接 serve `GET /report/:id` HTML（深色 DevTools Tab 分頁 + Token，vanilla JS 讀 `/api/reports/:id`，PM-59）；web React 版 `ReportPage` 同款 Tab（PM-58，Worker 未服務 SPA，靠 Vite 預覽）
 
 ## 核心鐵律
 1. **dc-light 唯讀**：PM 不用 dc-light 改 .ts/.tsx，只改文件（.md/job 檔）

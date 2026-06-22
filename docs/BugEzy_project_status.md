@@ -21,7 +21,7 @@
 | **① 能錄能存** | Chrome 擴充骨架 | rrweb DOM + Console + Network 攔截 → 打包 JSON | ✅ 完成 |
 | **② 能聽能說** | 語音辨識 | Web Speech API 中文即時轉文字，收進 payload | ✅ 完成 |
 | **③ 能存能看** | 後端 + 報告頁 | Cloudflare Workers + Supabase + R2 + React 報告頁 | ✅ 完成 |
-| **④ AI 能讀** | MCP Server | Pull 模式 10 Tool（+ get_live_errors / get_terminal_logs），AI 按需查詢 = **MVP 封測** | ✅ 完成 |
+| **④ AI 能讀** | MCP Server | Pull 模式 12 Tool（+ get_live_errors / get_terminal_logs / get_screenshots / get_usage_stats），每次回應附 token 省錢對比 = **MVP 封測** | ✅ 完成 |
 | **⑤ 能收錢** | 付費上線 | Stripe 串接 + Chrome Web Store 上架 = **正式上線** | 待做 |
 | **⑥ 更好用** | UX 優化 + 多模式 | 六種模式（錄製/回溯/截圖/即時監控/鍵盤/終端機CLI）+ 截圖三模式 + 即時字幕雙區 + 跨頁錄製 + 編輯頁時間軸標記 + AI精簡 + 乾淨toggle | 🔨 進行中（PM-53） |
 | **⑦ 規模化** | 多語 + 企業 | 日韓越語音、跨境除錯鏈、企業自託管 | 待做 |
@@ -302,6 +302,27 @@ FOX = 創辦人 + 決策者 + 手動驗收
 - 新增端點：`/test*`、`/api/live-errors`（POST/GET，R2）、`/api/terminal-logs`（POST/GET，R2）。
 - MCP Tool 由 8 → **10**：加 `get_live_errors`、`get_terminal_logs`（皆讀 R2，跨 isolate 一致）。
 - 新增子專案 `cli/`（@bugezy/cli，TypeScript + tsx，`bin: bugezy-watch`）。
+
+---
+
+## §6d 第 6 代 Day 6（2026-06-22，PM-54~59）— 上架前：Token 透明度 + 報告頁
+
+**Token 省錢透明度（PM-54~56b）**：
+- PM-54：每個 MCP tool 資料回應尾端附 token 估算 + 對比 Claude in Chrome 的省錢 footer（`estimateTokens`/`txtWithTokens`，倍率表 list_reports=5…get_terminal_logs=40）。
+- PM-55：edit-report 上傳前顯示各區塊（語音/console/network/說明/標記/DOM）token 明細 + 總計 + 省 %。
+- PM-56：每次 MCP 呼叫記錄到 Supabase `mcp_usage`；`GET /api/usage/monthly` 月度彙總；MCP `get_usage_stats`。
+- PM-56b：修記錄沒寫入——Workers 回應後立刻終止，`void` fire-and-forget 來不及；改 `await logMcpUsage`（線上實測 totalCalls 由 0→1）。
+
+**MCP 新工具（PM-57）**：`get_screenshots`（讀 R2 截圖；`include_images` 預設 false 只回 metadata 省 token，true 才回 base64 圖片 + 圖片 token 估算）。**MCP 共 12 Tool**。
+
+**報告頁（PM-58~59）**：
+- PM-58：web React `ReportPage` 改 Jam 風格 DevTools Tab 分頁（Info/Console/Network/Voice/截圖，自動選有資料 tab）。
+- PM-59：**Server 直接 serve `/report/:id` HTML**（自包含深色主題 + Tab + Token，vanilla JS 讀 `/api/reports/:id`）→ 解決 share_url 在 Worker origin 404（web React 版暫不使用）。據實修正規格的 snake_case 欄位（API 實回 camelCase，否則整頁無資料）。
+
+### Server / MCP（Day 6 增量）
+- 端點：`/report/:id`、`/api/usage/monthly`。
+- MCP **10 → 12 Tool**：加 `get_screenshots`、`get_usage_stats`。
+- Supabase `mcp_usage` 表（PM-56，FOX 已建）；即時暫存 live-errors/terminal-logs 用 R2 單一物件（跨 isolate 一致）。
 
 ---
 

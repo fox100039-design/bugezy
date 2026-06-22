@@ -169,3 +169,16 @@
 - PM-52：即時監控視覺回饋 — inject 頁面右下浮動 badge（綠✓/紅數字 + 閃動）+ 點擊展開 error 清單（escapeHtml 防注入）；攔截時 `updateMonitorBadge`；background 擴充圖示 badge 數字（非錄製時，`syncBadge` 還原）；`SET_MONITOR_BADGE`/`SHOW_MONITOR`/`HIDE_MONITOR` 串接
 - PM-53：🖥 終端機 CLI Agent（新建 `cli/`）— `npx bugezy-watch -- <command>` 包住開發指令，stdout/stderr 透傳 + `ERROR_PATTERNS` 攔截 stderr/throw/crash、環形 buffer、每 10s + exit flush；`POST/GET /api/terminal-logs`（R2）+ MCP `get_terminal_logs`；已部署 + 端到端實測（CLI→API→GET stale:false）；devDeps 補 `@types/node`
 - 收工：文件同步（project_status §2/§6c、CHANGELOG、SKILL）+ commit
+
+## 2026-06-22
+
+第 6 代 Day 6（PM-54~59）。上架前補齊：MCP token 省錢透明度、月度用量統計、get_screenshots、報告頁（Server 直接 serve HTML + DevTools 分頁）。MCP 由 10→12 tool。
+
+- PM-54：每個 MCP tool 資料回應附 token 估算 + 對比 Claude in Chrome 省錢 footer（`estimateTokens`/`formatTokenFooter`/`txtWithTokens`，10 tool 全套用）；已部署 + 真實 MCP 連線驗證
+- PM-55：edit-report 上傳前顯示各區塊 token 明細（語音/console/network/說明/標記/DOM）+ 總計 + 省%（`renderTokenEstimate`）；據實微調讀 `descInput.value`（payload 無 description 欄）
+- PM-56：每次 MCP 呼叫記錄 Supabase `mcp_usage`（`logMcpUsage`，txtWithTokens 移進 createMcpServer 捕獲 env）+ `GET /api/usage/monthly`（`getMonthlyUsage`）+ MCP `get_usage_stats`；schema 補建表（非阻擋：表不存在不會壞）
+- PM-56b：修記錄沒寫入——`void` fire-and-forget 被 Workers 提前終止；改 `txtWithTokens`/`get_usage_stats` 為 `await logMcpUsage`；線上實測 `/api/usage/monthly` totalCalls 0→1 記錄成功
+- PM-57：MCP Tool 12 `get_screenshots`（讀 R2 截圖；`include_images` 預設 false 只回 metadata 省 token，true 回 base64 圖片 + 圖片 token 估算）；raw `/mcp` tools/list + metadata 模式線上驗證
+- PM-58：web React `ReportPage` 改 Jam 風格 DevTools Tab 分頁（Info/Console/Network/Voice/截圖，自動選有資料 tab）+ index.css；標註 Worker 未服務 SPA
+- PM-59：**Server 直接 serve `/report/:id` HTML**（`REPORT_PAGE_HTML`，深色 Tab + Token + vanilla JS 讀 `/api/reports/:id`）→ 解 share_url 在 Worker origin 404；據實修正規格 snake_case→camelCase（API 實回 camelCase，否則整頁無資料）；curl 驗證 200/html、API 不受影響
+- 收工：文件同步（project_status §2/§6d、CHANGELOG、SKILL）+ commit
