@@ -646,6 +646,56 @@ function txt(data: unknown) {
   return { content: [{ type: 'text' as const, text }] };
 }
 
+// ── PM-54：每次 MCP 回應附 token 估算 + 對比 Claude in Chrome 的省錢 ──
+interface TokenEstimate {
+  bugezyTokens: number;
+  chromeTokens: number;
+  savedPercent: number;
+  bugezyUSD: string;
+  chromeUSD: string;
+}
+
+function estimateTokens(responseText: string, toolName: string): TokenEstimate {
+  // 估算：字串長度 / 3.5 ≈ token 數
+  const bugezyTokens = Math.ceil(responseText.length / 3.5);
+
+  // Claude in Chrome 對比基準（同場景的 token 倍率）
+  const chromeMultiplier: Record<string, number> = {
+    list_reports: 5, // Chrome 要讀整頁 DOM 找報告
+    get_report_overview: 10, // Chrome 要讀整頁
+    get_console_logs: 20, // Chrome 讀全量 console
+    get_network_errors: 20, // Chrome 讀全量 network
+    get_voice_transcript: 50, // Chrome 沒有語音功能，要人工描述
+    get_page_info: 15,
+    get_rrweb_summary: 10,
+    get_rrweb_events: 2, // 都是大量資料
+    get_live_errors: 30, // Chrome 要開 DevTools 掃全頁
+    get_terminal_logs: 40, // Chrome 完全做不到
+  };
+
+  const multiplier = chromeMultiplier[toolName] || 10;
+  const chromeTokens = bugezyTokens * multiplier;
+  const savedPercent = chromeTokens > 0 ? Math.round((1 - bugezyTokens / chromeTokens) * 100) : 0;
+
+  // 價格：Claude Sonnet ~$3/MTok input、~$15/MTok output，簡化用 $8/MTok 平均
+  const pricePerToken = 8 / 1_000_000;
+  const bugezyUSD = (bugezyTokens * pricePerToken).toFixed(4);
+  const chromeUSD = (chromeTokens * pricePerToken).toFixed(4);
+
+  return { bugezyTokens, chromeTokens, savedPercent, bugezyUSD, chromeUSD };
+}
+
+function formatTokenFooter(est: TokenEstimate): string {
+  return `\n\n---\n📊 Token 估算：~${est.bugezyTokens.toLocaleString()} tokens ≈ $${est.bugezyUSD}\n💡 同場景 Claude in Chrome：~${est.chromeTokens.toLocaleString()} tokens ≈ $${est.chromeUSD}\n✅ BugEzy 為你省了 ${est.savedPercent}%`;
+}
+
+/** 同 txt()，但在資料後附上 token 估算 footer（PM-54，給 tool 的「資料回應」用） */
+function txtWithTokens(data: unknown, toolName: string) {
+  const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+  const est = estimateTokens(text, toolName);
+  return { content: [{ type: 'text' as const, text: text + formatTokenFooter(est) }] };
+}
+
 function createMcpServer(env: Env): McpServer {
   const server = new McpServer({ name: 'BugEzy', version: '0.1.0' });
   const supabase = () => supa(env);
@@ -665,7 +715,7 @@ function createMcpServer(env: Env): McpServer {
       if (args.url) query = query.ilike('url', `%${args.url}%`);
       const { data, error } = await query;
       if (error) return txt(`查詢失敗: ${error.message}`);
-      return txt(data ?? []);
+      return txtWithTokens(data ?? [], 'list_reports');
     },
   );
 
@@ -681,7 +731,7 @@ function createMcpServer(env: Env): McpServer {
         .eq('report_id', args.report_id)
         .single();
       if (error || !data) return txt('找不到報告');
-      return txt(data);
+      return txtWithTokens(data, 'get_report_overview');
     },
   );
 
@@ -697,7 +747,7 @@ function createMcpServer(env: Env): McpServer {
         .eq('report_id', args.report_id)
         .single();
       if (error || !data) return txt('找不到報告');
-      return txt(data.console_logs);
+      return txtWithTokens(data.console_logs, 'get_console_logs');
     },
   );
 
@@ -713,7 +763,7 @@ function createMcpServer(env: Env): McpServer {
         .eq('report_id', args.report_id)
         .single();
       if (error || !data) return txt('找不到報告');
-      return txt(data.network_errors);
+      return txtWithTokens(data.network_errors, 'get_network_errors');
     },
   );
 
@@ -729,7 +779,7 @@ function createMcpServer(env: Env): McpServer {
         .eq('report_id', args.report_id)
         .single();
       if (error || !data) return txt('找不到報告');
-      return txt(data.voice_transcript);
+      return txtWithTokens(data.voice_transcript, 'get_voice_transcript');
     },
   );
 
@@ -745,7 +795,7 @@ function createMcpServer(env: Env): McpServer {
         .eq('report_id', args.report_id)
         .single();
       if (error || !data) return txt('找不到報告');
-      return txt(data);
+      return txtWithTokens(data, 'get_page_info');
     },
   );
 
@@ -771,7 +821,7 @@ function createMcpServer(env: Env): McpServer {
       }
       const ts = events.map((e) => e.timestamp ?? 0).filter((t) => t > 0);
       const duration_ms = ts.length >= 2 ? Math.max(...ts) - Math.min(...ts) : 0;
-      return txt({ event_count: events.length, duration_ms, event_types });
+      return txtWithTokens({ event_count: events.length, duration_ms, event_types }, 'get_rrweb_summary');
     },
   );
 
@@ -789,7 +839,7 @@ function createMcpServer(env: Env): McpServer {
       if (!meta?.rrweb_r2_key) return txt('無 DOM 軌跡');
       const obj = await env.R2.get(meta.rrweb_r2_key as string);
       if (!obj) return txt('R2 檔案不存在');
-      return txt(await obj.text());
+      return txtWithTokens(await obj.text(), 'get_rrweb_events');
     },
   );
 
@@ -803,7 +853,7 @@ function createMcpServer(env: Env): McpServer {
       if (data.stale) {
         return txt('即時監控未啟用或資料已過期（>30 秒）。請在 BugEzy popup 開啟「🔍 即時監控」後再查。');
       }
-      return txt(data);
+      return txtWithTokens(data, 'get_live_errors');
     },
   );
 
@@ -817,7 +867,7 @@ function createMcpServer(env: Env): McpServer {
       if (data.stale) {
         return txt('終端機 Agent 未啟動或資料已過期（>30 秒）。請在終端機執行：npx bugezy-watch -- npm run dev');
       }
-      return txt(data);
+      return txtWithTokens(data, 'get_terminal_logs');
     },
   );
 
