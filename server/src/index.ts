@@ -769,11 +769,15 @@ function createMcpServer(env: Env): McpServer {
   const server = new McpServer({ name: 'BugEzy', version: '0.1.0' });
   const supabase = () => supa(env);
 
-  /** 同 txt() + token footer（PM-54）+ 背景記錄使用量到 Supabase（PM-56，不 await）。 */
-  const txtWithTokens = (data: unknown, toolName: string, reportId?: string) => {
+  /**
+   * 同 txt() + token footer（PM-54）+ 記錄使用量到 Supabase（PM-56）。
+   * PM-56b：改 async + `await logMcpUsage` —— Workers 在回應送出後立刻終止，
+   * fire-and-forget 的背景 fetch 來不及完成，導致記錄沒寫入。多等幾十毫秒不影響體驗。
+   */
+  const txtWithTokens = async (data: unknown, toolName: string, reportId?: string) => {
     const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
     const est = estimateTokens(text, toolName);
-    void logMcpUsage(env, toolName, est, reportId); // 背景寫入，不拖慢回應
+    await logMcpUsage(env, toolName, est, reportId);
     return { content: [{ type: 'text' as const, text: text + formatTokenFooter(est) }] };
   };
 
@@ -976,7 +980,7 @@ function createMcpServer(env: Env): McpServer {
         `省下的 Token：~${data.savedTokens.toLocaleString()} tokens ≈ $${data.savedUSD}\n` +
         `節省比例：${data.savedPercent}%`;
       const est = estimateTokens(text, 'get_usage_stats');
-      void logMcpUsage(env, 'get_usage_stats', est);
+      await logMcpUsage(env, 'get_usage_stats', est); // PM-56b：await，否則 Workers 提前終止寫不進
       return { content: [{ type: 'text' as const, text: text + formatTokenFooter(est) }] };
     },
   );
