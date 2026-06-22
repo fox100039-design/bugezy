@@ -86,6 +86,243 @@ function html(body: string): Response {
   return new Response(body, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
 }
 
+// ── PM-59：Server 直接 serve 報告頁 HTML（vanilla JS 讀 /api/reports/:id 渲染）──
+// ⚠ 規格 HTML 讀 snake_case（console_logs / rrweb_count），但 GET /api/reports/:id 實際回
+// camelCase（consoleLogs / networkErrors / voiceTranscript / rrwebEvents）——已實測確認。
+// 直接照規格部署會整頁空白，故此處欄位名改為 camelCase 以正確渲染資料。
+const REPORT_PAGE_HTML = `<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>BugEzy — Bug 報告</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:#0f0f1a; color:#e0e0e0; font-family:system-ui,"Microsoft JhengHei",sans-serif; }
+    .topbar { display:flex; align-items:center; gap:12px; padding:12px 24px; background:#1a1a2e; border-bottom:1px solid #2a2a3e; }
+    .topbar-brand { font-size:18px; font-weight:700; color:#a78bfa; }
+    .topbar-title { color:#888; font-size:14px; }
+    .report { max-width:1100px; margin:0 auto; padding:24px; }
+    .header { margin-bottom:20px; }
+    .header h1 { font-size:20px; color:#fff; margin-bottom:8px; }
+    .meta { font-size:13px; color:#888; line-height:1.8; }
+    .meta a { color:#a78bfa; text-decoration:none; }
+    .tab-bar { display:flex; gap:0; border-bottom:2px solid #2a2a3e; margin:20px 0 0; overflow-x:auto; }
+    .tab-btn { padding:10px 20px; background:none; border:none; border-bottom:2px solid transparent; margin-bottom:-2px; color:#888; font-size:14px; font-weight:500; cursor:pointer; white-space:nowrap; display:flex; align-items:center; gap:6px; transition:all 0.15s; }
+    .tab-btn:hover { color:#ccc; background:rgba(124,58,237,0.05); }
+    .tab-btn.active { color:#a78bfa; border-bottom-color:#7c3aed; }
+    .tab-badge { font-size:11px; padding:1px 7px; border-radius:10px; background:#2a2a3e; color:#aaa; }
+    .tab-badge.error { background:rgba(239,68,68,0.2); color:#ef4444; }
+    .tab-content { min-height:200px; padding:16px 0; }
+    .tab-panel { display:none; }
+    .tab-panel.active { display:block; }
+    .info-section { margin-bottom:20px; }
+    .info-section h3 { font-size:14px; color:#a78bfa; margin-bottom:8px; }
+    .info-section p { color:#ccc; line-height:1.7; white-space:pre-wrap; }
+    .info-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; font-size:13px; color:#aaa; }
+    .marker-item { display:flex; gap:8px; padding:6px 0; border-bottom:1px solid #1a1a2e; font-size:13px; color:#ccc; }
+    .marker-time { background:#7c3aed; color:#fff; padding:2px 8px; border-radius:4px; font-family:monospace; font-size:12px; }
+    .log-item { padding:8px 12px; border-bottom:1px solid #1a1a2e; font-family:monospace; font-size:13px; display:flex; gap:8px; }
+    .log-item.error { color:#ef4444; }
+    .log-item.warn { color:#f59e0b; }
+    .log-icon { flex-shrink:0; }
+    .log-msg { word-break:break-all; }
+    .log-time { color:#555; font-size:11px; margin-left:auto; flex-shrink:0; }
+    .net-item { padding:8px 12px; border-bottom:1px solid #1a1a2e; font-family:monospace; font-size:13px; display:flex; gap:12px; align-items:center; }
+    .net-status { font-weight:700; min-width:36px; }
+    .net-status.s4xx { color:#f59e0b; }
+    .net-status.s5xx { color:#ef4444; }
+    .net-method { color:#3b82f6; min-width:40px; }
+    .net-url { color:#ccc; word-break:break-all; flex:1; }
+    .net-duration { color:#555; font-size:11px; }
+    .voice-item { padding:8px 12px; border-bottom:1px solid #1a1a2e; font-size:14px; color:#ccc; line-height:1.6; }
+    .voice-time { color:#555; font-size:11px; margin-right:8px; }
+    .ss-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px; }
+    .ss-img { width:100%; border-radius:8px; border:1px solid #2a2a3e; cursor:pointer; }
+    .ss-img:hover { border-color:#7c3aed; }
+    .token-panel { margin-top:24px; padding:16px; background:#1a1a2e; border:1px solid rgba(124,58,237,0.3); border-radius:12px; }
+    .token-row { display:flex; justify-content:space-between; padding:3px 0; font-size:13px; color:#aaa; }
+    .token-row.total { border-top:1px solid #2a2a3e; margin-top:6px; padding-top:6px; font-weight:700; color:#fff; }
+    .token-save { margin-top:10px; padding:10px; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); border-radius:8px; font-size:13px; color:#10b981; text-align:center; }
+    .loading { text-align:center; padding:60px; color:#888; }
+    .error-msg { text-align:center; padding:60px; color:#ef4444; }
+    .empty { text-align:center; padding:24px; color:#555; font-size:13px; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <span class="topbar-brand">🐛 BugEzy</span>
+    <span class="topbar-title">Bug 報告</span>
+  </div>
+  <div class="report" id="app">
+    <div class="loading" id="loading">載入中…</div>
+  </div>
+  <script>
+    const reportId = location.pathname.split('/report/')[1];
+    const API = location.origin;
+
+    fetch(API + '/api/reports/' + reportId)
+      .then(r => { if (!r.ok) throw new Error('not found'); return r.json(); })
+      .then(render)
+      .catch(() => {
+        document.getElementById('app').innerHTML = '<div class="error-msg">找不到報告</div>';
+      });
+
+    function fmtTime(ts) {
+      if (!ts) return '';
+      const d = new Date(ts);
+      const p = n => String(n).padStart(2,'0');
+      return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+    }
+    function fmtDate(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      const p = n => String(n).padStart(2,'0');
+      return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());
+    }
+    function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    function render(r) {
+      const consoleCount = r.consoleLogs?.length || 0;
+      const networkCount = r.networkErrors?.length || 0;
+      const voiceCount = r.voiceTranscript?.length || 0;
+      const ssCount = r.screenshots?.length || 0;
+      const markers = r.markers || [];
+
+      let html = '<div class="header">';
+      html += '<h1>' + esc(r.title || '（無標題）') + '</h1>';
+      html += '<div class="meta">';
+      html += '<div>URL：<a href="'+esc(r.url)+'" target="_blank">'+esc(r.url)+'</a></div>';
+      html += '<div>'+esc(r.browser||'')+(r.screen_size ? ' ｜ '+r.screen_size : '')+'</div>';
+      html += '<div>'+fmtDate(r.created_at)+'</div>';
+      html += '</div></div>';
+
+      const tabs = [
+        { key:'info', label:'Info', count:null },
+        { key:'console', label:'Console', count:consoleCount, isError:true },
+        { key:'network', label:'Network', count:networkCount },
+        { key:'voice', label:'Voice', count:voiceCount },
+      ];
+      if (ssCount > 0) tabs.push({ key:'screenshots', label:'📸', count:ssCount });
+
+      let defaultTab = 'info';
+      if (consoleCount > 0) defaultTab = 'console';
+      else if (networkCount > 0) defaultTab = 'network';
+
+      html += '<div class="tab-bar">';
+      tabs.forEach(t => {
+        const badge = t.count !== null && t.count > 0
+          ? '<span class="tab-badge'+(t.isError?' error':'')+'">'+t.count+'</span>'
+          : '';
+        html += '<button class="tab-btn'+(t.key===defaultTab?' active':'')+'" data-tab="'+t.key+'">'+t.label+badge+'</button>';
+      });
+      html += '</div>';
+
+      html += '<div class="tab-content">';
+
+      html += '<div class="tab-panel'+(defaultTab==='info'?' active':'')+'" id="tab-info">';
+      if (r.description) {
+        html += '<div class="info-section"><h3>💬 描述</h3><p>'+esc(r.description)+'</p></div>';
+      }
+      if (markers.length > 0) {
+        html += '<div class="info-section"><h3>📌 時間軸標記</h3>';
+        markers.forEach(m => {
+          const min = Math.floor(m.time_sec/60);
+          const sec = String(m.time_sec%60).padStart(2,'0');
+          html += '<div class="marker-item"><span class="marker-time">'+min+':'+sec+'</span><span>'+esc(m.note||'（無描述）')+'</span></div>';
+        });
+        html += '</div>';
+      }
+      html += '<div class="info-section"><h3>📊 摘要</h3><div class="info-grid">';
+      html += '<div>DOM 事件：'+(r.rrwebEvents?.length||0)+'</div>';
+      html += '<div>Console：'+consoleCount+'</div>';
+      html += '<div>Network：'+networkCount+'</div>';
+      html += '<div>語音：'+voiceCount+' 段</div>';
+      html += '<div>截圖：'+ssCount+'</div>';
+      html += '</div></div></div>';
+
+      html += '<div class="tab-panel'+(defaultTab==='console'?' active':'')+'" id="tab-console">';
+      if (consoleCount === 0) {
+        html += '<div class="empty">沒有 Console 錯誤 ✓</div>';
+      } else {
+        (r.consoleLogs||[]).forEach(log => {
+          const cls = log.level === 'error' ? 'error' : 'warn';
+          const icon = log.level === 'error' ? '❌' : '⚠';
+          html += '<div class="log-item '+cls+'"><span class="log-icon">'+icon+'</span><span class="log-msg">'+esc(log.message)+'</span><span class="log-time">'+fmtTime(log.timestamp)+'</span></div>';
+        });
+      }
+      html += '</div>';
+
+      html += '<div class="tab-panel'+(defaultTab==='network'?' active':'')+'" id="tab-network">';
+      if (networkCount === 0) {
+        html += '<div class="empty">沒有 Network 錯誤 ✓</div>';
+      } else {
+        (r.networkErrors||[]).forEach(err => {
+          const cls = err.status >= 500 ? 's5xx' : 's4xx';
+          html += '<div class="net-item"><span class="net-status '+cls+'">'+err.status+'</span><span class="net-method">'+esc(err.method)+'</span><span class="net-url">'+esc(err.url)+'</span><span class="net-duration">'+(err.duration||0)+'ms</span></div>';
+        });
+      }
+      html += '</div>';
+
+      html += '<div class="tab-panel'+(defaultTab==='voice'?' active':'')+'" id="tab-voice">';
+      if (voiceCount === 0) {
+        html += '<div class="empty">沒有語音記錄</div>';
+      } else {
+        (r.voiceTranscript||[]).forEach(v => {
+          html += '<div class="voice-item"><span class="voice-time">'+fmtTime(v.timestamp)+'</span>'+esc(v.text)+'</div>';
+        });
+      }
+      html += '</div>';
+
+      if (ssCount > 0) {
+        html += '<div class="tab-panel" id="tab-screenshots"><div class="ss-grid">';
+        (r.screenshots||[]).forEach(ss => {
+          const src = typeof ss === 'string' ? ss : ss.dataUrl || ss.url || '';
+          if (src) html += '<img class="ss-img" src="'+src+'" onclick="window.open(this.src)">';
+        });
+        html += '</div></div>';
+      }
+
+      html += '</div>';
+
+      const voiceText = (r.voiceTranscript||[]).map(v=>v.text).join('');
+      const consoleText = JSON.stringify(r.consoleLogs||[]);
+      const networkText = JSON.stringify(r.networkErrors||[]);
+      const descText = r.description || '';
+      const items = [
+        { label:'🎤 語音記錄', len:voiceText.length },
+        { label:'🖥 Console', len:consoleText.length },
+        { label:'🌐 Network', len:networkText.length },
+        { label:'📝 描述', len:descText.length },
+        { label:'📹 DOM 摘要', len:105 },
+      ];
+      let totalT = 0;
+      let tokenHtml = '';
+      items.forEach(it => {
+        const t = Math.ceil(it.len / 3.5);
+        if (t > 0) { totalT += t; tokenHtml += '<div class="token-row"><span>'+it.label+'</span><span>~'+t.toLocaleString()+' tokens</span></div>'; }
+      });
+      const chromeT = totalT * 15;
+      const pct = chromeT > 0 ? Math.round((1-totalT/chromeT)*100) : 0;
+      tokenHtml += '<div class="token-row total"><span>AI 讀取總計</span><span>~'+totalT.toLocaleString()+' tokens ≈ $'+((totalT*8/1e6).toFixed(4))+'</span></div>';
+      html += '<div class="token-panel"><div style="font-weight:600;margin-bottom:8px;color:#a78bfa;">📊 Token 估算</div>' + tokenHtml;
+      html += '<div class="token-save">💡 同場景 Claude in Chrome：~'+chromeT.toLocaleString()+' tokens ≈ $'+((chromeT*8/1e6).toFixed(4))+'<br>✅ BugEzy 為你省了 '+pct+'%</div></div>';
+
+      document.getElementById('app').innerHTML = html;
+
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+          document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+          btn.classList.add('active');
+          document.getElementById('tab-' + btn.dataset.tab)?.classList.add('active');
+        });
+      });
+    }
+  </script>
+</body>
+</html>`;
+
 // ── PM-51：即時監控 live errors 暫存 ────────────────────────
 // 改用 R2 單一物件（非全域 Map）：擴充 POST 與雲端 MCP GET 通常落在不同 Worker isolate，
 // per-isolate Map 不共享（實測 POST 後即時 GET 仍 stale）；R2 對單一 key 有強讀後寫一致性，
@@ -422,6 +659,13 @@ export default {
     if (path === '/mcp' || path.startsWith('/mcp/')) {
       const handler = createMcpHandler(createMcpServer(env), { route: '/mcp' });
       return handler(request, env, ctx);
+    }
+
+    // PM-59：報告頁——Server 直接回完整 HTML（vanilla JS 讀 /api/reports/:id 渲染），
+    // 放在 /api/reports/:id 之前匹配。
+    if (request.method === 'GET' && path.startsWith('/report/')) {
+      const reportId = path.split('/report/')[1];
+      if (reportId && reportId.length > 10) return html(REPORT_PAGE_HTML);
     }
 
     // PM-48：測試專頁（Test Harness）— 可預測的 Bug 場景，供 BugEzy 測試用
