@@ -65,8 +65,52 @@ async function init() {
 
   // PM-28：初始化 mini rrweb 播放器 + 時間軸標記
   initMiniPlayer(payload.rrwebEvents);
+
+  // PM-55：上傳前先讓使用者看到 AI 讀這份報告的 token 估算 + 省錢對比
+  renderTokenEstimate(payload);
 }
 void init();
+
+// PM-55：報告各區塊 token 估算（上傳前顯示，讓客戶知道 AI 讀這份要花多少 token）
+function renderTokenEstimate(payload: RecordingPayload) {
+  const container = document.getElementById('tokenBreakdown');
+  if (!container) return;
+
+  const voiceTextStr = payload.voiceTranscript.map((s) => s.text).join('');
+  const estimates = [
+    { label: '語音記錄', text: voiceTextStr, icon: '🎤' },
+    { label: 'Console logs', text: JSON.stringify(payload.consoleLogs), icon: '🖥' },
+    { label: 'Network errors', text: JSON.stringify(payload.networkErrors), icon: '🌐' },
+    { label: '補充說明', text: descInput.value || '', icon: '📝' },
+    { label: '時間軸標記', text: JSON.stringify(markers), icon: '📌' },
+  ];
+
+  let totalTokens = 0;
+  let html = '';
+  for (const est of estimates) {
+    const tokens = Math.ceil(est.text.length / 3.5);
+    if (tokens > 0) {
+      totalTokens += tokens;
+      html += `<div class="token-row"><span class="label">${est.icon} ${est.label}</span><span>~${tokens.toLocaleString()} tokens</span></div>`;
+    }
+  }
+
+  // rrweb 摘要（get_rrweb_summary 只回筆數，很小）
+  const rrwebSummaryTokens = 30;
+  totalTokens += rrwebSummaryTokens;
+  html += `<div class="token-row"><span class="label">📹 DOM 摘要</span><span>~${rrwebSummaryTokens} tokens</span></div>`;
+
+  // 總計 + 對比 Claude in Chrome
+  const bugezyUSD = ((totalTokens * 8) / 1_000_000).toFixed(4);
+  const chromeTokens = totalTokens * 15;
+  const chromeUSD = ((chromeTokens * 8) / 1_000_000).toFixed(4);
+  const savedPercent = chromeTokens > 0 ? Math.round((1 - totalTokens / chromeTokens) * 100) : 0;
+
+  html += `<div class="token-row total"><span>AI 讀取總計</span><span>~${totalTokens.toLocaleString()} tokens ≈ $${bugezyUSD}</span></div>`;
+  html += `<div class="token-save">💡 同場景 Claude in Chrome：~${chromeTokens.toLocaleString()} tokens ≈ $${chromeUSD}<br>✅ BugEzy 為你省了 ${savedPercent}%</div>`;
+
+  container.innerHTML = html;
+}
 
 // ── PM-28：時間軸標記 ─────────────────────────────────────
 const markers: TimeMarker[] = [];

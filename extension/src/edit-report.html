@@ -80,6 +80,26 @@
         white-space: nowrap;
       }
       .toggle-label input[type='checkbox'] { accent-color: #7c3aed; }
+
+      /* Token 估算面板（PM-55） */
+      .token-panel {
+        background: var(--panel); border: 1px solid rgba(124, 58, 237, 0.3);
+        border-radius: 12px; padding: 16px; margin-bottom: 16px;
+      }
+      .token-row {
+        display: flex; justify-content: space-between; padding: 4px 0;
+        font-size: 13px; color: #ccc;
+      }
+      .token-row.total {
+        border-top: 1px solid var(--line); margin-top: 8px; padding-top: 8px;
+        font-weight: 700; color: #fff;
+      }
+      .token-row .label { color: #a78bfa; }
+      .token-save {
+        margin-top: 12px; padding: 10px;
+        background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3);
+        border-radius: 8px; font-size: 13px; color: var(--success); text-align: center;
+      }
       .time-display { font-family: monospace; color: var(--muted); font-size: 12px; white-space: nowrap; }
       .marker-list { margin-top: 8px; }
       .marker-item {
@@ -146,6 +166,12 @@
         <button id="voiceBtn" class="voice-btn" title="語音輸入">🎤</button>
       </div>
       <div id="voiceStatus" class="voice-status"></div>
+
+      <!-- Token 估算（PM-55） -->
+      <div id="tokenEstimate" class="token-panel">
+        <h2>📊 Token 估算</h2>
+        <div id="tokenBreakdown"></div>
+      </div>
 
       <div class="actions">
         <button id="discardBtn" class="action discard">✗ 捨棄報告</button>
