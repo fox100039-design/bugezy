@@ -985,5 +985,94 @@ function createMcpServer(env: Env): McpServer {
     },
   );
 
+  // Tool 12（PM-57）: get_screenshots — 回傳報告截圖（base64），include_images 控制是否含圖片省 token
+  server.tool(
+    'get_screenshots',
+    '取得報告的截圖圖片（視覺 Bug 用）。⚠ 圖片會消耗較多 token（每張 ~3,000-8,000），建議只在需要看畫面時使用。Report screenshots.',
+    {
+      report_id: z.string(),
+      include_images: z
+        .boolean()
+        .optional()
+        .describe('是否回傳圖片內容（預設 false，只回 metadata 省 token）'),
+    },
+    async ({ report_id, include_images }) => {
+      const { data } = await supabase()
+        .from('reports')
+        .select('screenshots_r2_key, screenshot_count')
+        .eq('report_id', report_id)
+        .single();
+
+      if (!data || !data.screenshots_r2_key) {
+        return txtWithTokens({ message: '此報告沒有截圖', screenshot_count: 0 }, 'get_screenshots', report_id);
+      }
+
+      const obj = await env.R2.get(data.screenshots_r2_key as string);
+      if (!obj) {
+        return txtWithTokens(
+          { message: '截圖資料已過期或不存在', screenshot_count: data.screenshot_count },
+          'get_screenshots',
+          report_id,
+        );
+      }
+
+      const screenshots = JSON.parse(await obj.text()) as Array<{ dataUrl: string; annotation?: string }>;
+
+      // 預設只回 metadata（省 token），要看畫面才加 include_images:true
+      if (!include_images) {
+        return txtWithTokens(
+          {
+            screenshot_count: screenshots.length,
+            message: `此報告有 ${screenshots.length} 張截圖。如需 AI 分析視覺問題，請加 include_images: true（每張約 3,000-8,000 tokens）。`,
+          },
+          'get_screenshots',
+          report_id,
+        );
+      }
+
+      // include_images = true：回傳圖片內容（text 標題 + image block）
+      const content: Array<
+        { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }
+      > = [];
+      for (let i = 0; i < screenshots.length; i++) {
+        const ss = screenshots[i];
+        const base64 = ss.dataUrl.replace(/^data:image\/\w+;base64,/, '');
+        const mimeMatch = ss.dataUrl.match(/^data:(image\/\w+);base64,/);
+        const mimeType = mimeMatch ? mimeMatch[1] : 'image/png';
+        content.push({
+          type: 'text',
+          text: `📸 截圖 ${i + 1}/${screenshots.length}${ss.annotation ? `\n📝 標注：${ss.annotation}` : ''}`,
+        });
+        content.push({ type: 'image', data: base64, mimeType });
+      }
+
+      // 圖片 token 用固定估算（每張 ~5000），對比 Chrome 看整頁 DOM 更貴（×8）
+      const textPart = content
+        .filter((c): c is { type: 'text'; text: string } => c.type === 'text')
+        .map((c) => c.text)
+        .join('\n');
+      const totalTokens = Math.ceil(textPart.length / 3.5) + screenshots.length * 5000;
+      const chromeTokens = totalTokens * 8;
+      const savedPercent = chromeTokens > 0 ? Math.round((1 - totalTokens / chromeTokens) * 100) : 0;
+      const footer = `\n\n---\n📊 Token 估算：~${totalTokens.toLocaleString()} tokens ≈ $${((totalTokens * 8) / 1_000_000).toFixed(4)}（含 ${screenshots.length} 張圖片）\n💡 同場景 Claude in Chrome：~${chromeTokens.toLocaleString()} tokens ≈ $${((chromeTokens * 8) / 1_000_000).toFixed(4)}\n✅ BugEzy 為你省了 ${savedPercent}%`;
+      content.push({ type: 'text', text: footer });
+
+      await logMcpUsage(
+        env,
+        'get_screenshots',
+        {
+          bugezyTokens: totalTokens,
+          chromeTokens,
+          savedPercent,
+          bugezyUSD: ((totalTokens * 8) / 1_000_000).toFixed(4),
+          chromeUSD: ((chromeTokens * 8) / 1_000_000).toFixed(4),
+        },
+        report_id,
+      );
+
+      return { content };
+    },
+  );
+
   return server;
 }
