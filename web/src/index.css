@@ -305,3 +305,90 @@ a {
   font-size: 13px;
   line-height: 1.5;
 }
+
+/* DevTools 風格 Tab 分頁（PM-58） */
+.tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid #2a2a3e;
+  margin-top: 16px;
+  overflow-x: auto;
+}
+.tab-btn {
+  padding: 10px 20px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  color: #888;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s;
+}
+.tab-btn:hover {
+  color: #ccc;
+  background: rgba(124, 58, 237, 0.05);
+}
+.tab-btn.active {
+  color: #a78bfa;
+  border-bottom-color: #7c3aed;
+}
+.tab-btn.has-data {
+  color: #ccc;
+}
+.tab-badge {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: #2a2a3e;
+  color: #aaa;
+}
+.tab-badge.badge-error {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+.tab-content {
+  min-height: 200px;
+  padding: 16px 0;
+}
+.info-section {
+  margin-bottom: 20px;
+}
+.info-section h3 {
+  font-size: 14px;
+  color: #a78bfa;
+  margin-bottom: 8px;
+}
+.info-section p {
+  color: #ccc;
+  line-height: 1.7;
+}
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+  font-size: 13px;
+  color: #aaa;
+}
+.marker-item {
+  display: flex;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid #1a1a2e;
+  font-size: 13px;
+  color: #ccc;
+}
+.marker-time {
+  background: #7c3aed;
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 12px;
+  white-space: nowrap;
+}
