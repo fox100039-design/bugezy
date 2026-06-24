@@ -170,6 +170,18 @@ export const STATE_KEY = 'bugezy:state';
 /** 截圖獨立上傳後的最近一筆（給 popup 顯示連結） */
 export const LAST_SCREENSHOT_KEY = 'bugezy:lastScreenshot';
 
+/** PM-61：Google 登入後的使用者 session，存 chrome.storage.local */
+export const SESSION_KEY = 'bugezy:session';
+
+/** 登入 session（popup 存、background 上傳時帶 user_id） */
+export interface Session {
+  user_id: string;
+  email: string;
+  name: string;
+  avatar_url: string;
+  session_token: string;
+}
+
 /** PM-49：鍵盤模式（關閉所有語音）開關，存 chrome.storage.local */
 export const KEYBOARD_MODE_KEY = 'bugezy:keyboardMode';
 

@@ -44,3 +44,16 @@ CREATE TABLE IF NOT EXISTS mcp_usage (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_mcp_usage_created ON mcp_usage (created_at);
+
+-- ── PM-61：Google 登入使用者 + 報告綁定 user ──
+CREATE TABLE IF NOT EXISTS users (
+  user_id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+  email TEXT UNIQUE NOT NULL,
+  name TEXT,
+  avatar_url TEXT,
+  plan TEXT DEFAULT 'free',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  last_login_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE users DISABLE ROW LEVEL SECURITY;
+ALTER TABLE reports ADD COLUMN IF NOT EXISTS user_id TEXT;

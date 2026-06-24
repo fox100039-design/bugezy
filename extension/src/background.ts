@@ -9,9 +9,11 @@ import {
   BUFFER_RRWEB_KEY,
   BUFFER_VOICE_KEY,
   LAST_SCREENSHOT_KEY,
+  SESSION_KEY,
   STATE_KEY,
   STORAGE_KEY,
   blog,
+  type Session,
   type ConsoleLog,
   type ControlMessage,
   type NetworkError,
@@ -223,11 +225,14 @@ async function uploadReport(
   description: string,
   markers?: TimeMarker[],
 ): Promise<{ ok: boolean; shareUrl?: string; reportId?: string; error?: string }> {
-  const r = await chrome.storage.local.get(STORAGE_KEY);
+  const r = await chrome.storage.local.get([STORAGE_KEY, SESSION_KEY]);
   const payload = r[STORAGE_KEY];
   if (!payload) return { ok: false, error: '沒有報告資料' };
   payload.description = description ?? '';
   payload.markers = markers ?? []; // PM-28：時間軸標記
+  // PM-61：已登入則把報告綁到 user
+  const userId = (r[SESSION_KEY] as Session | undefined)?.user_id;
+  if (userId) payload.user_id = userId;
   try {
     const res = await fetch(`${API_BASE}/api/reports`, {
       method: 'POST',

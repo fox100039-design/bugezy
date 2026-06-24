@@ -3,7 +3,11 @@
   "name": "BugEzy",
   "version": "0.1.0",
   "description": "中文語音錄 Bug — DOM 軌跡 + Console + Network 一鍵打包",
-  "permissions": ["activeTab", "scripting", "storage", "downloads"],
+  "permissions": ["activeTab", "scripting", "storage", "downloads", "identity"],
+  "oauth2": {
+    "client_id": "610395663887-piqtrs4bvbj738iimbk3bre2ij78rvdl.apps.googleusercontent.com",
+    "scopes": ["openid", "email", "profile"]
+  },
   "background": {
     "service_worker": "background.js",
     "type": "module"

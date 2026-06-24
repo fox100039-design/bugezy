@@ -121,14 +121,49 @@
         width: auto; margin: 0; flex-shrink: 0;
         background: var(--accent); border-radius: 6px; padding: 4px 10px; font-size: 12px;
       }
+
+      /* PM-61：Google 登入 / 使用者列 */
+      .login-hint { color: var(--muted); font-size: 13px; text-align: center; margin: 10px 0 16px; }
+      .btn-google {
+        display: flex; align-items: center; justify-content: center; gap: 8px;
+        background: #fff; color: #3c4043; font-weight: 600;
+      }
+      .btn-google:hover { filter: brightness(0.96); }
+      .user-bar {
+        display: flex; align-items: center; gap: 8px;
+        padding-bottom: 10px; margin-bottom: 6px; border-bottom: 1px solid var(--line);
+      }
+      .avatar { border-radius: 50%; flex-shrink: 0; }
+      #userName { font-size: 13px; color: var(--fg); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .btn-sm { width: auto; margin: 0; padding: 4px 10px; font-size: 12px; background: #4a4a5e; }
     </style>
   </head>
   <body>
-    <div class="brand">
-      <span class="brand-icon">🐛</span>
-      <span class="brand-name">BugEzy</span>
-      <span class="brand-tag">語音 Bug 回報</span>
-    </div>
+    <!-- 未登入：Google 登入（PM-61）-->
+    <section id="loginView" class="hidden">
+      <div class="brand" style="justify-content:center;">
+        <span class="brand-icon">🐛</span>
+        <span class="brand-name">BugEzy</span>
+      </div>
+      <p class="login-hint">登入後開始使用</p>
+      <button id="googleLoginBtn" class="btn-google">
+        <img src="https://developers.google.com/identity/images/g-logo.png" width="18" alt="" />
+        用 Google 登入
+      </button>
+    </section>
+
+    <!-- 已登入：使用者列 + 現有功能 -->
+    <div id="mainView" class="hidden">
+      <div class="user-bar">
+        <img id="userAvatar" class="avatar" width="24" height="24" alt="" />
+        <span id="userName"></span>
+        <button id="logoutBtn" class="btn-sm">登出</button>
+      </div>
+      <div class="brand">
+        <span class="brand-icon">🐛</span>
+        <span class="brand-name">BugEzy</span>
+        <span class="brand-tag">語音 Bug 回報</span>
+      </div>
 
     <!-- 狀態一：閒置（兩個獨立入口） -->
     <section id="idleView" class="hidden">
@@ -193,6 +228,8 @@
       <button id="exportBtn">💾 匯出 JSON（給 AI 讀）</button>
       <button id="clearBtn">🗑️ 清除，重新錄製</button>
     </section>
+    </div>
+    <!-- /mainView -->
 
     <script type="module" src="popup.js"></script>
   </body>

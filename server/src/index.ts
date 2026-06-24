@@ -62,6 +62,7 @@ interface RecordingPayload {
   screenshots: Screenshot[];
   description?: string;
   markers?: TimeMarker[]; // PM-28：時間軸標記
+  user_id?: string; // PM-61：已登入時綁定的使用者
 }
 
 // ── CORS（MVP 先全開，第 5 代再收緊）────────────────────
@@ -723,6 +724,9 @@ export default {
       if (request.method === 'POST' && path === '/api/correct') {
         return await correctText(request, env);
       }
+      if (request.method === 'POST' && path === '/api/auth/google') {
+        return await googleAuth(request, env);
+      }
       if (request.method === 'POST' && path === '/api/reports') {
         return await createReport(request, env, url.origin);
       }
@@ -785,7 +789,9 @@ async function createReport(request: Request, env: Env, origin: string): Promise
     markers: payload.markers ?? [], // PM-28：時間軸標記
   };
 
-  const { error } = await supa(env).from('reports').insert(row);
+  // PM-61：只在有登入（payload.user_id）時才帶 user_id 欄，避免未跑 ALTER 時整批 insert 失敗
+  const insertRow = payload.user_id ? { ...row, user_id: payload.user_id } : row;
+  const { error } = await supa(env).from('reports').insert(insertRow);
   if (error) {
     return json({ error: `supabase insert failed: ${error.message}` }, 500);
   }
@@ -933,6 +939,67 @@ async function correctText(request: Request, env: Env): Promise<Response> {
   } catch (err) {
     return json({ error: `AI 校正失敗: ${err instanceof Error ? err.message : String(err)}` }, 500);
   }
+}
+
+// POST /api/auth/google — 驗 Google access token → 查/建 Supabase users → 回 session（PM-61）
+async function googleAuth(request: Request, env: Env): Promise<Response> {
+  const { token } = (await request.json().catch(() => ({}))) as { token?: string };
+  if (!token) return json({ error: 'missing token' }, 400);
+
+  // 用 access token 取 Google userinfo（同時驗證 token 有效）
+  const googleRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!googleRes.ok) return json({ error: 'invalid google token' }, 401);
+  const gUser = (await googleRes.json()) as {
+    id?: string;
+    email?: string;
+    name?: string;
+    picture?: string;
+  };
+  if (!gUser.email) return json({ error: 'no email in google profile' }, 401);
+
+  const supabase = supa(env);
+  const { data: existing } = await supabase
+    .from('users')
+    .select('user_id, email, name, avatar_url')
+    .eq('email', gUser.email)
+    .single();
+
+  let user = existing as
+    | { user_id: string; email: string; name: string | null; avatar_url: string | null }
+    | null;
+
+  if (!user) {
+    const { data: created, error } = await supabase
+      .from('users')
+      .insert({ email: gUser.email, name: gUser.name ?? '', avatar_url: gUser.picture ?? '' })
+      .select('user_id, email, name, avatar_url')
+      .single();
+    if (error || !created) {
+      return json({ error: `建立使用者失敗: ${error?.message ?? 'unknown'}` }, 500);
+    }
+    user = created;
+  } else {
+    await supabase
+      .from('users')
+      .update({
+        last_login_at: new Date().toISOString(),
+        name: gUser.name ?? user.name ?? '',
+        avatar_url: gUser.picture ?? user.avatar_url ?? '',
+      })
+      .eq('user_id', user.user_id);
+  }
+
+  // MVP 簡易 session token（base64(user_id:ts)）；正式環境之後改 JWT（PM-61 §9）
+  const session_token = btoa(`${user.user_id}:${Date.now()}`);
+  return json({
+    user_id: user.user_id,
+    email: user.email,
+    name: gUser.name ?? user.name ?? '',
+    avatar_url: gUser.picture ?? user.avatar_url ?? '',
+    session_token,
+  });
 }
 
 // ── MCP Server（8 Tool，直接讀 Supabase/R2，不繞 HTTP）──────

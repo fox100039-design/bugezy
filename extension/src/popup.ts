@@ -5,8 +5,11 @@ import {
   KEYBOARD_MODE_KEY,
   LAST_SCREENSHOT_KEY,
   MONITOR_MODE_KEY,
+  SESSION_KEY,
+  API_BASE,
   type RecordingPayload,
   type RecordingSummary,
+  type Session,
   type StateResponse,
 } from './types';
 
@@ -40,6 +43,14 @@ const uploadStatusEl = $('uploadStatus');
 const shareUrlRow = $('shareUrlRow');
 const shareLink = $<HTMLAnchorElement>('shareLink');
 const copyLinkBtn = $<HTMLButtonElement>('copyLinkBtn');
+
+// PM-61：Google 登入 UI
+const loginView = $('loginView');
+const mainView = $('mainView');
+const googleLoginBtn = $<HTMLButtonElement>('googleLoginBtn');
+const logoutBtn = $<HTMLButtonElement>('logoutBtn');
+const userAvatar = $<HTMLImageElement>('userAvatar');
+const userName = $('userName');
 
 // PM-49：鍵盤模式 toggle（關閉語音）— 狀態存 chrome.storage.local
 const keyboardMode = $<HTMLInputElement>('keyboardMode');
@@ -308,5 +319,72 @@ exportBtn.addEventListener('click', async () => {
   }
 });
 
-// 開啟 popup 時先抓一次狀態決定畫面
-send<StateResponse>('GET_STATE').then(render).catch((e) => console.error('[BugEzy popup]', e));
+// ── PM-61：Google 登入 ────────────────────────────────────
+async function checkAuth(): Promise<Session | null> {
+  const r = await chrome.storage.local.get(SESSION_KEY);
+  return (r[SESSION_KEY] as Session | undefined) ?? null;
+}
+
+/** chrome.identity.getAuthToken 取 Google access token（需 manifest oauth2 + 擴充 ID 已註冊）。*/
+function googleLogin(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    chrome.identity.getAuthToken({ interactive: true }, (token) => {
+      if (chrome.runtime.lastError || !token) {
+        reject(new Error(chrome.runtime.lastError?.message || 'login failed'));
+      } else {
+        resolve(token);
+      }
+    });
+  });
+}
+
+/** 把 Google token 交給 server 驗證 + 查/建 user，回 session。*/
+async function authenticate(googleToken: string): Promise<Session> {
+  const res = await fetch(`${API_BASE}/api/auth/google`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: googleToken }),
+  });
+  if (!res.ok) throw new Error('auth failed');
+  return (await res.json()) as Session;
+}
+
+function showLoginView() {
+  loginView.classList.remove('hidden');
+  mainView.classList.add('hidden');
+}
+
+function showMainView(session: Session) {
+  loginView.classList.add('hidden');
+  mainView.classList.remove('hidden');
+  userName.textContent = session.name || session.email;
+  if (session.avatar_url) userAvatar.src = session.avatar_url;
+  // 進主畫面後才抓錄製狀態決定 idle/recording/done
+  send<StateResponse>('GET_STATE').then(render).catch((e) => console.error('[BugEzy popup]', e));
+}
+
+googleLoginBtn.addEventListener('click', async () => {
+  googleLoginBtn.disabled = true;
+  googleLoginBtn.textContent = '登入中...';
+  try {
+    const session = await authenticate(await googleLogin());
+    await chrome.storage.local.set({ [SESSION_KEY]: session });
+    showMainView(session);
+  } catch (err) {
+    console.error('[BugEzy popup] login', err);
+    googleLoginBtn.disabled = false;
+    googleLoginBtn.textContent = '登入失敗，重試';
+  }
+});
+
+logoutBtn.addEventListener('click', async () => {
+  await chrome.storage.local.remove(SESSION_KEY);
+  chrome.identity.clearAllCachedAuthTokens(() => {});
+  showLoginView();
+});
+
+// 開啟 popup：先看是否已登入，再決定畫面
+void checkAuth().then((session) => {
+  if (session) showMainView(session);
+  else showLoginView();
+});
