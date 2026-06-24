@@ -182,3 +182,11 @@
 - PM-58：web React `ReportPage` 改 Jam 風格 DevTools Tab 分頁（Info/Console/Network/Voice/截圖，自動選有資料 tab）+ index.css；標註 Worker 未服務 SPA
 - PM-59：**Server 直接 serve `/report/:id` HTML**（`REPORT_PAGE_HTML`，深色 Tab + Token + vanilla JS 讀 `/api/reports/:id`）→ 解 share_url 在 Worker origin 404；據實修正規格 snake_case→camelCase（API 實回 camelCase，否則整頁無資料）；curl 驗證 200/html、API 不受影響
 - 收工：文件同步（project_status §2/§6d、CHANGELOG、SKILL）+ commit
+
+## 2026-06-24
+
+Day 7（PM-60~61）。上架前：🔧 AI 校正按鈕 + Google OAuth 登入（第 5 代「能收錢」前置）。
+
+- PM-60/60b/60c：編輯頁 🔧 AI 校正按鈕（與 AI 精簡並列）+ `POST /api/correct`（修錯字/去贅字/還原術語、可多次按不鎖死）。模型逐一實測（qwq-32b 輸出冗長推理不可用、deepseek 5007 無此模型、qwen3 與 llama-3.3 皆乾淨）→ 選 `@cf/meta/llama-3.3-70b-instruct-fp8-fast`（非推理、與 summarize 同款）；保留 `<think>` 剝除。釐清：先前「亂碼」是 Windows Git-Bash 測試環境編碼坑、非 server（Python UTF-8 驗證正確）
+- PM-61/61b：Google OAuth 登入 — manifest `oauth2`+`identity`；`chrome.identity.getAuthToken` → `POST /api/auth/google`（Google userinfo 驗 → 查/建 Supabase `users` → session）；popup `loginView`/`mainView`（user-bar 頭像/名字/登出）；上傳報告帶 `user_id`（條件式）。61b：`.single()`→`.maybeSingle()`（新用戶不拋 PGRST116）+ 外層 try/catch 回實際錯誤。schema 補 `users` 表 + `reports.user_id`。MVP：能登入+報告綁 user；JWT/鑑權/用量限制留後續
+- 收工：文件同步（project_status §6e、CHANGELOG、SKILL）+ commit

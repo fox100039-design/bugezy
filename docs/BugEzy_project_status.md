@@ -326,6 +326,22 @@ FOX = 創辦人 + 決策者 + 手動驗收
 
 ---
 
+## §6e 第 6→5 代 Day 7（2026-06-24，PM-60~61）— AI 校正 + Google 登入
+
+- **PM-60/60b/60c：🔧 AI 校正按鈕**（編輯頁，與 🤖 AI 精簡並列）— 新增 `POST /api/correct`（修語音辨識錯字/去贅字/還原術語，保留原意不摘要；可多次按、不鎖死）。
+  - 模型：規格的 `llama-3.1-8b` 已 deprecated → 逐一實測 qwq-32b（輸出冗長推理不可用）、deepseek-r1-distill-qwen-32b（此帳號 5007 無此模型）、qwen3-30b、llama-3.3 → **選 `@cf/meta/llama-3.3-70b-instruct-fp8-fast`**（非推理、與 summarize 同款、UTF-8 實測正確）。保留 `<think>` 剝除。
+  - 踩雷：先前「亂碼」是 **Windows Git-Bash 測試環境的編碼坑**（curl request body 非 UTF-8 + 終端機顯示），非 server——用 Python 送 UTF-8 看原始 bytes 才驗得準。
+- **PM-61/61b：Google OAuth 登入**（第 5 代「能收錢」前置）— `chrome.identity.getAuthToken` → `POST /api/auth/google`（Google userinfo 驗證 → 查/建 Supabase `users` → 回 session）→ 存 `chrome.storage.local`。popup 加 `loginView`/`mainView`（user-bar：頭像/名字/登出）；上傳報告帶 `user_id`（條件式，沒登入不碰欄位）。
+  - 61b：`googleAuth` `.single()`→`.maybeSingle()`（新用戶查不到不拋 PGRST116）+ 外層 try/catch 回實際錯誤。
+  - MVP 範圍：能登入 + 報告綁 user；JWT 正式 token / API 鑑權中間件 / 用量限制留後續（API 目前仍公開）。
+
+### Server / MCP / Schema（Day 7 增量）
+- 端點：`/api/correct`、`/api/auth/google`。
+- Supabase：`users` 表（Google 登入）+ `reports.user_id`（schema.sql，FOX 手動跑）。
+- ⑤「能收錢」起步：OAuth 登入 + 報告綁 user 完成；Stripe 付費 / Web Store 上架仍待做。
+
+---
+
 ## §7 已知問題與技術債
 
 | # | 問題 | 嚴重度 | 說明 |
