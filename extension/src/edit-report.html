@@ -47,6 +47,7 @@
       /* AI 精簡（PM-25） */
       .transcript-header { display: flex; justify-content: space-between; align-items: center; margin: 18px 0 8px; }
       .transcript-header h2 { margin: 0; }
+      .ai-actions { display: flex; gap: 8px; } /* PM-60：AI 校正 + AI 精簡 並列 */
       .ai-btn {
         background: linear-gradient(135deg, #7c3aed, #6d28d9); color: #fff; border: none;
         border-radius: 8px; padding: 6px 14px; font-size: 13px; cursor: pointer;
@@ -156,7 +157,10 @@
 
       <div class="transcript-header">
         <h2>🎤 語音記錄（自動辨識）</h2>
-        <button id="summarizeBtn" class="ai-btn">🤖 AI 精簡</button>
+        <div class="ai-actions">
+          <button id="correctBtn" class="ai-btn">🔧 AI 校正</button>
+          <button id="summarizeBtn" class="ai-btn">🤖 AI 精簡</button>
+        </div>
       </div>
       <textarea id="voiceText" rows="3" placeholder="（這次錄製沒有語音）"></textarea>
 

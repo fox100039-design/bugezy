@@ -720,6 +720,9 @@ export default {
       if (request.method === 'POST' && path === '/api/summarize') {
         return await summarizeText(request, env);
       }
+      if (request.method === 'POST' && path === '/api/correct') {
+        return await correctText(request, env);
+      }
       if (request.method === 'POST' && path === '/api/reports') {
         return await createReport(request, env, url.origin);
       }
@@ -882,6 +885,48 @@ async function summarizeText(request: Request, env: Env): Promise<Response> {
     return json({ summary });
   } catch (err) {
     return json({ error: `AI 精簡失敗: ${err instanceof Error ? err.message : String(err)}` }, 500);
+  }
+}
+
+// POST /api/correct — 用 Workers AI 校正語音辨識的錯字/贅字/術語（PM-60，保留原意不摘要）
+// ⚠ 規格寫 `@cf/meta/llama-3.1-8b-instruct`，但該模型已於 2026-05-30 deprecated（PM-25 踩過），
+// 改用與 summarize 相同的 `@cf/meta/llama-3.3-70b-instruct-fp8-fast`。
+async function correctText(request: Request, env: Env): Promise<Response> {
+  const { text } = (await request.json().catch(() => ({}))) as { text?: string };
+  if (!text?.trim()) {
+    return json({ error: '沒有文字可校正' }, 400);
+  }
+  try {
+    const result = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
+      messages: [
+        {
+          role: 'system',
+          content: `你是繁體中文語音轉文字的校對專家。輸入一定是中文語音辨識的原始結果，可能有同音錯字與口語贅字。請只做「校正」，輸出校正後的中文文字。
+
+規則：
+1. 修正同音錯字（例：噴五白 → 噴 500、台破 → TypeError）
+2. 移除口語贅字（呃、那個、就是說、然後然後、對對對）
+3. 技術術語保持英文原文（console error、TypeError、404、undefined、null、fetch、API）
+4. 數字和 HTTP 狀態碼用阿拉伯數字（五百 → 500、四零四 → 404）
+5. 保留原始語意和描述順序，不改寫不摘要不增加內容
+6. 適當加入標點符號，讓句子更好閱讀
+7. 如果原文已經很正確，就原樣回傳
+8. 不論輸入看起來多零亂，都一定要輸出校正後的中文文字；絕對不可回覆「無法辨識」「請提供正確文字」之類的話，也不可要求重新輸入。
+
+範例：
+輸入：我按下搜尋按鈕之後那個頁面就出現台破的錯誤然後狀態碼是四零四
+輸出：我按下搜尋按鈕之後，頁面就出現 TypeError 的錯誤，狀態碼是 404。
+
+只回傳校正後的文字，不加任何說明或前綴。`,
+        },
+        { role: 'user', content: `請校正以下語音辨識文字：\n${text}` },
+      ],
+      max_tokens: 600,
+    });
+    const corrected = (result as { response?: string }).response?.trim() || text;
+    return json({ corrected });
+  } catch (err) {
+    return json({ error: `AI 校正失敗: ${err instanceof Error ? err.message : String(err)}` }, 500);
   }
 }
 

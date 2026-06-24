@@ -29,6 +29,7 @@ const voiceStatus = $<HTMLDivElement>('voiceStatus');
 const discardBtn = $<HTMLButtonElement>('discardBtn');
 const uploadBtn = $<HTMLButtonElement>('uploadBtn');
 const summarizeBtn = $<HTMLButtonElement>('summarizeBtn');
+const correctBtn = $<HTMLButtonElement>('correctBtn');
 const result = $('result');
 
 // ── 載入摘要 + 語音記錄 ───────────────────────────────────
@@ -571,6 +572,37 @@ chrome.storage.local.get(KEYBOARD_MODE_KEY, (r) => {
     voiceBtn.style.display = 'none';
     voiceStatus.textContent = '🔇 鍵盤模式';
   }
+});
+
+// ── AI 校正（PM-60）：修語音辨識錯字/贅字/術語，保留原意，可多次按（不鎖死）──
+correctBtn.addEventListener('click', async () => {
+  const text = voiceText.value.trim();
+  if (!text) return;
+
+  correctBtn.disabled = true;
+  correctBtn.textContent = '🔧 校正中...';
+  try {
+    const res = await fetch(`${API_BASE}/api/correct`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    const data = (await res.json()) as { corrected?: string };
+    if (data.corrected) {
+      voiceText.value = data.corrected;
+      correctBtn.textContent = '✅ 已校正';
+    } else {
+      correctBtn.textContent = '❌ 校正失敗';
+    }
+  } catch (err) {
+    blog('AI 校正失敗', err);
+    correctBtn.textContent = '❌ 校正失敗';
+  }
+  // 3 秒後恢復（校正可多次微調，不像 AI 精簡那樣永久鎖死）
+  setTimeout(() => {
+    correctBtn.disabled = false;
+    correctBtn.textContent = '🔧 AI 校正';
+  }, 3000);
 });
 
 // ── AI 精簡：把語音記錄精簡成重點，替換語音記錄欄（成功後永久 disable）──
