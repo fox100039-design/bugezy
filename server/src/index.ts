@@ -889,15 +889,15 @@ async function summarizeText(request: Request, env: Env): Promise<Response> {
 }
 
 // POST /api/correct — 用 Workers AI 校正語音辨識的錯字/贅字/術語（PM-60，保留原意不摘要）
-// ⚠ 規格寫 `@cf/meta/llama-3.1-8b-instruct`，但該模型已於 2026-05-30 deprecated（PM-25 踩過），
-// 改用與 summarize 相同的 `@cf/meta/llama-3.3-70b-instruct-fp8-fast`。
+// PM-60b：Llama 3.3 校正繁中語音不可靠（拒絕/亂改）→ 改用 Qwen3（中文強、MoE 只用 3B 參數快）。
+// summarize 仍用 Llama（摘要沒問題，不動）。
 async function correctText(request: Request, env: Env): Promise<Response> {
   const { text } = (await request.json().catch(() => ({}))) as { text?: string };
   if (!text?.trim()) {
     return json({ error: '沒有文字可校正' }, 400);
   }
   try {
-    const result = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
+    const result = await env.AI.run('@cf/qwen/qwen3-30b-a3b-fp8', {
       messages: [
         {
           role: 'system',
@@ -921,9 +921,12 @@ async function correctText(request: Request, env: Env): Promise<Response> {
         },
         { role: 'user', content: `請校正以下語音辨識文字：\n${text}` },
       ],
-      max_tokens: 600,
+      // Qwen3 是推理模型，會先輸出 <think> 推理再給答案，max_tokens 需給足以免答案被截斷
+      max_tokens: 2048,
     });
-    const corrected = (result as { response?: string }).response?.trim() || text;
+    // PM-60b：Qwen3 回傳可能含 <think>...</think> 推理過程，移除後才是校正結果
+    let corrected = (result as { response?: string }).response ?? '';
+    corrected = corrected.replace(/<think>[\s\S]*?<\/think>/g, '').trim() || text;
     return json({ corrected });
   } catch (err) {
     return json({ error: `AI 校正失敗: ${err instanceof Error ? err.message : String(err)}` }, 500);
