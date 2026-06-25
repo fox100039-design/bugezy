@@ -1,6 +1,6 @@
 # BugEzy 專案全貌與接手指南
 
-> 最後更新：2026-06-17
+> 最後更新：2026-06-25
 > 維護者：FOX（Claude Chat PM 角色）
 > 用途：新 Chat 對話開始時讀此檔，快速掌握全貌並接手開發
 
@@ -22,8 +22,8 @@
 | **② 能聽能說** | 語音辨識 | Web Speech API 中文即時轉文字，收進 payload | ✅ 完成 |
 | **③ 能存能看** | 後端 + 報告頁 | Cloudflare Workers + Supabase + R2 + React 報告頁 | ✅ 完成 |
 | **④ AI 能讀** | MCP Server | Pull 模式 12 Tool（+ get_live_errors / get_terminal_logs / get_screenshots / get_usage_stats），每次回應附 token 省錢對比 = **MVP 封測** | ✅ 完成 |
-| **⑤ 能收錢** | 付費上線 | Stripe 串接 + Chrome Web Store 上架 = **正式上線** | 待做 |
-| **⑥ 更好用** | UX 優化 + 多模式 | 六種模式（錄製/回溯/截圖/即時監控/鍵盤/終端機CLI）+ 截圖三模式 + 即時字幕雙區 + 跨頁錄製 + 編輯頁時間軸標記 + AI精簡 + 乾淨toggle | 🔨 進行中（PM-53） |
+| **⑤ 能收錢** | 付費上線 | Google 登入 + 產品首頁 + 隱私政策 + 用量限制 + 兩層定價（綠界 ECPay 已送審，待 3-7 工作天）；Stripe/綠界金流串接 + Chrome Web Store 上架仍待做 | 🔨 進行中（PM-65） |
+| **⑥ 更好用** | UX 優化 + 多模式 | 六種模式（錄製/回溯/截圖/即時監控/鍵盤/終端機CLI）+ 截圖三模式 + 即時字幕雙區 + 跨頁錄製 + 編輯頁時間軸標記 + AI精簡/校正 + 乾淨toggle | ✅ 完成（PM-27~61） |
 | **⑦ 規模化** | 多語 + 企業 | 日韓越語音、跨境除錯鏈、企業自託管 | 待做 |
 
 ---
@@ -339,6 +339,22 @@ FOX = 創辦人 + 決策者 + 手動驗收
 - 端點：`/api/correct`、`/api/auth/google`。
 - Supabase：`users` 表（Google 登入）+ `reports.user_id`（schema.sql，FOX 手動跑）。
 - ⑤「能收錢」起步：OAuth 登入 + 報告綁 user 完成；Stripe 付費 / Web Store 上架仍待做。
+
+---
+
+## §6f 第 5 代 Day 8（2026-06-25，PM-62~65）— 上架前最後衝刺：首頁 + 用量限制 + 隱私 + 定價
+
+**目標**：補齊綠界 ECPay 審核與 Chrome Web Store 上架所需的對外頁面與付費前置（用量限制）。
+
+- **PM-62：產品首頁 `GET /`**（`HOMEPAGE_HTML`）— 一頁式深色主題（與報告頁統一 `#0f0f1a`/`#7c3aed`/`#a78bfa`、無 JS、RWD）：Hero 標語 + 4 賣點 + CTA、六種錄製模式 grid、方案與定價、Footer（聯絡 email + 隱私政策連結 + 版權）。解 `/` 原本回 `{"error":"not found"}`。
+- **PM-63：免費/付費用量限制系統** — `FREE_LIMITS`（錄製 10／回溯 5／MCP 20 月）+ `getUserIdFromHeader`（解 `Bearer base64(user_id:ts)`）；`GET /api/user/plan`（查方案 + 剩餘用量 + **跨月自動重置**）、`POST /api/user/usage`（遞增計數，免費版達上限回 **403 limit_reached**，付費版 unlimited）。popup 顯示「剩 N 次／已用完」+ 升級提示；background 錄製前 `checkRecordingUsage()`（未登入不擋、API 不通不擋）。schema 加 `users.recording_count/rewind_count/mcp_count/usage_reset_at`（FOX 手動跑）。**目前僅 recording 串前端**，rewind/mcp 後端就緒待接。
+- **PM-64：隱私政策頁 `GET /privacy`**（`PRIVACY_PAGE_HTML`）— 中英雙語深色主題，7 節（收集資料/如何使用/儲存/分享/您的權利/Cookie/變更通知）；首頁 footer 連結由佔位 `#` 改為 `/privacy`。Chrome Web Store + 綠界審核要求的可訪問隱私政策 URL。
+- **PM-65：首頁定價三層改兩層** — 免費版 NT$0 / 付費版 NT$80（與討論方案一致），移除 NT$150 重度 Pro；付費卡加紫色「立即升級」CTA。免費版額度與 PM-63 `FREE_LIMITS` 對齊。
+
+### Server / Schema（Day 8 增量）
+- 端點：`GET /`、`GET /privacy`、`GET /api/user/plan`、`POST /api/user/usage`（皆 server-only，extension 僅 popup/background/types 配合用量限制）。
+- Supabase：`users` 加 4 欄用量計數（每月重置）。
+- ⚠ 技術債：定價頁宣稱「報告保留 7／90 天」但**後端尚未實作自動過期清理**；「立即升級」/CTA/下載連結仍 `#` 佔位（待金流 + Web Store 上架）。
 
 ---
 
