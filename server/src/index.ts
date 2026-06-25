@@ -87,6 +87,107 @@ function html(body: string): Response {
   return new Response(body, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
 }
 
+// ── PM-62：產品首頁（GET /）— 一頁式、深色主題、無 JS、RWD（綠界審核 + 客戶訪問用）──
+const HOMEPAGE_HTML = `<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>BugEzy — 開發者 Bug 報告工具，AI 幫你修</title>
+  <meta name="description" content="BugEzy：用中文語音描述 Bug，AI 自動分析。6 種錄製模式 + MCP 整合，省 95% Token 費用。">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:#0f0f1a; color:#e0e0e0; font-family:system-ui,"Microsoft JhengHei",sans-serif; line-height:1.6; }
+    a { color:#a78bfa; text-decoration:none; }
+    .wrap { max-width:960px; margin:0 auto; padding:0 20px; }
+    .hero { text-align:center; padding:64px 20px 48px; background:radial-gradient(ellipse at top,rgba(124,58,237,0.18),transparent 60%); }
+    .logo { font-size:48px; }
+    .hero h1 { font-size:34px; color:#fff; margin:6px 0; }
+    .tagline { font-size:17px; color:#a78bfa; margin-bottom:26px; }
+    .bullets { display:inline-flex; flex-direction:column; gap:8px; text-align:left; color:#ccc; font-size:15px; margin-bottom:28px; }
+    .cta { display:inline-block; background:linear-gradient(135deg,#7c3aed,#6d28d9); color:#fff; font-weight:700; font-size:16px; padding:13px 28px; border-radius:10px; }
+    .cta:hover { filter:brightness(1.1); }
+    .cta-note { display:block; color:#666; font-size:12px; margin-top:10px; }
+    section { padding:40px 0; }
+    h2 { font-size:22px; color:#fff; text-align:center; margin-bottom:8px; }
+    .sub { text-align:center; color:#888; font-size:14px; margin-bottom:28px; }
+    .modes { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px; }
+    .mode { background:#1a1a2e; border:1px solid #2a2a3e; border-radius:12px; padding:18px; text-align:center; }
+    .mode .ico { font-size:30px; }
+    .mode .name { font-weight:700; color:#fff; margin:8px 0 4px; }
+    .mode .desc { font-size:13px; color:#999; }
+    .plans { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; }
+    .plan { background:#1a1a2e; border:1px solid #2a2a3e; border-radius:14px; padding:24px; text-align:center; }
+    .plan.featured { border-color:#7c3aed; box-shadow:0 0 0 1px #7c3aed; }
+    .plan .pname { font-size:15px; color:#a78bfa; font-weight:700; }
+    .plan .price { font-size:30px; color:#fff; font-weight:800; margin:10px 0; }
+    .plan .price small { font-size:14px; color:#888; font-weight:400; }
+    .plan ul { list-style:none; text-align:left; font-size:13px; color:#ccc; margin-top:14px; display:flex; flex-direction:column; gap:6px; }
+    .plan li::before { content:"✓ "; color:#10b981; }
+    footer { border-top:1px solid #2a2a3e; padding:28px 0; text-align:center; color:#888; font-size:13px; margin-top:24px; }
+    footer a { margin:0 6px; }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="logo">🐛</div>
+    <h1>BugEzy</h1>
+    <p class="tagline">開發者 Bug 報告工具，AI 幫你修</p>
+    <div class="bullets">
+      <span>✅ 語音描述 Bug，AI 自動分析</span>
+      <span>✅ 6 種錄製模式，完整重現問題</span>
+      <span>✅ MCP 整合，AI 直接讀報告</span>
+      <span>✅ 省 95% Token 費用</span>
+    </div>
+    <div>
+      <a class="cta" href="#download">🧩 安裝 Chrome 擴充功能</a>
+      <span class="cta-note">Chrome Web Store 即將上架</span>
+    </div>
+  </header>
+
+  <section class="wrap" id="modes">
+    <h2>六種錄製模式</h2>
+    <p class="sub">依情境選最省力的方式回報 Bug</p>
+    <div class="modes">
+      <div class="mode"><div class="ico">🎬</div><div class="name">錄製</div><div class="desc">DOM 軌跡 + 語音 + Console/Network</div></div>
+      <div class="mode"><div class="ico">⏪</div><div class="name">回溯</div><div class="desc">一鍵抓剛才發生的 30 秒</div></div>
+      <div class="mode"><div class="ico">📸</div><div class="name">截圖</div><div class="desc">三種擷取 + 畫重點標注</div></div>
+      <div class="mode"><div class="ico">🔇</div><div class="name">鍵盤</div><div class="desc">安靜環境，純文字模式</div></div>
+      <div class="mode"><div class="ico">🔍</div><div class="name">監控</div><div class="desc">AI 隨時查當前頁 error</div></div>
+      <div class="mode"><div class="ico">🖥</div><div class="name">終端機</div><div class="desc">npx bugezy-watch 攔 crash</div></div>
+    </div>
+  </section>
+
+  <section class="wrap" id="pricing">
+    <h2>方案與定價</h2>
+    <p class="sub">免費開始，需要更多再升級</p>
+    <div class="plans">
+      <div class="plan">
+        <div class="pname">免費版</div>
+        <div class="price">NT$0</div>
+        <ul><li>每月 30 次報告</li><li>錄製上限 30 秒</li><li>語音 + 截圖 + 回溯</li></ul>
+      </div>
+      <div class="plan featured">
+        <div class="pname">個人 Pro</div>
+        <div class="price">NT$80<small> /月</small></div>
+        <ul><li>每月 50 次報告</li><li>錄製上限 2 分鐘</li><li>MCP 整合（AI 直讀）</li><li>AI 校正 + 精簡</li></ul>
+      </div>
+      <div class="plan">
+        <div class="pname">重度 Pro</div>
+        <div class="price">NT$150<small> /月</small></div>
+        <ul><li>每月 200 次報告</li><li>錄製上限 5 分鐘</li><li>MCP 整合（AI 直讀）</li><li>即時監控 + 終端機 Agent</li></ul>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div>聯絡我們：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
+    <div style="margin-top:8px;"><a href="#">隱私政策</a>（即將推出）</div>
+    <div style="margin-top:8px;color:#555;">© 2026 BugEzy · 亞洲平價 MCP 語音除錯工具</div>
+  </footer>
+</body>
+</html>`;
+
 // ── PM-59：Server 直接 serve 報告頁 HTML（vanilla JS 讀 /api/reports/:id 渲染）──
 // ⚠ 規格 HTML 讀 snake_case（console_logs / rrweb_count），但 GET /api/reports/:id 實際回
 // camelCase（consoleLogs / networkErrors / voiceTranscript / rrwebEvents）——已實測確認。
@@ -655,6 +756,9 @@ export default {
 
     const url = new URL(request.url);
     const path = url.pathname;
+
+    // PM-62：產品首頁（根目錄）— 放在所有路由之前
+    if (request.method === 'GET' && path === '/') return html(HOMEPAGE_HTML);
 
     // MCP 端點（Streamable HTTP）— 給 Claude.ai Connectors / IDE 直接連
     if (path === '/mcp' || path.startsWith('/mcp/')) {
