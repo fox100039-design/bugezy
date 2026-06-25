@@ -113,6 +113,8 @@ export interface StateResponse {
   recording: boolean;
   startedAt: number | null;
   summary: RecordingSummary | null;
+  /** PM-63：免費版用量已達上限時，background 回傳此訊息，popup 顯示升級提示而不進入錄製 */
+  limitReached?: string;
 }
 
 /** API base URL — 開發期 localhost，部署後改正式 URL */

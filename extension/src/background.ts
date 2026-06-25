@@ -130,7 +130,39 @@ async function getActiveTab(): Promise<chrome.tabs.Tab | undefined> {
   return tab;
 }
 
+/**
+ * PM-63：錄製前檢查免費版用量。POST /api/user/usage（type:recording）同時遞增計數並檢查。
+ * - 未登入（無 token）→ 不檢查，回 null（公測期不阻擋匿名使用）。
+ * - 達上限 → 回傳升級訊息字串；否則回 null。
+ * - API 不通 → 回 null（不因後端問題卡住錄製）。
+ */
+async function checkRecordingUsage(): Promise<string | null> {
+  const r = await chrome.storage.local.get(SESSION_KEY);
+  const token = (r[SESSION_KEY] as Session | undefined)?.session_token;
+  if (!token) return null;
+  try {
+    const res = await fetch(`${API_BASE}/api/user/usage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ type: 'recording' }),
+    });
+    if (res.status === 403) {
+      const err = (await res.json()) as { error?: string; message?: string };
+      if (err.error === 'limit_reached') return err.message || '免費版用量已達上限，請升級付費版';
+    }
+    return null;
+  } catch (e) {
+    blog('checkRecordingUsage failed', e);
+    return null;
+  }
+}
+
 async function startRecording(): Promise<StateResponse> {
+  // PM-63：先檢查並遞增用量；達上限則不進入錄製，回傳升級提示
+  const limitReached = await checkRecordingUsage();
+  if (limitReached) {
+    return { recording: false, startedAt: null, summary: null, limitReached };
+  }
   const tab = await getActiveTab();
   if (!tab?.id) throw new Error('找不到 active tab');
   // PM-34：開錄前清空所有暫存 buffer，避免上一場殘留

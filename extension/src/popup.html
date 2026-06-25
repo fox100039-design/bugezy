@@ -136,6 +136,15 @@
       .avatar { border-radius: 50%; flex-shrink: 0; }
       #userName { font-size: 13px; color: var(--fg); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .btn-sm { width: auto; margin: 0; padding: 4px 10px; font-size: 12px; background: #4a4a5e; }
+
+      /* PM-63：用量上限升級提示 */
+      .upgrade-hint {
+        display: flex; align-items: center; justify-content: space-between; gap: 8px;
+        margin: 8px 0; padding: 10px 12px; border-radius: 8px;
+        background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.4);
+        color: #fcd34d; font-size: 12px;
+      }
+      .btn-upgrade { width: auto; margin: 0; padding: 5px 14px; font-size: 12px; background: #f59e0b; }
     </style>
   </head>
   <body>
@@ -185,6 +194,10 @@
         </button>
       </div>
       <div id="lastScreenshot" class="meta" style="display:none;"></div>
+      <div id="upgradeHint" class="upgrade-hint hidden">
+        <span>升級付費版 NT$80/月 → 解鎖無限次</span>
+        <button id="upgradeBtn" class="btn-upgrade">升級</button>
+      </div>
       <div class="mode-toggle">
         <label class="toggle-row">
           <span>🔍 即時監控（AI 可查 error）</span>

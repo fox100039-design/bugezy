@@ -51,6 +51,9 @@ const googleLoginBtn = $<HTMLButtonElement>('googleLoginBtn');
 const logoutBtn = $<HTMLButtonElement>('logoutBtn');
 const userAvatar = $<HTMLImageElement>('userAvatar');
 const userName = $('userName');
+// PM-63：用量上限提示
+const upgradeHint = $('upgradeHint');
+const upgradeBtn = $<HTMLButtonElement>('upgradeBtn');
 
 // PM-49：鍵盤模式 toggle（關閉語音）— 狀態存 chrome.storage.local
 const keyboardMode = $<HTMLInputElement>('keyboardMode');
@@ -221,7 +224,16 @@ startBtn.addEventListener('click', async () => {
   startBtn.disabled = true;
   try {
     // 語音改由 inject.ts（MAIN world）處理，麥克風授權由網頁觸發，popup 不需先搶
-    render(await send<StateResponse>('START_RECORDING'));
+    const res = await send<StateResponse>('START_RECORDING');
+    // PM-63：免費版用量已達上限 → 不進入錄製，顯示升級提示
+    if (res.limitReached) {
+      setRecordDesc('已用完（升級解鎖）');
+      const span = upgradeHint.querySelector('span');
+      if (span) span.textContent = res.limitReached;
+      upgradeHint.classList.remove('hidden');
+      return;
+    }
+    render(res);
   } catch (err) {
     console.error('[BugEzy popup]', err);
   } finally {
@@ -361,7 +373,56 @@ function showMainView(session: Session) {
   if (session.avatar_url) userAvatar.src = session.avatar_url;
   // 進主畫面後才抓錄製狀態決定 idle/recording/done
   send<StateResponse>('GET_STATE').then(render).catch((e) => console.error('[BugEzy popup]', e));
+  void loadPlan(session); // PM-63：查方案 + 剩餘用量
 }
+
+interface PlanInfo {
+  plan: string;
+  limits: null | {
+    recording: { used: number; max: number };
+    rewind: { used: number; max: number };
+    mcp: { used: number; max: number };
+  };
+}
+
+/** 只更新錄製按鈕的 .action-desc（不覆寫整顆按鈕，保留 icon/label span）。 */
+function setRecordDesc(text: string) {
+  const desc = startBtn.querySelector<HTMLElement>('.action-desc');
+  if (desc) desc.textContent = text;
+}
+
+// PM-63：查方案 → 免費版顯示剩餘錄製次數 + 升級提示；付費版顯示無限
+async function loadPlan(session: Session) {
+  try {
+    const res = await fetch(`${API_BASE}/api/user/plan`, {
+      headers: { Authorization: `Bearer ${session.session_token}` },
+    });
+    if (!res.ok) return; // 表未建/未授權等 → 不顯示用量，按鈕維持原樣（非阻擋）
+    const plan = (await res.json()) as PlanInfo;
+    if (plan.limits) {
+      const rec = plan.limits.recording;
+      const remain = rec.max - rec.used;
+      if (remain > 0) {
+        setRecordDesc(`剩 ${remain} 次`);
+        startBtn.disabled = false;
+      } else {
+        setRecordDesc('已用完（升級解鎖）');
+        startBtn.disabled = true;
+      }
+      upgradeHint.classList.remove('hidden');
+    } else {
+      setRecordDesc('✨ 無限次');
+      upgradeHint.classList.add('hidden');
+    }
+  } catch {
+    /* API 不通就維持預設按鈕 */
+  }
+}
+
+upgradeBtn.addEventListener('click', () => {
+  // 付費尚未上線：先導到首頁價目表（PM-62）
+  chrome.tabs.create({ url: `${API_BASE}/#pricing` });
+});
 
 googleLoginBtn.addEventListener('click', async () => {
   googleLoginBtn.disabled = true;

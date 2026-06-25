@@ -83,6 +83,26 @@ function supa(env: Env): SupabaseClient {
   return createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY);
 }
 
+// ── PM-63：免費/付費用量限制 ────────────────────────────────
+const FREE_LIMITS = {
+  recording: 10, // 月 10 次錄製
+  rewind: 5, // 月 5 次回溯
+  mcp: 20, // 月 20 次 MCP
+} as const;
+type UsageType = keyof typeof FREE_LIMITS;
+
+/** 從 Authorization: Bearer <session_token> 取 user_id（token = base64(user_id:ts)）。*/
+function getUserIdFromHeader(request: Request): string | null {
+  const auth = request.headers.get('Authorization');
+  if (!auth) return null;
+  try {
+    const decoded = atob(auth.replace('Bearer ', ''));
+    return decoded.split(':')[0] || null;
+  } catch {
+    return null;
+  }
+}
+
 function html(body: string): Response {
   return new Response(body, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
 }
@@ -831,6 +851,12 @@ export default {
       if (request.method === 'POST' && path === '/api/auth/google') {
         return await googleAuth(request, env);
       }
+      if (request.method === 'GET' && path === '/api/user/plan') {
+        return await getUserPlan(request, env);
+      }
+      if (request.method === 'POST' && path === '/api/user/usage') {
+        return await bumpUsage(request, env);
+      }
       if (request.method === 'POST' && path === '/api/reports') {
         return await createReport(request, env, url.origin);
       }
@@ -1109,6 +1135,106 @@ async function googleAuth(request: Request, env: Env): Promise<Response> {
     });
   } catch (err) {
     return json({ error: `auth error: ${err instanceof Error ? err.message : String(err)}` }, 500);
+  }
+}
+
+// GET /api/user/plan — 查方案 + 免費版剩餘用量（每月自動重置計數）（PM-63）
+async function getUserPlan(request: Request, env: Env): Promise<Response> {
+  const userId = getUserIdFromHeader(request);
+  if (!userId) return json({ error: 'unauthorized' }, 401);
+  try {
+    const { data: user, error } = await supa(env)
+      .from('users')
+      .select('plan, recording_count, rewind_count, mcp_count, usage_reset_at')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (error) return json({ error: `查方案失敗: ${error.message}` }, 500);
+    if (!user) return json({ error: 'user not found' }, 404);
+
+    const u = user as {
+      plan: string | null;
+      recording_count: number;
+      rewind_count: number;
+      mcp_count: number;
+      usage_reset_at: string;
+    };
+
+    // 跨月自動重置計數
+    const resetAt = new Date(u.usage_reset_at);
+    const now = new Date();
+    if (now.getMonth() !== resetAt.getMonth() || now.getFullYear() !== resetAt.getFullYear()) {
+      await supa(env)
+        .from('users')
+        .update({ recording_count: 0, rewind_count: 0, mcp_count: 0, usage_reset_at: now.toISOString() })
+        .eq('user_id', userId);
+      u.recording_count = 0;
+      u.rewind_count = 0;
+      u.mcp_count = 0;
+    }
+
+    const isPaid = u.plan === 'paid';
+    return json({
+      plan: u.plan ?? 'free',
+      limits: isPaid
+        ? null
+        : {
+            recording: { used: u.recording_count, max: FREE_LIMITS.recording },
+            rewind: { used: u.rewind_count, max: FREE_LIMITS.rewind },
+            mcp: { used: u.mcp_count, max: FREE_LIMITS.mcp },
+          },
+    });
+  } catch (err) {
+    return json({ error: `plan error: ${err instanceof Error ? err.message : String(err)}` }, 500);
+  }
+}
+
+// POST /api/user/usage — 遞增用量；免費版超限回 403 limit_reached（PM-63）
+async function bumpUsage(request: Request, env: Env): Promise<Response> {
+  const userId = getUserIdFromHeader(request);
+  if (!userId) return json({ error: 'unauthorized' }, 401);
+  try {
+    const { type } = (await request.json().catch(() => ({}))) as { type?: UsageType };
+    if (!type || !(type in FREE_LIMITS)) return json({ error: 'invalid type' }, 400);
+
+    const { data: user, error } = await supa(env)
+      .from('users')
+      .select('plan, recording_count, rewind_count, mcp_count')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (error) return json({ error: `查用量失敗: ${error.message}` }, 500);
+    if (!user) return json({ error: 'user not found' }, 404);
+
+    const u = user as {
+      plan: string | null;
+      recording_count: number;
+      rewind_count: number;
+      mcp_count: number;
+    };
+    if (u.plan === 'paid') return json({ ok: true, unlimited: true });
+
+    const countField = `${type}_count` as 'recording_count' | 'rewind_count' | 'mcp_count';
+    const currentCount = u[countField] || 0;
+    const limit = FREE_LIMITS[type];
+    if (currentCount >= limit) {
+      const label = type === 'recording' ? '錄製' : type === 'rewind' ? '回溯' : 'MCP 查詢';
+      return json(
+        {
+          error: 'limit_reached',
+          message: `免費版每月限 ${limit} 次${label}，升級付費版解鎖無限次`,
+          used: currentCount,
+          max: limit,
+        },
+        403,
+      );
+    }
+
+    await supa(env)
+      .from('users')
+      .update({ [countField]: currentCount + 1 })
+      .eq('user_id', userId);
+    return json({ ok: true, used: currentCount + 1, max: limit });
+  } catch (err) {
+    return json({ error: `usage error: ${err instanceof Error ? err.message : String(err)}` }, 500);
   }
 }
 
