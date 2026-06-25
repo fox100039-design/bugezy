@@ -202,9 +202,165 @@ const HOMEPAGE_HTML = `<!DOCTYPE html>
 
   <footer>
     <div>聯絡我們：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
-    <div style="margin-top:8px;"><a href="#">隱私政策</a>（即將推出）</div>
+    <div style="margin-top:8px;"><a href="/privacy">隱私政策</a></div>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy · 亞洲平價 MCP 語音除錯工具</div>
   </footer>
+</body>
+</html>`;
+
+// ── PM-64：隱私政策頁（Chrome Web Store 上架 + 綠界審核要求可訪問的隱私政策 URL）──
+// 中英雙語，深色主題與首頁/報告頁統一（#0f0f1a / #7c3aed / #a78bfa），一頁式無 JS、RWD。
+const PRIVACY_PAGE_HTML = `<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>隱私政策 · BugEzy</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0; background: #0f0f1a; color: #e8e8f0;
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+    line-height: 1.75; font-size: 15px;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 48px 24px 80px; }
+  header { border-bottom: 1px solid #2a2a3e; padding-bottom: 20px; margin-bottom: 28px; }
+  .brand { font-size: 24px; font-weight: 700; color: #a78bfa; text-decoration: none; }
+  h1 { font-size: 26px; margin: 18px 0 6px; }
+  .updated { color: #8b8fa3; font-size: 13px; }
+  h2 { font-size: 18px; color: #c4b5fd; margin: 34px 0 8px; }
+  h3 { font-size: 15px; color: #8b8fa3; font-weight: 600; letter-spacing: .04em;
+       text-transform: uppercase; margin: 40px 0 4px; }
+  ul { margin: 8px 0 0; padding-left: 22px; }
+  li { margin: 4px 0; }
+  a { color: #a78bfa; }
+  .lang-divider {
+    margin: 56px 0 0; padding-top: 8px; border-top: 1px dashed #2a2a3e; color: #8b8fa3;
+  }
+  footer {
+    margin-top: 48px; padding-top: 20px; border-top: 1px solid #2a2a3e;
+    color: #8b8fa3; font-size: 13px;
+  }
+  footer a { margin-right: 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="brand" href="/">🐛 BugEzy</a>
+  </header>
+
+  <!-- 中文版 -->
+  <h1>隱私政策</h1>
+  <div class="updated">最後更新：2026 年 6 月 25 日</div>
+
+  <h2>1. 我們收集什麼資料</h2>
+  <ul>
+    <li>Google 帳號資訊（email、姓名、頭像）用於登入</li>
+    <li>Bug 報告內容（Console logs、Network errors、DOM 快照、語音記錄、截圖）</li>
+    <li>使用量統計（MCP 呼叫次數、Token 估算）</li>
+  </ul>
+
+  <h2>2. 我們如何使用資料</h2>
+  <ul>
+    <li>提供 Bug 報告服務</li>
+    <li>AI 分析（Cloudflare Workers AI）用於語音精簡和校正</li>
+    <li>使用量追蹤用於方案管理</li>
+  </ul>
+
+  <h2>3. 資料儲存</h2>
+  <ul>
+    <li>報告資料儲存在 Cloudflare R2（全球 CDN）</li>
+    <li>使用者資料儲存在 Supabase（PostgreSQL）</li>
+    <li>免費版報告保留 7 天，付費版保留 90 天</li>
+  </ul>
+
+  <h2>4. 資料分享</h2>
+  <ul>
+    <li>我們不會將您的資料出售給第三方</li>
+    <li>報告資料僅在您主動分享連結時才對外可見</li>
+    <li>AI 分析由 Cloudflare Workers AI 處理，不會將資料傳送給其他 AI 服務商</li>
+  </ul>
+
+  <h2>5. 您的權利</h2>
+  <ul>
+    <li>您可以隨時刪除您的報告</li>
+    <li>您可以要求刪除您的帳號和所有相關資料</li>
+    <li>聯絡 <a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a> 提出請求</li>
+  </ul>
+
+  <h2>6. Cookie 和追蹤</h2>
+  <ul>
+    <li>我們不使用第三方追蹤 Cookie</li>
+    <li>Chrome 擴充使用 chrome.storage.local 儲存登入狀態</li>
+  </ul>
+
+  <h2>7. 變更通知</h2>
+  <ul>
+    <li>隱私政策變更時，我們會在首頁公告</li>
+  </ul>
+
+  <p>聯絡方式：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></p>
+
+  <!-- English version -->
+  <div class="lang-divider"></div>
+  <h1>Privacy Policy</h1>
+  <div class="updated">Last updated: June 25, 2026</div>
+
+  <h2>1. What We Collect</h2>
+  <ul>
+    <li>Google account info (email, name, avatar) for sign-in</li>
+    <li>Bug report contents (console logs, network errors, DOM snapshots, voice notes, screenshots)</li>
+    <li>Usage statistics (MCP call counts, token estimates)</li>
+  </ul>
+
+  <h2>2. How We Use Data</h2>
+  <ul>
+    <li>To provide the bug-reporting service</li>
+    <li>AI analysis (Cloudflare Workers AI) for voice cleanup and correction</li>
+    <li>Usage tracking for plan management</li>
+  </ul>
+
+  <h2>3. Data Storage</h2>
+  <ul>
+    <li>Report data is stored on Cloudflare R2 (global CDN)</li>
+    <li>User data is stored on Supabase (PostgreSQL)</li>
+    <li>Free-plan reports are kept for 7 days; paid-plan reports for 90 days</li>
+  </ul>
+
+  <h2>4. Data Sharing</h2>
+  <ul>
+    <li>We do not sell your data to third parties</li>
+    <li>Report data is only publicly visible when you actively share its link</li>
+    <li>AI analysis is processed by Cloudflare Workers AI and is not sent to any other AI provider</li>
+  </ul>
+
+  <h2>5. Your Rights</h2>
+  <ul>
+    <li>You may delete your reports at any time</li>
+    <li>You may request deletion of your account and all related data</li>
+    <li>Contact <a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a> to make a request</li>
+  </ul>
+
+  <h2>6. Cookies & Tracking</h2>
+  <ul>
+    <li>We do not use third-party tracking cookies</li>
+    <li>The Chrome extension uses chrome.storage.local to store sign-in state</li>
+  </ul>
+
+  <h2>7. Change Notice</h2>
+  <ul>
+    <li>When this policy changes, we will announce it on the homepage</li>
+  </ul>
+
+  <p>Contact: <a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></p>
+
+  <footer>
+    <a href="/">← 回首頁 / Home</a>
+    <a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a>
+    <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
+  </footer>
+</div>
 </body>
 </html>`;
 
@@ -779,6 +935,7 @@ export default {
 
     // PM-62：產品首頁（根目錄）— 放在所有路由之前
     if (request.method === 'GET' && path === '/') return html(HOMEPAGE_HTML);
+    if (request.method === 'GET' && path === '/privacy') return html(PRIVACY_PAGE_HTML); // PM-64
 
     // MCP 端點（Streamable HTTP）— 給 Claude.ai Connectors / IDE 直接連
     if (path === '/mcp' || path.startsWith('/mcp/')) {
