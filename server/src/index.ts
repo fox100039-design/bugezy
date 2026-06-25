@@ -144,6 +144,8 @@ const HOMEPAGE_HTML = `<!DOCTYPE html>
     .plan .price small { font-size:14px; color:#888; font-weight:400; }
     .plan ul { list-style:none; text-align:left; font-size:13px; color:#ccc; margin-top:14px; display:flex; flex-direction:column; gap:6px; }
     .plan li::before { content:"✓ "; color:#10b981; }
+    .plan-cta { display:block; margin-top:18px; padding:10px; border-radius:10px; background:#7c3aed; color:#fff; font-weight:700; font-size:14px; text-decoration:none; }
+    .plan-cta:hover { background:#6d28d9; }
     footer { border-top:1px solid #2a2a3e; padding:28px 0; text-align:center; color:#888; font-size:13px; margin-top:24px; }
     footer a { margin:0 6px; }
   </style>
@@ -185,17 +187,29 @@ const HOMEPAGE_HTML = `<!DOCTYPE html>
       <div class="plan">
         <div class="pname">免費版</div>
         <div class="price">NT$0</div>
-        <ul><li>每月 30 次報告</li><li>錄製上限 30 秒</li><li>語音 + 截圖 + 回溯</li></ul>
+        <ul>
+          <li>截圖標注 無限</li>
+          <li>即時監控</li>
+          <li>鍵盤模式</li>
+          <li>錄製 月 10 次</li>
+          <li>回溯 月 5 次</li>
+          <li>MCP 月 20 次</li>
+          <li>報告保留 7 天</li>
+        </ul>
       </div>
       <div class="plan featured">
-        <div class="pname">個人 Pro</div>
+        <div class="pname">付費版 ✨</div>
         <div class="price">NT$80<small> /月</small></div>
-        <ul><li>每月 50 次報告</li><li>錄製上限 2 分鐘</li><li>MCP 整合（AI 直讀）</li><li>AI 校正 + 精簡</li></ul>
-      </div>
-      <div class="plan">
-        <div class="pname">重度 Pro</div>
-        <div class="price">NT$150<small> /月</small></div>
-        <ul><li>每月 200 次報告</li><li>錄製上限 5 分鐘</li><li>MCP 整合（AI 直讀）</li><li>即時監控 + 終端機 Agent</li></ul>
+        <ul>
+          <li>全功能無限</li>
+          <li>錄製無限</li>
+          <li>MCP AI 讀取無限</li>
+          <li>終端機 CLI</li>
+          <li>Whisper 精準語音</li>
+          <li>報告保留 90 天</li>
+          <li>團隊協作（即將推出）</li>
+        </ul>
+        <a class="plan-cta" href="#">立即升級</a>
       </div>
     </div>
   </section>
