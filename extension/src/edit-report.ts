@@ -125,6 +125,88 @@ function $opt<T extends HTMLElement>(id: string): T | null {
   return document.getElementById(id) as T | null;
 }
 
+// ── PM-68：跨頁回放滑鼠游標修復 ──────────────────────────
+// 問題：跨頁錄製時，每換一頁 rrweb 都送一段新的 FullSnapshot，replayer 重建 DOM。
+// 新頁在使用者下一次移動滑鼠前沒有 MouseMove 事件，replayer 的 .replayer-mouse 游標
+// 因此「消失」到下一次移動為止。修法：在每個「非首段」FullSnapshot 後補一筆合成的
+// MouseMove（座標沿用上一段最後已知值、hover 目標 id 指向新頁的 <html> 節點），讓
+// 游標一進新頁就立刻現形。inject.ts 端不需改：rrweb 預設就會錄 mousemove，
+// 且 mouseTail 是 Replayer（回放）選項而非 record() 選項。
+type RRPos = { x?: number; y?: number; id?: number; timeOffset?: number };
+type RREvent = {
+  type?: number;
+  timestamp?: number;
+  data?: {
+    source?: number;
+    positions?: RRPos[];
+    x?: number;
+    y?: number;
+    node?: { childNodes?: Array<{ type?: number; id?: number; tagName?: string }> };
+  };
+};
+
+/** 從 FullSnapshot 取出 <html> 節點 id（合成 MouseMove 的 hover 目標需是新頁實際存在的節點）。 */
+function findHtmlNodeId(snapshot: RREvent): number | null {
+  const kids = snapshot?.data?.node?.childNodes;
+  if (!Array.isArray(kids)) return null;
+  // 序列化節點 type：Element = 2；優先取 <html>，否則退而求其次取任一元素節點
+  let firstElementId: number | null = null;
+  for (const k of kids) {
+    if (k?.type === 2 && typeof k.id === 'number') {
+      if (firstElementId === null) firstElementId = k.id;
+      if (k.tagName?.toLowerCase() === 'html') return k.id;
+    }
+  }
+  return firstElementId;
+}
+
+/** 跨頁游標修復：每個新頁 FullSnapshot 後注入一筆合成 MouseMove，初始化游標位置。 */
+function injectCrossPageCursor(events: unknown[]): unknown[] {
+  const list = events as RREvent[];
+  let lastX = 0;
+  let lastY = 0;
+  let haveLastPos = false;
+  let seenFullSnapshot = false;
+  const out: RREvent[] = [];
+
+  for (const ev of list) {
+    out.push(ev);
+
+    // 追蹤最後已知滑鼠座標（MouseMove positions / MouseInteraction x,y）
+    if (ev?.type === 3 && ev.data) {
+      const src = ev.data.source;
+      if (src === 1 && Array.isArray(ev.data.positions) && ev.data.positions.length) {
+        const p = ev.data.positions[ev.data.positions.length - 1];
+        if (typeof p?.x === 'number' && typeof p?.y === 'number') {
+          lastX = p.x;
+          lastY = p.y;
+          haveLastPos = true;
+        }
+      } else if (src === 2 && typeof ev.data.x === 'number' && typeof ev.data.y === 'number') {
+        lastX = ev.data.x;
+        lastY = ev.data.y;
+        haveLastPos = true;
+      }
+    }
+
+    // FullSnapshot（type 2）：首段不補；之後每段都是「新頁」→ 補合成游標
+    if (ev?.type === 2) {
+      if (seenFullSnapshot && haveLastPos) {
+        const htmlId = findHtmlNodeId(ev);
+        if (htmlId != null) {
+          out.push({
+            type: 3,
+            data: { source: 1, positions: [{ x: lastX, y: lastY, id: htmlId, timeOffset: 0 }] },
+            timestamp: (ev.timestamp || 0) + 1,
+          });
+        }
+      }
+      seenFullSnapshot = true;
+    }
+  }
+  return out;
+}
+
 function initMiniPlayer(events: unknown[]) {
   const container = document.getElementById('miniPlayer');
   // rrweb 至少要 2 筆事件（Meta + FullSnapshot）才能回放
@@ -133,6 +215,9 @@ function initMiniPlayer(events: unknown[]) {
     if (section) section.style.display = 'none';
     return;
   }
+
+  // PM-68：跨頁段落補合成游標，回放時每進新頁游標立即可見
+  events = injectCrossPageCursor(events);
 
   try {
     replayer = new Replayer(events as ConstructorParameters<typeof Replayer>[0], {
