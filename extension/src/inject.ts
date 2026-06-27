@@ -47,6 +47,7 @@ interface SRInstance {
   onresult: ((e: SREvent) => void) | null;
   onerror: ((e: SRErrorEvent) => void) | null;
   onend: (() => void) | null;
+  onstart: (() => void) | null;
   start(): void;
   stop(): void;
 }
@@ -235,7 +236,7 @@ function main() {
     const textSpan = document.createElement('span');
     textSpan.id = 'bugezy-caption-text';
     textSpan.style.cssText = 'flex:1;pointer-events:none;text-align:center;';
-    textSpan.textContent = '🔴 錄製中，可以用中文描述問題...';
+    textSpan.textContent = '🎙 錄製中，可以用中文描述問題…'; // PM-70：啟動後 onstart 會切到 🟢 聽取中
 
     // 永久重啟按鈕（PM-30：靜默中斷時使用者隨時可手動重啟）
     const restartBtn = document.createElement('button');
@@ -325,6 +326,14 @@ function main() {
     if (el) el.textContent = text;
   }
 
+  // PM-70：統一語音狀態指示器（顯示在底部字幕區）。🟢 聽取中 / 🟡 重啟中 / 🔴 已停止
+  type VoiceStatus = 'listening' | 'restarting' | 'stopped';
+  function setVoiceStatus(state: VoiceStatus, note?: string) {
+    const base =
+      state === 'listening' ? '🟢 聽取中…' : state === 'restarting' ? '🟡 重啟中…' : '🔴 已停止';
+    setCaptionText(note ? `${base} — ${note}` : base);
+  }
+
   // PM-33：自動重啟連續失敗計數（放在 createRecognition 外，建新實例不重置）
   let autoRestartFails = 0;
 
@@ -367,36 +376,60 @@ function main() {
             // 底部字幕：短暫顯示確認後回到聆聽中
             setCaptionText(`✅ ${text}`);
             window.setTimeout(() => {
-              if (voiceActive) setCaptionText('🔴 聆聽中...');
+              if (voiceActive) setVoiceStatus('listening');
             }, 1500);
           }
         }
       }
     };
 
+    // PM-70：實際啟動成功才把狀態切到「聽取中」並重置失敗計數
+    // （比在 start() 後立即歸零更準——start() 不拋例外不代表真的開始接收）。
+    rec.onstart = () => {
+      if (voiceActive) {
+        autoRestartFails = 0;
+        setVoiceStatus('listening');
+      }
+    };
+
     rec.onend = () => {
       // 靜默自停 → 仍在錄製就自動重啟；連續失敗 3 次就停手，等使用者按 🔄
-      if (voiceActive) {
-        blog('SpeechRecognition onend → auto restart');
-        try {
-          rec.start();
-          autoRestartFails = 0; // 成功就歸零
-        } catch {
-          autoRestartFails++;
-          blog(`auto restart 失敗 (第 ${autoRestartFails} 次)`);
-          if (autoRestartFails >= 3) {
-            setCaptionText('⚠ 語音中斷，按 🔄 重啟');
-            blog('auto restart 連續失敗 3 次，等待手動重啟');
-          }
+      if (!voiceActive) return;
+      blog('SpeechRecognition onend → auto restart');
+      setVoiceStatus('restarting');
+      try {
+        rec.start();
+        // 不在這裡歸零 autoRestartFails——交給 onstart（確認真的啟動）才歸零
+      } catch {
+        autoRestartFails++;
+        blog(`auto restart 失敗 (第 ${autoRestartFails} 次)`);
+        if (autoRestartFails >= 3) {
+          setVoiceStatus('stopped', '按 🔄 重啟');
+          blog('auto restart 連續失敗 3 次，等待手動重啟');
         }
       }
     };
 
+    // PM-70：依錯誤類型分流處理（no-speech 正常續跑 / audio-capture / 權限 / 其他）
     rec.onerror = (e: SRErrorEvent) => {
-      blog('SpeechRecognition error:', e.error, e.message || '');
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      const err = e.error;
+      blog('SpeechRecognition error:', err, e.message || '');
+      if (err === 'not-allowed' || err === 'service-not-allowed') {
+        // 權限被拒 → 停止自動重啟，提示使用者
         voiceActive = false;
-        setCaptionText('❌ 麥克風被拒絕');
+        setVoiceStatus('stopped', '麥克風被拒絕');
+      } else if (err === 'audio-capture') {
+        // 麥克風裝置問題（被佔用/拔除）→ 提示，但不關 voiceActive，
+        // 交給 onend 自動重啟 + 失敗計數收斂
+        setVoiceStatus('stopped', '麥克風無法擷取，請檢查裝置');
+      } else if (err === 'no-speech') {
+        // 正常：靜默太久觸發，onend 會自動重啟，不更動狀態
+        blog('no-speech（正常），等 onend 自動重啟');
+      } else if (err === 'aborted') {
+        // 多半是自己 stop() 觸發，忽略
+      } else {
+        // 其他未分類錯誤：不關 voiceActive，交給 onend 嘗試重啟
+        blog(`未分類語音錯誤 (${err})，交給 onend 重啟`);
       }
     };
 
@@ -413,7 +446,7 @@ function main() {
     blog('手動強制重啟語音');
     if (!voiceActive) return;
 
-    setCaptionText('🔄 重啟中...');
+    setVoiceStatus('restarting');
 
     // Step 1：停掉舊的並丟棄
     try {
@@ -430,7 +463,7 @@ function main() {
       blog('getUserMedia 刷新成功');
     } catch (err) {
       blog('getUserMedia 刷新失敗（麥克風可能被封鎖）', err);
-      setCaptionText('❌ 麥克風無法存取');
+      setVoiceStatus('stopped', '麥克風無法存取');
       return;
     }
 
@@ -442,12 +475,12 @@ function main() {
     if (recognition) {
       try {
         recognition.start();
-        autoRestartFails = 0; // 手動重啟成功 → 重置自動重啟失敗計數
-        setCaptionText('🔴 語音已重啟，繼續說...');
+        autoRestartFails = 0; // 手動重啟 → 重置自動重啟失敗計數（onstart 也會再歸零）
+        setVoiceStatus('listening'); // onstart 確認後也會再設一次
         blog('語音強制重啟成功');
       } catch (err) {
         blog('語音強制重啟失敗', err);
-        setCaptionText('❌ 語音重啟失敗，請重新整理頁面');
+        setVoiceStatus('stopped', '重啟失敗，請重新整理頁面');
       }
     }
   }
