@@ -22,8 +22,8 @@
 | **② 能聽能說** | 語音辨識 | Web Speech API 中文即時轉文字，收進 payload | ✅ 完成 |
 | **③ 能存能看** | 後端 + 報告頁 | Cloudflare Workers + Supabase + R2 + React 報告頁 | ✅ 完成 |
 | **④ AI 能讀** | MCP Server | Pull 模式 12 Tool（+ get_live_errors / get_terminal_logs / get_screenshots / get_usage_stats），每次回應附 token 省錢對比 = **MVP 封測** | ✅ 完成 |
-| **⑤ 能收錢** | 付費上線 | Google 登入 + 產品首頁 + 隱私政策 + 用量限制 + 兩層定價（綠界 ECPay 已送審，待 3-7 工作天）；Stripe/綠界金流串接 + Chrome Web Store 上架仍待做 | 🔨 進行中（PM-65） |
-| **⑥ 更好用** | UX 優化 + 多模式 | 六種模式（錄製/回溯/截圖/即時監控/鍵盤/終端機CLI）+ 截圖三模式 + 即時字幕雙區 + 跨頁錄製 + 編輯頁時間軸標記 + AI精簡/校正 + 乾淨toggle | ✅ 完成（PM-27~61） |
+| **⑤ 能收錢** | 付費上線 | Google 登入 + 產品首頁 + 隱私政策 + 用量限制 + 兩層定價 + 使用指南/FAQ 頁 + Chrome Web Store 上架文案（綠界 ECPay 已送審，待 3-7 工作天）；金流串接 + Web Store 上架仍待做 | 🔨 進行中（PM-67） |
+| **⑥ 更好用** | UX 優化 + 多模式 | 六種模式（錄製/回溯/截圖/即時監控/鍵盤/終端機CLI）+ 截圖三模式 + 即時字幕雙區 + 跨頁錄製 + 編輯頁時間軸標記 + AI精簡/校正 + 乾淨toggle；上架前打磨（跨頁游標/CSP 相容/語音穩定度）| ✅ 完成（PM-27~61, 68~70） |
 | **⑦ 規模化** | 多語 + 企業 | 日韓越語音、跨境除錯鏈、企業自託管 | 待做 |
 
 ---
@@ -355,6 +355,24 @@ FOX = 創辦人 + 決策者 + 手動驗收
 - 端點：`GET /`、`GET /privacy`、`GET /api/user/plan`、`POST /api/user/usage`（皆 server-only，extension 僅 popup/background/types 配合用量限制）。
 - Supabase：`users` 加 4 欄用量計數（每月重置）。
 - ⚠ 技術債：定價頁宣稱「報告保留 7／90 天」但**後端尚未實作自動過期清理**；「立即升級」/CTA/下載連結仍 `#` 佔位（待金流 + Web Store 上架）。
+
+---
+
+## §6g 第 5 代 Day 9（2026-06-27，PM-66~70）— 上架前文檔補齊 + 打磨
+
+**目標**：補齊新手文檔 / 上架素材，並修掉三個上架前的體驗瑕疵（跨頁游標、CSP 相容、語音穩定）。
+
+- **PM-66：使用指南 `GET /guide` + FAQ `GET /faq`**（`GUIDE_PAGE_HTML` / `FAQ_PAGE_HTML`，深色主題、RWD）— guide 四步驟卡片（安裝登入 → 六種模式各含適合/用法/錄到 → 編輯上傳 → 讓 AI 修 + MCP 設定框）+ 小技巧；faq **手風琴**（點擊展開、單一展開）四大類共 **14 題**（產品/隱私/付費/技術）。首頁 footer 改 `使用指南 | 常見問題 | 隱私政策` 三連結。已部署（`dd034701`）+ urllib 驗證。
+- **PM-67：Chrome Web Store 上架文案**（新建 `docs/chrome-web-store.md`）— 擴充名稱 / 中英簡短說明 / 中英詳細說明 / 分類 Developer Tools / 語言 / 隱私政策 URL / 首頁 URL / **權限說明**。⚠ **據實校正權限清單**：規格原列的 `tabs`/`offscreen` 與 manifest 不符（offscreen PM-08 已移除、tabs 未宣告），校正為實際的 `activeTab / scripting / storage / downloads / identity`，並附校正說明（Web Store 審核要求權限理由與 manifest 逐項一致）。
+- **PM-68：跨頁回放滑鼠游標修復**（只改 `edit-report.ts`）— 調查確認 `mouseTail` 是 Replayer 選項（inject 端不需設）、rrweb 預設就錄 mousemove。真因：跨頁每段新 FullSnapshot 後，使用者下次移動前無 MouseMove → 游標在段落開頭消失。修法 `injectCrossPageCursor()`：每個非首段 FullSnapshot 後注入合成 MouseMove（沿用上段座標 + 指向新頁 `<html>` 節點 id）。build ✅，待 FOX 實機驗收。
+- **PM-69：CSP 網站相容性**（只改 `inject.ts`）— 調查確認**注入早已是宣告式 `content_scripts world:MAIN`**（不受頁面 CSP `script-src` 限制），規格「改用 executeScript」前提不成立、不執行（會退步）。真正缺口：inject.ts 兩處頁面 MAIN world `innerHTML`（語音面板 header、即時監控錯誤清單）在 **Trusted Types CSP 網站（如 GitHub）會拋錯** → 改用 DOM 節點 + `textContent` 建構（連帶移除不再需要的 `escapeHtml`）。build ✅，待 FOX 在 GitHub 驗收。
+- **PM-70：語音辨識穩定度**（只改 `inject.ts`）— onend 自動重啟 + `autoRestartFails` 計數本已有；補上 **`onstart`**（真的啟動成功才歸零計數 + 切 🟢，比 start() 後立即歸零更準）、**onerror 分類**（`no-speech` 續跑 / `audio-capture` 提示但續試 / `not-allowed` 停止 / `aborted` 忽略 / 其他交 onend）、**統一狀態指示器 🟢 聽取中 / 🟡 重啟中 / 🔴 已停止**（`setVoiceStatus`，字幕區）。build ✅，待 FOX 實機驗收。
+
+### Server / Extension / Docs（Day 9 增量）
+- Server 端點：`GET /guide`、`GET /faq`（首頁 footer 加三連結）。
+- Extension：`edit-report.ts`（跨頁游標）、`inject.ts`（CSP innerHTML→DOM + 語音 onstart/onerror/狀態指示）。manifest 不變（已是 `world:MAIN`）。
+- Docs：新增 `docs/chrome-web-store.md`（上架文案）。
+- ⚠ 技術債（Day 9 留）：PM-68/69/70 三項打磨**皆需 FOX 瀏覽器實機驗收**（跨頁游標、GitHub 錄製、語音 30s/停頓/跨頁）；線上 `/report/:id`（server 端 HTML）未享 PM-68 游標修復，要同效需在 `REPORT_PAGE_HTML` 另加前處理；CSP「部分功能受限」popup 提示與語音 backoff 退避未做。
 
 ---
 
