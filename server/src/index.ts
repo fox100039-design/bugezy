@@ -216,7 +216,7 @@ const HOMEPAGE_HTML = `<!DOCTYPE html>
 
   <footer>
     <div>聯絡我們：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
-    <div style="margin-top:8px;"><a href="/privacy">隱私政策</a></div>
+    <div style="margin-top:8px;"><a href="/guide">使用指南</a> | <a href="/faq">常見問題</a> | <a href="/privacy">隱私政策</a></div>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy · 亞洲平價 MCP 語音除錯工具</div>
   </footer>
 </body>
@@ -375,6 +375,286 @@ const PRIVACY_PAGE_HTML = `<!DOCTYPE html>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
   </footer>
 </div>
+</body>
+</html>`;
+
+// ── PM-66：操作說明頁（新手三步上手 + 六種模式 + MCP 設定 + 小技巧）──
+// 深色主題與首頁/隱私頁統一（#0f0f1a / #7c3aed / #a78bfa），一頁式無 JS、RWD、繁中。
+const GUIDE_PAGE_HTML = `<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>使用指南 · BugEzy</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0; background: #0f0f1a; color: #e8e8f0;
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+    line-height: 1.75; font-size: 15px;
+  }
+  .wrap { max-width: 820px; margin: 0 auto; padding: 48px 24px 80px; }
+  header { border-bottom: 1px solid #2a2a3e; padding-bottom: 20px; margin-bottom: 28px; }
+  .brand { font-size: 24px; font-weight: 700; color: #a78bfa; text-decoration: none; }
+  h1 { font-size: 28px; margin: 18px 0 6px; }
+  .lead { color: #8b8fa3; font-size: 15px; }
+  .step {
+    margin: 32px 0 0; padding: 22px 24px; background: #1a1a2e;
+    border: 1px solid #2a2a3e; border-radius: 14px;
+  }
+  .step h2 { font-size: 19px; color: #c4b5fd; margin: 0 0 12px; }
+  .step ol { margin: 0; padding-left: 22px; }
+  .step ol li { margin: 6px 0; }
+  .mode {
+    margin: 16px 0 0; padding: 14px 16px; background: #15152a;
+    border: 1px solid #2a2a3e; border-radius: 10px;
+  }
+  .mode .mname { font-size: 16px; font-weight: 700; color: #fff; }
+  .mode .mrow { font-size: 14px; color: #ccc; margin-top: 4px; }
+  .mode .mrow b { color: #a78bfa; font-weight: 600; }
+  .mcp-box {
+    margin-top: 14px; padding: 14px 16px; background: #15152a;
+    border: 1px solid #7c3aed; border-radius: 10px; font-size: 14px;
+  }
+  .mcp-box code {
+    display: inline-block; margin-top: 4px; padding: 4px 8px; border-radius: 6px;
+    background: #0f0f1a; color: #7ee0c5; font-family: ui-monospace, monospace; word-break: break-all;
+  }
+  .tips { margin: 10px 0 0; padding-left: 22px; }
+  .tips li { margin: 6px 0; color: #ccc; }
+  a { color: #a78bfa; }
+  footer {
+    margin-top: 48px; padding-top: 20px; border-top: 1px solid #2a2a3e;
+    color: #8b8fa3; font-size: 13px;
+  }
+  footer .links a { margin-right: 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><a class="brand" href="/">🐛 BugEzy</a></header>
+
+  <h1>🐛 BugEzy 使用指南</h1>
+  <p class="lead">讓 AI 幫你修 Bug，只需三步。</p>
+
+  <div class="step">
+    <h2>🚀 第一步：安裝與登入</h2>
+    <ol>
+      <li>從 Chrome Web Store 安裝 BugEzy 擴充功能</li>
+      <li>點擊右上角 BugEzy 圖示 🐛</li>
+      <li>按「用 Google 登入」→ 完成</li>
+    </ol>
+  </div>
+
+  <div class="step">
+    <h2>🎯 第二步：錄下 Bug（六種模式任選）</h2>
+
+    <div class="mode">
+      <div class="mname">🎬 錄製</div>
+      <div class="mrow"><b>適合：</b>完整重現 Bug 過程</div>
+      <div class="mrow"><b>用法：</b>按「錄製」→ 操作網頁重現 Bug → 語音描述問題 → 按「停止」</div>
+      <div class="mrow"><b>錄到：</b>DOM 變化 + Console + Network + 語音</div>
+    </div>
+
+    <div class="mode">
+      <div class="mname">⏪ 30 秒回溯</div>
+      <div class="mrow"><b>適合：</b>Bug 已經發生，來不及錄</div>
+      <div class="mrow"><b>用法：</b>按「回溯 30s」→ 自動抓回最近 30 秒的操作</div>
+      <div class="mrow">不用提前按錄製，BugEzy 在背景持續記錄</div>
+    </div>
+
+    <div class="mode">
+      <div class="mname">📸 截圖標注</div>
+      <div class="mrow"><b>適合：</b>快速指出畫面問題</div>
+      <div class="mrow"><b>用法：</b>按「截圖標注」→ 畫筆/箭頭/框框標出問題 → 加文字說明</div>
+      <div class="mrow"><b>三種模式：</b>整頁截圖 / 可見範圍 / 自選區域</div>
+    </div>
+
+    <div class="mode">
+      <div class="mname">🔇 鍵盤模式</div>
+      <div class="mrow"><b>適合：</b>吵雜環境（咖啡廳、辦公室）</div>
+      <div class="mrow"><b>用法：</b>開啟鍵盤模式 → 關閉語音辨識 → 用文字描述 Bug</div>
+    </div>
+
+    <div class="mode">
+      <div class="mname">🔍 即時監控</div>
+      <div class="mrow"><b>適合：</b>掛著等 Bug 自己出現</div>
+      <div class="mrow"><b>用法：</b>開啟即時監控 → 頁面右下角出現 🐛 badge → 有 error 自動變紅 + 顯示數字</div>
+      <div class="mrow">點 badge 展開 error 清單</div>
+    </div>
+
+    <div class="mode">
+      <div class="mname">🖥 終端機</div>
+      <div class="mrow"><b>適合：</b>Server 端的錯誤（Node.js、Python 等）</div>
+      <div class="mrow"><b>用法：</b>終端機輸入 <code style="color:#7ee0c5;">npx bugezy-watch -- npm run dev</code></div>
+      <div class="mrow">自動攔截 stderr / throw / crash</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <h2>📝 第三步：編輯與上傳</h2>
+    <ol>
+      <li>錄製停止後進入編輯頁</li>
+      <li>可以編輯語音文字、加補充說明</li>
+      <li>按「🔧 AI 校正」修正錯字（選用）</li>
+      <li>按「🤖 AI 精簡」濃縮重點（選用）</li>
+      <li>按「上傳」→ 報告自動儲存到雲端</li>
+    </ol>
+  </div>
+
+  <div class="step">
+    <h2>🤖 第四步：讓 AI 幫你修</h2>
+    <p><b style="color:#c4b5fd;">方法一：在 Claude / Cursor / VS Code 直接問</b><br />
+      「讀我最新的 BugEzy 報告，告訴我怎麼修」<br />
+      AI 透過 MCP 自動讀取報告 → 分析 Console error + Network error → 給出修復建議</p>
+    <p style="margin-top:12px;"><b style="color:#c4b5fd;">方法二：分享報告連結</b><br />
+      上傳後會產生報告連結，傳給同事或貼到 Issue</p>
+    <div class="mcp-box">
+      <b>MCP 設定</b>（任何支援 MCP 的 AI 工具都能用）：<br />
+      URL：<code>https://bugezy-api.bugezy-api.workers.dev/mcp</code><br />
+      支援：Claude Desktop / Cursor / VS Code / Zed / Codex 等
+    </div>
+  </div>
+
+  <div class="step">
+    <h2>💡 小技巧</h2>
+    <ul class="tips">
+      <li>錄製時對著麥克風說「這個按鈕按下去沒反應」比打字快 10 倍</li>
+      <li>即時監控可以掛一整天，有 error 才通知你</li>
+      <li>免費版每月可錄 10 次，截圖和即時監控無限用</li>
+      <li>用 BugEzy MCP 讀報告比截圖貼給 AI 省 95% Token</li>
+    </ul>
+  </div>
+
+  <footer>
+    <div class="links">
+      <a href="/">首頁</a>
+      <a href="/faq">FAQ</a>
+      <a href="/privacy">隱私政策</a>
+    </div>
+    <div style="margin-top:8px;">聯絡：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
+    <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
+  </footer>
+</div>
+</body>
+</html>`;
+
+// ── PM-66：FAQ 頁（四大類問答，手風琴點擊展開/收合，單一展開）──
+const FAQ_PAGE_HTML = `<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>常見問題 · BugEzy</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0; background: #0f0f1a; color: #e8e8f0;
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+    line-height: 1.75; font-size: 15px;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 48px 24px 80px; }
+  header { border-bottom: 1px solid #2a2a3e; padding-bottom: 20px; margin-bottom: 28px; }
+  .brand { font-size: 24px; font-weight: 700; color: #a78bfa; text-decoration: none; }
+  h1 { font-size: 28px; margin: 18px 0 6px; }
+  h2 { font-size: 17px; color: #c4b5fd; margin: 36px 0 10px; }
+  .faq-q {
+    cursor: pointer; padding: 16px; background: #1a1a2e; border-radius: 8px;
+    margin-bottom: 4px; font-weight: 600; display: flex; justify-content: space-between;
+    align-items: center; gap: 12px; border: 1px solid #2a2a3e;
+  }
+  .faq-q::after { content: '▼'; transition: transform 0.2s; color: #8b8fa3; font-size: 12px; }
+  .faq-q.open::after { transform: rotate(180deg); }
+  .faq-a {
+    max-height: 0; overflow: hidden; transition: max-height 0.3s;
+    padding: 0 16px; color: #aaa; line-height: 1.8;
+  }
+  .faq-a p { margin: 14px 0; }
+  .faq-a code { color: #7ee0c5; font-family: ui-monospace, monospace; word-break: break-all; }
+  a { color: #a78bfa; }
+  footer {
+    margin-top: 48px; padding-top: 20px; border-top: 1px solid #2a2a3e;
+    color: #8b8fa3; font-size: 13px;
+  }
+  footer .links a { margin-right: 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><a class="brand" href="/">🐛 BugEzy</a></header>
+
+  <h1>🐛 BugEzy 常見問題</h1>
+
+  <h2>📌 關於產品</h2>
+  <div class="faq-q">BugEzy 是什麼？</div>
+  <div class="faq-a"><p>BugEzy 是一款 Chrome 擴充功能，讓開發者用語音 + 錄製的方式記錄 Bug，AI 透過 MCP 自動讀取報告並提供修復建議。省下 95% 的 debug 溝通時間。</p></div>
+
+  <div class="faq-q">跟 Jam 有什麼不同？</div>
+  <div class="faq-a"><p>BugEzy 專為亞洲開發者設計，支援中文語音辨識。價格只有 Jam 的 1/5（NT$80 vs $14 USD）。獨家功能：即時監控、30 秒回溯、終端機 CLI、Token 透明度。</p></div>
+
+  <div class="faq-q">支援哪些 AI 工具？</div>
+  <div class="faq-a"><p>任何支援 MCP 的 AI 工具都能用，包括 Claude Desktop、Claude Code、Cursor、VS Code + Copilot、Zed、Windsurf、Codex、Replit 等。只需要一行 URL：<code>https://bugezy-api.bugezy-api.workers.dev/mcp</code></p></div>
+
+  <h2>🔒 關於隱私與安全</h2>
+  <div class="faq-q">BugEzy 會錄到我的密碼嗎？</div>
+  <div class="faq-a"><p>BugEzy 錄製的是 DOM 結構變化，不是螢幕截圖。密碼輸入框（type="password"）的內容會被 rrweb 自動遮蔽，不會錄到實際密碼。</p></div>
+
+  <div class="faq-q">我的報告誰能看到？</div>
+  <div class="faq-a"><p>只有你自己。報告預設為私人，只有當你主動分享報告連結時，別人才能看到。</p></div>
+
+  <div class="faq-q">資料存在哪裡？</div>
+  <div class="faq-a"><p>報告存在 Cloudflare R2（全球 CDN），使用者資料存在 Supabase（PostgreSQL）。所有傳輸都經過 HTTPS 加密。</p></div>
+
+  <h2>💰 關於方案與付費</h2>
+  <div class="faq-q">免費版有什麼限制？</div>
+  <div class="faq-a"><p>免費版每月可錄製 10 次、回溯 5 次、MCP 查詢 20 次。截圖標注和即時監控無限使用。報告保留 7 天。</p></div>
+
+  <div class="faq-q">付費版多少錢？</div>
+  <div class="faq-a"><p>NT$80/月（約 $3 USD），解鎖全功能無限次使用，報告保留 90 天，加上終端機 CLI、Whisper 精準語音等進階功能。</p></div>
+
+  <div class="faq-q">如何升級付費版？</div>
+  <div class="faq-a"><p>在 BugEzy popup 點「升級」按鈕，透過信用卡或 ATM 付款。</p></div>
+
+  <div class="faq-q">可以取消訂閱嗎？</div>
+  <div class="faq-a"><p>可以，隨時取消。取消後當月剩餘天數仍可使用付費功能，下個月恢復為免費版。</p></div>
+
+  <h2>🛠 關於技術</h2>
+  <div class="faq-q">哪些瀏覽器支援？</div>
+  <div class="faq-a"><p>目前支援 Chrome 和所有 Chromium 瀏覽器（Edge、Brave、Arc 等）。</p></div>
+
+  <div class="faq-q">會影響網頁效能嗎？</div>
+  <div class="faq-a"><p>影響極小。BugEzy 只在你主動錄製時才記錄 DOM 變化，即時監控模式只攔截 Console error 和 Network error，不錄 DOM。</p></div>
+
+  <div class="faq-q">MCP 是什麼？</div>
+  <div class="faq-a"><p>Model Context Protocol（模型上下文協議），是 Anthropic 推出的開放標準，讓 AI 工具可以連接外部服務。BugEzy 的 MCP 讓 AI 直接讀取你的 Bug 報告，不需要複製貼上。</p></div>
+
+  <div class="faq-q">Token 是什麼？為什麼 BugEzy 能省 Token？</div>
+  <div class="faq-a"><p>Token 是 AI 處理文字的計量單位，等於你的 AI 使用費用。BugEzy 用結構化文字（而非截圖）傳送報告給 AI，同樣的 Bug 資訊只需要 1/20 的 Token。每次 MCP 查詢都會顯示 Token 估算，讓你看到省了多少。</p></div>
+
+  <footer>
+    <div class="links">
+      <a href="/">首頁</a>
+      <a href="/guide">使用指南</a>
+      <a href="/privacy">隱私政策</a>
+    </div>
+    <div style="margin-top:8px;">聯絡：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
+    <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
+  </footer>
+</div>
+<script>
+document.querySelectorAll('.faq-q').forEach(function (q) {
+  q.addEventListener('click', function () {
+    var a = q.nextElementSibling;
+    var isOpen = a.style.maxHeight;
+    document.querySelectorAll('.faq-a').forEach(function (el) { el.style.maxHeight = null; });
+    document.querySelectorAll('.faq-q').forEach(function (el) { el.classList.remove('open'); });
+    if (!isOpen) {
+      a.style.maxHeight = a.scrollHeight + 'px';
+      q.classList.add('open');
+    }
+  });
+});
+</script>
 </body>
 </html>`;
 
@@ -950,6 +1230,8 @@ export default {
     // PM-62：產品首頁（根目錄）— 放在所有路由之前
     if (request.method === 'GET' && path === '/') return html(HOMEPAGE_HTML);
     if (request.method === 'GET' && path === '/privacy') return html(PRIVACY_PAGE_HTML); // PM-64
+    if (request.method === 'GET' && path === '/guide') return html(GUIDE_PAGE_HTML); // PM-66
+    if (request.method === 'GET' && path === '/faq') return html(FAQ_PAGE_HTML); // PM-66
 
     // MCP 端點（Streamable HTTP）— 給 Claude.ai Connectors / IDE 直接連
     if (path === '/mcp' || path.startsWith('/mcp/')) {
