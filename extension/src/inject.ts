@@ -128,10 +128,8 @@ function main() {
 
   // ===== PM-52：即時監控視覺回饋（頁面右下角浮動 badge + error 清單）=====
   let monitorBadge: HTMLElement | null = null;
-
-  function escapeHtml(s: string): string {
-    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  }
+  // PM-69：error 清單改用 DOM 節點 + textContent 建構（見 toggleErrorPanel），
+  // 不再拼 HTML 字串，故移除原 escapeHtml（textContent 本身即防注入）。
 
   function showMonitorBadge() {
     if (monitorBadge) return;
@@ -184,20 +182,44 @@ function main() {
     panel.id = 'bugezy-error-panel';
     panel.style.cssText =
       'position:fixed;bottom:80px;right:20px;z-index:2147483647;width:360px;max-height:400px;overflow-y:auto;background:#1a1a2e;border:1px solid #2a2a3e;border-radius:12px;padding:12px;box-shadow:0 8px 32px rgba(0,0,0,0.4);font-family:system-ui,sans-serif;font-size:13px;color:#eee;pointer-events:auto;';
-    let panelHtml = '<div style="font-weight:600;margin-bottom:8px;color:#a78bfa;">🐛 即時監控錯誤</div>';
+
+    // PM-69：改用 DOM 節點建構（textContent 天生防注入），不再拼 innerHTML 字串，
+    // 避免在啟用 Trusted Types 的 CSP 網站（如 GitHub）assign innerHTML 直接拋錯。
+    const title = document.createElement('div');
+    title.style.cssText = 'font-weight:600;margin-bottom:8px;color:#a78bfa;';
+    title.textContent = '🐛 即時監控錯誤';
+    panel.appendChild(title);
+
+    /** 一列錯誤：彩色標記 span + 內容 span（內容走 textContent 自動轉義） */
+    function appendRow(markText: string, markColor: string, body: string) {
+      const row = document.createElement('div');
+      row.style.cssText = 'padding:4px 0;border-bottom:1px solid #2a2a3e;';
+      const mark = document.createElement('span');
+      mark.style.cssText = `color:${markColor};font-weight:600;`;
+      mark.textContent = markText;
+      const text = document.createElement('span');
+      text.style.cssText = 'color:#ccc;margin-left:4px;';
+      text.textContent = body;
+      row.appendChild(mark);
+      row.appendChild(text);
+      panel.appendChild(row);
+    }
+
     const cLogs = bgConsoleLogs.map((e) => e.data);
     cLogs.forEach((log) => {
-      const color = log.level === 'error' ? '#ef4444' : '#f59e0b';
-      panelHtml += `<div style="padding:4px 0;border-bottom:1px solid #2a2a3e;"><span style="color:${color};font-weight:600;">${log.level === 'error' ? '❌' : '⚠'}</span><span style="color:#ccc;margin-left:4px;">${escapeHtml(log.message.slice(0, 120))}</span></div>`;
+      const isErr = log.level === 'error';
+      appendRow(isErr ? '❌' : '⚠', isErr ? '#ef4444' : '#f59e0b', log.message.slice(0, 120));
     });
     const nErrs = bgNetworkErrors.map((e) => e.data);
     nErrs.forEach((err) => {
-      panelHtml += `<div style="padding:4px 0;border-bottom:1px solid #2a2a3e;"><span style="color:#3b82f6;font-weight:600;">🌐 ${err.status}</span><span style="color:#ccc;margin-left:4px;">${err.method} ${escapeHtml(err.url.slice(0, 80))}</span></div>`;
+      appendRow(`🌐 ${err.status}`, '#3b82f6', `${err.method} ${err.url.slice(0, 80)}`);
     });
     if (!cLogs.length && !nErrs.length) {
-      panelHtml += '<div style="color:#888;text-align:center;padding:12px;">✓ 目前無錯誤</div>';
+      const empty = document.createElement('div');
+      empty.style.cssText = 'color:#888;text-align:center;padding:12px;';
+      empty.textContent = '✓ 目前無錯誤';
+      panel.appendChild(empty);
     }
-    panel.innerHTML = panelHtml;
     document.body.appendChild(panel);
   }
 
@@ -245,7 +267,11 @@ function main() {
     const header = document.createElement('div');
     header.style.cssText =
       'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.15);pointer-events:none;';
-    header.innerHTML = '<span style="font-size:12px;color:#a78bfa;">📝 語音記錄</span>';
+    // PM-69：用 DOM 節點建構，避免 innerHTML 在 Trusted-Types CSP 網站（如 GitHub）拋錯
+    const headerLabel = document.createElement('span');
+    headerLabel.style.cssText = 'font-size:12px;color:#a78bfa;';
+    headerLabel.textContent = '📝 語音記錄';
+    header.appendChild(headerLabel);
 
     const content = document.createElement('div');
     content.id = 'bugezy-voice-content';
