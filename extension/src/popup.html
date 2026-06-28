@@ -146,6 +146,19 @@
       }
       .btn-upgrade { width: auto; margin: 0; padding: 5px 14px; font-size: 12px; background: #f59e0b; }
 
+      /* PM-73：付費用戶管理訂閱 / 已取消狀態 */
+      .manage-sub {
+        display: flex; align-items: center; justify-content: space-between; gap: 8px;
+        margin: 8px 0; padding: 10px 12px; border-radius: 8px;
+        background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.35);
+        color: #6ee7b7; font-size: 12px;
+      }
+      #subStatus { flex: 1; }
+      .cancel-link {
+        flex-shrink: 0; color: #8b8fa3; font-size: 12px; text-decoration: underline; cursor: pointer;
+      }
+      .cancel-link:hover { color: #ef4444; }
+
       /* PM-71：版本更新通知 */
       .update-notice {
         background: linear-gradient(135deg, #7c3aed20, #10b98120);
@@ -230,6 +243,10 @@
       <div id="upgradeHint" class="upgrade-hint hidden">
         <span>升級付費版 NT$80/月 → 解鎖無限次</span>
         <button id="upgradeBtn" class="btn-upgrade">升級</button>
+      </div>
+      <div id="manageSubscription" class="manage-sub hidden">
+        <span id="subStatus">✨ 付費版</span>
+        <a id="cancelSubBtn" class="cancel-link">取消訂閱</a>
       </div>
       <div class="mode-toggle">
         <label class="toggle-row">

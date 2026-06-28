@@ -54,6 +54,10 @@ const userName = $('userName');
 // PM-63：用量上限提示
 const upgradeHint = $('upgradeHint');
 const upgradeBtn = $<HTMLButtonElement>('upgradeBtn');
+// PM-73：付費用戶管理訂閱
+const manageSubscription = $('manageSubscription');
+const subStatus = $('subStatus');
+const cancelSubBtn = $<HTMLAnchorElement>('cancelSubBtn');
 
 // PM-49：鍵盤模式 toggle（關閉語音）— 狀態存 chrome.storage.local
 const keyboardMode = $<HTMLInputElement>('keyboardMode');
@@ -378,11 +382,17 @@ function showMainView(session: Session) {
 
 interface PlanInfo {
   plan: string;
+  expires_at?: string | null;
   limits: null | {
     recording: { used: number; max: number };
     rewind: { used: number; max: number };
     mcp: { used: number; max: number };
   };
+}
+
+/** ISO 日期 → YYYY/MM/DD（顯示用，避免依賴 Intl locale）。 */
+function fmtDate(iso?: string | null): string {
+  return iso ? iso.slice(0, 10).replace(/-/g, '/') : '本期結束';
 }
 
 /** 只更新錄製按鈕的 .action-desc（不覆寫整顆按鈕，保留 icon/label span）。 */
@@ -400,6 +410,7 @@ async function loadPlan(session: Session) {
     if (!res.ok) return; // 表未建/未授權等 → 不顯示用量，按鈕維持原樣（非阻擋）
     const plan = (await res.json()) as PlanInfo;
     if (plan.limits) {
+      // 免費版：顯示剩餘錄製次數 + 升級提示
       const rec = plan.limits.recording;
       const remain = rec.max - rec.used;
       if (remain > 0) {
@@ -410,9 +421,20 @@ async function loadPlan(session: Session) {
         startBtn.disabled = true;
       }
       upgradeHint.classList.remove('hidden');
+      manageSubscription.classList.add('hidden');
     } else {
+      // 付費版（paid）或已取消未到期（cancelled）→ 無限功能 + 管理訂閱區
       setRecordDesc('✨ 無限次');
+      startBtn.disabled = false;
       upgradeHint.classList.add('hidden');
+      if (plan.plan === 'cancelled') {
+        subStatus.textContent = `已取消，可用到 ${fmtDate(plan.expires_at)}`;
+        cancelSubBtn.classList.add('hidden'); // 已取消，不再顯示取消連結
+      } else {
+        subStatus.textContent = '✨ 付費版';
+        cancelSubBtn.classList.remove('hidden');
+      }
+      manageSubscription.classList.remove('hidden');
     }
   } catch {
     /* API 不通就維持預設按鈕 */
@@ -426,6 +448,32 @@ upgradeBtn.addEventListener('click', async () => {
     chrome.tabs.create({ url: `${API_BASE}/checkout?user_id=${encodeURIComponent(session.user_id)}` });
   } else {
     chrome.tabs.create({ url: `${API_BASE}/#pricing` });
+  }
+});
+
+// PM-73：取消訂閱（二次確認 → POST /api/user/cancel）
+cancelSubBtn.addEventListener('click', async () => {
+  const confirmed = confirm(
+    '確定要取消訂閱嗎？\n取消後當月剩餘天數仍可使用付費功能，下個月恢復為免費版。',
+  );
+  if (!confirmed) return;
+  const session = await checkAuth();
+  if (!session) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/user/cancel`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session.session_token}` },
+    });
+    const data = (await res.json()) as { ok?: boolean; message?: string; error?: string };
+    if (data.ok) {
+      alert(data.message ?? '已取消訂閱');
+      void loadPlan(session); // 重新整理方案狀態（改顯示「已取消，可用到…」）
+    } else {
+      alert(data.error ?? '取消失敗，請稍後再試');
+    }
+  } catch (err) {
+    console.error('[BugEzy popup] cancel', err);
+    alert('取消失敗，請稍後再試');
   }
 });
 

@@ -179,6 +179,13 @@ function escapeAttr(s: string): string {
     .replace(/>/g, '&gt;');
 }
 
+/** PM-73：訂閱到期日 = 自現在起算一個月後的 ISO 字串。 */
+function oneMonthLaterISO(): string {
+  const d = new Date();
+  d.setMonth(d.getMonth() + 1);
+  return d.toISOString();
+}
+
 // ── PM-62：產品首頁（GET /）— 一頁式、深色主題、無 JS、RWD（綠界審核 + 客戶訪問用）──
 const HOMEPAGE_HTML = `<!DOCTYPE html>
 <html lang="zh-TW">
@@ -1382,6 +1389,9 @@ export default {
       if (request.method === 'POST' && path === '/api/user/usage') {
         return await bumpUsage(request, env);
       }
+      if (request.method === 'POST' && path === '/api/user/cancel') {
+        return await ecpayCancel(request, env); // PM-73：取消訂閱
+      }
       // PM-72：綠界 ECPay 付費
       if (request.method === 'GET' && path === '/checkout') {
         return await ecpayCheckout(url, env);
@@ -1683,7 +1693,7 @@ async function getUserPlan(request: Request, env: Env): Promise<Response> {
   try {
     const { data: user, error } = await supa(env)
       .from('users')
-      .select('plan, recording_count, rewind_count, mcp_count, usage_reset_at')
+      .select('plan, recording_count, rewind_count, mcp_count, usage_reset_at, plan_expires_at')
       .eq('user_id', userId)
       .maybeSingle();
     if (error) return json({ error: `查方案失敗: ${error.message}` }, 500);
@@ -1695,6 +1705,7 @@ async function getUserPlan(request: Request, env: Env): Promise<Response> {
       rewind_count: number;
       mcp_count: number;
       usage_reset_at: string;
+      plan_expires_at: string | null;
     };
 
     // 跨月自動重置計數
@@ -1710,9 +1721,17 @@ async function getUserPlan(request: Request, env: Env): Promise<Response> {
       u.mcp_count = 0;
     }
 
-    const isPaid = u.plan === 'paid';
+    // PM-73：cancelled 用戶到期 → 自動降級 free
+    if (u.plan === 'cancelled' && u.plan_expires_at && now > new Date(u.plan_expires_at)) {
+      await supa(env).from('users').update({ plan: 'free' }).eq('user_id', userId);
+      u.plan = 'free';
+    }
+
+    // PM-73：cancelled 在到期前仍視同付費（享無限功能）
+    const isPaid = u.plan === 'paid' || u.plan === 'cancelled';
     return json({
       plan: u.plan ?? 'free',
+      expires_at: u.plan_expires_at ?? null,
       limits: isPaid
         ? null
         : {
@@ -1748,7 +1767,8 @@ async function bumpUsage(request: Request, env: Env): Promise<Response> {
       rewind_count: number;
       mcp_count: number;
     };
-    if (u.plan === 'paid') return json({ ok: true, unlimited: true });
+    // PM-73：cancelled 在到期前仍視同付費（無限）
+    if (u.plan === 'paid' || u.plan === 'cancelled') return json({ ok: true, unlimited: true });
 
     const countField = `${type}_count` as 'recording_count' | 'rewind_count' | 'mcp_count';
     const currentCount = u[countField] || 0;
@@ -1844,10 +1864,18 @@ async function ecpayCallback(request: Request, env: Env): Promise<Response> {
   }
 
   // 付款成功（RtnCode=1）→ 用 CustomField1 帶回的 user_id 升級為 paid
+  // PM-73：同時記錄 ecpay_trade_no（取消訂閱要用）+ plan_expires_at（到期日）
   if (params.RtnCode === '1') {
     const userId = params.CustomField1;
     if (userId) {
-      await supa(env).from('users').update({ plan: 'paid' }).eq('user_id', userId);
+      await supa(env)
+        .from('users')
+        .update({
+          plan: 'paid',
+          ecpay_trade_no: params.MerchantTradeNo,
+          plan_expires_at: oneMonthLaterISO(),
+        })
+        .eq('user_id', userId);
     }
   }
 
@@ -1898,10 +1926,14 @@ async function ecpayPeriodCallback(request: Request, env: Env): Promise<Response
   const userId = params.CustomField1;
   if (userId) {
     if (params.RtnCode === '1') {
-      // 本期扣款成功 → 維持 paid，順手更新最近活躍時間
+      // 本期扣款成功 → 維持 paid + 展延到期日（PM-73），順手更新最近活躍時間
       await supa(env)
         .from('users')
-        .update({ plan: 'paid', last_login_at: new Date().toISOString() })
+        .update({
+          plan: 'paid',
+          plan_expires_at: oneMonthLaterISO(),
+          last_login_at: new Date().toISOString(),
+        })
         .eq('user_id', userId);
     } else {
       // 本期扣款失敗 → 降級為 free
@@ -1911,6 +1943,67 @@ async function ecpayPeriodCallback(request: Request, env: Env): Promise<Response
 
   // 綠界要求每期通知後回 1|OK（否則視為未收到）
   return new Response('1|OK', { status: 200 });
+}
+
+// POST /api/user/cancel → 取消定期定額訂閱（PM-73）。標記 cancelled，到期前仍享付費功能。
+async function ecpayCancel(request: Request, env: Env): Promise<Response> {
+  const userId = getUserIdFromHeader(request);
+  if (!userId) return json({ error: 'unauthorized' }, 401);
+  try {
+    const { data: user, error } = await supa(env)
+      .from('users')
+      .select('plan, ecpay_trade_no, plan_expires_at')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (error) return json({ error: `查用戶失敗: ${error.message}` }, 500);
+    const u = user as {
+      plan?: string;
+      ecpay_trade_no?: string | null;
+      plan_expires_at?: string | null;
+    } | null;
+    if (!u || u.plan !== 'paid') return json({ error: '目前不是付費用戶' }, 400);
+
+    // 呼叫綠界「定期定額作業」API 停止訂閱
+    // ⚠ 官方端點是 /Cashier/CreditCardPeriodAction（非 /CreditDetail/DoAction，後者為一般信用卡交易作業），
+    // 且需帶 TimeStamp。端點主機沿用 ECPAY_PAYMENT_URL 的 origin（stage/prod 自動一致）。
+    if (u.ecpay_trade_no) {
+      const actionParams: Record<string, string> = {
+        MerchantID: env.ECPAY_MERCHANT_ID,
+        MerchantTradeNo: u.ecpay_trade_no,
+        Action: 'Cancel',
+        TimeStamp: String(Math.floor(Date.now() / 1000)),
+      };
+      actionParams.CheckMacValue = await generateCheckMacValue(
+        actionParams,
+        env.ECPAY_HASH_KEY,
+        env.ECPAY_HASH_IV,
+      );
+      const actionUrl = `${new URL(env.ECPAY_PAYMENT_URL).origin}/Cashier/CreditCardPeriodAction`;
+      try {
+        await fetch(actionUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams(actionParams).toString(),
+        });
+      } catch (e) {
+        // 綠界端取消失敗不阻擋本地標記（避免用戶卡住），記錄即可
+        console.log('ECPay cancel action failed', e);
+      }
+    }
+
+    // 標記 cancelled（已取消但未到期；用量檢查仍視同 paid，到期後由 /api/user/plan 自動降級 free）
+    await supa(env).from('users').update({ plan: 'cancelled' }).eq('user_id', userId);
+
+    const expires = u.plan_expires_at ?? null;
+    const expiresText = expires ? expires.slice(0, 10).replace(/-/g, '/') : '本期結束';
+    return json({
+      ok: true,
+      message: `已取消訂閱。付費功能可使用到 ${expiresText}`,
+      expires_at: expires,
+    });
+  } catch (err) {
+    return json({ error: `cancel error: ${err instanceof Error ? err.message : String(err)}` }, 500);
+  }
 }
 
 // ── MCP Server（8 Tool，直接讀 Supabase/R2，不繞 HTTP）──────

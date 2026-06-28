@@ -63,3 +63,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS recording_count INT DEFAULT 0;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS rewind_count INT DEFAULT 0;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS mcp_count INT DEFAULT 0;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS usage_reset_at TIMESTAMPTZ DEFAULT NOW();
+
+-- ── PM-73：取消訂閱（綠界訂單編號 + 付費到期日；plan 多一個 'cancelled' 狀態）──
+ALTER TABLE users ADD COLUMN IF NOT EXISTS ecpay_trade_no TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_expires_at TIMESTAMPTZ;
