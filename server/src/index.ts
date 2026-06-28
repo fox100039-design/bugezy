@@ -1392,6 +1392,9 @@ export default {
       if (request.method === 'POST' && path === '/checkout/result') {
         return await ecpayResult(request);
       }
+      if (request.method === 'POST' && path === '/api/ecpay/period-callback') {
+        return await ecpayPeriodCallback(request, env);
+      }
       if (request.method === 'POST' && path === '/api/reports') {
         return await createReport(request, env, url.origin);
       }
@@ -1794,6 +1797,12 @@ async function ecpayCheckout(url: URL, env: Env): Promise<Response> {
     ChoosePayment: 'Credit',
     EncryptType: '1',
     CustomField1: userId, // 用 CustomField 帶 user_id 回來
+    // PM-72b：定期定額（月扣 NT$80 訂閱制）。PeriodAmount 必須等於 TotalAmount。
+    PeriodAmount: '80', // 每期授權金額
+    PeriodType: 'M', // 週期：M=月
+    Frequency: '1', // 每 1 個月扣一次
+    ExecTimes: '99', // 最多扣 99 次（最少 2，月 max 999）
+    PeriodReturnURL: `${url.origin}/api/ecpay/period-callback`, // 第 2 次起的扣款結果通知
   };
   params.CheckMacValue = await generateCheckMacValue(
     params,
@@ -1869,6 +1878,39 @@ async function ecpayResult(request: Request): Promise<Response> {
     }</p>` +
     `<a href="/">← 回到首頁</a></div></body></html>`;
   return html(body);
+}
+
+// POST /api/ecpay/period-callback → 定期定額「第 2 期起」的每月扣款結果通知（PM-72b）
+// 第 1 次授權走 /api/ecpay/callback；第 2 次起由綠界排程自動扣款，結果通知到這裡。
+async function ecpayPeriodCallback(request: Request, env: Env): Promise<Response> {
+  const formData = await request.formData();
+  const params: Record<string, string> = {};
+  formData.forEach((val, key) => {
+    params[key] = String(val);
+  });
+
+  const received = params.CheckMacValue ?? '';
+  const expected = await generateCheckMacValue(params, env.ECPAY_HASH_KEY, env.ECPAY_HASH_IV);
+  if (!timingSafeEqualStr(received, expected)) {
+    return new Response('0|ErrorMessage=CheckMacValue Error', { status: 200 });
+  }
+
+  const userId = params.CustomField1;
+  if (userId) {
+    if (params.RtnCode === '1') {
+      // 本期扣款成功 → 維持 paid，順手更新最近活躍時間
+      await supa(env)
+        .from('users')
+        .update({ plan: 'paid', last_login_at: new Date().toISOString() })
+        .eq('user_id', userId);
+    } else {
+      // 本期扣款失敗 → 降級為 free
+      await supa(env).from('users').update({ plan: 'free' }).eq('user_id', userId);
+    }
+  }
+
+  // 綠界要求每期通知後回 1|OK（否則視為未收到）
+  return new Response('1|OK', { status: 200 });
 }
 
 // ── MCP Server（8 Tool，直接讀 Supabase/R2，不繞 HTTP）──────
