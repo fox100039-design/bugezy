@@ -22,7 +22,7 @@
 | **② 能聽能說** | 語音辨識 | Web Speech API 中文即時轉文字，收進 payload | ✅ 完成 |
 | **③ 能存能看** | 後端 + 報告頁 | Cloudflare Workers + Supabase + R2 + React 報告頁 | ✅ 完成 |
 | **④ AI 能讀** | MCP Server | Pull 模式 12 Tool（+ get_live_errors / get_terminal_logs / get_screenshots / get_usage_stats），每次回應附 token 省錢對比 = **MVP 封測** | ✅ 完成 |
-| **⑤ 能收錢** | 付費上線 | Google 登入 + 產品首頁 + 隱私政策 + 用量限制 + 兩層定價 + 使用指南/FAQ 頁 + Web Store 上架文案/zip + **綠界 ECPay 金流（測試環境跑通：單次付款 + 定期定額月訂閱，CheckMacValue 對官方測試向量驗證）**；換正式 key + Web Store 上架仍待做 | 🔨 進行中（PM-72b） |
+| **⑤ 能收錢** | 付費上線 | Google 登入 + 產品首頁 + 隱私政策 + 用量限制 + 兩層定價 + 使用指南/FAQ 頁 + Web Store 上架文案/zip + **綠界 ECPay 金流（測試環境跑通：單次付款 + 定期定額月訂閱 + 取消訂閱，CheckMacValue 對官方測試向量驗證）**；換正式 key + Web Store 上架仍待做 | 🔨 進行中（PM-73） |
 | **⑥ 更好用** | UX 優化 + 多模式 | 六種模式（錄製/回溯/截圖/即時監控/鍵盤/終端機CLI）+ 截圖三模式 + 即時字幕雙區 + 跨頁錄製 + 編輯頁時間軸標記 + AI精簡/校正 + 乾淨toggle；上架前打磨（跨頁游標/CSP 相容/語音穩定度）| ✅ 完成（PM-27~61, 68~70） |
 | **⑦ 規模化** | 多語 + 企業 | 日韓越語音、跨境除錯鏈、企業自託管 | 待做 |
 
@@ -383,12 +383,14 @@ FOX = 創辦人 + 決策者 + 手動驗收
 - **PM-71：popup 更新通知 + Web Store zip**（只改 `popup.ts`/`popup.html` + 打包）— `checkVersionNotice()` 用 `chrome.storage.local` 的 `bugezy:lastVersion` 比對 manifest 版本，**有舊記錄且不同才跳卡片**（首裝不跳）。Web Store zip 用 PowerShell + .NET `ZipFile.CreateFromDirectory` 從 `dist/` 只取執行期 11 檔（排 `.map`）→ `C:\dev\bugezy\bugezy-v0.1.0.zip`（206.4 KB，manifest 在根）。`.gitignore` 加 `dist-zip/`+`bugezy-v*.zip`。⚠ 規格列的 offscreen/icons 實際不存在（offscreen PM-08 移除、manifest 未宣告 icons）故不含。
 - **PM-72：綠界 ECPay 付費（測試環境）**（`server/src/index.ts` + `wrangler.toml` + `popup.ts`）— `GET /checkout?user_id=` 回自動提交綠界表單、`POST /api/ecpay/callback` 驗 CheckMacValue → `RtnCode=1` 更新 `users.plan='paid'` → 回 `1|OK`、`POST /checkout/result` 結果頁。popup 升級鈕改開 `/checkout?user_id=`。⚠ **CheckMacValue 依官方 AI Skill（ECPay-API-Skill guides/13）校正**：規格版漏了 TS 的 `~→%7e`、`'→%27`（encodeURIComponent 不編碼這兩個）→ 補齊 `ecpayUrlEncode`；Workers 用 `crypto.subtle`（async SHA256）。**對官方 8 個測試向量驗證**（6 個有 params 全 PASS）+ **線上 `/checkout` 的 CheckMacValue 與本地獨立重算一致**。wrangler.toml `[vars]` 加 4 個 ECPAY 變數（測試帳號 3002607）。
 - **PM-72b：定期定額月訂閱**（只改 `server/src/index.ts`）— `/checkout` 加 `PeriodAmount/PeriodType=M/Frequency=1/ExecTimes=99/PeriodReturnURL`（PeriodAmount 必須=TotalAmount=80）；新增 `POST /api/ecpay/period-callback`（第 2 期起每月扣款通知）：驗 CheckMacValue → `RtnCode=1` 維持 paid／否則降級 free → 回 `1|OK`。第 1 次授權仍走 `/api/ecpay/callback`。對官方 `guides/01 §定期定額` 核對欄位 + 線上驗證（含 period 參數的 CheckMacValue 一致、bad mac→`0|ErrorMessage`、valid mac→`1|OK`）。
+- **PM-73：取消訂閱**（`server/src/index.ts` + `schema.sql` + `popup.ts`/`popup.html`）— `users` 加 `ecpay_trade_no` + `plan_expires_at`（**FOX 手動跑 ALTER**）。callback 首期/續扣成功時記 `ecpay_trade_no` + 展延 `plan_expires_at`（+1 月）。新增 `POST /api/user/cancel`：呼叫綠界停止訂閱 → 標 `plan='cancelled'`（到期前仍享付費）→ 回可用到期日。`getUserPlan`/`bumpUsage` 的 isPaid 改 `paid||cancelled`；`getUserPlan` 加「cancelled 過期 → 自動降 free」+ 回 `expires_at`。popup 加 `#manageSubscription`（付費顯「取消訂閱」、cancelled 顯「已取消，可用到 YYYY/MM/DD」），取消鈕二次確認 → cancel API。⚠ **據官方 Skill 校正綠界取消端點**：規格寫 `/CreditDetail/DoAction`（一般信用卡交易作業），定期定額取消官方端點是 **`/Cashier/CreditCardPeriodAction`** 且需 `TimeStamp`（主機沿用 `ECPAY_PAYMENT_URL` origin）。線上驗證：cancel 無 auth→401、路由命中 DB；**偵測到新欄位尚未建（待 FOX 跑 ALTER），程式路徑已驗正確**。
 
 ### Server / Extension（Day 10 增量）
-- Server 端點：`GET /checkout`、`POST /api/ecpay/callback`、`POST /checkout/result`、`POST /api/ecpay/period-callback`。helper：`ecpayUrlEncode`/`generateCheckMacValue`(async crypto.subtle)/`timingSafeEqualStr`/`formatEcpayDate`/`escapeAttr`。`Env` + `wrangler.toml` 加 4 個 ECPAY 變數。
-- Extension：`popup.ts`（更新通知 + 升級鈕開結帳）、`popup.html`（更新通知 CSS）。manifest 不變。
+- Server 端點：`GET /checkout`、`POST /api/ecpay/callback`、`POST /checkout/result`、`POST /api/ecpay/period-callback`、`POST /api/user/cancel`。helper：`ecpayUrlEncode`/`generateCheckMacValue`(async crypto.subtle)/`timingSafeEqualStr`/`formatEcpayDate`/`escapeAttr`/`oneMonthLaterISO`。`Env` + `wrangler.toml` 加 4 個 ECPAY 變數。
+- Supabase：`users` 加 `ecpay_trade_no TEXT` + `plan_expires_at TIMESTAMPTZ`（PM-73，**FOX 手動跑**）；`plan` 多一個 `'cancelled'` 狀態（已取消未到期＝仍享付費）。
+- Extension：`popup.ts`（更新通知 + 升級鈕開結帳 + 管理訂閱/取消）、`popup.html`（更新通知 + 管理訂閱 CSS）。manifest 不變。
 - 產物：`bugezy-v0.1.0.zip`（gitignore，不進版控）。
-- ⚠ 技術債（Day 10 留）：① 正式上線要把 ECPAY 4 值換正式 key（HASH_KEY/IV 建議改 `wrangler secret`）；② **定期定額降級策略**目前「任一期失敗即降 free」，綠界實務是連續失敗 6 次才終止合約 → 上線前宜改寬限期/連續失敗 N 次（需加欄位記連續失敗數）；③ 測試環境只扣第一期，period-callback 需正式環境/後台模擬才驗得到；④ 升降級後用戶需重開 popup 才反映方案（無即時推播）；⑤ PM-71 更新通知 + Day 9 三項打磨仍待瀏覽器實機驗收。
+- ⚠ 技術債（Day 10 留）：① 正式上線要把 ECPAY 4 值換正式 key（HASH_KEY/IV 建議改 `wrangler secret`）；② **定期定額降級策略**目前「任一期失敗即降 free」，綠界實務是連續失敗 6 次才終止合約 → 上線前宜改寬限期/連續失敗 N 次（需加欄位記連續失敗數）；③ 取消後若綠界端取消失敗仍續扣，period-callback 成功會把 cancelled 翻回 paid → 宜「period-callback 成功時若現況 cancelled 則維持」；④ 測試環境只扣第一期，period-callback 需正式環境/後台模擬才驗得到；⑤ 升降級後用戶需重開 popup 才反映方案（無即時推播）；⑥ **PM-73 的 2 個 ALTER 待 FOX 跑**（未跑前已登入用戶打 plan/usage/cancel 會 500，extension 端靜默降級不崩）；⑦ PM-71 更新通知 + Day 9 三項打磨仍待瀏覽器實機驗收。
 
 ---
 
