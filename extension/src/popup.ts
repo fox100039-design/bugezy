@@ -444,7 +444,33 @@ logoutBtn.addEventListener('click', async () => {
   showLoginView();
 });
 
+// ── PM-71：版本更新通知 ───────────────────────────────────
+const LAST_VERSION_KEY = 'bugezy:lastVersion';
+
+function showUpdateNotice(version: string) {
+  const notice = document.createElement('div');
+  notice.className = 'update-notice';
+  notice.innerHTML = `
+    <div class="update-title">🎉 BugEzy 更新到 v${version}</div>
+    <div class="update-body">感謝使用 BugEzy！此版本改善了穩定度和使用體驗。</div>
+    <button class="update-dismiss" id="dismissUpdate">知道了</button>
+  `;
+  document.body.prepend(notice);
+  document.getElementById('dismissUpdate')?.addEventListener('click', () => notice.remove());
+}
+
+/** 版本號從 manifest 讀；與上次記錄不同就顯示更新提示，然後寫回目前版本。 */
+async function checkVersionNotice() {
+  const currentVersion = chrome.runtime.getManifest().version;
+  const stored = await chrome.storage.local.get(LAST_VERSION_KEY);
+  const lastVersion = stored[LAST_VERSION_KEY] as string | undefined;
+  // 首次安裝（無舊版本記錄）不顯示，只有「升級」才顯示
+  if (lastVersion && lastVersion !== currentVersion) showUpdateNotice(currentVersion);
+  await chrome.storage.local.set({ [LAST_VERSION_KEY]: currentVersion });
+}
+
 // 開啟 popup：先看是否已登入，再決定畫面
+void checkVersionNotice();
 void checkAuth().then((session) => {
   if (session) showMainView(session);
   else showLoginView();

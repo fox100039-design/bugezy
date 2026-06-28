@@ -4,3 +4,6 @@ dist/
 .dev.vars
 *.log
 debug/
+# PM-71：Chrome Web Store 打包產物（建置輸出，不進版控）
+dist-zip/
+bugezy-v*.zip
