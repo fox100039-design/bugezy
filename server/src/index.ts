@@ -16,6 +16,11 @@ export interface Env {
   SUPABASE_URL: string;
   SUPABASE_ANON_KEY: string;
   AI: Ai; // Cloudflare Workers AI binding（PM-25）
+  // PM-72：綠界 ECPay（測試環境值放 wrangler.toml [vars]；正式上線改用 secret）
+  ECPAY_MERCHANT_ID: string;
+  ECPAY_HASH_KEY: string;
+  ECPAY_HASH_IV: string;
+  ECPAY_PAYMENT_URL: string;
 }
 
 // ── 與擴充端一致的 payload 型別 ──────────────────────────
@@ -105,6 +110,73 @@ function getUserIdFromHeader(request: Request): string | null {
 
 function html(body: string): Response {
   return new Response(body, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+}
+
+// ── PM-72：綠界 ECPay CheckMacValue（依官方 AI Skill ECPay-API-Skill guides/13）──
+// AIO 金流用 SHA256；TypeScript 的 encodeURIComponent 需額外把 %20→+、~→%7e、'→%27，
+// 再轉小寫並還原 .NET 7 個特殊字元（-_.!*()）。順序與綠界 PHP SDK ecpayUrlEncode 一致。
+function ecpayUrlEncode(source: string): string {
+  let encoded = encodeURIComponent(source)
+    .replace(/%20/g, '+')
+    .replace(/~/g, '%7e')
+    .replace(/'/g, '%27')
+    .toLowerCase();
+  const replacements: Record<string, string> = {
+    '%2d': '-',
+    '%5f': '_',
+    '%2e': '.',
+    '%21': '!',
+    '%2a': '*',
+    '%28': '(',
+    '%29': ')',
+  };
+  for (const [enc, ch] of Object.entries(replacements)) encoded = encoded.split(enc).join(ch);
+  return encoded;
+}
+
+/** 產生 CheckMacValue（AIO SHA256）。Workers 無同步 crypto，改用 crypto.subtle（async）。*/
+async function generateCheckMacValue(
+  params: Record<string, string>,
+  hashKey: string,
+  hashIV: string,
+): Promise<string> {
+  // 1. 排除 CheckMacValue 本身 2. Key 不分大小寫字典序排序
+  const keys = Object.keys(params)
+    .filter((k) => k !== 'CheckMacValue')
+    .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+  // 3. HashKey=...&k=v&...&HashIV=...
+  const paramStr = keys.map((k) => `${k}=${params[k]}`).join('&');
+  const raw = `HashKey=${hashKey}&${paramStr}&HashIV=${hashIV}`;
+  // 4. ECPay URL encode 5. SHA256 6. 轉大寫
+  const encoded = ecpayUrlEncode(raw);
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(encoded));
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+    .toUpperCase();
+}
+
+/** 常數時間字串比較（避免 timing attack；長度固定 64 hex）。 */
+function timingSafeEqualStr(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+/** 綠界 MerchantTradeDate 格式：yyyy/MM/dd HH:mm:ss（Workers 為 UTC，測試環境可接受）。 */
+function formatEcpayDate(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+/** HTML 屬性值轉義（表單 input value 用） */
+function escapeAttr(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
 // ── PM-62：產品首頁（GET /）— 一頁式、深色主題、無 JS、RWD（綠界審核 + 客戶訪問用）──
@@ -1310,6 +1382,16 @@ export default {
       if (request.method === 'POST' && path === '/api/user/usage') {
         return await bumpUsage(request, env);
       }
+      // PM-72：綠界 ECPay 付費
+      if (request.method === 'GET' && path === '/checkout') {
+        return await ecpayCheckout(url, env);
+      }
+      if (request.method === 'POST' && path === '/api/ecpay/callback') {
+        return await ecpayCallback(request, env);
+      }
+      if (request.method === 'POST' && path === '/checkout/result') {
+        return await ecpayResult(request);
+      }
       if (request.method === 'POST' && path === '/api/reports') {
         return await createReport(request, env, url.origin);
       }
@@ -1689,6 +1771,104 @@ async function bumpUsage(request: Request, env: Env): Promise<Response> {
   } catch (err) {
     return json({ error: `usage error: ${err instanceof Error ? err.message : String(err)}` }, 500);
   }
+}
+
+// ── PM-72：綠界 ECPay 付費串接 ─────────────────────────────
+// GET /checkout?user_id=xxx → 產生帶 CheckMacValue 的綠界表單並自動提交
+async function ecpayCheckout(url: URL, env: Env): Promise<Response> {
+  const userId = url.searchParams.get('user_id');
+  if (!userId) return json({ error: 'missing user_id' }, 400);
+
+  const now = new Date();
+  const tradeNo = `BZ${now.getTime()}`.slice(0, 20); // 唯一訂單編號，最長 20 碼
+  const params: Record<string, string> = {
+    MerchantID: env.ECPAY_MERCHANT_ID,
+    MerchantTradeNo: tradeNo,
+    MerchantTradeDate: formatEcpayDate(now),
+    PaymentType: 'aio',
+    TotalAmount: '80',
+    TradeDesc: 'BugEzy Pro 月訂閱',
+    ItemName: 'BugEzy Pro 付費版 NT$80/月',
+    ReturnURL: `${url.origin}/api/ecpay/callback`, // server-to-server 通知
+    OrderResultURL: `${url.origin}/checkout/result`, // 付款後瀏覽器導回
+    ChoosePayment: 'Credit',
+    EncryptType: '1',
+    CustomField1: userId, // 用 CustomField 帶 user_id 回來
+  };
+  params.CheckMacValue = await generateCheckMacValue(
+    params,
+    env.ECPAY_HASH_KEY,
+    env.ECPAY_HASH_IV,
+  );
+
+  const inputs = Object.entries(params)
+    .map(([k, v]) => `<input type="hidden" name="${k}" value="${escapeAttr(v)}">`)
+    .join('');
+  const formHtml =
+    `<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8">` +
+    `<meta name="viewport" content="width=device-width,initial-scale=1"><title>前往綠界付款…</title>` +
+    `<style>body{background:#0f0f1a;color:#e0e0e0;font-family:system-ui,"Microsoft JhengHei",sans-serif;` +
+    `display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;}</style></head>` +
+    `<body><p>🔒 正在前往綠界安全付款頁面，請稍候…</p>` +
+    `<form id="ecpay" method="POST" action="${env.ECPAY_PAYMENT_URL}">${inputs}</form>` +
+    `<script>document.getElementById('ecpay').submit();</script></body></html>`;
+  return html(formHtml);
+}
+
+// POST /api/ecpay/callback → 綠界 server-to-server 付款結果通知（驗 CheckMacValue → 更新 plan）
+async function ecpayCallback(request: Request, env: Env): Promise<Response> {
+  const formData = await request.formData();
+  const params: Record<string, string> = {};
+  formData.forEach((val, key) => {
+    params[key] = String(val);
+  });
+
+  const received = params.CheckMacValue ?? '';
+  const expected = await generateCheckMacValue(params, env.ECPAY_HASH_KEY, env.ECPAY_HASH_IV);
+  if (!timingSafeEqualStr(received, expected)) {
+    return new Response('0|ErrorMessage=CheckMacValue Error', { status: 200 });
+  }
+
+  // 後台「付款結果通知(模擬)」：SimulatePaid=1，不更新狀態但仍要回 1|OK
+  if (params.SimulatePaid === '1') {
+    return new Response('1|OK', { status: 200 });
+  }
+
+  // 付款成功（RtnCode=1）→ 用 CustomField1 帶回的 user_id 升級為 paid
+  if (params.RtnCode === '1') {
+    const userId = params.CustomField1;
+    if (userId) {
+      await supa(env).from('users').update({ plan: 'paid' }).eq('user_id', userId);
+    }
+  }
+
+  // 綠界要求成功時回傳 1|OK（否則會重送通知）
+  return new Response('1|OK', { status: 200 });
+}
+
+// POST /checkout/result → 綠界付款後用 POST 導回，顯示結果頁
+async function ecpayResult(request: Request): Promise<Response> {
+  const formData = await request.formData();
+  const rtnCode = String(formData.get('RtnCode') ?? '');
+  const rtnMsg = String(formData.get('RtnMsg') ?? '');
+  const success = rtnCode === '1';
+  const body =
+    `<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8">` +
+    `<meta name="viewport" content="width=device-width,initial-scale=1"><title>付款結果</title>` +
+    `<style>body{background:#0f0f1a;color:#e0e0e0;font-family:system-ui,"Microsoft JhengHei",sans-serif;` +
+    `display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;}` +
+    `.card{background:#1a1a2e;border:1px solid #2a2a3e;border-radius:16px;padding:40px;text-align:center;max-width:400px;}` +
+    `.icon{font-size:48px;margin-bottom:16px;}h1{font-size:24px;margin:0 0 8px;}` +
+    `p{color:#aaa;margin:0 0 24px;line-height:1.6;}a{color:#a78bfa;text-decoration:none;}</style></head>` +
+    `<body><div class="card"><div class="icon">${success ? '🎉' : '❌'}</div>` +
+    `<h1>${success ? '升級成功！' : '付款失敗'}</h1>` +
+    `<p>${
+      success
+        ? '你已升級為 BugEzy Pro 付費版。重新開啟 BugEzy 即可享受無限功能！'
+        : escapeAttr(rtnMsg || '請稍後再試')
+    }</p>` +
+    `<a href="/">← 回到首頁</a></div></body></html>`;
+  return html(body);
 }
 
 // ── MCP Server（8 Tool，直接讀 Supabase/R2，不繞 HTTP）──────

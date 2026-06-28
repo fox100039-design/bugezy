@@ -419,9 +419,14 @@ async function loadPlan(session: Session) {
   }
 }
 
-upgradeBtn.addEventListener('click', () => {
-  // 付費尚未上線：先導到首頁價目表（PM-62）
-  chrome.tabs.create({ url: `${API_BASE}/#pricing` });
+upgradeBtn.addEventListener('click', async () => {
+  // PM-72：開新分頁到綠界結帳（帶 user_id）；未登入則退回首頁價目表
+  const session = await checkAuth();
+  if (session) {
+    chrome.tabs.create({ url: `${API_BASE}/checkout?user_id=${encodeURIComponent(session.user_id)}` });
+  } else {
+    chrome.tabs.create({ url: `${API_BASE}/#pricing` });
+  }
 });
 
 googleLoginBtn.addEventListener('click', async () => {

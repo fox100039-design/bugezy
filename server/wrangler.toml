@@ -7,6 +7,12 @@ compatibility_flags = ["nodejs_compat"]
 SUPABASE_URL = "https://fpqlclltjreetlyhzlsd.supabase.co"
 # SUPABASE_ANON_KEY 用 `wrangler secret put SUPABASE_ANON_KEY` 設定，不寫在這
 
+# PM-72：綠界 ECPay（測試環境的公開測試帳號值；正式上線改用 `wrangler secret put` 設正式 key）
+ECPAY_MERCHANT_ID = "3002607"
+ECPAY_HASH_KEY = "pwFHCqoQZGmho4w6"
+ECPAY_HASH_IV = "EkRm7iFT261dpevs"
+ECPAY_PAYMENT_URL = "https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5"
+
 [[r2_buckets]]
 binding = "R2"
 bucket_name = "bugezy-reports"
