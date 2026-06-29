@@ -75,7 +75,9 @@
       .action-label { font-size: 15px; font-weight: 700; }
       .action-desc { font-size: 11px; opacity: 0.8; }
 
-      .hidden { display: none; }
+      /* PM-75b：!important 確保 .hidden 永遠勝過 .upgrade-hint/.manage-sub 等同特異度但後定義的 display:flex
+         （否則 paid/cancelled 用戶加了 hidden 仍被 flex 蓋過、升級提示不會消失）。 */
+      .hidden { display: none !important; }
 
       /* 鍵盤模式 toggle（PM-49） */
       .mode-toggle { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
