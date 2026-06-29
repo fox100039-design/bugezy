@@ -1,6 +1,6 @@
 # BugEzy 專案全貌與接手指南
 
-> 最後更新：2026-06-25
+> 最後更新：2026-06-29
 > 維護者：FOX（Claude Chat PM 角色）
 > 用途：新 Chat 對話開始時讀此檔，快速掌握全貌並接手開發
 
@@ -22,7 +22,7 @@
 | **② 能聽能說** | 語音辨識 | Web Speech API 中文即時轉文字，收進 payload | ✅ 完成 |
 | **③ 能存能看** | 後端 + 報告頁 | Cloudflare Workers + Supabase + R2 + React 報告頁 | ✅ 完成 |
 | **④ AI 能讀** | MCP Server | Pull 模式 12 Tool（+ get_live_errors / get_terminal_logs / get_screenshots / get_usage_stats），每次回應附 token 省錢對比 = **MVP 封測** | ✅ 完成 |
-| **⑤ 能收錢** | 付費上線 | Google 登入 + 產品首頁 + 隱私政策 + 用量限制 + 兩層定價 + 使用指南/FAQ 頁 + Web Store 上架文案/zip + **綠界 ECPay 金流（測試環境跑通：單次付款 + 定期定額月訂閱 + 取消訂閱，CheckMacValue 對官方測試向量驗證）**；換正式 key + Web Store 上架仍待做 | 🔨 進行中（PM-73） |
+| **⑤ 能收錢** | 付費上線 | Google 登入 + 產品首頁（含聯絡資訊）+ 隱私政策 + 用量限制 + 兩層定價 + 使用指南/FAQ 頁 + Web Store 上架文案/zip + **綠界 ECPay 金流（測試環境跑通：單次付款 + 定期定額月訂閱 + 取消訂閱，CheckMacValue 對官方測試向量驗證）**；**Chrome Web Store 已送審 + 綠界補件已重送（2026-06-29）**；換正式 key + 等兩邊審核通過仍待做 | 🔨 進行中（PM-75，待審） |
 | **⑥ 更好用** | UX 優化 + 多模式 | 六種模式（錄製/回溯/截圖/即時監控/鍵盤/終端機CLI）+ 截圖三模式 + 即時字幕雙區 + 跨頁錄製 + 編輯頁時間軸標記 + AI精簡/校正 + 乾淨toggle；上架前打磨（跨頁游標/CSP 相容/語音穩定度）| ✅ 完成（PM-27~61, 68~70） |
 | **⑦ 規模化** | 多語 + 企業 | 日韓越語音、跨境除錯鏈、企業自託管 | 待做 |
 
@@ -391,6 +391,25 @@ FOX = 創辦人 + 決策者 + 手動驗收
 - Extension：`popup.ts`（更新通知 + 升級鈕開結帳 + 管理訂閱/取消）、`popup.html`（更新通知 + 管理訂閱 CSS）。manifest 不變。
 - 產物：`bugezy-v0.1.0.zip`（gitignore，不進版控）。
 - ⚠ 技術債（Day 10 留）：① 正式上線要把 ECPAY 4 值換正式 key（HASH_KEY/IV 建議改 `wrangler secret`）；② **定期定額降級策略**目前「任一期失敗即降 free」，綠界實務是連續失敗 6 次才終止合約 → 上線前宜改寬限期/連續失敗 N 次（需加欄位記連續失敗數）；③ 取消後若綠界端取消失敗仍續扣，period-callback 成功會把 cancelled 翻回 paid → 宜「period-callback 成功時若現況 cancelled 則維持」；④ 測試環境只扣第一期，period-callback 需正式環境/後台模擬才驗得到；⑤ 升降級後用戶需重開 popup 才反映方案（無即時推播）；⑥ **PM-73 的 2 個 ALTER 待 FOX 跑**（未跑前已登入用戶打 plan/usage/cancel 會 500，extension 端靜默降級不崩）；⑦ PM-71 更新通知 + Day 9 三項打磨仍待瀏覽器實機驗收。
+
+---
+
+## §6i 第 5 代 Day 11（2026-06-29，PM-74~75）— 綠界補件 + 上架送審
+
+**目標**：補齊綠界審核要求的聯絡資訊、修付費用戶 UI bug，兩邊（Chrome Web Store / 綠界）送審。
+
+- **PM-74：首頁加聯絡資訊**（只改 `server/src/index.ts` 的 `HOMEPAGE_HTML`）— footer 內、隱私政策連結上方新增 **明顯的 `.contact-info` 紫框卡片**：聯絡我們 + 📧 `fox100039@gmail.com` + 📱 `0983-101-085`（`tel:` 可撥）+ 服務時間「週一至週五 09:00-18:00」。綠界要求販售網址聯絡資訊與註冊資料一致。已部署（`6dfd69ab`）+ urllib 驗證（卡片在 `/privacy` 連結上方）。
+- **PM-75：修付費用戶仍顯示升級提示**（只改 `extension/src/popup.ts` 的 `loadPlan()`）— plan 狀態判斷由「看 `plan.limits` 是否 null」改成**直接以 `plan.plan` 為準**（source of truth）三態分流：paid → ✨ + 隱藏升級提示 + 管理訂閱（可取消）；cancelled → ✨ + 隱藏升級提示 + 顯示到期日（隱藏取消連結）；free → 剩餘次數 + 升級提示。`npm run build` + `tsc` ✅，**zip 重打包** → `bugezy-v0.1.0.zip`（207.1 KB，popup.js 13.0→15.3kb）。
+
+### 上架/審核狀態（2026-06-29）
+- **Chrome Web Store**：已提交審查（zip `bugezy-v0.1.0.zip`）。
+- **綠界 ECPay**：補件（聯絡資訊）已重送，等候審核。
+- 兩邊審核通過 + 換綠界正式 key 後即可正式收錢上線。
+
+### 增量（Day 11）
+- Server：`HOMEPAGE_HTML` footer 加 `.contact-info`（PM-74）。
+- Extension：`popup.ts` `loadPlan()` 改以 `plan.plan` 分流（PM-75）；zip 重打包。
+- ⚠ 技術債（沿用 Day 10）：PM-73 的 2 個 ALTER 仍待 FOX 跑（PM-75 的付費 UI 效果依賴它 + 實際 paid/cancelled 用戶）；定期定額降級寬限期、cancelled 被 period-callback 翻回 paid、報告過期清理、rewind/mcp 用量前端、`/report/:id` 游標前處理；一批仍待瀏覽器實機驗收（更新通知、跨頁游標、GitHub 錄製、語音、完整刷卡/取消、付費 UI）。
 
 ---
 
