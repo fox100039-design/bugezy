@@ -227,6 +227,11 @@ const HOMEPAGE_HTML = `<!DOCTYPE html>
     .plan-cta:hover { background:#6d28d9; }
     footer { border-top:1px solid #2a2a3e; padding:28px 0; text-align:center; color:#888; font-size:13px; margin-top:24px; }
     footer a { margin:0 6px; }
+    /* PM-74：聯絡資訊（綠界審核要求，明顯可見） */
+    .contact-info { max-width:440px; margin:0 auto 20px; padding:20px 22px; background:#1a1a2e; border:1px solid #7c3aed; border-radius:12px; }
+    .contact-info h3 { font-size:17px; color:#a78bfa; margin:0 0 12px; }
+    .contact-info p { margin:6px 0; font-size:15px; color:#e0e0e0; }
+    .contact-info a { color:#a78bfa; margin:0; }
   </style>
 </head>
 <body>
@@ -294,7 +299,12 @@ const HOMEPAGE_HTML = `<!DOCTYPE html>
   </section>
 
   <footer>
-    <div>聯絡我們：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
+    <div class="contact-info">
+      <h3>聯絡我們</h3>
+      <p>📧 Email：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></p>
+      <p>📱 電話：<a href="tel:+886983101085">0983-101-085</a></p>
+      <p>服務時間：週一至週五 09:00-18:00</p>
+    </div>
     <div style="margin-top:8px;"><a href="/guide">使用指南</a> | <a href="/faq">常見問題</a> | <a href="/privacy">隱私政策</a></div>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy · 亞洲平價 MCP 語音除錯工具</div>
   </footer>
