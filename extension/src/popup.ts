@@ -54,10 +54,12 @@ const userName = $('userName');
 // PM-63：用量上限提示
 const upgradeHint = $('upgradeHint');
 const upgradeBtn = $<HTMLButtonElement>('upgradeBtn');
-// PM-73：付費用戶管理訂閱
-const manageSubscription = $('manageSubscription');
-const subStatus = $('subStatus');
+// PM-73/75c：付費 / 已取消狀態徽章（三態互斥）
+const paidBadge = $('paidBadge');
+const cancelledBadge = $('cancelledBadge');
+const expiresDate = $('expiresDate');
 const cancelSubBtn = $<HTMLAnchorElement>('cancelSubBtn');
+const resubBtn = $<HTMLAnchorElement>('resubBtn');
 
 // PM-49：鍵盤模式 toggle（關閉語音）— 狀態存 chrome.storage.local
 const keyboardMode = $<HTMLInputElement>('keyboardMode');
@@ -411,25 +413,24 @@ async function loadPlan(session: Session) {
     if (!res.ok) return; // 表未建/未授權等 → 不顯示用量，按鈕維持原樣（非阻擋）
     const plan = (await res.json()) as PlanInfo;
 
+    // 三態互斥：先全部收起，再依 plan 開對應的一個
+    upgradeHint.classList.add('hidden');
+    paidBadge.classList.add('hidden');
+    cancelledBadge.classList.add('hidden');
+
     if (plan.plan === 'paid') {
-      // 付費版 → 無限功能、隱藏升級提示、顯示管理訂閱（可取消）
+      // 付費版 → 無限功能 + ✨付費版徽章（含取消訂閱）
       setRecordDesc('✨ 無限次');
       startBtn.disabled = false;
-      upgradeHint.classList.add('hidden');
-      subStatus.textContent = '✨ 付費版';
-      cancelSubBtn.classList.remove('hidden');
-      manageSubscription.classList.remove('hidden');
+      paidBadge.classList.remove('hidden');
     } else if (plan.plan === 'cancelled') {
-      // 已取消未到期 → 仍享無限功能、隱藏升級提示、顯示到期日（不再顯示取消連結）
+      // 已取消未到期 → 仍享無限功能 + 到期日 + 重新訂閱
       setRecordDesc('✨ 無限次');
       startBtn.disabled = false;
-      upgradeHint.classList.add('hidden');
-      subStatus.textContent = `已取消，可用到 ${fmtDate(plan.expires_at)}`;
-      cancelSubBtn.classList.add('hidden');
-      manageSubscription.classList.remove('hidden');
+      expiresDate.textContent = fmtDate(plan.expires_at);
+      cancelledBadge.classList.remove('hidden');
     } else {
-      // 免費版（含未知狀態 fallback）→ 顯示剩餘次數 + 升級提示
-      manageSubscription.classList.add('hidden');
+      // 免費版（含未知狀態 fallback）→ 剩餘次數 + 升級提示
       const rec = plan.limits?.recording;
       if (rec) {
         const remain = rec.max - rec.used;
@@ -448,15 +449,19 @@ async function loadPlan(session: Session) {
   }
 }
 
-upgradeBtn.addEventListener('click', async () => {
-  // PM-72：開新分頁到綠界結帳（帶 user_id）；未登入則退回首頁價目表
+/** 開新分頁到綠界結帳（帶 user_id）；未登入則退回首頁價目表。 */
+async function openCheckout() {
   const session = await checkAuth();
   if (session) {
     chrome.tabs.create({ url: `${API_BASE}/checkout?user_id=${encodeURIComponent(session.user_id)}` });
   } else {
     chrome.tabs.create({ url: `${API_BASE}/#pricing` });
   }
-});
+}
+
+// PM-72：升級；PM-75c：cancelled 用戶重新訂閱——皆走綠界結帳
+upgradeBtn.addEventListener('click', () => void openCheckout());
+resubBtn.addEventListener('click', () => void openCheckout());
 
 // PM-73：取消訂閱（二次確認 → POST /api/user/cancel）
 cancelSubBtn.addEventListener('click', async () => {

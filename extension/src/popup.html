@@ -148,17 +148,18 @@
       }
       .btn-upgrade { width: auto; margin: 0; padding: 5px 14px; font-size: 12px; background: #f59e0b; }
 
-      /* PM-73：付費用戶管理訂閱 / 已取消狀態 */
-      .manage-sub {
-        display: flex; align-items: center; justify-content: space-between; gap: 8px;
-        margin: 8px 0; padding: 10px 12px; border-radius: 8px;
-        background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.35);
-        color: #6ee7b7; font-size: 12px;
+      /* PM-75c：付費 / 已取消 兩種狀態徽章（三態互斥：free→upgradeHint、paid→paidBadge、cancelled→cancelledBadge） */
+      .paid-badge {
+        display: flex; justify-content: space-between; align-items: center;
+        background: rgba(124, 58, 237, 0.15); border: 1px solid #7c3aed; border-radius: 8px;
+        padding: 8px 12px; font-size: 13px; color: #a78bfa; margin-bottom: 8px;
       }
-      #subStatus { flex: 1; }
-      .cancel-link {
-        flex-shrink: 0; color: #8b8fa3; font-size: 12px; text-decoration: underline; cursor: pointer;
+      .cancelled-badge {
+        display: flex; justify-content: space-between; align-items: center; gap: 8px;
+        background: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; border-radius: 8px;
+        padding: 8px 12px; font-size: 13px; color: #f59e0b; margin-bottom: 8px;
       }
+      .cancel-link { flex-shrink: 0; color: #888; font-size: 12px; cursor: pointer; text-decoration: underline; }
       .cancel-link:hover { color: #ef4444; }
 
       /* PM-71：版本更新通知 */
@@ -246,9 +247,13 @@
         <span>升級付費版 NT$80/月 → 解鎖無限次</span>
         <button id="upgradeBtn" class="btn-upgrade">升級</button>
       </div>
-      <div id="manageSubscription" class="manage-sub hidden">
-        <span id="subStatus">✨ 付費版</span>
+      <div id="paidBadge" class="paid-badge hidden">
+        <span>✨ 付費版</span>
         <a id="cancelSubBtn" class="cancel-link">取消訂閱</a>
+      </div>
+      <div id="cancelledBadge" class="cancelled-badge hidden">
+        <span>已取消訂閱，可用到 <span id="expiresDate"></span></span>
+        <a id="resubBtn" class="cancel-link">重新訂閱</a>
       </div>
       <div class="mode-toggle">
         <label class="toggle-row">
