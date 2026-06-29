@@ -20,3 +20,7 @@ bucket_name = "bugezy-reports"
 # Workers AI（PM-25：語音記錄 AI 精簡）
 [ai]
 binding = "AI"
+
+# PM-79：Cron 保活 Supabase（免費版閒置 7 天會自動暫停 DB），每天 03:00 UTC ping 一次
+[triggers]
+crons = ["0 3 * * *"]

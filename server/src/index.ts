@@ -1454,6 +1454,19 @@ export default {
       return json({ error: err instanceof Error ? err.message : String(err) }, 500);
     }
   },
+
+  // PM-79：Cron 保活 Supabase（免費版閒置 7 天會自動暫停 DB）。每天 ping 一次。
+  async scheduled(_event: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
+    try {
+      const { count, error } = await supa(env)
+        .from('users')
+        .select('user_id', { count: 'exact', head: true });
+      if (error) console.error('[Cron] Supabase keepalive failed:', error.message);
+      else console.log(`[Cron] Supabase keepalive OK: ${count ?? 0} users`);
+    } catch (err) {
+      console.error('[Cron] Supabase keepalive failed:', err);
+    }
+  },
 };
 
 // POST /api/reports — 上傳報告
@@ -2180,16 +2193,43 @@ function createMcpServer(env: Env): McpServer {
     return { content: [{ type: 'text' as const, text: text + formatTokenFooter(est) }] };
   };
 
-  // Tool 1: list_reports
+  // Tool 1: list_reports（PM-78：需 user_email 過濾，只回該使用者的報告）
   server.tool(
     'list_reports',
-    '列出最近的 Bug 報告（metadata）。List recent bug reports.',
-    { limit: z.number().min(1).max(50).optional(), url: z.string().optional() },
+    '列出某使用者的 Bug 報告（需提供 user_email）。List a user\'s bug reports — requires user_email.',
+    {
+      user_email: z
+        .string()
+        .optional()
+        .describe('使用者 email；只回傳該 email 的報告。未提供則不回任何報告（安全預設）。'),
+      limit: z.number().min(1).max(50).optional(),
+      url: z.string().optional(),
+    },
     async (args) => {
+      // PM-78：未提供 email → 不回報告（安全預設），回提示
+      if (!args.user_email) {
+        return txtWithTokens(
+          {
+            message:
+              '請提供 user_email 參數以查詢你的報告。例如：list_reports(user_email: "you@example.com")',
+          },
+          'list_reports',
+        );
+      }
+      // 以 email 查 user_id
+      const { data: user, error: uErr } = await supabase()
+        .from('users')
+        .select('user_id')
+        .eq('email', args.user_email)
+        .maybeSingle();
+      if (uErr) return txt(`查詢失敗: ${uErr.message}`);
+      if (!user) return txtWithTokens([], 'list_reports'); // 查無此 email → 回空
+
       const limit = Math.min(Math.max(args.limit ?? 10, 1), 50);
       let query = supabase()
         .from('reports')
         .select(META_COLS)
+        .eq('user_id', (user as { user_id: string }).user_id)
         .order('created_at', { ascending: false })
         .limit(limit);
       if (args.url) query = query.ilike('url', `%${args.url}%`);
