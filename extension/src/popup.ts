@@ -401,7 +401,8 @@ function setRecordDesc(text: string) {
   if (desc) desc.textContent = text;
 }
 
-// PM-63：查方案 → 免費版顯示剩餘錄製次數 + 升級提示；付費版顯示無限
+// PM-63/75：查方案 → 依 plan 狀態（source of truth）控制 UI。
+// paid：隱藏升級提示 + ✨ + 管理訂閱（含取消）；cancelled：隱藏升級提示 + 顯示到期日；free：剩餘次數 + 升級提示。
 async function loadPlan(session: Session) {
   try {
     const res = await fetch(`${API_BASE}/api/user/plan`, {
@@ -409,32 +410,38 @@ async function loadPlan(session: Session) {
     });
     if (!res.ok) return; // 表未建/未授權等 → 不顯示用量，按鈕維持原樣（非阻擋）
     const plan = (await res.json()) as PlanInfo;
-    if (plan.limits) {
-      // 免費版：顯示剩餘錄製次數 + 升級提示
-      const rec = plan.limits.recording;
-      const remain = rec.max - rec.used;
-      if (remain > 0) {
-        setRecordDesc(`剩 ${remain} 次`);
-        startBtn.disabled = false;
-      } else {
-        setRecordDesc('已用完（升級解鎖）');
-        startBtn.disabled = true;
-      }
-      upgradeHint.classList.remove('hidden');
-      manageSubscription.classList.add('hidden');
-    } else {
-      // 付費版（paid）或已取消未到期（cancelled）→ 無限功能 + 管理訂閱區
+
+    if (plan.plan === 'paid') {
+      // 付費版 → 無限功能、隱藏升級提示、顯示管理訂閱（可取消）
       setRecordDesc('✨ 無限次');
       startBtn.disabled = false;
       upgradeHint.classList.add('hidden');
-      if (plan.plan === 'cancelled') {
-        subStatus.textContent = `已取消，可用到 ${fmtDate(plan.expires_at)}`;
-        cancelSubBtn.classList.add('hidden'); // 已取消，不再顯示取消連結
-      } else {
-        subStatus.textContent = '✨ 付費版';
-        cancelSubBtn.classList.remove('hidden');
-      }
+      subStatus.textContent = '✨ 付費版';
+      cancelSubBtn.classList.remove('hidden');
       manageSubscription.classList.remove('hidden');
+    } else if (plan.plan === 'cancelled') {
+      // 已取消未到期 → 仍享無限功能、隱藏升級提示、顯示到期日（不再顯示取消連結）
+      setRecordDesc('✨ 無限次');
+      startBtn.disabled = false;
+      upgradeHint.classList.add('hidden');
+      subStatus.textContent = `已取消，可用到 ${fmtDate(plan.expires_at)}`;
+      cancelSubBtn.classList.add('hidden');
+      manageSubscription.classList.remove('hidden');
+    } else {
+      // 免費版（含未知狀態 fallback）→ 顯示剩餘次數 + 升級提示
+      manageSubscription.classList.add('hidden');
+      const rec = plan.limits?.recording;
+      if (rec) {
+        const remain = rec.max - rec.used;
+        if (remain > 0) {
+          setRecordDesc(`剩 ${remain} 次`);
+          startBtn.disabled = false;
+        } else {
+          setRecordDesc('已用完（升級解鎖）');
+          startBtn.disabled = true;
+        }
+      }
+      upgradeHint.classList.remove('hidden');
     }
   } catch {
     /* API 不通就維持預設按鈕 */
