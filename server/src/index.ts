@@ -509,6 +509,14 @@ const GUIDE_PAGE_HTML = `<!DOCTYPE html>
     display: inline-block; margin-top: 4px; padding: 4px 8px; border-radius: 6px;
     background: #0f0f1a; color: #7ee0c5; font-family: ui-monospace, monospace; word-break: break-all;
   }
+  /* PM-77：MCP 設定（警示 + 各工具步驟 + JSON 範例） */
+  .mcp-warn { margin-top: 10px; padding: 10px 12px; border-radius: 8px;
+    background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.45); color: #fcd34d; font-size: 13px; }
+  .mcp-tool { margin-top: 12px; }
+  .mcp-tool .tname { font-weight: 700; color: #c4b5fd; font-size: 13px; }
+  .mcp-tool .tstep { color: #ccc; font-size: 13px; margin-top: 2px; }
+  .mcp-box pre { margin: 6px 0 0; padding: 10px 12px; background: #0f0f1a; border-radius: 6px;
+    color: #7ee0c5; font-family: ui-monospace, monospace; font-size: 12px; overflow-x: auto; white-space: pre; }
   .tips { margin: 10px 0 0; padding-left: 22px; }
   .tips li { margin: 6px 0; color: #ccc; }
   a { color: #a78bfa; }
@@ -599,9 +607,25 @@ const GUIDE_PAGE_HTML = `<!DOCTYPE html>
     <p style="margin-top:12px;"><b style="color:#c4b5fd;">方法二：分享報告連結</b><br />
       上傳後會產生報告連結，傳給同事或貼到 Issue</p>
     <div class="mcp-box">
-      <b>MCP 設定</b>（任何支援 MCP 的 AI 工具都能用）：<br />
-      URL：<code>https://bugezy-api.bugezy-api.workers.dev/mcp</code><br />
-      支援：Claude Desktop / Cursor / VS Code / Zed / Codex 等
+      <b>🔌 MCP 連接設定</b><br />
+      BugEzy MCP 網址（所有工具通用）：<br />
+      <code>https://bugezy-api.bugezy-api.workers.dev/mcp</code>
+      <div class="mcp-warn">⚠ 注意：這個網址<b>不能用瀏覽器開</b>，它是專給 AI 工具連接的協議。用瀏覽器開只會看到一段錯誤訊息，屬正常現象——請依下方步驟在 AI 工具裡設定。</div>
+
+      <div class="mcp-tool"><div class="tname">Claude.ai</div><div class="tstep">Settings → Connectors → Add → 貼上網址 → 連接</div></div>
+      <div class="mcp-tool"><div class="tname">Claude Desktop</div><div class="tstep">編輯 claude_desktop_config.json，加入：</div><pre>{
+  "mcpServers": {
+    "bugezy": {
+      "url": "https://bugezy-api.bugezy-api.workers.dev/mcp"
+    }
+  }
+}</pre></div>
+      <div class="mcp-tool"><div class="tname">Cursor</div><div class="tstep">Settings → MCP → Add Server → 貼上網址</div></div>
+      <div class="mcp-tool"><div class="tname">VS Code</div><div class="tstep">Settings → 搜尋 MCP → Add Server → 貼上網址</div></div>
+      <div class="mcp-tool"><div class="tname">Claude Code（終端機）</div><div class="tstep">執行：<code>claude mcp add --transport http bugezy https://bugezy-api.bugezy-api.workers.dev/mcp</code></div></div>
+      <div class="mcp-tool"><div class="tname">Zed</div><div class="tstep">設定檔加 context_servers</div></div>
+
+      <div style="margin-top:14px;color:#ccc;font-size:13px;">連接成功後，直接問 AI：<br /><b style="color:#a78bfa;">「讀我最新的 BugEzy 報告，告訴我怎麼修」</b><br />AI 就會透過 MCP 自動讀取你的 Bug 報告。</div>
     </div>
   </div>
 
