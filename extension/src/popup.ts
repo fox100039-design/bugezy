@@ -6,6 +6,7 @@ import {
   KEYBOARD_MODE_KEY,
   LAST_SCREENSHOT_KEY,
   MIC_KEY,
+  MIC_MODE_KEY,
   MIC_PERMISSION_KEY,
   MONITOR_MODE_KEY,
   USER_PLAN_KEY,
@@ -97,9 +98,20 @@ allowScreenshots.addEventListener('change', () => {
 // PM-86：麥克風 toggle（標題列）— offscreen 錄音 + Groq Whisper 架構；預設開啟，狀態存 storage
 const micToggle = $<HTMLInputElement>('micToggle');
 const micIcon = $('micIcon');
+// PM-91：付費版語音模式（即時字幕 / 精準轉錄）— 免費版隱藏
+const micMode = $('micMode');
+const modeBtns = Array.from(document.querySelectorAll<HTMLButtonElement>('.mic-mode-btn'));
+let micPlan = 'free';
+
+function updateMicModeUI() {
+  // 付費版（paid/cancelled）+ 麥克風開啟才顯示模式選擇
+  micMode.style.display = micPlan !== 'free' && micToggle.checked ? 'flex' : 'none';
+}
 function updateMicUI() {
   micIcon.style.opacity = micToggle.checked ? '1' : '0.3';
+  updateMicModeUI();
 }
+
 chrome.storage.local.get(MIC_KEY, (r) => {
   micToggle.checked = r[MIC_KEY] === true; // PM-90：預設關閉，要明確開過才是 ON
   updateMicUI();
@@ -118,6 +130,20 @@ micToggle.addEventListener('change', async () => {
   }
   await chrome.storage.local.set({ [MIC_KEY]: micToggle.checked });
   updateMicUI();
+});
+
+// PM-91：模式按鈕高亮 + 儲存（付費版預設精準轉錄 whisper）
+chrome.storage.local.get([USER_PLAN_KEY, MIC_MODE_KEY], (r) => {
+  micPlan = (r[USER_PLAN_KEY] as string) || 'free';
+  const mode = (r[MIC_MODE_KEY] as string) || 'whisper';
+  modeBtns.forEach((btn) => btn.classList.toggle('active', btn.dataset.mode === mode));
+  updateMicModeUI();
+});
+modeBtns.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    modeBtns.forEach((b) => b.classList.toggle('active', b === btn));
+    void chrome.storage.local.set({ [MIC_MODE_KEY]: btn.dataset.mode });
+  });
 });
 
 // PM-50：⏪ 回溯 30 秒 — 打包背景緩存（不需先按錄製）
@@ -453,6 +479,9 @@ async function loadPlan(session: Session) {
     const plan = (await res.json()) as PlanInfo;
     // PM-87：持久化 plan 供 background/content 路由語音引擎（free→Web Speech、paid/cancelled→Groq Whisper）
     void chrome.storage.local.set({ [USER_PLAN_KEY]: plan.plan });
+    // PM-91：更新模式選擇可見性（付費版才顯示）
+    micPlan = plan.plan;
+    updateMicModeUI();
 
     // 三態互斥：先全部收起，再依 plan 開對應的一個
     upgradeHint.classList.add('hidden');

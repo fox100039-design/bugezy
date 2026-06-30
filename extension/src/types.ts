@@ -116,7 +116,9 @@ export type ControlMessage =
   // PM-88：麥克風授權頁回報授權完成
   | { type: 'MIC_PERMISSION_GRANTED' }
   // PM-89：popup 開麥克風 toggle 時請求授權（在 toggle 觸發，不在錄製時）
-  | { type: 'REQUEST_MIC_PERMISSION' };
+  | { type: 'REQUEST_MIC_PERMISSION' }
+  // PM-91：Whisper 模式停止錄製 → 通知頁面顯示「轉錄中」
+  | { type: 'WHISPER_TRANSCRIBING' };
 
 /** background → popup 的狀態回應 */
 export interface StateResponse {
@@ -145,7 +147,8 @@ export interface InjectCommand {
   dir: 'to-inject';
   cmd: 'START' | 'STOP' | 'REWIND' | 'GET_LIVE_ERRORS' | 'SHOW_MONITOR' | 'HIDE_MONITOR';
   keyboardMode?: boolean;
-  micEnabled?: boolean; // PM-87：是否啟動頁面 SpeechRecognition（免費版+mic→true；付費版/mic off→false）
+  micEnabled?: boolean; // PM-87：是否啟動頁面 SpeechRecognition（即時字幕模式→true；whisper/mic off→false）
+  whisperMode?: boolean; // PM-91：付費版 Whisper 模式 → 顯示「錄音中」bar，不啟 SpeechRecognition
 }
 
 /** inject → content：狀態回報（握手 / 開始確認）與打包資料 */
@@ -209,6 +212,9 @@ export const MIC_KEY = 'bugezy:mic-enabled';
 
 /** PM-88：是否已完成一次麥克風授權（授給 chrome-extension://，offscreen getUserMedia 才不會靜默失敗） */
 export const MIC_PERMISSION_KEY = 'bugezy:mic-permitted';
+
+/** PM-91：付費版語音模式 'realtime'（即時字幕/Web Speech）| 'whisper'（精準轉錄/Groq），預設 whisper */
+export const MIC_MODE_KEY = 'bugezy:mic-mode';
 
 /** PM-86：offscreen 錄音 → /api/transcribe 轉錄結果暫存（PM-87 錄製 payload 讀回） */
 export const VOICE_TRANSCRIPT_KEY = 'bugezy:voice-transcript';

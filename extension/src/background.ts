@@ -10,6 +10,7 @@ import {
   BUFFER_VOICE_KEY,
   LAST_SCREENSHOT_KEY,
   MIC_KEY,
+  MIC_MODE_KEY,
   MIC_PERMISSION_KEY,
   SESSION_KEY,
   STATE_KEY,
@@ -178,14 +179,15 @@ async function startRecording(): Promise<StateResponse> {
   });
   // PM-87：付費版 + 麥克風開啟 → 用 offscreen 錄音（Groq Whisper，一次授權通用，不彈頁面授權橫幅）。
   // 免費版則由 inject.ts 的 SpeechRecognition 自行啟動（content 依 plan 決定 micEnabled）。
-  if (await isPaidMicSession()) {
+  // PM-91：只有付費版「精準轉錄(whisper)」模式才走 offscreen 錄音；即時字幕由 inject 處理
+  if ((await getMicMode()) === 'whisper') {
     try {
-      const ready = await ensureMicReady(); // PM-88：首次未授權 → 開授權頁，本次不錄語音
+      const ready = await ensureMicReady(); // PM-88/89：未授權 → 跳過語音（授權改由 popup toggle 觸發）
       if (ready) {
         await chrome.runtime.sendMessage({ type: 'OFFSCREEN_START_MIC' });
-        blog('語音引擎：Groq Whisper（付費版）');
+        blog('語音引擎：Groq Whisper（付費版精準轉錄）');
       } else {
-        blog('首次麥克風授權中，本次不錄語音（授權完成後下次生效）');
+        blog('麥克風未授權，本次不錄語音（請在 popup 開麥克風 toggle 授權）');
       }
     } catch (err) {
       blog('offscreen 麥克風啟動失敗（不阻擋錄製）', err);
@@ -379,12 +381,13 @@ async function ensureMicReady(): Promise<boolean> {
   return true;
 }
 
-/** PM-87：本次錄製是否走 offscreen + Groq Whisper（付費版且麥克風開啟）。 */
-async function isPaidMicSession(): Promise<boolean> {
-  const r = await chrome.storage.local.get([MIC_KEY, USER_PLAN_KEY]);
-  const micEnabled = r[MIC_KEY] === true; // PM-90：預設關閉
+/** PM-91：本次錄製的語音模式。'off'（mic 關）/'realtime'（即時字幕 Web Speech）/'whisper'（offscreen+Groq）。 */
+async function getMicMode(): Promise<'off' | 'realtime' | 'whisper'> {
+  const r = await chrome.storage.local.get([MIC_KEY, USER_PLAN_KEY, MIC_MODE_KEY]);
+  if (r[MIC_KEY] !== true) return 'off'; // PM-90：預設關閉
   const plan = (r[USER_PLAN_KEY] as string) || 'free';
-  return micEnabled && plan !== 'free'; // paid / cancelled（到期前仍享付費）皆走 Whisper
+  if (plan === 'free') return 'realtime'; // 免費版只有即時字幕
+  return (r[MIC_MODE_KEY] as string) === 'realtime' ? 'realtime' : 'whisper'; // 付費版預設精準轉錄
 }
 
 /** PM-86/87：停 offscreen 錄音 → 送 /api/transcribe（Groq Whisper）→ 存 VOICE_TRANSCRIPT_KEY，回轉錄結果。 */
@@ -430,12 +433,26 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summ
         case 'START_RECORDING':
           sendResponse(await startRecording());
           break;
-        case 'STOP_RECORDING':
-          // PM-87：付費版先停 offscreen 並轉錄（存 VOICE_TRANSCRIPT_KEY）→ 再停錄製打包，
-          // 讓隨後的 RECORDING_DONE 合併時能讀到 Whisper 結果。
-          if (await isPaidMicSession()) await stopMicAndTranscribe();
+        case 'STOP_RECORDING': {
+          // PM-87/91：Whisper 模式 → 先通知頁面顯示「轉錄中」，停 offscreen 並轉錄（存 VOICE_TRANSCRIPT_KEY）
+          // → 再停錄製打包，讓隨後的 RECORDING_DONE 合併時能讀到 Whisper 結果。
+          if ((await getMicMode()) === 'whisper') {
+            const st = await getState();
+            const tid = st.tabId ?? (await getActiveTab())?.id;
+            if (tid) {
+              try {
+                await chrome.tabs.sendMessage(tid, {
+                  type: 'WHISPER_TRANSCRIBING',
+                } satisfies ControlMessage);
+              } catch {
+                /* 頁面可能已關，忽略 */
+              }
+            }
+            await stopMicAndTranscribe();
+          }
           sendResponse(await stopRecording());
           break;
+        }
         case 'CLEAR_RECORDING':
           sendResponse(await clearRecording());
           break;

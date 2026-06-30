@@ -320,6 +320,32 @@ function main() {
     captionBar = bar;
   }
 
+  /** PM-91：付費 Whisper 模式的「錄音中」反饋 bar（紅色脈衝點，不啟 SpeechRecognition；停止後轉錄）。
+   *  text span 用 id `bugezy-caption-text`，停止時 content 收 WHISPER_TRANSCRIBING 可改字。 */
+  function showWhisperCaptionBar() {
+    document.getElementById('bugezy-live-caption')?.remove();
+    const bar = document.createElement('div');
+    bar.id = 'bugezy-live-caption';
+    bar.style.cssText =
+      'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);z-index:2147483647;pointer-events:none;background:rgba(0,0,0,0.85);color:#fff;padding:12px 28px;border-radius:12px;font-size:18px;font-family:system-ui,sans-serif;display:flex;align-items:center;gap:10px;';
+    const dot = document.createElement('span');
+    dot.style.cssText =
+      'width:12px;height:12px;border-radius:50%;background:#ef4444;animation:bugezy-pulse 1.5s infinite;flex-shrink:0;';
+    bar.appendChild(dot);
+    const text = document.createElement('span');
+    text.id = 'bugezy-caption-text';
+    text.textContent = '🎙️ Whisper 錄音中…（停止後自動轉錄）';
+    bar.appendChild(text);
+    if (!document.getElementById('bugezy-pulse-style')) {
+      const style = document.createElement('style');
+      style.id = 'bugezy-pulse-style';
+      style.textContent = '@keyframes bugezy-pulse{0%,100%{opacity:1}50%{opacity:0.3}}';
+      document.head.appendChild(style);
+    }
+    document.body.appendChild(bar);
+    captionBar = bar;
+  }
+
   /** PM-30：更新字幕文字只動 textSpan，保留 🔄 按鈕不被清掉 */
   function setCaptionText(text: string) {
     const el = document.getElementById('bugezy-caption-text');
@@ -616,7 +642,11 @@ function main() {
   };
 
   // ── 控制：開始 / 停止 ─────────────────────────────────────
-  function startRecording(options?: { keyboardMode?: boolean; micEnabled?: boolean }): boolean {
+  function startRecording(options?: {
+    keyboardMode?: boolean;
+    micEnabled?: boolean;
+    whisperMode?: boolean;
+  }): boolean {
     if (recording) {
       blog('START 重複呼叫，已在錄製中');
       return stopRrweb !== null;
@@ -671,9 +701,14 @@ function main() {
       blog('鍵盤模式：跳過語音初始化');
       voiceActive = false;
       showKeyboardModeBar();
+    } else if (options?.whisperMode) {
+      // PM-91：付費 Whisper 模式 — 顯示「錄音中」bar（不啟 SpeechRecognition；offscreen 負責錄音、停止後轉錄）
+      blog('Whisper 模式：顯示錄音中 bar，不啟頁面語音');
+      voiceActive = false;
+      showWhisperCaptionBar();
     } else if (options?.micEnabled === false) {
-      // PM-87：付費版（語音由 offscreen + Groq Whisper 處理）或麥克風關閉 → 不啟動頁面 SpeechRecognition、不彈授權橫幅
-      blog('語音由 offscreen 處理或麥克風已關閉，跳過頁面 SpeechRecognition');
+      // PM-87/90：麥克風關閉 → 不啟動頁面 SpeechRecognition、不彈授權橫幅、不顯字幕
+      blog('麥克風已關閉，跳過頁面語音');
       voiceActive = false;
     } else {
       showCaptionBar(); // PM-24：錄製中浮動字幕
@@ -886,10 +921,15 @@ function main() {
     if (!data || data.source !== BUGEZY_SOURCE || data.dir !== 'to-inject') return;
 
     if (data.cmd === 'START') {
-      blog('收到 START 指令', data.keyboardMode ? '(鍵盤模式)' : '', `micEnabled=${data.micEnabled !== false}`);
+      blog(
+        '收到 START 指令',
+        data.keyboardMode ? '(鍵盤模式)' : '',
+        `micEnabled=${data.micEnabled === true} whisperMode=${data.whisperMode === true}`,
+      );
       const rrwebOk = startRecording({
         keyboardMode: data.keyboardMode === true,
         micEnabled: data.micEnabled,
+        whisperMode: data.whisperMode === true,
       });
       post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'STARTED', rrwebOk });
     } else if (data.cmd === 'STOP') {
