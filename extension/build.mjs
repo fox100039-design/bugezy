@@ -21,6 +21,7 @@ function copyStatic() {
   cpSync(resolve(root, 'src/annotate.html'), resolve(outdir, 'annotate.html'));
   cpSync(resolve(root, 'src/edit-report.html'), resolve(outdir, 'edit-report.html'));
   cpSync(resolve(root, 'src/offscreen.html'), resolve(outdir, 'offscreen.html')); // PM-86：麥克風錄音
+  cpSync(resolve(root, 'src/mic-permission.html'), resolve(outdir, 'mic-permission.html')); // PM-88：授權頁
   // PM-76：擴充圖示（manifest icons + action.default_icon 引用）
   cpSync(resolve(root, 'icons'), resolve(outdir, 'icons'), { recursive: true });
 }
@@ -45,6 +46,7 @@ const options = {
     annotate: resolve(root, 'src/annotate.ts'),
     'edit-report': resolve(root, 'src/edit-report.ts'),
     offscreen: resolve(root, 'src/offscreen.ts'), // PM-86：麥克風錄音
+    'mic-permission': resolve(root, 'src/mic-permission.ts'), // PM-88：麥克風授權頁
   },
   outdir,
   bundle: true,

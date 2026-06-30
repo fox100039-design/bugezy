@@ -10,6 +10,7 @@ import {
   BUFFER_VOICE_KEY,
   LAST_SCREENSHOT_KEY,
   MIC_KEY,
+  MIC_PERMISSION_KEY,
   SESSION_KEY,
   STATE_KEY,
   STORAGE_KEY,
@@ -179,9 +180,13 @@ async function startRecording(): Promise<StateResponse> {
   // 免費版則由 inject.ts 的 SpeechRecognition 自行啟動（content 依 plan 決定 micEnabled）。
   if (await isPaidMicSession()) {
     try {
-      await ensureOffscreen();
-      await chrome.runtime.sendMessage({ type: 'OFFSCREEN_START_MIC' });
-      blog('語音引擎：Groq Whisper（付費版）');
+      const ready = await ensureMicReady(); // PM-88：首次未授權 → 開授權頁，本次不錄語音
+      if (ready) {
+        await chrome.runtime.sendMessage({ type: 'OFFSCREEN_START_MIC' });
+        blog('語音引擎：Groq Whisper（付費版）');
+      } else {
+        blog('首次麥克風授權中，本次不錄語音（授權完成後下次生效）');
+      }
     } catch (err) {
       blog('offscreen 麥克風啟動失敗（不阻擋錄製）', err);
     }
@@ -360,6 +365,18 @@ async function ensureOffscreen(): Promise<void> {
     reasons: [chrome.offscreen.Reason.USER_MEDIA],
     justification: 'BugEzy 麥克風錄音（語音 Bug 描述）',
   });
+}
+
+/** PM-88：確保麥克風可用。首次（未授權）開可見授權頁觸發一次授權（offscreen 隱藏頁不會彈），回 false
+ *  本次不錄語音；已授權則確保 offscreen 存在，回 true。 */
+async function ensureMicReady(): Promise<boolean> {
+  const store = await chrome.storage.local.get(MIC_PERMISSION_KEY);
+  if (!store[MIC_PERMISSION_KEY]) {
+    await chrome.tabs.create({ url: 'mic-permission.html' });
+    return false; // 等使用者授權完成，下次錄製才走 offscreen
+  }
+  await ensureOffscreen();
+  return true;
 }
 
 /** PM-87：本次錄製是否走 offscreen + Groq Whisper（付費版且麥克風開啟）。 */
@@ -611,6 +628,13 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summ
         // PM-86：停止錄音 → 取音訊 → 送 /api/transcribe 轉錄 → 存 storage
         case 'MIC_STOP': {
           sendResponse(await stopMicAndTranscribe());
+          break;
+        }
+        // PM-88：麥克風授權頁回報授權完成 → 記錄，之後直接走 offscreen 不再開授權頁
+        case 'MIC_PERMISSION_GRANTED': {
+          await chrome.storage.local.set({ [MIC_PERMISSION_KEY]: true });
+          blog('麥克風授權完成');
+          sendResponse({ ok: true });
           break;
         }
         default:

@@ -112,7 +112,9 @@ export type ControlMessage =
   | { type: 'MIC_START' }
   | { type: 'MIC_STOP' }
   | { type: 'OFFSCREEN_START_MIC' }
-  | { type: 'OFFSCREEN_STOP_MIC' };
+  | { type: 'OFFSCREEN_STOP_MIC' }
+  // PM-88：麥克風授權頁回報授權完成
+  | { type: 'MIC_PERMISSION_GRANTED' };
 
 /** background → popup 的狀態回應 */
 export interface StateResponse {
@@ -202,6 +204,9 @@ export const ALLOW_SCREENSHOT_KEY = 'bugezy:allow-screenshot-images';
 
 /** PM-86：popup 麥克風 toggle（offscreen 錄音 + Groq Whisper 架構）開關，預設開啟 */
 export const MIC_KEY = 'bugezy:mic-enabled';
+
+/** PM-88：是否已完成一次麥克風授權（授給 chrome-extension://，offscreen getUserMedia 才不會靜默失敗） */
+export const MIC_PERMISSION_KEY = 'bugezy:mic-permitted';
 
 /** PM-86：offscreen 錄音 → /api/transcribe 轉錄結果暫存（PM-87 錄製 payload 讀回） */
 export const VOICE_TRANSCRIPT_KEY = 'bugezy:voice-transcript';

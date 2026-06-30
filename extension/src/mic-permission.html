@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<!-- PM-88：可見的麥克風授權頁（offscreen 是隱藏頁不會彈授權，改用此可見分頁觸發一次授權） -->
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <title>BugEzy 麥克風授權</title>
+  </head>
+  <body
+    style="background:#1a1a2e;color:#fff;font-family:system-ui,-apple-system,'Microsoft JhengHei',sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"
+  >
+    <div style="text-align:center;max-width:400px;">
+      <p style="font-size:48px;margin:0;">🎙️</p>
+      <h2>BugEzy 需要麥克風權限</h2>
+      <p style="color:#9aa3b2;">允許後即可用語音描述 Bug。<br />此授權只需一次，之後自動啟用。</p>
+      <p id="status" style="color:#3fb950;font-size:18px;">正在請求授權...</p>
+    </div>
+    <script type="module" src="mic-permission.js"></script>
+  </body>
+</html>
