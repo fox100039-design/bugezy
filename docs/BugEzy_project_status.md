@@ -1,6 +1,6 @@
 # BugEzy 專案全貌與接手指南
 
-> 最後更新：2026-06-29
+> 最後更新：2026-06-30
 > 維護者：FOX（Claude Chat PM 角色）
 > 用途：新 Chat 對話開始時讀此檔，快速掌握全貌並接手開發
 
@@ -19,11 +19,11 @@
 | 代 | 名稱 | 目標 | 狀態 |
 |---|---|---|---|
 | **① 能錄能存** | Chrome 擴充骨架 | rrweb DOM + Console + Network 攔截 → 打包 JSON | ✅ 完成 |
-| **② 能聽能說** | 語音辨識 | Web Speech API 中文即時轉文字，收進 payload | ✅ 完成 |
+| **② 能聽能說** | 語音辨識 | Web Speech API 中文即時轉文字，收進 payload；**Day 15 升級為雙引擎**（免費 Web Speech / 付費 offscreen + Groq Whisper 精準轉錄，一次授權全站通用）⑥ 提前完成「語音降級/精準化」 | ✅ 完成（+ Groq Whisper） |
 | **③ 能存能看** | 後端 + 報告頁 | Cloudflare Workers + Supabase + R2 + React 報告頁 | ✅ 完成 |
 | **④ AI 能讀** | MCP Server | Pull 模式 12 Tool（+ get_live_errors / get_terminal_logs / get_screenshots / get_usage_stats），每次回應附 token 省錢對比 = **MVP 封測** | ✅ 完成 |
 | **⑤ 能收錢** | 付費上線 | Google 登入 + 產品首頁（含聯絡資訊）+ 隱私政策 + 用量限制 + 兩層定價 + 使用指南/FAQ 頁 + Web Store 上架文案/zip + **綠界 ECPay 金流（測試環境跑通：單次付款 + 定期定額月訂閱 + 取消訂閱，CheckMacValue 對官方測試向量驗證）**；**Chrome Web Store 已送審 + 綠界補件已重送（2026-06-29）**；換正式 key + 等兩邊審核通過仍待做 | 🔨 進行中（PM-75，待審） |
-| **⑥ 更好用** | UX 優化 + 多模式 | 六種模式（錄製/回溯/截圖/即時監控/鍵盤/終端機CLI）+ 截圖三模式 + 即時字幕雙區 + 跨頁錄製 + 編輯頁時間軸標記 + AI精簡/校正 + 乾淨toggle；上架前打磨（跨頁游標/CSP 相容/語音穩定度）| ✅ 完成（PM-27~61, 68~70） |
+| **⑥ 更好用** | UX 優化 + 多模式 | 六種模式 + 截圖三模式 + 即時字幕雙區 + 跨頁錄製 + 編輯頁時間軸標記 + AI精簡/校正 + 乾淨toggle；上架前打磨（跨頁游標/CSP/語音穩定）；**Day 15 提前完成：Groq Whisper 精準語音 + 報告頁「高畫質 AI 分析」截圖勾選（使用者控制 AI 是否讀圖）**| ✅ 完成（PM-27~61, 68~70, 82~91） |
 | **⑦ 規模化** | 多語 + 企業 | 日韓越語音、跨境除錯鏈、企業自託管 | 待做 |
 
 ---
@@ -410,6 +410,31 @@ FOX = 創辦人 + 決策者 + 手動驗收
 - Server：`HOMEPAGE_HTML` footer 加 `.contact-info`（PM-74）。
 - Extension：`popup.ts` `loadPlan()` 改以 `plan.plan` 分流（PM-75）；zip 重打包。
 - ⚠ 技術債（沿用 Day 10）：PM-73 的 2 個 ALTER 仍待 FOX 跑（PM-75 的付費 UI 效果依賴它 + 實際 paid/cancelled 用戶）；定期定額降級寬限期、cancelled 被 period-callback 翻回 paid、報告過期清理、rewind/mcp 用量前端、`/report/:id` 游標前處理；一批仍待瀏覽器實機驗收（更新通知、跨頁游標、GitHub 錄製、語音、完整刷卡/取消、付費 UI）。
+
+---
+
+## §6j Day 15（2026-06-30，PM-80~91）— 首頁受眾擴展 + bugezy.dev 域名 + 截圖 AI 勾選 + 語音架構升級（Groq Whisper 雙引擎）
+
+**目標**：擴大首頁受眾、bugezy.dev 域名上線、報告頁讓使用者控制 AI 是否讀截圖、把語音從「每站授權的 Web Speech」升級為「一次授權的雙引擎（Web Speech / Groq Whisper）」。
+
+- **PM-80 首頁受眾定位**（`HOMEPAGE_HTML`）：主標語改「Web 開發者的 AI Bug 報告工具」；新增「支援所有 Web 開發框架」區塊（前端 7 + 後端 8 框架標籤）+ MCP 工具列 + RWD。已部署 `c3fd3617`。
+- **PM-81 bugezy.dev 域名稽核**（唯讀，產出 `docs/domain-migration-checklist.md`）：核心結論——後端全用 `url.origin` 故域名無關，真正要改只有 `extension/src/types.ts:API_BASE` 一處；OAuth/ECPay 回調自動連動。
+- **PM-82~84 截圖「高畫質 AI 分析」**：`reports.allow_screenshot_images`（FOX 跑 ALTER）+ 報告頁勾選 + `PATCH /api/reports/:id/settings`；MCP `get_screenshots` 兩層判斷（**使用者勾選 OR AI 帶 `include_images`**）+ 文字統一為「高畫質 AI 分析（高 Token）」；popup 加同名 toggle，截圖上傳帶入（createReport 非破壞性退回重試）。已部署 `eb870142`/`86c22eee`。
+- **PM-85~91 語音架構升級（麥克風 1/3~3/3 + 4 個修正/增強）**：
+  - **1/3 server**：`POST /api/transcribe`（Groq `whisper-large-v3-turbo`，`Env.GROQ_API_KEY` secret），已部署 `ec1da982`。
+  - **2/3 extension**：`offscreen.html/ts`（getUserMedia + MediaRecorder webm/opus）+ background offscreen 管理 + popup 麥克風 toggle。
+  - **3/3 路由**：`getMicMode()`（off/realtime/whisper）；免費版 Web Speech、付費版可選；plan 由 popup `loadPlan` 持久化 `USER_PLAN_KEY`（規格的 `bugezy:user` storage 不存在，據實校正）。
+  - **修正鏈**：PM-88 移除無效 `audioCapture` + 新增 `mic-permission.html` 可見授權頁（隱藏 offscreen 不彈授權）；PM-89 授權時機改到 popup toggle（修「錄製中開頁導致停止失效」）；PM-90 麥克風預設 OFF + 授權頁停留 3s；PM-91 付費版「即時字幕/精準轉錄」模式切換 + Whisper 錄音中(紅點脈衝)/轉錄中反饋。
+
+### 語音雙引擎（§2a 對應）
+- **免費版**：Web Speech API 即時字幕（inject MAIN world，零成本、每站第一次需頁面授權橫幅）。
+- **付費版/已取消**：popup 可切「即時字幕」或「精準轉錄（Groq Whisper）」；Whisper 走 offscreen 錄原始音訊 → 停止 → `/api/transcribe` → 合併 `voiceTranscript(source:'whisper')`。一次授權（綁 `chrome-extension://`）後全站通用。
+
+### 增量（Day 15）
+- Server（已部署）：`/api/transcribe`、`/api/reports/:id/settings`、`get_screenshots` 兩層判斷、首頁框架區塊。Supabase：`reports.allow_screenshot_images`（FOX 跑 ALTER）。
+- Extension（皆 build 過、**未重上架 Web Store**）：新增 `offscreen.html/ts`、`mic-permission.html/ts`；manifest 加 `offscreen` 權限；popup 麥克風 toggle + 語音模式 + 高畫質 AI toggle；語音引擎路由全鏈。
+- 域名：**bugezy.dev 已綁同 Worker 上線**（與 `…workers.dev` 雙域名並行）。
+- ⚠ 技術債（Day 15）：① extension PM-85~91 整套**未重上架 Web Store**（offscreen 權限變更需重審，等當前審核過再一起打包）；② PM-82 的 `allow_screenshot_images` ALTER + PM-73 的 2 個 ALTER 待 FOX 跑；③ domain 遷移（改 `API_BASE`→bugezy.dev）待雙審核過後執行；④ 待辦：即時字幕授權橫幅改居中 modal、Whisper 音量跳動指示器、錄製中 popup 模式按鈕 disable；⑤ 一批語音/截圖功能待瀏覽器實機驗收。
 
 ---
 
