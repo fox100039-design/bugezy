@@ -2,6 +2,7 @@
 // 與 background service worker 溝通：開始/停止/清除、輪詢狀態、顯示摘要、複製 JSON。
 
 import {
+  ALLOW_SCREENSHOT_KEY,
   KEYBOARD_MODE_KEY,
   LAST_SCREENSHOT_KEY,
   MONITOR_MODE_KEY,
@@ -79,6 +80,15 @@ monitorMode.addEventListener('change', async () => {
   const enabled = monitorMode.checked;
   await chrome.storage.local.set({ [MONITOR_MODE_KEY]: enabled });
   await send(enabled ? 'START_MONITORING' : 'STOP_MONITORING');
+});
+
+// PM-83：高畫質 AI 分析 toggle — 勾選後截圖上傳時帶入報告 allow_screenshot_images（讓 AI 自動看圖）
+const allowScreenshots = $<HTMLInputElement>('allowScreenshots');
+chrome.storage.local.get(ALLOW_SCREENSHOT_KEY, (r) => {
+  allowScreenshots.checked = r[ALLOW_SCREENSHOT_KEY] === true;
+});
+allowScreenshots.addEventListener('change', () => {
+  chrome.storage.local.set({ [ALLOW_SCREENSHOT_KEY]: allowScreenshots.checked });
 });
 
 // PM-50：⏪ 回溯 30 秒 — 打包背景緩存（不需先按錄製）

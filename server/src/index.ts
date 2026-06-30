@@ -1032,10 +1032,10 @@ const REPORT_PAGE_HTML = `<!DOCTYPE html>
         html += '<div class="tab-panel" id="tab-screenshots">';
         html += '<div class="screenshot-toggle">'
           + '<label><input type="checkbox" id="allow-images-toggle"'+(allowImg?' checked':'')+' />'
-          + '<span class="toggle-label">📸 允許 AI 讀取截圖圖片</span></label>'
+          + '<span class="toggle-label">📸 高畫質 AI 分析（高 Token）</span></label>'
           + '<p class="toggle-hint" id="toggle-hint">'+(allowImg
-              ? '✅ 已開啟 — AI 可直接看到截圖，適合視覺類 Bug（顏色、排版、CSS）'
-              : '🔒 未開啟 — AI 只讀文字描述，省 Token。遇到視覺 Bug 時再開啟')+'</p>'
+              ? '✅ 已開啟 — AI 可看到截圖畫面，視覺 Bug 更精準（顏色、排版、CSS）'
+              : '🔒 未開啟 — AI 只讀文字，省 Token。遇到視覺 Bug 再開啟')+'</p>'
           + '<p class="toggle-token" id="toggle-token">'+(allowImg
               ? '⚠️ 每張截圖約 3,000~8,000 tokens（'+ssCount+' 張 ≈ '+approxTok+' tokens）'
               : '💰 目前 AI 讀取此報告約 200~1,500 tokens')+'</p>'
@@ -1093,8 +1093,8 @@ const REPORT_PAGE_HTML = `<!DOCTYPE html>
           const ht = document.getElementById('toggle-hint');
           const tk = document.getElementById('toggle-token');
           if (ht) ht.textContent = allow
-            ? '✅ 已開啟 — AI 可直接看到截圖，適合視覺類 Bug（顏色、排版、CSS）'
-            : '🔒 未開啟 — AI 只讀文字描述，省 Token。遇到視覺 Bug 時再開啟';
+            ? '✅ 已開啟 — AI 可看到截圖畫面，視覺 Bug 更精準（顏色、排版、CSS）'
+            : '🔒 未開啟 — AI 只讀文字，省 Token。遇到視覺 Bug 再開啟';
           if (tk) tk.textContent = allow
             ? '⚠️ 每張截圖約 3,000~8,000 tokens（'+cnt+' 張 ≈ '+(cnt*5000).toLocaleString()+' tokens）'
             : '💰 目前 AI 讀取此報告約 200~1,500 tokens';
@@ -1624,8 +1624,15 @@ async function createReport(request: Request, env: Env, origin: string): Promise
   };
 
   // PM-61：只在有登入（payload.user_id）時才帶 user_id 欄，避免未跑 ALTER 時整批 insert 失敗
-  const insertRow = payload.user_id ? { ...row, user_id: payload.user_id } : row;
-  const { error } = await supa(env).from('reports').insert(insertRow);
+  const baseRow = payload.user_id ? { ...row, user_id: payload.user_id } : row;
+  // PM-83：截圖上傳帶入 allow_screenshot_images（預設 false）。欄位若尚未建（PM-82 ALTER 未跑）
+  // 會讓 insert 失敗 → 退回不含該欄位重試，確保上傳永不因此中斷。
+  const allowImages = (payload as { allow_screenshot_images?: boolean }).allow_screenshot_images === true;
+  const insertRow = allowImages ? { ...baseRow, allow_screenshot_images: true } : baseRow;
+  let { error } = await supa(env).from('reports').insert(insertRow);
+  if (error && allowImages && error.message.includes('allow_screenshot_images')) {
+    ({ error } = await supa(env).from('reports').insert(baseRow));
+  }
   if (error) {
     return json({ error: `supabase insert failed: ${error.message}` }, 500);
   }

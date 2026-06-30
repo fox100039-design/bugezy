@@ -190,6 +190,9 @@ export const KEYBOARD_MODE_KEY = 'bugezy:keyboardMode';
 /** PM-51：即時監控模式（背景每 10s 推送 live errors 到 API）開關 */
 export const MONITOR_MODE_KEY = 'bugezy:monitorMode';
 
+/** PM-83：允許 AI 讀取截圖圖片（高畫質 AI 分析）開關；截圖上傳時帶入報告 allow_screenshot_images */
+export const ALLOW_SCREENSHOT_KEY = 'bugezy:allow-screenshot-images';
+
 /** PM-34：錄製中即時 flush 的暫存 buffer（頁面跳轉不丟資料） */
 export const BUFFER_VOICE_KEY = 'bugezy:buffer:voice';
 export const BUFFER_CONSOLE_KEY = 'bugezy:buffer:console';

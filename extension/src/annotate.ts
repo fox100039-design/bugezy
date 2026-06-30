@@ -4,7 +4,13 @@
 // 工具：✏️ 畫筆(freehand) / ➡️ 箭頭 / ⬜ 框框 / 📝 文字
 // undo：history stack（每次操作前 snapshot），clear：還原底圖。
 
-import { API_BASE, KEYBOARD_MODE_KEY, blog, type ControlMessage } from './types';
+import {
+  ALLOW_SCREENSHOT_KEY,
+  API_BASE,
+  KEYBOARD_MODE_KEY,
+  blog,
+  type ControlMessage,
+} from './types';
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -354,6 +360,9 @@ chrome.storage.local.get(KEYBOARD_MODE_KEY, (r) => {
 saveBtn.addEventListener('click', async () => {
   const annotatedDataUrl = canvas.toDataURL('image/png');
   stopListening(); // 存檔前停止語音辨識
+  // PM-83：讀 popup「高畫質 AI 分析」開關，截圖上傳時帶入報告設定（預設 false 省 token）
+  const ssStore = await chrome.storage.local.get(ALLOW_SCREENSHOT_KEY);
+  const allowScreenshotImages = ssStore[ALLOW_SCREENSHOT_KEY] === true;
   const payload = {
     rrwebEvents: [],
     consoleLogs: [],
@@ -361,6 +370,7 @@ saveBtn.addEventListener('click', async () => {
     voiceTranscript: [],
     screenshots: [{ dataUrl: annotatedDataUrl, timestamp: Date.now() }],
     description: descInput.value.trim(),
+    allow_screenshot_images: allowScreenshotImages,
     pageInfo: {
       url: params.get('pageUrl') ?? '',
       title: params.get('pageTitle') ?? '',
