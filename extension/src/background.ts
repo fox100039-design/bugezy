@@ -382,7 +382,7 @@ async function ensureMicReady(): Promise<boolean> {
 /** PM-87：本次錄製是否走 offscreen + Groq Whisper（付費版且麥克風開啟）。 */
 async function isPaidMicSession(): Promise<boolean> {
   const r = await chrome.storage.local.get([MIC_KEY, USER_PLAN_KEY]);
-  const micEnabled = r[MIC_KEY] !== false; // 預設開啟
+  const micEnabled = r[MIC_KEY] === true; // PM-90：預設關閉
   const plan = (r[USER_PLAN_KEY] as string) || 'free';
   return micEnabled && plan !== 'free'; // paid / cancelled（到期前仍享付費）皆走 Whisper
 }

@@ -11,11 +11,11 @@ import { MIC_KEY } from './types';
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     // 授權成功，立刻停止音軌（這裡只為取得權限，不錄音）
     stream.getTracks().forEach((t) => t.stop());
-    status.textContent = '✅ 已授權！此分頁將自動關閉...';
+    status.textContent = '✅ 麥克風已授權成功！此頁面 3 秒後自動關閉...';
     status.style.color = '#3fb950';
     await chrome.runtime.sendMessage({ type: 'MIC_PERMISSION_GRANTED' });
     await chrome.storage.local.set({ [MIC_KEY]: true }); // PM-89：授權完直接把 mic toggle 設為 ON
-    setTimeout(() => window.close(), 1500);
+    setTimeout(() => window.close(), 3000); // PM-90：停留加長至 3 秒，讓使用者看清楚
   } catch {
     status.textContent = '❌ 授權被拒絕。請在瀏覽器設定中允許麥克風後重試。';
     status.style.color = '#f85149';

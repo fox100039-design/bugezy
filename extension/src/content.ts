@@ -38,7 +38,7 @@ function sendToInject(
 async function computeUseOldVoice(): Promise<{ keyboardMode: boolean; useOldVoice: boolean }> {
   const r = await chrome.storage.local.get([KEYBOARD_MODE_KEY, MIC_KEY, USER_PLAN_KEY]);
   const keyboardMode = r[KEYBOARD_MODE_KEY] === true;
-  const micEnabled = r[MIC_KEY] !== false; // 預設開啟
+  const micEnabled = r[MIC_KEY] === true; // PM-90：預設關閉（toggle OFF → 免費版也不啟頁面語音）
   const plan = (r[USER_PLAN_KEY] as string) || 'free';
   return { keyboardMode, useOldVoice: micEnabled && plan === 'free' };
 }

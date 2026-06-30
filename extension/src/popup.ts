@@ -101,7 +101,7 @@ function updateMicUI() {
   micIcon.style.opacity = micToggle.checked ? '1' : '0.3';
 }
 chrome.storage.local.get(MIC_KEY, (r) => {
-  micToggle.checked = r[MIC_KEY] !== false; // 預設開啟（無記錄或 true → 開）
+  micToggle.checked = r[MIC_KEY] === true; // PM-90：預設關閉，要明確開過才是 ON
   updateMicUI();
 });
 micToggle.addEventListener('change', async () => {
