@@ -616,7 +616,7 @@ function main() {
   };
 
   // ── 控制：開始 / 停止 ─────────────────────────────────────
-  function startRecording(options?: { keyboardMode?: boolean }): boolean {
+  function startRecording(options?: { keyboardMode?: boolean; micEnabled?: boolean }): boolean {
     if (recording) {
       blog('START 重複呼叫，已在錄製中');
       return stopRrweb !== null;
@@ -671,6 +671,10 @@ function main() {
       blog('鍵盤模式：跳過語音初始化');
       voiceActive = false;
       showKeyboardModeBar();
+    } else if (options?.micEnabled === false) {
+      // PM-87：付費版（語音由 offscreen + Groq Whisper 處理）或麥克風關閉 → 不啟動頁面 SpeechRecognition、不彈授權橫幅
+      blog('語音由 offscreen 處理或麥克風已關閉，跳過頁面 SpeechRecognition');
+      voiceActive = false;
     } else {
       showCaptionBar(); // PM-24：錄製中浮動字幕
       voiceActive = true;
@@ -882,8 +886,11 @@ function main() {
     if (!data || data.source !== BUGEZY_SOURCE || data.dir !== 'to-inject') return;
 
     if (data.cmd === 'START') {
-      blog('收到 START 指令', data.keyboardMode ? '(鍵盤模式)' : '');
-      const rrwebOk = startRecording({ keyboardMode: data.keyboardMode === true });
+      blog('收到 START 指令', data.keyboardMode ? '(鍵盤模式)' : '', `micEnabled=${data.micEnabled !== false}`);
+      const rrwebOk = startRecording({
+        keyboardMode: data.keyboardMode === true,
+        micEnabled: data.micEnabled,
+      });
       post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'STARTED', rrwebOk });
     } else if (data.cmd === 'STOP') {
       blog('收到 STOP 指令');

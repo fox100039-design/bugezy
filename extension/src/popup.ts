@@ -7,6 +7,7 @@ import {
   LAST_SCREENSHOT_KEY,
   MIC_KEY,
   MONITOR_MODE_KEY,
+  USER_PLAN_KEY,
   SESSION_KEY,
   API_BASE,
   type RecordingPayload,
@@ -438,6 +439,8 @@ async function loadPlan(session: Session) {
     });
     if (!res.ok) return; // 表未建/未授權等 → 不顯示用量，按鈕維持原樣（非阻擋）
     const plan = (await res.json()) as PlanInfo;
+    // PM-87：持久化 plan 供 background/content 路由語音引擎（free→Web Speech、paid/cancelled→Groq Whisper）
+    void chrome.storage.local.set({ [USER_PLAN_KEY]: plan.plan });
 
     // 三態互斥：先全部收起，再依 plan 開對應的一個
     upgradeHint.classList.add('hidden');

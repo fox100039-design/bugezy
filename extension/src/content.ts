@@ -7,7 +7,9 @@
 import {
   BUGEZY_SOURCE,
   KEYBOARD_MODE_KEY,
+  MIC_KEY,
   STORAGE_KEY,
+  USER_PLAN_KEY,
   blog,
   type ControlMessage,
   type InjectCommand,
@@ -24,10 +26,21 @@ let injectReady = false;
 function sendToInject(
   cmd: 'START' | 'STOP' | 'REWIND' | 'GET_LIVE_ERRORS' | 'SHOW_MONITOR' | 'HIDE_MONITOR',
   keyboardMode?: boolean,
+  micEnabled?: boolean,
 ) {
-  const msg: InjectCommand = { source: BUGEZY_SOURCE, dir: 'to-inject', cmd, keyboardMode };
-  blog(`→ 轉送 ${cmd} 給 inject（injectReady=${injectReady}, keyboardMode=${keyboardMode === true}）`);
+  const msg: InjectCommand = { source: BUGEZY_SOURCE, dir: 'to-inject', cmd, keyboardMode, micEnabled };
+  blog(`→ 轉送 ${cmd} 給 inject（injectReady=${injectReady}, keyboardMode=${keyboardMode === true}, micEnabled=${micEnabled !== false}）`);
   window.postMessage(msg, '*');
+}
+
+/** PM-87：算出本次錄製是否該由 inject 啟動頁面 SpeechRecognition。
+ *  免費版 + mic ON → true（舊 Web Speech）；付費版（offscreen/Groq 處理）或 mic OFF → false。 */
+async function computeUseOldVoice(): Promise<{ keyboardMode: boolean; useOldVoice: boolean }> {
+  const r = await chrome.storage.local.get([KEYBOARD_MODE_KEY, MIC_KEY, USER_PLAN_KEY]);
+  const keyboardMode = r[KEYBOARD_MODE_KEY] === true;
+  const micEnabled = r[MIC_KEY] !== false; // 預設開啟
+  const plan = (r[USER_PLAN_KEY] as string) || 'free';
+  return { keyboardMode, useOldVoice: micEnabled && plan === 'free' };
 }
 
 function summarize(payload: RecordingPayload): RecordingSummary {
@@ -126,9 +139,9 @@ window.addEventListener('message', async (e: MessageEvent) => {
 // background → content：控制指令
 chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse) => {
   if (msg.type === 'START_RECORDING') {
-    // PM-49：送 START 前先讀 keyboardMode 一併帶給 inject
-    chrome.storage.local.get(KEYBOARD_MODE_KEY, (r) => {
-      sendToInject('START', r[KEYBOARD_MODE_KEY] === true);
+    // PM-49/87：送 START 前讀 keyboardMode + 算 useOldVoice（免費版才啟頁面語音），一併帶給 inject
+    void computeUseOldVoice().then(({ keyboardMode, useOldVoice }) => {
+      sendToInject('START', keyboardMode, useOldVoice);
       sendResponse({ ok: true });
     });
   } else if (msg.type === 'STOP_RECORDING') {
@@ -174,12 +187,11 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
     const state = (await chrome.runtime.sendMessage({ type: 'GET_STATE' })) as StateResponse | undefined;
     if (!state?.recording) return;
     blog('偵測到正在錄製中，自動恢復 inject 錄製');
-    // PM-49：跨頁恢復也要帶上 keyboardMode
-    const kmStore = await chrome.storage.local.get(KEYBOARD_MODE_KEY);
-    const km = kmStore[KEYBOARD_MODE_KEY] === true;
+    // PM-49/87：跨頁恢復也要帶 keyboardMode + useOldVoice（付費版 offscreen 跨頁持續錄、頁面不啟語音）
+    const { keyboardMode: km, useOldVoice } = await computeUseOldVoice();
     const waitForInject = (retries = 0) => {
       if (injectReady) {
-        sendToInject('START', km); // inject 全新（recording=false）會正常啟動
+        sendToInject('START', km, useOldVoice); // inject 全新（recording=false）會正常啟動
         blog('已送 START 給 inject（跳頁恢復）');
       } else if (retries < 40) {
         // PM-36：inject 尚未 READY，縮短為每 50ms 再試（最多 40×50ms = 2 秒），恢復更滑順

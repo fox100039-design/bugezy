@@ -32,6 +32,7 @@ export interface VoiceSegment {
   text: string; // 辨識出的文字
   timestamp: number; // 該句開始的 Date.now()
   isFinal: boolean; // SpeechRecognition 的 isFinal
+  source?: 'web-speech' | 'whisper'; // PM-87：語音來源（免費版 Web Speech / 付費版 Groq Whisper）
 }
 
 /** 截圖（PM-18：截圖改為獨立功能，自行上傳一份報告） */
@@ -140,6 +141,7 @@ export interface InjectCommand {
   dir: 'to-inject';
   cmd: 'START' | 'STOP' | 'REWIND' | 'GET_LIVE_ERRORS' | 'SHOW_MONITOR' | 'HIDE_MONITOR';
   keyboardMode?: boolean;
+  micEnabled?: boolean; // PM-87：是否啟動頁面 SpeechRecognition（免費版+mic→true；付費版/mic off→false）
 }
 
 /** inject → content：狀態回報（握手 / 開始確認）與打包資料 */
@@ -203,6 +205,10 @@ export const MIC_KEY = 'bugezy:mic-enabled';
 
 /** PM-86：offscreen 錄音 → /api/transcribe 轉錄結果暫存（PM-87 錄製 payload 讀回） */
 export const VOICE_TRANSCRIPT_KEY = 'bugezy:voice-transcript';
+
+/** PM-87：使用者方案（free/paid/cancelled）快取——popup loadPlan 寫入，供 background/content 路由語音引擎。
+ *  註：規格寫的 `bugezy:user` storage 在本專案不存在（session 存於 bugezy:session 且無 plan 欄），故改用此鍵持久化 plan。 */
+export const USER_PLAN_KEY = 'bugezy:user-plan';
 
 /** PM-34：錄製中即時 flush 的暫存 buffer（頁面跳轉不丟資料） */
 export const BUFFER_VOICE_KEY = 'bugezy:buffer:voice';

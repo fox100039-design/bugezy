@@ -9,9 +9,11 @@ import {
   BUFFER_RRWEB_KEY,
   BUFFER_VOICE_KEY,
   LAST_SCREENSHOT_KEY,
+  MIC_KEY,
   SESSION_KEY,
   STATE_KEY,
   STORAGE_KEY,
+  USER_PLAN_KEY,
   VOICE_TRANSCRIPT_KEY,
   blog,
   type Session,
@@ -173,7 +175,18 @@ async function startRecording(): Promise<StateResponse> {
     [BUFFER_NETWORK_KEY]: [],
     [BUFFER_RRWEB_KEY]: [],
   });
-  // 語音改由 inject.ts（MAIN world）自行收集；截圖改為獨立功能（PM-18），不再混入錄製
+  // PM-87：付費版 + 麥克風開啟 → 用 offscreen 錄音（Groq Whisper，一次授權通用，不彈頁面授權橫幅）。
+  // 免費版則由 inject.ts 的 SpeechRecognition 自行啟動（content 依 plan 決定 micEnabled）。
+  if (await isPaidMicSession()) {
+    try {
+      await ensureOffscreen();
+      await chrome.runtime.sendMessage({ type: 'OFFSCREEN_START_MIC' });
+      blog('語音引擎：Groq Whisper（付費版）');
+    } catch (err) {
+      blog('offscreen 麥克風啟動失敗（不阻擋錄製）', err);
+    }
+  }
+  // 截圖改為獨立功能（PM-18），不再混入錄製
   await chrome.tabs.sendMessage(tab.id, { type: 'START_RECORDING' } satisfies ControlMessage);
   const s = await setState({
     recording: true,
@@ -349,6 +362,50 @@ async function ensureOffscreen(): Promise<void> {
   });
 }
 
+/** PM-87：本次錄製是否走 offscreen + Groq Whisper（付費版且麥克風開啟）。 */
+async function isPaidMicSession(): Promise<boolean> {
+  const r = await chrome.storage.local.get([MIC_KEY, USER_PLAN_KEY]);
+  const micEnabled = r[MIC_KEY] !== false; // 預設開啟
+  const plan = (r[USER_PLAN_KEY] as string) || 'free';
+  return micEnabled && plan !== 'free'; // paid / cancelled（到期前仍享付費）皆走 Whisper
+}
+
+/** PM-86/87：停 offscreen 錄音 → 送 /api/transcribe（Groq Whisper）→ 存 VOICE_TRANSCRIPT_KEY，回轉錄結果。 */
+async function stopMicAndTranscribe(): Promise<{ ok?: boolean; text?: string; error?: string }> {
+  const res = (await chrome.runtime.sendMessage({ type: 'OFFSCREEN_STOP_MIC' })) as {
+    audioBlob?: string;
+    error?: string;
+  };
+  if (!res?.audioBlob) return res ?? { error: '未取得音訊' };
+  try {
+    const blob = await (await fetch(res.audioBlob)).blob();
+    const form = new FormData();
+    form.append('audio', blob, 'recording.webm');
+    const transcribeRes = await fetch(`${API_BASE}/api/transcribe`, { method: 'POST', body: form });
+    const result = (await transcribeRes.json()) as {
+      ok?: boolean;
+      text?: string;
+      segments?: unknown[];
+      duration?: number;
+    };
+    if (result.ok) {
+      await chrome.storage.local.set({
+        [VOICE_TRANSCRIPT_KEY]: {
+          text: result.text,
+          segments: result.segments,
+          duration: result.duration,
+          timestamp: Date.now(),
+        },
+      });
+      blog('語音轉錄完成:', (result.text ?? '').substring(0, 50));
+    }
+    return result;
+  } catch (err) {
+    blog('轉錄失敗:', err);
+    return { error: '轉錄失敗' };
+  }
+}
+
 chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summary?: RecordingSummary }, _sender, sendResponse) => {
   (async () => {
     try {
@@ -357,6 +414,9 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summ
           sendResponse(await startRecording());
           break;
         case 'STOP_RECORDING':
+          // PM-87：付費版先停 offscreen 並轉錄（存 VOICE_TRANSCRIPT_KEY）→ 再停錄製打包，
+          // 讓隨後的 RECORDING_DONE 合併時能讀到 Whisper 結果。
+          if (await isPaidMicSession()) await stopMicAndTranscribe();
           sendResponse(await stopRecording());
           break;
         case 'CLEAR_RECORDING':
@@ -398,6 +458,26 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summ
           const prev = await getState();
           const incoming = (msg as { summary: RecordingSummary }).summary;
           const merged = await buildFullPayload();
+          // PM-87：合併語音來源——付費版用 Groq Whisper 結果覆蓋；免費版維持 inject 的 Web Speech 並標記來源
+          const wStore = await chrome.storage.local.get(VOICE_TRANSCRIPT_KEY);
+          const whisper = wStore[VOICE_TRANSCRIPT_KEY] as
+            | { text?: string; timestamp?: number }
+            | undefined;
+          if (whisper?.text?.trim()) {
+            merged.voiceTranscript = [
+              {
+                text: whisper.text,
+                timestamp: whisper.timestamp ?? Date.now(),
+                isFinal: true,
+                source: 'whisper',
+              },
+            ];
+            await chrome.storage.local.remove(VOICE_TRANSCRIPT_KEY);
+          } else {
+            merged.voiceTranscript.forEach((s) => {
+              if (!s.source) s.source = 'web-speech';
+            });
+          }
           await chrome.storage.local.set({ [STORAGE_KEY]: merged });
           const summary: RecordingSummary = {
             ...incoming,
@@ -530,44 +610,7 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summ
         }
         // PM-86：停止錄音 → 取音訊 → 送 /api/transcribe 轉錄 → 存 storage
         case 'MIC_STOP': {
-          const res = (await chrome.runtime.sendMessage({ type: 'OFFSCREEN_STOP_MIC' })) as {
-            audioBlob?: string;
-            error?: string;
-          };
-          if (res?.audioBlob) {
-            try {
-              const blob = await (await fetch(res.audioBlob)).blob();
-              const form = new FormData();
-              form.append('audio', blob, 'recording.webm');
-              const transcribeRes = await fetch(`${API_BASE}/api/transcribe`, {
-                method: 'POST',
-                body: form,
-              });
-              const result = (await transcribeRes.json()) as {
-                ok?: boolean;
-                text?: string;
-                segments?: unknown[];
-                duration?: number;
-              };
-              if (result.ok) {
-                await chrome.storage.local.set({
-                  [VOICE_TRANSCRIPT_KEY]: {
-                    text: result.text,
-                    segments: result.segments,
-                    duration: result.duration,
-                    timestamp: Date.now(),
-                  },
-                });
-                blog('語音轉錄完成:', (result.text ?? '').substring(0, 50));
-              }
-              sendResponse(result);
-            } catch (err) {
-              blog('轉錄失敗:', err);
-              sendResponse({ error: '轉錄失敗' });
-            }
-          } else {
-            sendResponse(res);
-          }
+          sendResponse(await stopMicAndTranscribe());
           break;
         }
         default:
