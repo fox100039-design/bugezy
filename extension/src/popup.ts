@@ -5,6 +5,7 @@ import {
   ALLOW_SCREENSHOT_KEY,
   KEYBOARD_MODE_KEY,
   LAST_SCREENSHOT_KEY,
+  MIC_KEY,
   MONITOR_MODE_KEY,
   SESSION_KEY,
   API_BASE,
@@ -89,6 +90,21 @@ chrome.storage.local.get(ALLOW_SCREENSHOT_KEY, (r) => {
 });
 allowScreenshots.addEventListener('change', () => {
   chrome.storage.local.set({ [ALLOW_SCREENSHOT_KEY]: allowScreenshots.checked });
+});
+
+// PM-86：麥克風 toggle（標題列）— offscreen 錄音 + Groq Whisper 架構；預設開啟，狀態存 storage
+const micToggle = $<HTMLInputElement>('micToggle');
+const micIcon = $('micIcon');
+function updateMicUI() {
+  micIcon.style.opacity = micToggle.checked ? '1' : '0.3';
+}
+chrome.storage.local.get(MIC_KEY, (r) => {
+  micToggle.checked = r[MIC_KEY] !== false; // 預設開啟（無記錄或 true → 開）
+  updateMicUI();
+});
+micToggle.addEventListener('change', () => {
+  chrome.storage.local.set({ [MIC_KEY]: micToggle.checked });
+  updateMicUI();
 });
 
 // PM-50：⏪ 回溯 30 秒 — 打包背景緩存（不需先按錄製）

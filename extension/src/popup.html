@@ -38,6 +38,22 @@
       .brand-name { font-size: 18px; font-weight: 700; color: var(--accent); }
       .brand-tag { font-size: 11px; color: var(--muted); margin-left: auto; }
 
+      /* PM-86：麥克風 toggle（小型滑動開關，跟標題同行） */
+      .mic-toggle { display: flex; align-items: center; gap: 6px; margin-left: 8px; }
+      .mic-icon { font-size: 14px; transition: opacity 0.15s; }
+      .mic-switch { position: relative; display: inline-block; width: 32px; height: 18px; }
+      .mic-switch input { opacity: 0; width: 0; height: 0; }
+      .mic-slider {
+        position: absolute; inset: 0; cursor: pointer; background: #4a4a5e;
+        border-radius: 18px; transition: background 0.15s;
+      }
+      .mic-slider::before {
+        content: ''; position: absolute; height: 14px; width: 14px; left: 2px; top: 2px;
+        background: #fff; border-radius: 50%; transition: transform 0.15s;
+      }
+      .mic-switch input:checked + .mic-slider { background: var(--success); }
+      .mic-switch input:checked + .mic-slider::before { transform: translateX(14px); }
+
       /* 通用按鈕 */
       button {
         width: 100%;
@@ -220,6 +236,13 @@
       <div class="brand">
         <span class="brand-icon">🐛</span>
         <span class="brand-name">BugEzy</span>
+        <div class="mic-toggle" title="麥克風語音輸入（一次授權，所有網站通用）">
+          <span class="mic-icon" id="micIcon">🎙️</span>
+          <label class="mic-switch">
+            <input type="checkbox" id="micToggle" />
+            <span class="mic-slider"></span>
+          </label>
+        </div>
         <span class="brand-tag">語音 Bug 回報</span>
       </div>
 

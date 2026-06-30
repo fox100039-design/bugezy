@@ -106,7 +106,12 @@ export type ControlMessage =
   | { type: 'START_MONITORING' }
   | { type: 'STOP_MONITORING' }
   // PM-52：通知 content/inject 顯示/隱藏頁面浮動監控 badge
-  | { type: 'SET_MONITOR_BADGE'; show: boolean };
+  | { type: 'SET_MONITOR_BADGE'; show: boolean }
+  // PM-86：offscreen 麥克風錄音（popup → background → offscreen）
+  | { type: 'MIC_START' }
+  | { type: 'MIC_STOP' }
+  | { type: 'OFFSCREEN_START_MIC' }
+  | { type: 'OFFSCREEN_STOP_MIC' };
 
 /** background → popup 的狀態回應 */
 export interface StateResponse {
@@ -192,6 +197,12 @@ export const MONITOR_MODE_KEY = 'bugezy:monitorMode';
 
 /** PM-83：允許 AI 讀取截圖圖片（高畫質 AI 分析）開關；截圖上傳時帶入報告 allow_screenshot_images */
 export const ALLOW_SCREENSHOT_KEY = 'bugezy:allow-screenshot-images';
+
+/** PM-86：popup 麥克風 toggle（offscreen 錄音 + Groq Whisper 架構）開關，預設開啟 */
+export const MIC_KEY = 'bugezy:mic-enabled';
+
+/** PM-86：offscreen 錄音 → /api/transcribe 轉錄結果暫存（PM-87 錄製 payload 讀回） */
+export const VOICE_TRANSCRIPT_KEY = 'bugezy:voice-transcript';
 
 /** PM-34：錄製中即時 flush 的暫存 buffer（頁面跳轉不丟資料） */
 export const BUFFER_VOICE_KEY = 'bugezy:buffer:voice';

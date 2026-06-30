@@ -12,6 +12,7 @@ import {
   SESSION_KEY,
   STATE_KEY,
   STORAGE_KEY,
+  VOICE_TRANSCRIPT_KEY,
   blog,
   type Session,
   type ConsoleLog,
@@ -332,6 +333,22 @@ function stopMonitoring() {
   blog('即時監控已停止');
 }
 
+// ── PM-86：offscreen 麥克風錄音（一次授權，所有網站通用）──────
+const OFFSCREEN_URL = 'offscreen.html';
+
+/** 確保 offscreen document 存在（沒有就建立，USER_MEDIA 用途）。 */
+async function ensureOffscreen(): Promise<void> {
+  const contexts = await chrome.runtime.getContexts({
+    contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
+  });
+  if (contexts.length > 0) return;
+  await chrome.offscreen.createDocument({
+    url: OFFSCREEN_URL,
+    reasons: [chrome.offscreen.Reason.USER_MEDIA],
+    justification: 'BugEzy 麥克風錄音（語音 Bug 描述）',
+  });
+}
+
 chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summary?: RecordingSummary }, _sender, sendResponse) => {
   (async () => {
     try {
@@ -502,6 +519,55 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summ
         case 'GET_VOICE_BUFFER': {
           const r = await chrome.storage.local.get(BUFFER_VOICE_KEY);
           sendResponse({ segments: (r[BUFFER_VOICE_KEY] as VoiceSegment[]) ?? [] });
+          break;
+        }
+        // PM-86：麥克風錄音 — 建 offscreen + 開始錄音
+        case 'MIC_START': {
+          await ensureOffscreen();
+          const res = await chrome.runtime.sendMessage({ type: 'OFFSCREEN_START_MIC' });
+          sendResponse(res);
+          break;
+        }
+        // PM-86：停止錄音 → 取音訊 → 送 /api/transcribe 轉錄 → 存 storage
+        case 'MIC_STOP': {
+          const res = (await chrome.runtime.sendMessage({ type: 'OFFSCREEN_STOP_MIC' })) as {
+            audioBlob?: string;
+            error?: string;
+          };
+          if (res?.audioBlob) {
+            try {
+              const blob = await (await fetch(res.audioBlob)).blob();
+              const form = new FormData();
+              form.append('audio', blob, 'recording.webm');
+              const transcribeRes = await fetch(`${API_BASE}/api/transcribe`, {
+                method: 'POST',
+                body: form,
+              });
+              const result = (await transcribeRes.json()) as {
+                ok?: boolean;
+                text?: string;
+                segments?: unknown[];
+                duration?: number;
+              };
+              if (result.ok) {
+                await chrome.storage.local.set({
+                  [VOICE_TRANSCRIPT_KEY]: {
+                    text: result.text,
+                    segments: result.segments,
+                    duration: result.duration,
+                    timestamp: Date.now(),
+                  },
+                });
+                blog('語音轉錄完成:', (result.text ?? '').substring(0, 50));
+              }
+              sendResponse(result);
+            } catch (err) {
+              blog('轉錄失敗:', err);
+              sendResponse({ error: '轉錄失敗' });
+            }
+          } else {
+            sendResponse(res);
+          }
           break;
         }
         default:
