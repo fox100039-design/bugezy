@@ -232,13 +232,26 @@ const HOMEPAGE_HTML = `<!DOCTYPE html>
     .contact-info h3 { font-size:17px; color:#a78bfa; margin:0 0 12px; }
     .contact-info p { margin:6px 0; font-size:15px; color:#e0e0e0; }
     .contact-info a { color:#a78bfa; margin:0; }
+    /* PM-80：支援的開發框架 + MCP 工具標籤 */
+    .framework-grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin:24px 0; }
+    .fw-category { background:#1a1a2e; border:1px solid #2a2a3e; border-radius:12px; padding:20px; }
+    .fw-category h3 { font-size:16px; margin-bottom:12px; color:#a78bfa; }
+    .fw-tags { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+    .fw-category .fw-tags { justify-content:flex-start; }
+    .fw-tags span { background:#2a2a3e; border:1px solid #7c3aed40; border-radius:20px; padding:4px 14px; font-size:13px; color:#ccc; }
+    .fw-note { text-align:center; color:#888; font-size:13px; margin-top:16px; line-height:1.7; }
+    .fw-note code { background:#2a2a3e; padding:2px 6px; border-radius:4px; color:#10b981; }
+    .ai-tools { background:#1a1a2e; border:1px solid #2a2a3e; border-radius:12px; padding:20px; margin-top:24px; text-align:center; }
+    .ai-tools h3 { font-size:16px; color:#a78bfa; margin-bottom:14px; }
+    .ai-tools p { color:#888; font-size:13px; margin-top:12px; }
+    @media (max-width:600px) { .framework-grid { grid-template-columns:1fr; } }
   </style>
 </head>
 <body>
   <header class="hero">
     <div class="logo">🐛</div>
     <h1>BugEzy</h1>
-    <p class="tagline">開發者 Bug 報告工具，AI 幫你修</p>
+    <p class="tagline">Web 開發者的 AI Bug 報告工具<br>前端後端一起抓，10 分鐘修好 Bug</p>
     <div class="bullets">
       <span>✅ 語音描述 Bug，AI 自動分析</span>
       <span>✅ 6 種錄製模式，完整重現問題</span>
@@ -261,6 +274,54 @@ const HOMEPAGE_HTML = `<!DOCTYPE html>
       <div class="mode"><div class="ico">🔇</div><div class="name">鍵盤</div><div class="desc">安靜環境，純文字模式</div></div>
       <div class="mode"><div class="ico">🔍</div><div class="name">監控</div><div class="desc">AI 隨時查當前頁 error</div></div>
       <div class="mode"><div class="ico">🖥</div><div class="name">終端機</div><div class="desc">npx bugezy-watch 攔 crash</div></div>
+    </div>
+  </section>
+
+  <section class="wrap" id="frameworks">
+    <h2>支援所有 Web 開發框架</h2>
+    <p class="sub">只要你的產品跑在瀏覽器上，BugEzy 就能用</p>
+    <div class="framework-grid">
+      <div class="fw-category">
+        <h3>🖥 前端框架（Chrome 擴充錄製）</h3>
+        <div class="fw-tags">
+          <span>React</span>
+          <span>Vue</span>
+          <span>Angular</span>
+          <span>Next.js</span>
+          <span>Nuxt</span>
+          <span>Svelte</span>
+          <span>HTML/CSS/JS</span>
+        </div>
+      </div>
+      <div class="fw-category">
+        <h3>⚙ 後端框架（終端機 CLI 攔截）</h3>
+        <div class="fw-tags">
+          <span>Django</span>
+          <span>Flask</span>
+          <span>FastAPI</span>
+          <span>Laravel</span>
+          <span>Rails</span>
+          <span>Spring Boot</span>
+          <span>Express</span>
+          <span>Node.js</span>
+        </div>
+      </div>
+    </div>
+    <p class="fw-note">前端用 Chrome 擴充錄製 DOM + Console + Network<br>後端用 <code>npx bugezy-watch -- python manage.py runserver</code> 攔截 stderr</p>
+
+    <div class="ai-tools">
+      <h3>支援所有 MCP 工具</h3>
+      <div class="fw-tags">
+        <span>Claude Desktop</span>
+        <span>Claude Code</span>
+        <span>Cursor</span>
+        <span>VS Code</span>
+        <span>Zed</span>
+        <span>Windsurf</span>
+        <span>Codex</span>
+        <span>Replit</span>
+      </div>
+      <p>一行 URL 連接，零安裝</p>
     </div>
   </section>
 
