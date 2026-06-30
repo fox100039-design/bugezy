@@ -886,6 +886,12 @@ const REPORT_PAGE_HTML = `<!DOCTYPE html>
     .ss-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px; }
     .ss-img { width:100%; border-radius:8px; border:1px solid #2a2a3e; cursor:pointer; }
     .ss-img:hover { border-color:#7c3aed; }
+    /* PM-82：允許 AI 讀取截圖圖片 勾選 */
+    .screenshot-toggle { padding:16px; margin:0 0 16px; background:#161b22; border:1px solid #30363d; border-radius:10px; }
+    .screenshot-toggle label { display:flex; align-items:center; gap:10px; cursor:pointer; font-size:15px; color:#f0f6fc; }
+    .screenshot-toggle input[type="checkbox"] { width:18px; height:18px; accent-color:#7c3aed; flex-shrink:0; }
+    .toggle-hint { margin-top:8px; font-size:13px; color:#8b949e; }
+    .toggle-token { margin-top:4px; font-size:12px; color:#d29922; font-family:monospace; }
     .token-panel { margin-top:24px; padding:16px; background:#1a1a2e; border:1px solid rgba(124,58,237,0.3); border-radius:12px; }
     .token-row { display:flex; justify-content:space-between; padding:3px 0; font-size:13px; color:#aaa; }
     .token-row.total { border-top:1px solid #2a2a3e; margin-top:6px; padding-top:6px; font-weight:700; color:#fff; }
@@ -1021,7 +1027,20 @@ const REPORT_PAGE_HTML = `<!DOCTYPE html>
       html += '</div>';
 
       if (ssCount > 0) {
-        html += '<div class="tab-panel" id="tab-screenshots"><div class="ss-grid">';
+        const allowImg = r.allowScreenshotImages === true; // PM-82
+        const approxTok = (ssCount * 5000).toLocaleString();
+        html += '<div class="tab-panel" id="tab-screenshots">';
+        html += '<div class="screenshot-toggle">'
+          + '<label><input type="checkbox" id="allow-images-toggle"'+(allowImg?' checked':'')+' />'
+          + '<span class="toggle-label">📸 允許 AI 讀取截圖圖片</span></label>'
+          + '<p class="toggle-hint" id="toggle-hint">'+(allowImg
+              ? '✅ 已開啟 — AI 可直接看到截圖，適合視覺類 Bug（顏色、排版、CSS）'
+              : '🔒 未開啟 — AI 只讀文字描述，省 Token。遇到視覺 Bug 時再開啟')+'</p>'
+          + '<p class="toggle-token" id="toggle-token">'+(allowImg
+              ? '⚠️ 每張截圖約 3,000~8,000 tokens（'+ssCount+' 張 ≈ '+approxTok+' tokens）'
+              : '💰 目前 AI 讀取此報告約 200~1,500 tokens')+'</p>'
+          + '</div>';
+        html += '<div class="ss-grid">';
         (r.screenshots||[]).forEach(ss => {
           const src = typeof ss === 'string' ? ss : ss.dataUrl || ss.url || '';
           if (src) html += '<img class="ss-img" src="'+src+'" onclick="window.open(this.src)">';
@@ -1064,6 +1083,30 @@ const REPORT_PAGE_HTML = `<!DOCTYPE html>
           document.getElementById('tab-' + btn.dataset.tab)?.classList.add('active');
         });
       });
+
+      // PM-82：允許 AI 讀取截圖圖片 — 勾選即時更新提示 + PATCH 存回 Supabase
+      const ssToggle = document.getElementById('allow-images-toggle');
+      if (ssToggle) {
+        ssToggle.addEventListener('change', async () => {
+          const allow = ssToggle.checked;
+          const cnt = (r.screenshots||[]).length;
+          const ht = document.getElementById('toggle-hint');
+          const tk = document.getElementById('toggle-token');
+          if (ht) ht.textContent = allow
+            ? '✅ 已開啟 — AI 可直接看到截圖，適合視覺類 Bug（顏色、排版、CSS）'
+            : '🔒 未開啟 — AI 只讀文字描述，省 Token。遇到視覺 Bug 時再開啟';
+          if (tk) tk.textContent = allow
+            ? '⚠️ 每張截圖約 3,000~8,000 tokens（'+cnt+' 張 ≈ '+(cnt*5000).toLocaleString()+' tokens）'
+            : '💰 目前 AI 讀取此報告約 200~1,500 tokens';
+          try {
+            await fetch('/api/reports/' + reportId + '/settings', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ allow_screenshot_images: allow }),
+            });
+          } catch (err) { console.error('儲存失敗', err); }
+        });
+      }
     }
   </script>
 </body>
@@ -1506,6 +1549,11 @@ export default {
       if (request.method === 'GET' && path === '/api/reports') {
         return await listReports(url, env);
       }
+      // PM-82：報告設定（允許 AI 讀截圖）— 有 share link 就能改，不需登入
+      const settingsMatch = path.match(/^\/api\/reports\/([^/]+)\/settings$/);
+      if (request.method === 'PATCH' && settingsMatch) {
+        return await updateReportSettings(settingsMatch[1], request, env);
+      }
       const match = path.match(/^\/api\/reports\/([^/]+)$/);
       if (request.method === 'GET' && match) {
         return await getReport(match[1], env);
@@ -1625,10 +1673,29 @@ async function getReport(reportId: string, env: Env): Promise<Response> {
     voiceTranscript: data.voice_transcript,
     description: data.description ?? '',
     markers: data.markers ?? [], // PM-28：時間軸標記
+    allowScreenshotImages: data.allow_screenshot_images ?? false, // PM-82（select('*') → 欄位未建時為 undefined→false）
     rrwebEvents,
     screenshots,
     created_at: data.created_at,
   });
+}
+
+// PATCH /api/reports/:id/settings — 報告設定（PM-82：允許 AI 讀截圖）。不需登入（有 share link 即可改）。
+async function updateReportSettings(
+  reportId: string,
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const body = (await request.json().catch(() => ({}))) as { allow_screenshot_images?: boolean };
+  if (typeof body.allow_screenshot_images !== 'boolean') {
+    return json({ error: 'allow_screenshot_images (boolean) required' }, 400);
+  }
+  const { error } = await supa(env)
+    .from('reports')
+    .update({ allow_screenshot_images: body.allow_screenshot_images })
+    .eq('report_id', reportId);
+  if (error) return json({ error: `更新失敗: ${error.message}` }, 500);
+  return json({ ok: true });
 }
 
 // GET /api/reports — 列出最近報告（metadata only，不含 rrweb / JSONB 大欄位）
@@ -2497,15 +2564,32 @@ function createMcpServer(env: Env): McpServer {
         .describe('是否回傳圖片內容（預設 false，只回 metadata 省 token）'),
     },
     async ({ report_id, include_images }) => {
-      const { data } = await supabase()
+      // PM-82：讀報告設定 allow_screenshot_images；欄位若尚未建（ALTER 未跑）→ 退回不含新欄位的查詢
+      let data:
+        | { screenshots_r2_key?: string; screenshot_count?: number; allow_screenshot_images?: boolean }
+        | null = null;
+      const primary = await supabase()
         .from('reports')
-        .select('screenshots_r2_key, screenshot_count')
+        .select('screenshots_r2_key, screenshot_count, allow_screenshot_images')
         .eq('report_id', report_id)
         .single();
+      if (primary.error) {
+        const fb = await supabase()
+          .from('reports')
+          .select('screenshots_r2_key, screenshot_count')
+          .eq('report_id', report_id)
+          .single();
+        data = fb.data;
+      } else {
+        data = primary.data;
+      }
 
       if (!data || !data.screenshots_r2_key) {
         return txtWithTokens({ message: '此報告沒有截圖', screenshot_count: 0 }, 'get_screenshots', report_id);
       }
+
+      // PM-82：兩層判斷——使用者在報告頁勾了 allow_screenshot_images，OR AI 明確帶 include_images:true
+      const shouldIncludeImages = data.allow_screenshot_images === true || include_images === true;
 
       const obj = await env.R2.get(data.screenshots_r2_key as string);
       if (!obj) {
@@ -2518,19 +2602,19 @@ function createMcpServer(env: Env): McpServer {
 
       const screenshots = JSON.parse(await obj.text()) as Array<{ dataUrl: string; annotation?: string }>;
 
-      // 預設只回 metadata（省 token），要看畫面才加 include_images:true
-      if (!include_images) {
+      // 預設只回 metadata（省 token）；使用者在報告頁勾選 OR AI 帶 include_images:true 才回圖片
+      if (!shouldIncludeImages) {
         return txtWithTokens(
           {
             screenshot_count: screenshots.length,
-            message: `此報告有 ${screenshots.length} 張截圖。如需 AI 分析視覺問題，請加 include_images: true（每張約 3,000-8,000 tokens）。`,
+            message: `此報告有 ${screenshots.length} 張截圖。如需 AI 分析視覺問題，請加 include_images: true（每張約 3,000-8,000 tokens），或由使用者在報告頁勾選「允許 AI 讀取截圖圖片」。`,
           },
           'get_screenshots',
           report_id,
         );
       }
 
-      // include_images = true：回傳圖片內容（text 標題 + image block）
+      // shouldIncludeImages = true：回傳圖片內容（text 標題 + image block）
       const content: Array<
         { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }
       > = [];
