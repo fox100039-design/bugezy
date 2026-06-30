@@ -367,13 +367,13 @@ async function ensureOffscreen(): Promise<void> {
   });
 }
 
-/** PM-88：確保麥克風可用。首次（未授權）開可見授權頁觸發一次授權（offscreen 隱藏頁不會彈），回 false
- *  本次不錄語音；已授權則確保 offscreen 存在，回 true。 */
+/** PM-88/89：確保麥克風可用。未授權 → 跳過語音（**不開授權頁、不打斷錄製**；授權改由 popup toggle 觸發）；
+ *  已授權 → 確保 offscreen 存在，回 true。 */
 async function ensureMicReady(): Promise<boolean> {
   const store = await chrome.storage.local.get(MIC_PERMISSION_KEY);
   if (!store[MIC_PERMISSION_KEY]) {
-    await chrome.tabs.create({ url: 'mic-permission.html' });
-    return false; // 等使用者授權完成，下次錄製才走 offscreen
+    blog('麥克風未授權，跳過語音（請在 popup 開啟麥克風 toggle 授權）');
+    return false;
   }
   await ensureOffscreen();
   return true;
@@ -634,6 +634,15 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summ
         case 'MIC_PERMISSION_GRANTED': {
           await chrome.storage.local.set({ [MIC_PERMISSION_KEY]: true });
           blog('麥克風授權完成');
+          sendResponse({ ok: true });
+          break;
+        }
+        // PM-89：popup 開麥克風 toggle 時請求授權（未授權才開授權頁；授權時機在此，不在錄製時）
+        case 'REQUEST_MIC_PERMISSION': {
+          const store = await chrome.storage.local.get(MIC_PERMISSION_KEY);
+          if (!store[MIC_PERMISSION_KEY]) {
+            await chrome.tabs.create({ url: 'mic-permission.html' });
+          }
           sendResponse({ ok: true });
           break;
         }

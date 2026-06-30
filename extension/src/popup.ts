@@ -6,6 +6,7 @@ import {
   KEYBOARD_MODE_KEY,
   LAST_SCREENSHOT_KEY,
   MIC_KEY,
+  MIC_PERMISSION_KEY,
   MONITOR_MODE_KEY,
   USER_PLAN_KEY,
   SESSION_KEY,
@@ -103,8 +104,19 @@ chrome.storage.local.get(MIC_KEY, (r) => {
   micToggle.checked = r[MIC_KEY] !== false; // 預設開啟（無記錄或 true → 開）
   updateMicUI();
 });
-micToggle.addEventListener('change', () => {
-  chrome.storage.local.set({ [MIC_KEY]: micToggle.checked });
+micToggle.addEventListener('change', async () => {
+  // PM-89：開麥克風時若尚未授權 → 先開授權頁（toggle 暫回 OFF，授權頁授完會自動設 ON），
+  // 把授權時機放在 toggle，而非錄製時（避免錄製中開頁搶焦點導致停止失效）。
+  if (micToggle.checked) {
+    const store = await chrome.storage.local.get(MIC_PERMISSION_KEY);
+    if (!store[MIC_PERMISSION_KEY]) {
+      micToggle.checked = false;
+      updateMicUI();
+      await chrome.runtime.sendMessage({ type: 'REQUEST_MIC_PERMISSION' });
+      return;
+    }
+  }
+  await chrome.storage.local.set({ [MIC_KEY]: micToggle.checked });
   updateMicUI();
 });
 

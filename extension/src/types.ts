@@ -114,7 +114,9 @@ export type ControlMessage =
   | { type: 'OFFSCREEN_START_MIC' }
   | { type: 'OFFSCREEN_STOP_MIC' }
   // PM-88：麥克風授權頁回報授權完成
-  | { type: 'MIC_PERMISSION_GRANTED' };
+  | { type: 'MIC_PERMISSION_GRANTED' }
+  // PM-89：popup 開麥克風 toggle 時請求授權（在 toggle 觸發，不在錄製時）
+  | { type: 'REQUEST_MIC_PERMISSION' };
 
 /** background → popup 的狀態回應 */
 export interface StateResponse {
