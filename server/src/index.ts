@@ -886,7 +886,7 @@ const REPORT_PAGE_HTML = `<!DOCTYPE html>
     .ss-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px; }
     .ss-img { width:100%; border-radius:8px; border:1px solid #2a2a3e; cursor:pointer; }
     .ss-img:hover { border-color:#7c3aed; }
-    /* PM-82：允許 AI 讀取截圖圖片 勾選 */
+    /* PM-82/84：高畫質 AI 分析（高 Token）勾選 */
     .screenshot-toggle { padding:16px; margin:0 0 16px; background:#161b22; border:1px solid #30363d; border-radius:10px; }
     .screenshot-toggle label { display:flex; align-items:center; gap:10px; cursor:pointer; font-size:15px; color:#f0f6fc; }
     .screenshot-toggle input[type="checkbox"] { width:18px; height:18px; accent-color:#7c3aed; flex-shrink:0; }
@@ -1084,7 +1084,7 @@ const REPORT_PAGE_HTML = `<!DOCTYPE html>
         });
       });
 
-      // PM-82：允許 AI 讀取截圖圖片 — 勾選即時更新提示 + PATCH 存回 Supabase
+      // PM-82/84：高畫質 AI 分析（高 Token）— 勾選即時更新提示 + PATCH 存回 Supabase
       const ssToggle = document.getElementById('allow-images-toggle');
       if (ssToggle) {
         ssToggle.addEventListener('change', async () => {
@@ -2562,13 +2562,13 @@ function createMcpServer(env: Env): McpServer {
   // Tool 12（PM-57）: get_screenshots — 回傳報告截圖（base64），include_images 控制是否含圖片省 token
   server.tool(
     'get_screenshots',
-    '取得報告的截圖圖片（視覺 Bug 用）。⚠ 圖片會消耗較多 token（每張 ~3,000-8,000），建議只在需要看畫面時使用。Report screenshots.',
+    '高畫質 AI 分析：取得報告截圖圖片（視覺 Bug 用）。⚠ 圖片消耗較高 Token（每張 ~3,000-8,000），建議只在需要看畫面時使用。Report screenshots.',
     {
       report_id: z.string(),
       include_images: z
         .boolean()
         .optional()
-        .describe('是否回傳圖片內容（預設 false，只回 metadata 省 token）'),
+        .describe('開啟高畫質 AI 分析（預設 false，只回 metadata 省 Token）'),
     },
     async ({ report_id, include_images }) => {
       // PM-82：讀報告設定 allow_screenshot_images；欄位若尚未建（ALTER 未跑）→ 退回不含新欄位的查詢
@@ -2614,7 +2614,7 @@ function createMcpServer(env: Env): McpServer {
         return txtWithTokens(
           {
             screenshot_count: screenshots.length,
-            message: `此報告有 ${screenshots.length} 張截圖。如需 AI 分析視覺問題，請加 include_images: true（每張約 3,000-8,000 tokens），或由使用者在報告頁勾選「允許 AI 讀取截圖圖片」。`,
+            message: `此報告有 ${screenshots.length} 張截圖。如需高畫質 AI 分析（視覺 Bug），請加 include_images: true（每張約 3,000-8,000 Token）。`,
           },
           'get_screenshots',
           report_id,
