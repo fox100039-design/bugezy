@@ -21,6 +21,8 @@ export interface Env {
   ECPAY_HASH_KEY: string;
   ECPAY_HASH_IV: string;
   ECPAY_PAYMENT_URL: string;
+  // PM-85：Groq Whisper 語音轉文字（用 `wrangler secret put GROQ_API_KEY` 設定，不寫明文）
+  GROQ_API_KEY: string;
 }
 
 // ── 與擴充端一致的 payload 型別 ──────────────────────────
@@ -1518,6 +1520,9 @@ export default {
       if (request.method === 'POST' && path === '/api/correct') {
         return await correctText(request, env);
       }
+      if (request.method === 'POST' && path === '/api/transcribe') {
+        return await handleTranscribe(request, env); // PM-85：Groq Whisper 語音轉文字
+      }
       if (request.method === 'POST' && path === '/api/auth/google') {
         return await googleAuth(request, env);
       }
@@ -1798,6 +1803,68 @@ async function correctText(request: Request, env: Env): Promise<Response> {
     return json({ corrected });
   } catch (err) {
     return json({ error: `AI 校正失敗: ${err instanceof Error ? err.message : String(err)}` }, 500);
+  }
+}
+
+// POST /api/transcribe — Groq Whisper 語音轉文字（PM-85：麥克風架構升級 1/3）
+// 接收音訊（multipart form-data 的 audio 欄位，或 raw binary）→ Groq Whisper → 回中文逐字稿。
+async function handleTranscribe(request: Request, env: Env): Promise<Response> {
+  // 1. 讀取音訊
+  const contentType = request.headers.get('content-type') || '';
+  let audioBlob: Blob;
+  if (contentType.includes('multipart/form-data')) {
+    const formData = await request.formData();
+    const file = formData.get('audio');
+    if (!file || typeof file === 'string') {
+      return json({ error: '缺少 audio 欄位' }, 400);
+    }
+    audioBlob = file;
+  } else {
+    audioBlob = await request.blob();
+  }
+
+  // 2. 檢查大小（上限 25MB = Groq 免費版限制；過短視為無效）
+  if (audioBlob.size > 25 * 1024 * 1024) {
+    return json({ error: '音訊超過 25MB 上限' }, 400);
+  }
+  if (audioBlob.size < 100) {
+    return json({ error: '音訊太短' }, 400);
+  }
+
+  // 3. 呼叫 Groq Whisper API
+  const groqForm = new FormData();
+  groqForm.append('file', audioBlob, 'audio.webm');
+  groqForm.append('model', 'whisper-large-v3-turbo');
+  groqForm.append('language', 'zh'); // 預設中文
+  groqForm.append('response_format', 'verbose_json');
+
+  try {
+    const groqRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${env.GROQ_API_KEY}` },
+      body: groqForm,
+    });
+    if (!groqRes.ok) {
+      const errText = await groqRes.text();
+      console.error('Groq API error:', groqRes.status, errText);
+      return json({ error: 'Groq 轉錄失敗', detail: errText }, 502);
+    }
+    const result = (await groqRes.json()) as {
+      text?: string;
+      segments?: Array<{ start: number; end: number; text: string }>;
+      language?: string;
+      duration?: number;
+    };
+    return json({
+      ok: true,
+      text: result.text ?? '',
+      segments: result.segments ?? [],
+      language: result.language ?? 'zh',
+      duration: result.duration ?? 0,
+    });
+  } catch (err) {
+    console.error('Groq fetch error:', err);
+    return json({ error: '語音轉錄服務暫時不可用' }, 503);
   }
 }
 
