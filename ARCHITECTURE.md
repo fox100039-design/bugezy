@@ -65,6 +65,12 @@ job/           每日任務檔
 3. **智能過濾**：只擷取 console.error 和 4xx/5xx，過濾 200 OK
 4. **MCP Pull 模式**：初始只傳 ~1,000 token 摘要，AI 按需查詢細節
 5. **語言 Token 壓縮**：亞洲語言先轉極簡英文技術術語再餵 AI
+6. **Supabase 安全鐵律（PM-93）**：
+   > 所有 public table 一律 `ENABLE ROW LEVEL SECURITY`，**不加任何 policy（= deny all）**。唯一能存取資料的途徑是 Worker 的 **`service_role` key**（天生繞過 RLS）。anon key 完全鎖死（任何 SELECT/INSERT/UPDATE/DELETE 皆 deny）。
+   >
+   > - 新增 table 時**必須**跟著 `ALTER TABLE <name> ENABLE ROW LEVEL SECURITY;`，不需寫 policy。
+   > - Worker 連線 key 統一走 `supaKey(env)` = `SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY`；**正式環境必須設 `SUPABASE_SERVICE_ROLE_KEY`**（`wrangler secret put`），否則開 RLS 後 Worker(anon) 會被自己鎖死。
+   > - 鎖死腳本：`server/rls-lockdown.sql`（含動態對所有 public table 開 RLS）。
 
 ## §5 MCP Server Tool Schema
 

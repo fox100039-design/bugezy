@@ -58,7 +58,8 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   last_login_at TIMESTAMPTZ DEFAULT NOW()
 );
-ALTER TABLE users DISABLE ROW LEVEL SECURITY;
+-- PM-93：users 改為 ENABLE RLS（原 PM-61 的 DISABLE 已不需要——Worker 改用 service_role 繞 RLS）
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reports ADD COLUMN IF NOT EXISTS user_id TEXT;
 
 -- ── PM-63：免費/付費用量限制（每月計數，跨月自動重置）──
@@ -70,3 +71,10 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS usage_reset_at TIMESTAMPTZ DEFAULT NO
 -- ── PM-73：取消訂閱（綠界訂單編號 + 付費到期日；plan 多一個 'cancelled' 狀態）──
 ALTER TABLE users ADD COLUMN IF NOT EXISTS ecpay_trade_no TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_expires_at TIMESTAMPTZ;
+
+-- ── PM-93：全 public table 開 RLS(deny all)，anon key 完全鎖死；唯一存取途徑是 Worker 的 service_role。
+--    ⚠ 執行前務必先 `wrangler secret put SUPABASE_SERVICE_ROLE_KEY`，否則 Worker(anon) 會被鎖死。
+--    完整腳本 + 步驟見 server/rls-lockdown.sql。
+ALTER TABLE reports   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE mcp_usage ENABLE ROW LEVEL SECURITY;
+ALTER TABLE users     ENABLE ROW LEVEL SECURITY;

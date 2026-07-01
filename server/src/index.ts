@@ -15,6 +15,9 @@ export interface Env {
   R2: R2Bucket;
   SUPABASE_URL: string;
   SUPABASE_ANON_KEY: string;
+  // PM-93：service_role key（繞過 RLS）。設定後 supaKey() 會優先用它，未設定則退回 anon key（安全部署，不破壞現況）。
+  // 全 public table 開 RLS（deny all）前，必須先 `wrangler secret put SUPABASE_SERVICE_ROLE_KEY`，否則 Worker 用 anon 會被鎖死。
+  SUPABASE_SERVICE_ROLE_KEY?: string;
   AI: Ai; // Cloudflare Workers AI binding（PM-25）
   // PM-72：綠界 ECPay（測試環境值放 wrangler.toml [vars]；正式上線改用 secret）
   ECPAY_MERCHANT_ID: string;
@@ -86,8 +89,14 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
+/** PM-93：Supabase 連線 key — 優先 service_role（繞過 RLS），未設定則退回 anon（安全過渡）。
+ *  全 table 開 RLS(deny all) 後，唯一能存取資料的途徑就是這把 service_role key。 */
+function supaKey(env: Env): string {
+  return env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY;
+}
+
 function supa(env: Env): SupabaseClient {
-  return createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY);
+  return createClient(env.SUPABASE_URL, supaKey(env));
 }
 
 // ── PM-63：免費/付費用量限制 ────────────────────────────────
@@ -2315,12 +2324,13 @@ async function logMcpUsage(
   reportId?: string,
 ): Promise<void> {
   try {
+    const key = supaKey(env); // PM-93：service_role（繞 RLS）或退回 anon
     await fetch(`${env.SUPABASE_URL}/rest/v1/mcp_usage`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        apikey: env.SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${env.SUPABASE_ANON_KEY}`,
+        apikey: key,
+        Authorization: `Bearer ${key}`,
         Prefer: 'return=minimal',
       },
       body: JSON.stringify({
@@ -2339,10 +2349,11 @@ async function logMcpUsage(
 async function getMonthlyUsage(env: Env): Promise<Record<string, unknown>> {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const key = supaKey(env); // PM-93：service_role（繞 RLS）或退回 anon
   const res = await fetch(
     `${env.SUPABASE_URL}/rest/v1/mcp_usage?select=tool_name,tokens_estimated,chrome_tokens_estimated&created_at=gte.${monthStart}`,
     {
-      headers: { apikey: env.SUPABASE_ANON_KEY, Authorization: `Bearer ${env.SUPABASE_ANON_KEY}` },
+      headers: { apikey: key, Authorization: `Bearer ${key}` },
     },
   );
   const rows = (await res.json().catch(() => [])) as Array<{
