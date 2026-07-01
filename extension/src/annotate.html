@@ -48,6 +48,14 @@
     }
     .voice-btn.listening { background: #dc2626; border-color: #dc2626; animation: pulse 1s infinite; }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+    /* PM-100：問題描述左邊的臨時「語音／鍵盤」快速切換鈕 */
+    .voice-toggle-btn {
+      background: #2a2a3e; border: 1px solid #555; border-radius: 8px;
+      padding: 8px; font-size: 20px; cursor: pointer; flex-shrink: 0;
+      transition: background 0.2s;
+    }
+    .voice-toggle-btn:hover { background: #3a3a5e; }
+    .voice-toggle-btn.mic-on { background: #1a3a1a; border-color: #3fb950; }
     .voice-status { color: #9aa3b2; font-size: 12px; margin-top: 4px; min-height: 16px; }
 
     /* AI 精簡（PM-25） */
@@ -109,6 +117,7 @@
       <label for="descInput">💬 問題描述（選填）</label>
     </div>
     <div class="desc-row">
+      <button id="voice-toggle" class="voice-toggle-btn" title="切換到鍵盤輸入">⌨️</button>
       <textarea id="descInput" placeholder="描述你看到的問題，或按右邊麥克風語音輸入..." rows="3"></textarea>
       <button id="voiceInputBtn" class="voice-btn" title="語音輸入">🎤</button>
     </div>

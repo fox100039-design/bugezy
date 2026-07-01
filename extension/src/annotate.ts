@@ -223,6 +223,27 @@ let listening = false;
 const captionText = $('captionText');
 const liveCaptions = $('liveCaptions');
 
+// PM-100：問題描述左邊「語音／鍵盤」臨時快速切換鈕。
+// icon ⌨️ = 目前語音模式（點我切鍵盤）；icon 🎙️ = 目前鍵盤模式（點我切語音）。
+// 只影響這次標注，下次截圖重新載入頁面就恢復預設語音。
+const voiceToggle = $<HTMLButtonElement>('voice-toggle');
+let voiceOn = true;
+function setVoiceToggleUI(on: boolean): void {
+  voiceOn = on;
+  voiceToggle.textContent = on ? '⌨️' : '🎙️';
+  voiceToggle.title = on ? '切換到鍵盤輸入' : '切換到語音輸入';
+  voiceToggle.classList.toggle('mic-on', !on); // 鍵盤模式時亮綠框
+}
+voiceToggle.addEventListener('click', () => {
+  if (voiceOn) {
+    setVoiceToggleUI(false);
+    stopListening(); // 臨時關麥，改鍵盤打字
+  } else {
+    setVoiceToggleUI(true);
+    void startListening(); // 復用頁面載入時同一條語音啟動邏輯
+  }
+});
+
 // PM-42：套用 inject.ts PM-32/33 穩定模式——工廠建全新實例 + onend 失敗計數。
 let autoRestartFails = 0;
 
@@ -293,7 +314,12 @@ function createAnnotateRecognition(): SRInst | null {
   };
   rec.onerror = (e: SRErr) => {
     captionText.textContent = `語音錯誤：${e.error}`;
-    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') stopListening();
+    // PM-100：語音授權/服務失敗 → 自動退回鍵盤並更新切換鈕（不含 no-speech：
+    // no-speech 只是靜默，onend 會自動重啟，若在此切鍵盤會讓每次停頓都殺掉麥克風）。
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      setVoiceToggleUI(false);
+      stopListening();
+    }
   };
 
   return rec;
@@ -353,6 +379,7 @@ voiceInputBtn.addEventListener('click', () => {
 chrome.storage.local.get(KEYBOARD_MODE_KEY, (r) => {
   if (r[KEYBOARD_MODE_KEY] === true) {
     voiceStatus.textContent = '🔇 鍵盤模式（語音已關閉）';
+    setVoiceToggleUI(false); // PM-100：頁面本就鍵盤模式 → 切換鈕同步顯示 🎙️
   } else {
     window.setTimeout(() => startListening(), 800);
   }
