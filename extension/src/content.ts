@@ -303,32 +303,29 @@ function createToolbar(onMode: (mode: string) => void) {
   const bar = document.createElement('div');
   bar.id = SS_TOOLBAR_ID;
   bar.style.cssText = `position:fixed;top:0;left:0;right:0;z-index:${Z_TOP};display:flex;align-items:center;gap:8px;padding:10px 16px;background:#16213e;border-bottom:1px solid #333;font-family:system-ui,sans-serif;font-size:14px;color:#fff;`;
-  // PM-101：入場邊框掃光動畫（與 annotate 工具列一致），讓使用者一眼看到模式選擇列出現
+  // PM-102：入場亮紫脈衝光暈（與 annotate 工具列一致），深色背景上更醒目；閃 3 次後退暗
   bar.style.cssText += `
-    border-bottom: 2px solid transparent;
-    background:
-      linear-gradient(#16213e, #16213e) padding-box,
-      linear-gradient(90deg, #333 0%, #333 40%, #7c3aed 50%, #333 60%, #333 100%) border-box;
-    background-size: 100% 100%, 300% 100%;
-    animation: bugezy-toolbar-sweep 1.5s ease-in-out 2;
-    box-shadow: 0 2px 12px rgba(124, 58, 237, 0.3);
+    border: 2px solid #7c3aed;
+    box-shadow: 0 0 20px rgba(124, 58, 237, 0.8), 0 0 40px rgba(124, 58, 237, 0.4);
+    animation: bugezy-toolbar-pulse 0.6s ease-in-out 3;
   `;
-  if (!document.getElementById('bugezy-toolbar-sweep-style')) {
+  if (!document.getElementById('bugezy-toolbar-pulse-style')) {
     const style = document.createElement('style');
-    style.id = 'bugezy-toolbar-sweep-style';
+    style.id = 'bugezy-toolbar-pulse-style';
     style.textContent = `
-      @keyframes bugezy-toolbar-sweep {
-        0% { background-position: 0% 50%, 0% 50%; }
-        100% { background-position: 0% 50%, 100% 50%; }
+      @keyframes bugezy-toolbar-pulse {
+        0%, 100% { box-shadow: 0 0 8px rgba(124,58,237,0.3); }
+        50% { box-shadow: 0 0 25px rgba(124,58,237,0.9), 0 0 50px rgba(124,58,237,0.4); }
       }
     `;
     document.head.appendChild(style);
   }
-  // 動畫播完 2 次 → 切靜態微光，不持續閃
+  // 脈衝播完 3 次 → 邊框退暗 + 常駐微光，不持續閃
   bar.addEventListener('animationend', () => {
     bar.style.animation = 'none';
-    bar.style.borderImage = 'linear-gradient(90deg, #333, #7c3aed, #333) 1';
-    bar.style.boxShadow = '0 2px 8px rgba(124, 58, 237, 0.2)';
+    bar.style.borderColor = '#444';
+    bar.style.boxShadow = '0 2px 8px rgba(124,58,237,0.15)';
+    bar.style.transition = 'border-color 0.5s, box-shadow 0.5s';
   });
   const modes: Array<[string, string]> = [
     ['full', '📷 整頁'],
