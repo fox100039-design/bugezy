@@ -8,8 +8,10 @@ import {
   ALLOW_SCREENSHOT_KEY,
   API_BASE,
   KEYBOARD_MODE_KEY,
+  SESSION_KEY,
   blog,
   type ControlMessage,
+  type Session,
 } from './types';
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -361,8 +363,11 @@ saveBtn.addEventListener('click', async () => {
   const annotatedDataUrl = canvas.toDataURL('image/png');
   stopListening(); // 存檔前停止語音辨識
   // PM-83：讀 popup「高畫質 AI 分析」開關，截圖上傳時帶入報告設定（預設 false 省 token）
-  const ssStore = await chrome.storage.local.get(ALLOW_SCREENSHOT_KEY);
+  // PM-98：同時讀登入 session，把 user_id 綁進報告（與 background 錄製上傳一致）——
+  // 否則截圖報告沒有 owner，MCP list_reports（依 user_id 過濾）永遠查不到。
+  const ssStore = await chrome.storage.local.get([ALLOW_SCREENSHOT_KEY, SESSION_KEY]);
   const allowScreenshotImages = ssStore[ALLOW_SCREENSHOT_KEY] === true;
+  const session = ssStore[SESSION_KEY] as Session | undefined;
   const payload = {
     rrwebEvents: [],
     consoleLogs: [],
@@ -371,6 +376,7 @@ saveBtn.addEventListener('click', async () => {
     screenshots: [{ dataUrl: annotatedDataUrl, timestamp: Date.now() }],
     description: descInput.value.trim(),
     allow_screenshot_images: allowScreenshotImages,
+    ...(session?.user_id ? { user_id: session.user_id } : {}),
     pageInfo: {
       url: params.get('pageUrl') ?? '',
       title: params.get('pageTitle') ?? '',
@@ -385,7 +391,11 @@ saveBtn.addEventListener('click', async () => {
   try {
     const res = await fetch(`${API_BASE}/api/reports`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        // PM-98：帶 session token，讓 server 端防呆能在漏帶 user_id 時從 header 補回
+        ...(session?.session_token ? { Authorization: `Bearer ${session.session_token}` } : {}),
+      },
       body: JSON.stringify(payload),
     });
     const data = (await res.json()) as { report_id?: string; share_url?: string };

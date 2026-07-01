@@ -1917,6 +1917,13 @@ async function createReport(request: Request, env: Env, origin: string): Promise
     return json({ error: 'invalid payload：缺少 pageInfo' }, 400);
   }
 
+  // PM-98 防呆：報告 owner 綁定用 user_id。若上傳端（早期截圖流程）漏帶 payload.user_id，
+  // 退而從 Authorization: Bearer <session_token> 補回，避免報告變孤兒（list_reports 依 user_id 過濾查不到）。
+  if (!payload.user_id) {
+    const headerUserId = getUserIdFromHeader(request);
+    if (headerUserId) payload.user_id = headerUserId;
+  }
+
   const report_id = crypto.randomUUID();
   const rrweb_r2_key = `reports/${report_id}/rrweb.json`;
   const screenshots = payload.screenshots ?? [];
