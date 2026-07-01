@@ -7,23 +7,23 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #1a1a2e; display: flex; flex-direction: column; height: 100vh; overflow: hidden; font-family: system-ui, "Microsoft JhengHei", sans-serif; }
 
-    /* 工具列（PM-102：入場亮紫脈衝光暈，深色背景上更醒目；閃 3 次後退回暗邊框微光）*/
+    /* 工具列（PM-103：annotate 頁固定深色底 → 高亮橘光脈衝入場 0.7s×10≈7 秒，之後退暗微光）*/
     .toolbar {
       display: flex; align-items: center; gap: 8px;
       padding: 8px 16px; background: #16213e;
-      border: 2px solid #7c3aed;
-      box-shadow: 0 0 20px rgba(124, 58, 237, 0.8), 0 0 40px rgba(124, 58, 237, 0.4);
-      animation: toolbar-pulse 0.6s ease-in-out 3;
+      border: 2px solid #ff8c00;
+      box-shadow: 0 0 20px rgba(255, 140, 0, 0.8);
+      animation: toolbar-orange-pulse 0.7s ease-in-out 10;
     }
-    @keyframes toolbar-pulse {
-      0%, 100% { box-shadow: 0 0 8px rgba(124, 58, 237, 0.3); }
-      50% { box-shadow: 0 0 25px rgba(124, 58, 237, 0.9), 0 0 50px rgba(124, 58, 237, 0.4); }
+    @keyframes toolbar-orange-pulse {
+      0%, 100% { box-shadow: 0 0 8px rgba(255, 140, 0, 0.3); border-color: #ff8c00; }
+      50% { box-shadow: 0 0 30px rgba(255, 140, 0, 1), 0 0 60px rgba(255, 140, 0, 0.5); border-color: #ffaa00; }
     }
-    /* 脈衝結束後：邊框退暗 + 常駐微光 */
+    /* 7 秒脈衝結束後：邊框退暗 + 常駐微光 */
     .toolbar.glow-settled {
       animation: none;
       border-color: #444;
-      box-shadow: 0 2px 8px rgba(124, 58, 237, 0.15);
+      box-shadow: 0 2px 8px rgba(255, 140, 0, 0.15);
       transition: border-color 0.5s, box-shadow 0.5s;
     }
     .toolbar button {

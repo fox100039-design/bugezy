@@ -299,34 +299,68 @@ function setHint(text: string) {
 }
 
 /** 頂部模式選擇列 */
+// PM-103：以相對亮度判斷頁面底色（<128 視為深色）。透明/取不到 → 當深色。
+function isDarkBackground(): boolean {
+  const bg = window.getComputedStyle(document.body).backgroundColor;
+  const match = bg.match(/\d+/g);
+  if (!match) return true;
+  const [r, g, b] = match.map(Number);
+  return 0.299 * r + 0.587 * g + 0.114 * b < 128;
+}
+
+// PM-103：一次性注入橘光脈衝 keyframes + 紅色跑馬燈（@property + conic-gradient ::before）。
+function injectToolbarFxStyles(): void {
+  if (document.getElementById('bugezy-toolbar-fx-style')) return;
+  const style = document.createElement('style');
+  style.id = 'bugezy-toolbar-fx-style';
+  style.textContent = `
+    @property --bugezy-marquee-angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+    @keyframes bugezy-orange-pulse {
+      0%, 100% { box-shadow: 0 0 8px rgba(255,140,0,0.3); border-color: #ff8c00; }
+      50% { box-shadow: 0 0 30px rgba(255,140,0,1), 0 0 60px rgba(255,140,0,0.5); border-color: #ffaa00; }
+    }
+    #${SS_TOOLBAR_ID}.bugezy-marquee-active::before {
+      content: ''; position: absolute; inset: -2px; border-radius: inherit; pointer-events: none;
+      background: conic-gradient(from var(--bugezy-marquee-angle),
+        transparent 0%, transparent 70%, #ff0000 80%, #ff4444 90%, transparent 100%);
+      z-index: -1; animation: bugezy-spin 1s linear infinite;
+    }
+    @keyframes bugezy-spin { to { --bugezy-marquee-angle: 360deg; } }
+  `;
+  document.head.appendChild(style);
+}
+
+// PM-103：套用入場光效並在 7 秒後平滑退回靜態。深色→橘光脈衝（0.7s×10）；淺色→紅色跑馬燈。
+function applyToolbarEntranceFx(bar: HTMLElement): void {
+  injectToolbarFxStyles();
+  const dark = isDarkBackground();
+  if (dark) {
+    bar.style.border = '2px solid #ff8c00';
+    bar.style.boxShadow = '0 0 20px rgba(255,140,0,0.8)';
+    bar.style.animation = 'bugezy-orange-pulse 0.7s ease-in-out 10'; // 0.7×10 = 7 秒
+  } else {
+    // 注意：不改 position（bar 為 position:fixed 全寬頂列，改 relative 會失去 top 固定）；
+    // ::before 對 fixed 父層一樣有效。
+    bar.style.border = '2px solid #ff4444';
+    bar.style.boxShadow = '0 0 12px rgba(255,0,0,0.4)';
+    bar.classList.add('bugezy-marquee-active');
+  }
+  // 7 秒後清理退場（兩種模式共用）
+  window.setTimeout(() => {
+    bar.style.animation = 'none';
+    bar.classList.remove('bugezy-marquee-active');
+    bar.style.transition = 'border-color 0.6s, box-shadow 0.6s';
+    bar.style.borderColor = dark ? '#444' : '#ccc';
+    bar.style.boxShadow = dark ? '0 2px 8px rgba(255,140,0,0.15)' : '0 2px 8px rgba(0,0,0,0.15)';
+  }, 7000);
+}
+
 function createToolbar(onMode: (mode: string) => void) {
   const bar = document.createElement('div');
   bar.id = SS_TOOLBAR_ID;
   bar.style.cssText = `position:fixed;top:0;left:0;right:0;z-index:${Z_TOP};display:flex;align-items:center;gap:8px;padding:10px 16px;background:#16213e;border-bottom:1px solid #333;font-family:system-ui,sans-serif;font-size:14px;color:#fff;`;
-  // PM-102：入場亮紫脈衝光暈（與 annotate 工具列一致），深色背景上更醒目；閃 3 次後退暗
-  bar.style.cssText += `
-    border: 2px solid #7c3aed;
-    box-shadow: 0 0 20px rgba(124, 58, 237, 0.8), 0 0 40px rgba(124, 58, 237, 0.4);
-    animation: bugezy-toolbar-pulse 0.6s ease-in-out 3;
-  `;
-  if (!document.getElementById('bugezy-toolbar-pulse-style')) {
-    const style = document.createElement('style');
-    style.id = 'bugezy-toolbar-pulse-style';
-    style.textContent = `
-      @keyframes bugezy-toolbar-pulse {
-        0%, 100% { box-shadow: 0 0 8px rgba(124,58,237,0.3); }
-        50% { box-shadow: 0 0 25px rgba(124,58,237,0.9), 0 0 50px rgba(124,58,237,0.4); }
-      }
-    `;
-    document.head.appendChild(style);
-  }
-  // 脈衝播完 3 次 → 邊框退暗 + 常駐微光，不持續閃
-  bar.addEventListener('animationend', () => {
-    bar.style.animation = 'none';
-    bar.style.borderColor = '#444';
-    bar.style.boxShadow = '0 2px 8px rgba(124,58,237,0.15)';
-    bar.style.transition = 'border-color 0.5s, box-shadow 0.5s';
-  });
+  // PM-103：入場光效自適應底色——深色頁→橘光脈衝；淺色頁→紅色跑馬燈；7 秒後退回靜態。
+  applyToolbarEntranceFx(bar);
   const modes: Array<[string, string]> = [
     ['full', '📷 整頁'],
     ['area', '⬜ 區域（兩點）'],
