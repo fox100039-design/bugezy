@@ -48,6 +48,10 @@ toolbar?.addEventListener('mousedown', (e) => {
   const tag = (e.target as HTMLElement).tagName.toLowerCase();
   if (tag !== 'input' && tag !== 'select') e.preventDefault();
 });
+// PM-101：工具列入場掃光動畫播完 2 次後切靜態微光（不持續閃）
+toolbar?.addEventListener('animationend', () => {
+  (toolbar as HTMLElement).classList.add('glow-settled');
+});
 
 const params = new URLSearchParams(location.search);
 const key = params.get('key');

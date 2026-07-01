@@ -7,11 +7,29 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #1a1a2e; display: flex; flex-direction: column; height: 100vh; overflow: hidden; font-family: system-ui, "Microsoft JhengHei", sans-serif; }
 
-    /* 工具列 */
+    /* 工具列（PM-101：入場邊框掃光動畫，讓使用者一眼看到功能列出現）*/
     .toolbar {
       display: flex; align-items: center; gap: 8px;
-      padding: 8px 16px; background: #16213e;
-      border-bottom: 1px solid #333;
+      padding: 8px 16px;
+      position: relative;
+      border: 2px solid transparent;
+      background:
+        linear-gradient(#16213e, #16213e) padding-box,
+        linear-gradient(90deg, #333 0%, #333 40%, #7c3aed 50%, #333 60%, #333 100%) border-box;
+      background-size: 100% 100%, 300% 100%;
+      animation: toolbar-sweep 1.5s ease-in-out 2;
+      box-shadow: 0 2px 12px rgba(124, 58, 237, 0.3);
+    }
+    /* 掃光動畫：漸層 background-position 從左到右 */
+    @keyframes toolbar-sweep {
+      0% { background-position: 0% 50%, 0% 50%; }
+      100% { background-position: 0% 50%, 100% 50%; }
+    }
+    /* 動畫結束後的常駐微光 */
+    .toolbar.glow-settled {
+      animation: none;
+      border-image: linear-gradient(90deg, #333, #7c3aed, #333) 1;
+      box-shadow: 0 2px 8px rgba(124, 58, 237, 0.2);
     }
     .toolbar button {
       background: #333; color: #fff; border: 1px solid #555;
