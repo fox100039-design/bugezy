@@ -162,6 +162,9 @@ async function checkRecordingUsage(): Promise<string | null> {
   }
 }
 
+// PM-97：本次錄製的 tab id 快取，供 MIC_VOLUME（每 200ms）轉發音量到頁面，免每次讀 storage。
+let recordingTabId: number | null = null;
+
 async function startRecording(): Promise<StateResponse> {
   // PM-63：先檢查並遞增用量；達上限則不進入錄製，回傳升級提示
   const limitReached = await checkRecordingUsage();
@@ -201,6 +204,7 @@ async function startRecording(): Promise<StateResponse> {
     tabId: tab.id,
     summary: null,
   });
+  recordingTabId = tab.id; // PM-97：快取供 MIC_VOLUME 轉發
   setBadgeRecording();
   return toResponse(s);
 }
@@ -213,6 +217,7 @@ async function stopRecording(): Promise<StateResponse> {
   }
   // 摘要由 content script 的 RECORDING_DONE 回填；這裡先標記停止。
   const next = await setState({ recording: false });
+  recordingTabId = null; // PM-97：停止轉發音量
   clearBadge();
   return toResponse(next);
 }
@@ -451,6 +456,17 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summ
             await stopMicAndTranscribe();
           }
           sendResponse(await stopRecording());
+          break;
+        }
+        case 'MIC_VOLUME': {
+          // PM-97：offscreen 每 200ms 送即時音量 → 轉發給錄製中的 tab（inject 更新音量條）
+          if (recordingTabId !== null) {
+            const level = (msg as { level?: number }).level ?? 0;
+            chrome.tabs
+              .sendMessage(recordingTabId, { type: 'MIC_VOLUME', level } satisfies ControlMessage)
+              .catch(() => {});
+          }
+          sendResponse({ ok: true }); // 立即回應關閉通道，避免 200ms 一次的 port 未回覆警告
           break;
         }
         case 'CLEAR_RECORDING':

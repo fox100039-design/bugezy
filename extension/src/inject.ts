@@ -320,7 +320,9 @@ function main() {
     captionBar = bar;
   }
 
-  /** PM-91：付費 Whisper 模式的「錄音中」反饋 bar（紅色脈衝點，不啟 SpeechRecognition；停止後轉錄）。
+  /** PM-91/97：付費 Whisper 模式的「錄音中」反饋 bar。
+   *  PM-97：靜態脈衝紅點改為 5 條即時音量條（安靜=矮紅、講話=綠色跳動），
+   *  音量由 offscreen → background → content 以 `bugezy-mic-volume` CustomEvent 送進來。
    *  text span 用 id `bugezy-caption-text`，停止時 content 收 WHISPER_TRANSCRIBING 可改字。 */
   function showWhisperCaptionBar() {
     document.getElementById('bugezy-live-caption')?.remove();
@@ -328,23 +330,39 @@ function main() {
     bar.id = 'bugezy-live-caption';
     bar.style.cssText =
       'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);z-index:2147483647;pointer-events:none;background:rgba(0,0,0,0.85);color:#fff;padding:12px 28px;border-radius:12px;font-size:18px;font-family:system-ui,sans-serif;display:flex;align-items:center;gap:10px;';
-    const dot = document.createElement('span');
-    dot.style.cssText =
-      'width:12px;height:12px;border-radius:50%;background:#ef4444;animation:bugezy-pulse 1.5s infinite;flex-shrink:0;';
-    bar.appendChild(dot);
+
+    // PM-97：5 條音量條（取代原本 bugezy-pulse 靜態紅點）
+    const bars = document.createElement('span');
+    bars.id = 'bugezy-volume-bars';
+    bars.style.cssText = 'display:flex;align-items:flex-end;gap:2px;height:20px;flex-shrink:0;';
+    for (let i = 0; i < 5; i++) {
+      const b = document.createElement('span');
+      b.className = 'bugezy-vol-bar';
+      b.style.cssText =
+        'width:4px;background:#ef4444;border-radius:2px;transition:height 0.15s ease;height:4px;';
+      bars.appendChild(b);
+    }
+    bar.appendChild(bars);
+
     const text = document.createElement('span');
     text.id = 'bugezy-caption-text';
-    text.textContent = '🎙️ Whisper 錄音中…（停止後自動轉錄）';
+    text.textContent = '🎙️ 錄音中…（停止後自動轉錄）';
     bar.appendChild(text);
-    if (!document.getElementById('bugezy-pulse-style')) {
-      const style = document.createElement('style');
-      style.id = 'bugezy-pulse-style';
-      style.textContent = '@keyframes bugezy-pulse{0%,100%{opacity:1}50%{opacity:0.3}}';
-      document.head.appendChild(style);
-    }
     document.body.appendChild(bar);
     captionBar = bar;
   }
+
+  // PM-97：接 content relay 的即時音量，更新 5 條音量條高度 + 顏色（安靜矮紅、講話綠色跳動）。
+  // 只註冊一次；bar 不存在時 querySelectorAll 回空、無副作用。
+  window.addEventListener('bugezy-mic-volume', ((e: Event) => {
+    const level = (e as CustomEvent).detail?.level ?? 0;
+    document.querySelectorAll('.bugezy-vol-bar').forEach((b, i) => {
+      const threshold = (i + 1) / 5;
+      const h = level >= threshold ? 4 + 16 * level + Math.random() * 4 : 4;
+      (b as HTMLElement).style.height = `${Math.min(h, 20)}px`;
+      (b as HTMLElement).style.background = level > 0.3 ? '#3fb950' : '#ef4444';
+    });
+  }) as EventListener);
 
   /** PM-30：更新字幕文字只動 textSpan，保留 🔄 按鈕不被清掉 */
   function setCaptionText(text: string) {

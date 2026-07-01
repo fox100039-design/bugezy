@@ -118,7 +118,9 @@ export type ControlMessage =
   // PM-89：popup 開麥克風 toggle 時請求授權（在 toggle 觸發，不在錄製時）
   | { type: 'REQUEST_MIC_PERMISSION' }
   // PM-91：Whisper 模式停止錄製 → 通知頁面顯示「轉錄中」
-  | { type: 'WHISPER_TRANSCRIBING' };
+  | { type: 'WHISPER_TRANSCRIBING' }
+  // PM-97：offscreen 即時音量（0~1）→ background 轉發 → content relay → inject 更新音量條
+  | { type: 'MIC_VOLUME'; level: number };
 
 /** background → popup 的狀態回應 */
 export interface StateResponse {

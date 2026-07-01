@@ -169,6 +169,10 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
     const el = document.getElementById('bugezy-caption-text');
     if (el) el.textContent = '⏳ 語音轉錄中…';
     sendResponse({ ok: true });
+  } else if (msg.type === 'MIC_VOLUME') {
+    // PM-97：轉發即時音量給 inject（MAIN world）——CustomEvent 派在共用的 window EventTarget 上跨世界
+    window.dispatchEvent(new CustomEvent('bugezy-mic-volume', { detail: { level: msg.level } }));
+    sendResponse({ ok: true });
   } else if (msg.type === 'START_SCREENSHOT') {
     injectScreenshotOverlay();
     sendResponse({ ok: true });

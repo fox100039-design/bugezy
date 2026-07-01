@@ -5,6 +5,43 @@
 let mediaRecorder: MediaRecorder | null = null;
 let chunks: Blob[] = [];
 
+// PM-97：即時音量分析（AudioContext + AnalyserNode），每 200ms 回報 MIC_VOLUME 給 background。
+let audioCtx: AudioContext | null = null;
+let analyser: AnalyserNode | null = null;
+let volumeTimer: ReturnType<typeof setInterval> | null = null;
+
+function startVolumeMeter(stream: MediaStream): void {
+  try {
+    audioCtx = new AudioContext();
+    const source = audioCtx.createMediaStreamSource(stream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    source.connect(analyser);
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+    volumeTimer = setInterval(() => {
+      if (!analyser) return;
+      analyser.getByteFrequencyData(dataArray);
+      const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+      const level = Math.min(avg / 128, 1);
+      chrome.runtime.sendMessage({ type: 'MIC_VOLUME', level }).catch(() => {});
+    }, 200);
+  } catch (err) {
+    console.error('[BugEzy offscreen] 音量分析啟動失敗:', err);
+  }
+}
+
+function stopVolumeMeter(): void {
+  if (volumeTimer) {
+    clearInterval(volumeTimer);
+    volumeTimer = null;
+  }
+  if (audioCtx) {
+    void audioCtx.close();
+    audioCtx = null;
+    analyser = null;
+  }
+}
+
 async function startRecording(): Promise<void> {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -21,6 +58,7 @@ async function startRecording(): Promise<void> {
       if (e.data.size > 0) chunks.push(e.data);
     };
     mediaRecorder.start(1000); // 每秒一個 chunk
+    startVolumeMeter(stream); // PM-97：同一條 stream 開音量表
     console.log('[BugEzy offscreen] 錄音開始');
   } catch (err) {
     console.error('[BugEzy offscreen] getUserMedia 失敗:', err);
@@ -34,6 +72,7 @@ function stopRecording(): Promise<{ audioBlob?: string; error?: string }> {
       return;
     }
     const rec = mediaRecorder;
+    stopVolumeMeter(); // PM-97：先停音量表
     rec.onstop = () => {
       const blob = new Blob(chunks, { type: 'audio/webm;codecs=opus' });
       chunks = [];
