@@ -758,36 +758,64 @@ function main() {
     const existing = document.getElementById('bugezy-mic-overlay');
     if (existing) existing.remove();
 
+    // PM-95：改成全頁半透明遮罩 + 居中卡片（原本是頂部橫條，跟網頁融在一起看不到）
     const overlay = document.createElement('div');
     overlay.id = 'bugezy-mic-overlay';
     overlay.style.cssText = `
       position: fixed;
-      top: 0; left: 0; right: 0;
+      top: 0; left: 0; right: 0; bottom: 0;
       z-index: 2147483647;
-      background: rgba(0,0,0,0.85);
-      color: #fff;
+      background: rgba(0, 0, 0, 0.6);
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 12px;
-      padding: 12px 20px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      font-size: 14px;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.3);
     `;
 
-    const label = document.createElement('span');
-    label.textContent = '🎤 BugEzy 需要麥克風來錄語音';
+    const card = document.createElement('div');
+    card.style.cssText = `
+      background: #1a1a2e;
+      border: 1px solid #7c3aed;
+      border-radius: 16px;
+      padding: 32px 40px;
+      max-width: 380px;
+      text-align: center;
+      box-shadow: 0 8px 32px rgba(124, 58, 237, 0.3);
+    `;
+
+    const icon = document.createElement('div');
+    icon.textContent = '🎙️';
+    icon.style.cssText = 'font-size: 48px; line-height: 1;';
+
+    const title = document.createElement('h3');
+    title.textContent = 'BugEzy 需要麥克風權限';
+    title.style.cssText = `
+      color: #fff;
+      font-size: 18px;
+      font-weight: 600;
+      margin: 16px 0 8px;
+    `;
+
+    const desc = document.createElement('p');
+    desc.textContent = '允許後可用語音描述 Bug · 此網站只需授權一次';
+    desc.style.cssText = `
+      color: #aaa;
+      font-size: 14px;
+      line-height: 1.5;
+      margin: 0 0 24px;
+    `;
 
     const allowBtn = document.createElement('button');
     allowBtn.textContent = '允許麥克風';
     allowBtn.style.cssText = `
+      display: block;
+      width: 100%;
       background: #7c3aed;
       color: #fff;
       border: none;
-      border-radius: 6px;
-      padding: 6px 16px;
-      font-size: 14px;
+      border-radius: 10px;
+      padding: 12px 32px;
+      font-size: 16px;
       cursor: pointer;
       font-weight: 600;
     `;
@@ -795,18 +823,22 @@ function main() {
     const skipBtn = document.createElement('button');
     skipBtn.textContent = '跳過（不錄語音）';
     skipBtn.style.cssText = `
+      display: block;
+      width: 100%;
       background: transparent;
       color: #aaa;
-      border: 1px solid #555;
-      border-radius: 6px;
-      padding: 6px 16px;
+      border: none;
+      padding: 12px 0 0;
       font-size: 13px;
       cursor: pointer;
     `;
 
-    overlay.appendChild(label);
-    overlay.appendChild(allowBtn);
-    overlay.appendChild(skipBtn);
+    card.appendChild(icon);
+    card.appendChild(title);
+    card.appendChild(desc);
+    card.appendChild(allowBtn);
+    card.appendChild(skipBtn);
+    overlay.appendChild(card);
     document.body.appendChild(overlay);
 
     allowBtn.addEventListener('click', async () => {
