@@ -469,6 +469,10 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summ
           sendResponse({ ok: true }); // 立即回應關閉通道，避免 200ms 一次的 port 未回覆警告
           break;
         }
+        case 'GET_RECORDING_STATE':
+          // PM-105：popup 在開麥克風前先問是否錄製中（錄製中不開授權頁，避免搶焦點卡死）
+          sendResponse({ recording: recordingTabId !== null });
+          break;
         case 'CLEAR_RECORDING':
           sendResponse(await clearRecording());
           break;

@@ -132,6 +132,17 @@ micToggle.addEventListener('change', async () => {
   if (micToggle.checked) {
     const store = await chrome.storage.local.get(MIC_PERMISSION_KEY);
     if (!store[MIC_PERMISSION_KEY]) {
+      // PM-105：未授權 + 正在錄製 → 只存偏好、不開授權頁（錄製中開頁會搶焦點卡死錄製）。
+      // 下次錄製才觸發授權；toggle 維持 ON 反映偏好。
+      const state = (await chrome.runtime.sendMessage({ type: 'GET_RECORDING_STATE' })) as
+        | { recording?: boolean }
+        | undefined;
+      if (state?.recording) {
+        await chrome.storage.local.set({ [MIC_KEY]: true });
+        updateMicUI();
+        return;
+      }
+      // 未錄製：正常開授權頁（toggle 暫回 OFF，授權完成後由授權頁流程設 ON）
       micToggle.checked = false;
       updateMicUI();
       await chrome.runtime.sendMessage({ type: 'REQUEST_MIC_PERMISSION' });

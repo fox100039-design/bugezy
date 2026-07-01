@@ -120,7 +120,9 @@ export type ControlMessage =
   // PM-91：Whisper 模式停止錄製 → 通知頁面顯示「轉錄中」
   | { type: 'WHISPER_TRANSCRIBING' }
   // PM-97：offscreen 即時音量（0~1）→ background 轉發 → content relay → inject 更新音量條
-  | { type: 'MIC_VOLUME'; level: number };
+  | { type: 'MIC_VOLUME'; level: number }
+  // PM-105：popup 查詢是否錄製中（錄製中開麥克風只存偏好、不開授權頁）
+  | { type: 'GET_RECORDING_STATE' };
 
 /** background → popup 的狀態回應 */
 export interface StateResponse {
