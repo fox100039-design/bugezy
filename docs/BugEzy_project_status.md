@@ -1,6 +1,6 @@
 # BugEzy 專案全貌與接手指南
 
-> 最後更新：2026-06-30
+> 最後更新：2026-07-01
 > 維護者：FOX（Claude Chat PM 角色）
 > 用途：新 Chat 對話開始時讀此檔，快速掌握全貌並接手開發
 
@@ -435,6 +435,29 @@ FOX = 創辦人 + 決策者 + 手動驗收
 - Extension（皆 build 過、**未重上架 Web Store**）：新增 `offscreen.html/ts`、`mic-permission.html/ts`；manifest 加 `offscreen` 權限；popup 麥克風 toggle + 語音模式 + 高畫質 AI toggle；語音引擎路由全鏈。
 - 域名：**bugezy.dev 已綁同 Worker 上線**（與 `…workers.dev` 雙域名並行）。
 - ⚠ 技術債（Day 15）：① extension PM-85~91 整套**未重上架 Web Store**（offscreen 權限變更需重審，等當前審核過再一起打包）；② PM-82 的 `allow_screenshot_images` ALTER + PM-73 的 2 個 ALTER 待 FOX 跑；③ domain 遷移（改 `API_BASE`→bugezy.dev）待雙審核過後執行；④ 待辦：即時字幕授權橫幅改居中 modal、Whisper 音量跳動指示器、錄製中 popup 模式按鈕 disable；⑤ 一批語音/截圖功能待瀏覽器實機驗收。
+
+---
+
+## §6k Day 16（2026-07-01，PM-93~107）— Supabase RLS 安全根治 + Whisper 音量條 + install/features 雙頁 + 截圖修復 + 工具列特效 + 錄製 UX
+
+**目標**：修 Supabase Critical 安全警告、補齊上手文檔、修一批截圖/錄製體驗與麥克風授權時機問題、把 Day 15 待辦（授權 modal、音量條）做完。
+
+- **PM-93 Supabase RLS 安全根治（Critical）**：⚠ 發現規格前提錯——Worker 實際用 **anon key 非 service_role**（`schema.sql` 曾 `DISABLE RLS on users` 為鐵證）。若直接開 RLS 會鎖死自己全站 500。校正：新增 `supaKey(env)=SUPABASE_SERVICE_ROLE_KEY||SUPABASE_ANON_KEY`（未設 service_role 自動退回 anon，安全過渡，已部署 `9a2dc3f6`）；產出 `server/rls-lockdown.sql`（含動態 DO block 對所有 public table 開 RLS）；ARCHITECTURE §4-6 加「Supabase 安全鐵律」。**FOX 待辦（順序不可顛倒）：先 `wrangler secret put SUPABASE_SERVICE_ROLE_KEY` → 再跑 `rls-lockdown.sql`**。
+- **PM-95 即時字幕授權橫幅改居中 modal**（Day 15 待辦①）：`inject.ts showMicPermissionOverlay` 頂部橫條→全頁遮罩 + 紫框居中卡片，按鈕邏輯零改。
+- **PM-96 `/install` + `/features` 雙頁**：安裝指南（五步 + MCP 設定 `bugezy.dev/mcp` + 12 工具）+ 功能總覽（八區塊）+ 首頁/guide/faq/privacy footer 統一導覽。已部署 `568cc421`。
+- **PM-97 Whisper 即時音量條**（Day 15 待辦②）：offscreen `AudioContext/Analyser` 每 200ms 送 `MIC_VOLUME` → background(`recordingTabId` 轉發) → content(CustomEvent) → inject 5 條音量條（安靜矮紅/講話綠跳），取代靜態脈衝紅點。
+- **PM-98 修截圖報告在 `list_reports` 消失**：⚠ 根因是漏 `user_id` 非規格說的 `user_email`（reports 無此欄；`list_reports` 靠 email→user_id 過濾）。annotate 上傳補帶 `user_id`(session)+Authorization header + server `createReport` 防呆從 Bearer token 補 user_id。已部署 `33fde879`。**FOX 待辦：跑 `server/backfill-user-id.sql` 補舊孤兒報告**。
+- **PM-99 報告頁截圖點擊改頁內 lightbox**：base64 data URL 無法 `window.open`（開空白頁）；改 `openLightbox` + `</body>` 前全頁遮罩放大圖，點遮罩/ESC 關。已部署 `2ccbb942`。
+- **PM-100 截圖標注頁語音/鍵盤臨時切換鈕**：問題描述左側加 `voice-toggle`（⌨️/🎙️），復用既有 `startListening/stopListening`；授權失敗自動退鍵盤（刻意排除 no-speech 免殺 onend 自動重啟）。
+- **PM-101→104 工具列入場特效四連迭代**（純視覺）：邊框掃光（看不清）→ 紫脈衝（不搶眼）→ 自適應底色（深橘光/淺紅跑馬燈）→ **104 定案**：只留橘光脈衝 `applyOrangePulse` + popup「✨ 工具列特效」開關（`TOOLBAR_EFFECT_KEY` 預設 ON）。
+- **PM-105 錄製中開麥克風不再卡死**：popup toggle 先 `GET_RECORDING_STATE`，錄製中只存 `MIC_KEY` 偏好不開授權頁（下次錄製才授權）。
+- **PM-106 錄製中鎖定 popup 全部設定**：`lockSettings` 於 `render()` 依 `state.recording` disable 全 toggle/模式鈕 + `settingsHint`「🔒 錄製中設定已鎖定」。
+- **PM-107 按錄製時 mic OFF 提示**（鍵盤模式除外）：`startBtn` 抽 `doStartRecording`，mic OFF+非鍵盤模式先彈 `micPrompt`（開啟並錄製/直接錄製）。
+
+### 增量（Day 16）
+- Server（已部署）：`supaKey` service_role fallback + `/install` + `/features` + footer 統一 + 報告頁 lightbox + `createReport` user_id 防呆。新 SQL 腳本：`server/rls-lockdown.sql`、`server/backfill-user-id.sql`（皆待 FOX 跑）。
+- Extension（皆 build 過、**未重上架 Web Store**）：Whisper 音量條全鏈（`MIC_VOLUME`）、授權 modal、annotate user_id/語音切換鈕、工具列橘光脈衝 + 開關、錄製中鎖設定、mic OFF 提示；新 storage key `TOOLBAR_EFFECT_KEY`、新訊息 `MIC_VOLUME`/`GET_RECORDING_STATE`。
+- ⚠ 技術債（Day 16）：① **PM-93 service_role secret + `rls-lockdown.sql` 待 FOX 跑（順序關鍵，先切 key 再開 RLS，否則全站 500）**；② **PM-98 `backfill-user-id.sql` 待跑**（否則舊截圖報告仍不在 list_reports）；③ **PM-94（綠界測試 key→正式 key）本日未執行**，Worker 仍 `3002607`/`payment-stage`，正式收款未生效；④ PM-73/82 ALTER 沿用待跑；⑤ extension 整套仍未重上架 Web Store；⑥ PM-95~107 一批 extension 功能待瀏覽器實機驗收；⑦ **無 git remote，push 無法執行**（commit 已在本地）。
 
 ---
 
