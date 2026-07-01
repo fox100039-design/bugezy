@@ -337,7 +337,7 @@ async function updateLastScreenshot() {
   }
 }
 
-startBtn.addEventListener('click', async () => {
+async function doStartRecording() {
   startBtn.disabled = true;
   try {
     // 語音改由 inject.ts（MAIN world）處理，麥克風授權由網頁觸發，popup 不需先搶
@@ -350,12 +350,56 @@ startBtn.addEventListener('click', async () => {
       upgradeHint.classList.remove('hidden');
       return;
     }
-    render(res);
+    render(res); // render 內 lockSettings(true) 會鎖定設定（PM-106）
   } catch (err) {
     console.error('[BugEzy popup]', err);
   } finally {
     startBtn.disabled = false;
   }
+}
+
+// PM-107：mic OFF + 非鍵盤模式 → 按錄製先提示（避免錄完才發現沒語音）。
+// 鍵盤模式 ON（使用者刻意）或 mic ON → 不提示，直接錄。
+const micPrompt = $('micPrompt');
+function showMicPrompt() {
+  micPrompt.style.display = 'flex';
+}
+function hideMicPrompt() {
+  micPrompt.style.display = 'none';
+}
+startBtn.addEventListener('click', async () => {
+  const store = await chrome.storage.local.get([MIC_KEY, KEYBOARD_MODE_KEY]);
+  const micOn = store[MIC_KEY] === true;
+  const kbOn = store[KEYBOARD_MODE_KEY] === true;
+  if (!micOn && !kbOn) {
+    showMicPrompt();
+    return;
+  }
+  await doStartRecording();
+});
+
+// PM-107：「開啟並錄製」→ 開 mic；未授權則開授權頁（這次不錄，比照 PM-89/105 授權時機在 toggle）；
+// 已授權則直接開始錄製。
+$<HTMLButtonElement>('micPromptOn').addEventListener('click', async () => {
+  const permStore = await chrome.storage.local.get(MIC_PERMISSION_KEY);
+  if (!permStore[MIC_PERMISSION_KEY]) {
+    // 未授權：不硬開 MIC_KEY（授權頁授完流程會設 ON），關提示 + 開授權頁，這次不錄
+    hideMicPrompt();
+    await chrome.runtime.sendMessage({ type: 'REQUEST_MIC_PERMISSION' });
+    return;
+  }
+  // 已授權：開 mic + 同步 UI + 直接錄製
+  await chrome.storage.local.set({ [MIC_KEY]: true });
+  micToggle.checked = true;
+  updateMicUI();
+  hideMicPrompt();
+  await doStartRecording();
+});
+
+// PM-107：「直接錄製（不錄語音）」→ 不開 mic，直接錄
+$<HTMLButtonElement>('micPromptSkip').addEventListener('click', () => {
+  hideMicPrompt();
+  void doStartRecording();
 });
 
 stopBtn.addEventListener('click', async () => {
