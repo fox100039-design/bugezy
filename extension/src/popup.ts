@@ -251,9 +251,34 @@ function renderUpload(summary: RecordingSummary | null) {
   }
 }
 
+// PM-106：錄製中鎖定所有 popup 設定 toggle/按鈕（錄製中改設定會擾動 background 錄製狀態機 → stop 失效）。
+// 由 render() 依 state.recording 統一驅動，涵蓋 popup 開啟時已在錄製、按錄製、按停止三種路徑。
+const settingsHint = $('settingsHint');
+function lockSettings(locked: boolean) {
+  const toggles: HTMLInputElement[] = [
+    micToggle, // 麥克風（標題列，錄製中仍可見 → 最關鍵）
+    keyboardMode,
+    monitorMode,
+    allowScreenshots,
+    toolbarEffect,
+  ];
+  toggles.forEach((t) => {
+    t.disabled = locked;
+    t.style.opacity = locked ? '0.4' : '1';
+    t.style.cursor = locked ? 'not-allowed' : 'pointer';
+  });
+  modeBtns.forEach((b) => {
+    b.disabled = locked;
+    b.style.opacity = locked ? '0.4' : '1';
+    b.style.cursor = locked ? 'not-allowed' : 'pointer';
+  });
+  settingsHint.style.display = locked ? 'block' : 'none';
+}
+
 // 依 background 回傳的狀態決定要顯示哪一態
 function render(state: StateResponse) {
   startedAt = state.startedAt;
+  lockSettings(!!state.recording); // PM-106：錄製中鎖設定，停止/閒置解鎖
 
   if (state.recording) {
     show('recording');
