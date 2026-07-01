@@ -7,13 +7,16 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #1a1a2e; display: flex; flex-direction: column; height: 100vh; overflow: hidden; font-family: system-ui, "Microsoft JhengHei", sans-serif; }
 
-    /* 工具列（PM-103：annotate 頁固定深色底 → 高亮橘光脈衝入場 0.7s×10≈7 秒，之後退暗微光）*/
+    /* 工具列（PM-104：橘光脈衝入場特效，由 popup「工具列特效」開關控制 → 加 .fx-on 才播）*/
     .toolbar {
       display: flex; align-items: center; gap: 8px;
       padding: 8px 16px; background: #16213e;
-      border: 2px solid #ff8c00;
+      border: 2px solid #444;
+    }
+    .toolbar.fx-on {
+      border-color: #ff8c00;
       box-shadow: 0 0 20px rgba(255, 140, 0, 0.8);
-      animation: toolbar-orange-pulse 0.7s ease-in-out 10;
+      animation: toolbar-orange-pulse 0.7s ease-in-out 10; /* 0.7×10 ≈ 7 秒 */
     }
     @keyframes toolbar-orange-pulse {
       0%, 100% { box-shadow: 0 0 8px rgba(255, 140, 0, 0.3); border-color: #ff8c00; }

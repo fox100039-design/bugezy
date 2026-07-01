@@ -209,6 +209,9 @@ export const MONITOR_MODE_KEY = 'bugezy:monitorMode';
 /** PM-83：允許 AI 讀取截圖圖片（高畫質 AI 分析）開關；截圖上傳時帶入報告 allow_screenshot_images */
 export const ALLOW_SCREENSHOT_KEY = 'bugezy:allow-screenshot-images';
 
+/** PM-104：工具列入場橘光脈衝特效開關（popup 可關；預設 ON） */
+export const TOOLBAR_EFFECT_KEY = 'bugezy:toolbar-effect';
+
 /** PM-86：popup 麥克風 toggle（offscreen 錄音 + Groq Whisper 架構）開關，預設開啟 */
 export const MIC_KEY = 'bugezy:mic-enabled';
 

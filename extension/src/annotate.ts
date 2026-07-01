@@ -9,6 +9,7 @@ import {
   API_BASE,
   KEYBOARD_MODE_KEY,
   SESSION_KEY,
+  TOOLBAR_EFFECT_KEY,
   blog,
   type ControlMessage,
   type Session,
@@ -48,9 +49,13 @@ toolbar?.addEventListener('mousedown', (e) => {
   const tag = (e.target as HTMLElement).tagName.toLowerCase();
   if (tag !== 'input' && tag !== 'select') e.preventDefault();
 });
-// PM-101：工具列入場掃光動畫播完 2 次後切靜態微光（不持續閃）
+// PM-101/104：工具列入場橘光脈衝，播完（7 秒）切靜態微光（不持續閃）
 toolbar?.addEventListener('animationend', () => {
   (toolbar as HTMLElement).classList.add('glow-settled');
+});
+// PM-104：依 popup「工具列特效」開關（預設 ON）決定是否播入場脈衝
+chrome.storage.local.get(TOOLBAR_EFFECT_KEY, (store) => {
+  if (store[TOOLBAR_EFFECT_KEY] !== false) toolbar?.classList.add('fx-on');
 });
 
 const params = new URLSearchParams(location.search);

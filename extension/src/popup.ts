@@ -9,6 +9,7 @@ import {
   MIC_MODE_KEY,
   MIC_PERMISSION_KEY,
   MONITOR_MODE_KEY,
+  TOOLBAR_EFFECT_KEY,
   USER_PLAN_KEY,
   SESSION_KEY,
   API_BASE,
@@ -93,6 +94,15 @@ chrome.storage.local.get(ALLOW_SCREENSHOT_KEY, (r) => {
 });
 allowScreenshots.addEventListener('change', () => {
   chrome.storage.local.set({ [ALLOW_SCREENSHOT_KEY]: allowScreenshots.checked });
+});
+
+// PM-104：工具列特效 toggle — 控制截圖工具列入場橘光脈衝（預設 ON，存 storage）
+const toolbarEffect = $<HTMLInputElement>('toolbarEffect');
+chrome.storage.local.get(TOOLBAR_EFFECT_KEY, (r) => {
+  toolbarEffect.checked = r[TOOLBAR_EFFECT_KEY] !== false; // 預設 ON
+});
+toolbarEffect.addEventListener('change', () => {
+  chrome.storage.local.set({ [TOOLBAR_EFFECT_KEY]: toolbarEffect.checked });
 });
 
 // PM-86：麥克風 toggle（標題列）— offscreen 錄音 + Groq Whisper 架構；預設開啟，狀態存 storage
