@@ -1370,7 +1370,7 @@ const REPORT_PAGE_HTML = `<!DOCTYPE html>
         html += '<div class="ss-grid">';
         (r.screenshots||[]).forEach(ss => {
           const src = typeof ss === 'string' ? ss : ss.dataUrl || ss.url || '';
-          if (src) html += '<img class="ss-img" src="'+src+'" onclick="window.open(this.src)">';
+          if (src) html += '<img class="ss-img" src="'+src+'" onclick="openLightbox(this.src)" style="cursor:zoom-in;">';
         });
         html += '</div></div>';
       }
@@ -1435,6 +1435,23 @@ const REPORT_PAGE_HTML = `<!DOCTYPE html>
         });
       }
     }
+  </script>
+  <!-- PM-99：截圖點擊頁內 lightbox（base64 data URL 無法 window.open，會開空白頁；改頁內放大）-->
+  <div id="bugezy-lightbox" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;background:rgba(0,0,0,0.85);cursor:zoom-out;align-items:center;justify-content:center;" onclick="closeLightbox()">
+    <img id="bugezy-lightbox-img" style="max-width:95vw;max-height:95vh;border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,0.5);" />
+  </div>
+  <script>
+    function openLightbox(src) {
+      var lb = document.getElementById('bugezy-lightbox');
+      document.getElementById('bugezy-lightbox-img').src = src;
+      lb.style.display = 'flex';
+    }
+    function closeLightbox() {
+      document.getElementById('bugezy-lightbox').style.display = 'none';
+    }
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') closeLightbox();
+    });
   </script>
 </body>
 </html>`;
