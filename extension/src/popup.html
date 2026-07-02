@@ -229,13 +229,22 @@
       .prompt-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
       .prompt-title { color: #c9d1d9; font-size: 12px; font-weight: 600; }
       .prompt-index { color: #7c3aed; font-size: 11px; }
-      .prompt-preview-row { display: flex; align-items: center; gap: 6px; }
+      .prompt-preview-row { display: flex; align-items: center; gap: 4px; }
       .prompt-nav { background: #2a2a3e; color: #fff; border: 1px solid #444; border-radius: 6px; width: 28px; height: 28px; cursor: pointer; font-size: 12px; flex-shrink: 0; }
       .prompt-nav:hover { background: #3a3a5e; }
-      .prompt-preview { flex: 1; color: #e6edf3; font-size: 12px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: #0d1117; padding: 8px 10px; border-radius: 6px; border: 1px solid #21262d; }
-      .prompt-actions { display: flex; gap: 8px; margin-top: 8px; }
-      .prompt-copy-btn { flex: 1; background: #7c3aed; color: #fff; border: none; border-radius: 8px; padding: 6px; font-size: 12px; font-weight: 600; cursor: pointer; }
+      /* PM-115：預覽 wrap（顏色點 + 文字），複製鈕移到右側 */
+      .prompt-preview-wrap { flex: 1; display: flex; align-items: center; gap: 6px; background: #0d1117; padding: 8px 10px; border-radius: 6px; border: 1px solid #21262d; overflow: hidden; }
+      .prompt-color-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+      .prompt-preview { flex: 1; color: #e6edf3; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .prompt-copy-btn { background: #7c3aed; border: none; border-radius: 6px; width: 32px; height: 32px; cursor: pointer; font-size: 14px; flex-shrink: 0; }
+      .prompt-copy-btn:hover { background: #6d28d9; }
+      .prompt-actions { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
       .prompt-edit-btn { background: #2a2a3e; color: #ccc; border: 1px solid #444; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+      /* PM-115：編輯模式顏色選擇列 */
+      .prompt-color-picker { display: flex; gap: 8px; margin-bottom: 8px; }
+      .color-option { width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: border-color 0.2s; }
+      .color-option:hover { border-color: #fff; }
+      .color-option.selected { border-color: #fff; }
       .prompt-editor { margin-top: 8px; }
       .prompt-textarea { width: 100%; background: #0d1117; color: #e6edf3; border: 1px solid #7c3aed; border-radius: 8px; padding: 8px; font-size: 12px; font-family: inherit; resize: vertical; box-sizing: border-box; }
       .prompt-editor-actions { display: flex; gap: 8px; margin-top: 6px; }
@@ -362,7 +371,7 @@
         </label>
       </div>
 
-      <!-- PM-114：AI 慣用語輪盤（4 則可編輯 + 一鍵複製） -->
+      <!-- PM-114/115：AI 慣用語輪盤（4 則可編輯 + 顏色標記 + 一鍵複製；複製鈕右側） -->
       <div class="prompt-carousel">
         <div class="prompt-header">
           <span class="prompt-title">💬 AI 指令</span>
@@ -370,21 +379,30 @@
         </div>
         <div class="prompt-preview-row">
           <button id="prompt-prev" class="prompt-nav">◀</button>
-          <div class="prompt-preview" id="prompt-preview">請讀取我最新的 BugEzy 報告...</div>
+          <div class="prompt-preview-wrap">
+            <span class="prompt-color-dot" id="prompt-color-dot"></span>
+            <span class="prompt-preview" id="prompt-preview">請讀取我最新的 BugEzy 報告...</span>
+          </div>
+          <button id="prompt-copy" class="prompt-copy-btn" title="複製">📋</button>
           <button id="prompt-next" class="prompt-nav">▶</button>
         </div>
         <div class="prompt-actions">
-          <button id="prompt-copy" class="prompt-copy-btn">📋 複製</button>
           <button id="prompt-edit" class="prompt-edit-btn">✏️ 編輯</button>
+          <span id="prompt-copied" class="prompt-copied" style="display:none;">✅ 已複製！</span>
         </div>
         <div id="prompt-editor" class="prompt-editor" style="display:none;">
+          <div class="prompt-color-picker" id="prompt-color-picker">
+            <span class="color-option" data-color="#ef4444" style="background:#ef4444;"></span>
+            <span class="color-option" data-color="#3b82f6" style="background:#3b82f6;"></span>
+            <span class="color-option" data-color="#22c55e" style="background:#22c55e;"></span>
+            <span class="color-option" data-color="#f59e0b" style="background:#f59e0b;"></span>
+          </div>
           <textarea id="prompt-textarea" class="prompt-textarea" rows="5"></textarea>
           <div class="prompt-editor-actions">
             <button id="prompt-save" class="prompt-save-btn">💾 儲存</button>
             <button id="prompt-cancel" class="prompt-cancel-btn">取消</button>
           </div>
         </div>
-        <span id="prompt-copied" class="prompt-copied" style="display:none;">✅ 已複製！</span>
       </div>
     </section>
 

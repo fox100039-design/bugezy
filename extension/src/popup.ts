@@ -749,16 +749,26 @@ async function checkVersionNotice() {
   await chrome.storage.local.set({ [LAST_VERSION_KEY]: currentVersion });
 }
 
-// ── PM-114：AI 慣用語輪盤（4 則預設可編輯 + ◀▶ 切換 + 一鍵複製全文，存 chrome.storage）──
+// ── PM-114/115：AI 慣用語輪盤（4 則可編輯 + 顏色標記 + ◀▶ 切換 + 複製全文，存 chrome.storage）──
 const PROMPTS_KEY = 'bugezy:ai-prompts';
-const DEFAULT_PROMPTS = [
-  '請讀取我最新的 BugEzy 報告，幫我找出問題並修復',
-  '請讀取最新 BugEzy 報告，分析：\n1. 真正的 root cause\n2. 修復方案\n3. 修改哪些檔案\n4. 產生 fix plan\n請不要猜測，如果資料不足請告知需要哪些資訊',
-  '請讀取我最新的截圖報告，看畫面哪裡有問題，給我 CSS/HTML 修復建議',
-  '請讀取最新 BugEzy 報告，直接給我可以貼上的修復程式碼',
+// PM-115：資料結構改為 { text, color }。
+interface PromptItem {
+  text: string;
+  color: string;
+}
+const DEFAULT_COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b'];
+const DEFAULT_PROMPTS: PromptItem[] = [
+  { text: '請讀取我最新的 BugEzy 報告，幫我找出問題並修復', color: '#ef4444' },
+  {
+    text: '請讀取最新 BugEzy 報告，分析：\n1. 真正的 root cause\n2. 修復方案\n3. 修改哪些檔案\n4. 產生 fix plan\n請不要猜測，如果資料不足請告知需要哪些資訊',
+    color: '#3b82f6',
+  },
+  { text: '請讀取我最新的截圖報告，看畫面哪裡有問題，給我 CSS/HTML 修復建議', color: '#22c55e' },
+  { text: '請讀取最新 BugEzy 報告，直接給我可以貼上的修復程式碼', color: '#f59e0b' },
 ];
 
 const promptPreview = $('prompt-preview');
+const promptColorDot = $('prompt-color-dot');
 const promptIndex = $('prompt-index');
 const promptPrev = $<HTMLButtonElement>('prompt-prev');
 const promptNext = $<HTMLButtonElement>('prompt-next');
@@ -769,22 +779,44 @@ const promptTextarea = $<HTMLTextAreaElement>('prompt-textarea');
 const promptSave = $<HTMLButtonElement>('prompt-save');
 const promptCancel = $<HTMLButtonElement>('prompt-cancel');
 const promptCopied = $('prompt-copied');
+const colorOptions = Array.from(document.querySelectorAll<HTMLElement>('.color-option'));
 
-let prompts: string[] = [];
+let prompts: PromptItem[] = [];
 let promptCurrent = 0;
+let editingColor = DEFAULT_COLORS[0];
 
 function renderPrompt() {
-  const text = prompts[promptCurrent] ?? '';
-  promptPreview.textContent = text.split('\n')[0]; // 只預覽第一行（CSS 再截斷 + …）
+  const item = prompts[promptCurrent];
+  if (!item) return;
+  promptPreview.textContent = item.text.split('\n')[0]; // 只預覽第一行（CSS 再截斷 + …）
+  promptColorDot.style.background = item.color;
   promptIndex.textContent = `${promptCurrent + 1}/${prompts.length}`;
+}
+
+// PM-115 向下相容：舊版存的是 string[]，自動轉成 PromptItem[]（依序分配預設顏色）。
+function normalizePrompts(raw: unknown): PromptItem[] {
+  if (!Array.isArray(raw) || raw.length === 0) return [...DEFAULT_PROMPTS];
+  return raw.map((entry, i) => {
+    if (typeof entry === 'string') {
+      return { text: entry, color: DEFAULT_COLORS[i % DEFAULT_COLORS.length] };
+    }
+    const obj = entry as Partial<PromptItem>;
+    return {
+      text: typeof obj.text === 'string' ? obj.text : '',
+      color: typeof obj.color === 'string' ? obj.color : DEFAULT_COLORS[i % DEFAULT_COLORS.length],
+    };
+  });
 }
 
 async function initPrompts() {
   const store = await chrome.storage.local.get(PROMPTS_KEY);
-  const saved = store[PROMPTS_KEY] as string[] | undefined;
-  prompts = saved && saved.length ? saved : [...DEFAULT_PROMPTS];
+  prompts = normalizePrompts(store[PROMPTS_KEY]);
   promptCurrent = 0;
   renderPrompt();
+}
+
+function highlightColorOption(color: string) {
+  colorOptions.forEach((el) => el.classList.toggle('selected', el.dataset.color === color));
 }
 
 promptPrev.addEventListener('click', () => {
@@ -796,18 +828,28 @@ promptNext.addEventListener('click', () => {
   renderPrompt();
 });
 promptCopy.addEventListener('click', async () => {
-  await navigator.clipboard.writeText(prompts[promptCurrent] ?? ''); // 複製完整全文（含換行）
+  await navigator.clipboard.writeText(prompts[promptCurrent]?.text ?? ''); // 複製完整全文（含換行）
   promptCopied.style.display = 'inline-block';
   setTimeout(() => {
     promptCopied.style.display = 'none';
   }, 2000);
 });
 promptEdit.addEventListener('click', () => {
-  promptTextarea.value = prompts[promptCurrent] ?? '';
+  const item = prompts[promptCurrent];
+  if (!item) return;
+  promptTextarea.value = item.text;
+  editingColor = item.color;
+  highlightColorOption(editingColor);
   promptEditor.style.display = 'block';
 });
+colorOptions.forEach((el) => {
+  el.addEventListener('click', () => {
+    editingColor = el.dataset.color || DEFAULT_COLORS[0];
+    highlightColorOption(editingColor);
+  });
+});
 promptSave.addEventListener('click', async () => {
-  prompts[promptCurrent] = promptTextarea.value.trim();
+  prompts[promptCurrent] = { text: promptTextarea.value.trim(), color: editingColor };
   await chrome.storage.local.set({ [PROMPTS_KEY]: prompts });
   promptEditor.style.display = 'none';
   renderPrompt();
