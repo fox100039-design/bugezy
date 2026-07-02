@@ -216,6 +216,14 @@
         width: auto;
         margin: 0;
       }
+      /* PM-111：日票升級雙按鈕 + 日票中倒數狀態 */
+      .upgrade-section { display: flex; gap: 8px; margin-top: 8px; }
+      .day-pass-btn { flex: 1; background: #f59e0b; color: #000; border: none; border-radius: 8px; padding: 8px 4px; font-size: 12px; font-weight: 600; cursor: pointer; }
+      .monthly-btn { flex: 1; background: #7c3aed; color: #fff; border: none; border-radius: 8px; padding: 8px 4px; font-size: 12px; font-weight: 600; cursor: pointer; }
+      .day-pass-status { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 8px 0 0; }
+      .day-pass-badge { background: #f59e0b; color: #000; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 8px; }
+      .countdown { color: #f59e0b; font-size: 12px; font-family: monospace; }
+      .day-pass-hint { color: #9aa3b2; font-size: 11px; text-align: center; margin: 4px 0 0; }
       /* PM-107：mic OFF 按錄製提示層 */
       .mic-prompt {
         position: fixed; inset: 0; background: rgba(0,0,0,0.6);
@@ -298,9 +306,17 @@
       </div>
       <div id="lastScreenshot" class="meta" style="display:none;"></div>
       <div id="upgradeHint" class="upgrade-hint hidden">
-        <span>升級付費版 NT$80/月 → 解鎖無限次</span>
-        <button id="upgradeBtn" class="btn-upgrade">升級</button>
+        <span>升級解鎖無限次</span>
+        <div class="upgrade-section">
+          <button id="dayPassBtn" class="day-pass-btn">⚡ 日票 NT$20（24hr）</button>
+          <button id="upgradeBtn" class="monthly-btn">✨ 月費 NT$80/月</button>
+        </div>
       </div>
+      <div id="dayPassStatus" class="day-pass-status hidden">
+        <span class="day-pass-badge">⚡ 日票</span>
+        <span id="dayPassCountdown" class="countdown"></span>
+      </div>
+      <p id="dayPassHint" class="day-pass-hint hidden">日票到期後可升級月費</p>
       <div id="paidBadge" class="paid-badge hidden">
         <span>✨ 付費版</span>
         <a id="cancelSubBtn" class="cancel-link">取消訂閱</a>

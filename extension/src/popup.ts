@@ -66,6 +66,12 @@ const cancelledBadge = $('cancelledBadge');
 const expiresDate = $('expiresDate');
 const cancelSubBtn = $<HTMLAnchorElement>('cancelSubBtn');
 const resubBtn = $<HTMLAnchorElement>('resubBtn');
+// PM-111：日票升級鈕 + 日票中倒數狀態
+const dayPassBtn = $<HTMLButtonElement>('dayPassBtn');
+const dayPassStatus = $('dayPassStatus');
+const dayPassCountdown = $('dayPassCountdown');
+const dayPassHint = $('dayPassHint');
+let dayPassTimer: number | undefined;
 
 // PM-49：鍵盤模式 toggle（關閉語音）— 狀態存 chrome.storage.local
 const keyboardMode = $<HTMLInputElement>('keyboardMode');
@@ -540,6 +546,7 @@ function showMainView(session: Session) {
 interface PlanInfo {
   plan: string;
   expires_at?: string | null;
+  day_pass_expires_at?: string | null; // PM-111：日票到期時間
   limits: null | {
     recording: { used: number; max: number };
     rewind: { used: number; max: number };
@@ -573,10 +580,20 @@ async function loadPlan(session: Session) {
     micPlan = plan.plan;
     updateMicModeUI();
 
-    // 三態互斥：先全部收起，再依 plan 開對應的一個
+    // 狀態互斥：先全部收起，再依 plan 開對應的一個（PM-111：多日票兩態）
     upgradeHint.classList.add('hidden');
     paidBadge.classList.add('hidden');
     cancelledBadge.classList.add('hidden');
+    dayPassStatus.classList.add('hidden');
+    dayPassHint.classList.add('hidden');
+    if (dayPassTimer !== undefined) {
+      clearInterval(dayPassTimer);
+      dayPassTimer = undefined;
+    }
+
+    const dayPassRemainMs = plan.day_pass_expires_at
+      ? new Date(plan.day_pass_expires_at).getTime() - Date.now()
+      : 0;
 
     if (plan.plan === 'paid') {
       // 付費版 → 無限功能 + ✨付費版徽章（含取消訂閱）
@@ -589,6 +606,11 @@ async function loadPlan(session: Session) {
       startBtn.disabled = false;
       expiresDate.textContent = fmtDate(plan.expires_at);
       cancelledBadge.classList.remove('hidden');
+    } else if (plan.plan === 'day_pass' && dayPassRemainMs > 0) {
+      // PM-111：日票有效中 → 無限功能 + ⚡日票 badge + 倒數；隱藏升級鈕（鎖月費）+ 顯示到期提示
+      setRecordDesc('✨ 無限次');
+      startBtn.disabled = false;
+      showDayPassActive(dayPassRemainMs);
     } else {
       // 免費版（含未知狀態 fallback）→ 剩餘次數 + 升級提示
       const rec = plan.limits?.recording;
@@ -622,6 +644,39 @@ async function openCheckout() {
 // PM-72：升級；PM-75c：cancelled 用戶重新訂閱——皆走綠界結帳
 upgradeBtn.addEventListener('click', () => void openCheckout());
 resubBtn.addEventListener('click', () => void openCheckout());
+
+// PM-111：日票升級 → 開結帳跳板頁（該頁讀 session→POST /api/day-pass/create→送出綠界表單）。
+// 不能像月費直接 tabs.create 到 API（日票 create 是 POST+auth），故走擴充頁跳板。
+dayPassBtn.addEventListener('click', () => {
+  void chrome.tabs.create({ url: 'day-pass-checkout.html' });
+});
+
+// PM-111：顯示日票有效中狀態（⚡ badge + 每秒倒數；到期自動 reload 刷新回免費升級畫面）。
+function updateCountdown(ms: number) {
+  const clamped = Math.max(0, ms);
+  const h = Math.floor(clamped / 3600000);
+  const m = Math.floor((clamped % 3600000) / 60000);
+  const s = Math.floor((clamped % 60000) / 1000);
+  dayPassCountdown.textContent = `剩餘 ${h}h ${m}m ${s}s`;
+}
+function showDayPassActive(remainMs: number) {
+  upgradeHint.classList.add('hidden'); // 鎖月費：日票中不顯示升級鈕
+  dayPassStatus.classList.remove('hidden');
+  dayPassHint.classList.remove('hidden');
+  let remain = remainMs;
+  updateCountdown(remain);
+  if (dayPassTimer !== undefined) clearInterval(dayPassTimer);
+  dayPassTimer = window.setInterval(() => {
+    remain -= 1000;
+    if (remain <= 0) {
+      clearInterval(dayPassTimer);
+      dayPassTimer = undefined;
+      location.reload(); // 到期 → 重新載入 popup，回到免費/升級畫面
+      return;
+    }
+    updateCountdown(remain);
+  }, 1000);
+}
 
 // PM-73：取消訂閱（二次確認 → POST /api/user/cancel）
 cancelSubBtn.addEventListener('click', async () => {
