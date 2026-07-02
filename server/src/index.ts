@@ -197,6 +197,20 @@ function oneMonthLaterISO(): string {
   return d.toISOString();
 }
 
+// PM-109：日票到期時間（付款成功起 24 小時）
+function dayPassExpiryISO(): string {
+  return new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+}
+
+// PM-109：是否為「有效付費用戶」——月費 paid、取消但未到期 cancelled（PM-73），或日票未到期 day_pass。
+function isActiveUser(u: { plan?: string | null; day_pass_expires_at?: string | null }): boolean {
+  if (u.plan === 'paid' || u.plan === 'cancelled') return true;
+  if (u.plan === 'day_pass' && u.day_pass_expires_at) {
+    return new Date(u.day_pass_expires_at) > new Date();
+  }
+  return false;
+}
+
 // ── PM-62：產品首頁（GET /）— 一頁式、深色主題、無 JS、RWD（綠界審核 + 客戶訪問用）──
 const HOMEPAGE_HTML = `<!DOCTYPE html>
 <html lang="zh-TW">
@@ -1898,6 +1912,16 @@ export default {
       if (request.method === 'POST' && path === '/api/ecpay/period-callback') {
         return await ecpayPeriodCallback(request, env);
       }
+      // PM-109：日票 NT$20（一次性付款）
+      if (request.method === 'POST' && path === '/api/day-pass/create') {
+        return await handleDayPassCreate(request, env);
+      }
+      if (request.method === 'POST' && path === '/api/day-pass/callback') {
+        return await handleDayPassCallback(request, env);
+      }
+      if (request.method === 'GET' && path === '/day-pass-success') {
+        return dayPassSuccessPage();
+      }
       if (request.method === 'POST' && path === '/api/reports') {
         return await createReport(request, env, url.origin);
       }
@@ -2299,7 +2323,7 @@ async function getUserPlan(request: Request, env: Env): Promise<Response> {
   try {
     const { data: user, error } = await supa(env)
       .from('users')
-      .select('plan, recording_count, rewind_count, mcp_count, usage_reset_at, plan_expires_at')
+      .select('plan, recording_count, rewind_count, mcp_count, usage_reset_at, plan_expires_at, day_pass_expires_at')
       .eq('user_id', userId)
       .maybeSingle();
     if (error) return json({ error: `查方案失敗: ${error.message}` }, 500);
@@ -2312,6 +2336,7 @@ async function getUserPlan(request: Request, env: Env): Promise<Response> {
       mcp_count: number;
       usage_reset_at: string;
       plan_expires_at: string | null;
+      day_pass_expires_at: string | null;
     };
 
     // 跨月自動重置計數
@@ -2333,11 +2358,22 @@ async function getUserPlan(request: Request, env: Env): Promise<Response> {
       u.plan = 'free';
     }
 
-    // PM-73：cancelled 在到期前仍視同付費（享無限功能）
-    const isPaid = u.plan === 'paid' || u.plan === 'cancelled';
+    // PM-109：day_pass 到期 → 自動降回 free（清 day_pass_expires_at；不重置用量欄位）
+    if (u.plan === 'day_pass' && u.day_pass_expires_at && now > new Date(u.day_pass_expires_at)) {
+      await supa(env)
+        .from('users')
+        .update({ plan: 'free', day_pass_expires_at: null })
+        .eq('user_id', userId);
+      u.plan = 'free';
+      u.day_pass_expires_at = null;
+    }
+
+    // PM-73/109：cancelled 未到期、day_pass 未到期皆視同付費（享無限功能）
+    const isPaid = isActiveUser(u);
     return json({
       plan: u.plan ?? 'free',
       expires_at: u.plan_expires_at ?? null,
+      day_pass_expires_at: u.day_pass_expires_at ?? null, // PM-109
       limits: isPaid
         ? null
         : {
@@ -2361,7 +2397,7 @@ async function bumpUsage(request: Request, env: Env): Promise<Response> {
 
     const { data: user, error } = await supa(env)
       .from('users')
-      .select('plan, recording_count, rewind_count, mcp_count')
+      .select('plan, recording_count, rewind_count, mcp_count, day_pass_expires_at')
       .eq('user_id', userId)
       .maybeSingle();
     if (error) return json({ error: `查用量失敗: ${error.message}` }, 500);
@@ -2372,9 +2408,10 @@ async function bumpUsage(request: Request, env: Env): Promise<Response> {
       recording_count: number;
       rewind_count: number;
       mcp_count: number;
+      day_pass_expires_at: string | null;
     };
-    // PM-73：cancelled 在到期前仍視同付費（無限）
-    if (u.plan === 'paid' || u.plan === 'cancelled') return json({ ok: true, unlimited: true });
+    // PM-73/109：cancelled 未到期、day_pass 未到期皆視同付費（無限）
+    if (isActiveUser(u)) return json({ ok: true, unlimited: true });
 
     const countField = `${type}_count` as 'recording_count' | 'rewind_count' | 'mcp_count';
     const currentCount = u[countField] || 0;
@@ -2510,6 +2547,109 @@ async function ecpayResult(request: Request): Promise<Response> {
         ? '你已升級為 BugEzy Pro 付費版。重新開啟 BugEzy 即可享受無限功能！'
         : escapeAttr(rtnMsg || '請稍後再試')
     }</p>` +
+    `<a href="/">← 回到首頁</a></div></body></html>`;
+  return html(body);
+}
+
+// ── PM-109：日票 NT$20（一次性付款，非定期定額；信用卡+ATM+超商 ChoosePayment=ALL）──
+// POST /api/day-pass/create → 需登入；建綠界一次性訂單 → 回自動送出的付款表單 HTML
+async function handleDayPassCreate(request: Request, env: Env): Promise<Response> {
+  const userId = getUserIdFromHeader(request);
+  if (!userId) return json({ error: '請先登入' }, 401);
+
+  // 已是月費 / 已有有效日票 → 擋
+  const { data } = await supa(env)
+    .from('users')
+    .select('plan, day_pass_expires_at')
+    .eq('user_id', userId)
+    .maybeSingle();
+  const u = (data ?? {}) as { plan?: string | null; day_pass_expires_at?: string | null };
+  if (u.plan === 'paid' || u.plan === 'cancelled') {
+    return json({ error: '您已是月費用戶，不需購買日票' }, 400);
+  }
+  if (u.day_pass_expires_at && new Date(u.day_pass_expires_at) > new Date()) {
+    return json({ error: '您已有有效日票，到期後才能再購買' }, 400);
+  }
+
+  const origin = new URL(request.url).origin;
+  const now = new Date();
+  const tradeNo = `DP${now.getTime()}`.slice(0, 20); // 唯一訂單編號，最長 20 碼
+  const params: Record<string, string> = {
+    MerchantID: env.ECPAY_MERCHANT_ID,
+    MerchantTradeNo: tradeNo,
+    MerchantTradeDate: formatEcpayDate(now),
+    PaymentType: 'aio',
+    TotalAmount: '20',
+    TradeDesc: 'BugEzy 日票（24小時無限使用）',
+    ItemName: 'BugEzy 日票 NT$20',
+    ReturnURL: `${origin}/api/day-pass/callback`, // server-to-server 通知
+    ClientBackURL: `${origin}/day-pass-success`, // 付款後瀏覽器 GET 導回
+    ChoosePayment: 'ALL', // 信用卡 + ATM + 超商（一次性）
+    EncryptType: '1',
+    CustomField1: userId, // callback 用來識別使用者
+  };
+  params.CheckMacValue = await generateCheckMacValue(params, env.ECPAY_HASH_KEY, env.ECPAY_HASH_IV);
+
+  const inputs = Object.entries(params)
+    .map(([k, v]) => `<input type="hidden" name="${k}" value="${escapeAttr(v)}">`)
+    .join('');
+  const formHtml =
+    `<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8">` +
+    `<meta name="viewport" content="width=device-width,initial-scale=1"><title>前往綠界付款…</title>` +
+    `<style>body{background:#0f0f1a;color:#e0e0e0;font-family:system-ui,"Microsoft JhengHei",sans-serif;` +
+    `display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;}</style></head>` +
+    `<body><p>🔒 正在前往綠界安全付款頁面，請稍候…</p>` +
+    `<form id="ecpay" method="POST" action="${env.ECPAY_PAYMENT_URL}">${inputs}</form>` +
+    `<script>document.getElementById('ecpay').submit();</script></body></html>`;
+  return html(formHtml);
+}
+
+// POST /api/day-pass/callback → 綠界付款結果通知（驗 CheckMacValue → 開通 24 小時日票）
+async function handleDayPassCallback(request: Request, env: Env): Promise<Response> {
+  const formData = await request.formData();
+  const params: Record<string, string> = {};
+  formData.forEach((val, key) => {
+    params[key] = String(val);
+  });
+
+  const received = params.CheckMacValue ?? '';
+  const expected = await generateCheckMacValue(params, env.ECPAY_HASH_KEY, env.ECPAY_HASH_IV);
+  if (!timingSafeEqualStr(received, expected)) {
+    return new Response('0|ErrorMessage=CheckMacValue Error', { status: 200 });
+  }
+
+  // 後台「付款結果通知(模擬)」：SimulatePaid=1，不開通但仍回 1|OK
+  if (params.SimulatePaid === '1') {
+    return new Response('1|OK', { status: 200 });
+  }
+
+  // 付款成功（RtnCode=1）→ 用 CustomField1 帶回的 user_id 開通 24 小時日票
+  if (params.RtnCode === '1') {
+    const userId = params.CustomField1;
+    if (userId) {
+      await supa(env)
+        .from('users')
+        .update({ plan: 'day_pass', day_pass_expires_at: dayPassExpiryISO() })
+        .eq('user_id', userId);
+    }
+  }
+
+  return new Response('1|OK', { status: 200 });
+}
+
+// GET /day-pass-success → 日票啟動成功頁
+function dayPassSuccessPage(): Response {
+  const body =
+    `<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8">` +
+    `<meta name="viewport" content="width=device-width,initial-scale=1"><title>日票啟動成功</title>` +
+    `<style>body{background:#0f0f1a;color:#e0e0e0;font-family:system-ui,"Microsoft JhengHei",sans-serif;` +
+    `display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;}` +
+    `.card{background:#1a1a2e;border:1px solid #7c3aed;border-radius:16px;padding:40px;text-align:center;max-width:400px;}` +
+    `.icon{font-size:48px;margin-bottom:16px;}h1{font-size:24px;margin:0 0 8px;}` +
+    `p{color:#aaa;margin:0 0 24px;line-height:1.6;}a{color:#a78bfa;text-decoration:none;}</style></head>` +
+    `<body><div class="card"><div class="icon">🎉</div>` +
+    `<h1>日票啟動成功！</h1>` +
+    `<p>24 小時內享有所有付費功能（無限錄製 / MCP / Whisper 精準語音）。重新開啟 BugEzy 即可使用。</p>` +
     `<a href="/">← 回到首頁</a></div></body></html>`;
   return html(body);
 }

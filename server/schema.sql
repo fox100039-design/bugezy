@@ -72,6 +72,9 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS usage_reset_at TIMESTAMPTZ DEFAULT NO
 ALTER TABLE users ADD COLUMN IF NOT EXISTS ecpay_trade_no TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_expires_at TIMESTAMPTZ;
 
+-- ── PM-109：日票 NT$20（一次性付款，24 小時）。NULL=無日票；有值=到期時間；plan 多一個 'day_pass' 狀態 ──
+ALTER TABLE users ADD COLUMN IF NOT EXISTS day_pass_expires_at TIMESTAMPTZ DEFAULT NULL;
+
 -- ── PM-93：全 public table 開 RLS(deny all)，anon key 完全鎖死；唯一存取途徑是 Worker 的 service_role。
 --    ⚠ 執行前務必先 `wrangler secret put SUPABASE_SERVICE_ROLE_KEY`，否則 Worker(anon) 會被鎖死。
 --    完整腳本 + 步驟見 server/rls-lockdown.sql。
