@@ -226,12 +226,14 @@
       .day-pass-hint { color: #9aa3b2; font-size: 11px; text-align: center; margin: 4px 0 0; }
       /* PM-114：AI 慣用語輪盤 */
       .prompt-carousel { margin-top: 12px; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 10px; }
-      .prompt-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; cursor: pointer; flex-wrap: nowrap; }
-      .prompt-header.expanded { cursor: default; }
-      .prompt-title { color: #e6edf3; font-size: 13px; font-weight: 700; flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      /* PM-120：標題列（title + 索引 + 釘選）+ body 三行式 */
+      .prompt-title-row { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+      .prompt-title-row.expanded { cursor: default; }
+      .prompt-title { flex: 1; min-width: 0; color: #e6edf3; font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .prompt-index { color: #7c3aed; font-size: 11px; flex-shrink: 0; }
       .prompt-pin-btn { background: transparent; border: none; cursor: pointer; font-size: 14px; opacity: 0.5; transition: opacity 0.2s; flex-shrink: 0; }
       .prompt-pin-btn.pinned { opacity: 1; }
+      .prompt-body { margin-top: 8px; }
       .prompt-preview-row { display: flex; align-items: center; gap: 4px; }
       .prompt-nav { background: #2a2a3e; color: #fff; border: 1px solid #444; border-radius: 6px; width: 28px; height: 28px; cursor: pointer; font-size: 12px; flex-shrink: 0; }
       .prompt-nav:hover { background: #3a3a5e; }
@@ -239,10 +241,11 @@
       .prompt-preview-wrap { flex: 1; display: flex; align-items: center; gap: 6px; background: #0d1117; padding: 8px 10px; border-radius: 6px; border: 1px solid #21262d; overflow: hidden; }
       .prompt-color-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
       .prompt-preview { flex: 1; color: #e6edf3; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .prompt-copy-btn { background: #7c3aed; border: none; border-radius: 6px; width: 26px; height: 26px; cursor: pointer; font-size: 12px; flex-shrink: 0; color: #fff; display: flex; align-items: center; justify-content: center; }
+      /* PM-120：複製鈕移到 actions 行、加大帶文字（SVG + 「複製」） */
+      .prompt-copy-btn { display: flex; align-items: center; gap: 6px; background: #7c3aed; color: #fff; border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; }
       .prompt-copy-btn:hover { background: #6d28d9; }
       .prompt-actions { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
-      .prompt-edit-btn { background: #2a2a3e; color: #ccc; border: 1px solid #444; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+      .prompt-edit-btn { background: #2a2a3e; color: #ccc; border: 1px solid #444; border-radius: 8px; padding: 8px 16px; font-size: 13px; cursor: pointer; }
       /* PM-115：編輯模式顏色選擇列 */
       .prompt-color-picker { display: flex; gap: 8px; margin-bottom: 8px; }
       .color-option { width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: border-color 0.2s; }
@@ -376,15 +379,8 @@
 
       <!-- PM-114~118：AI 慣用語輪盤（可編輯 + 顏色標記 + 一鍵複製 + 可收合/釘選，預設收合） -->
       <div class="prompt-carousel" id="prompt-carousel">
-        <div class="prompt-header" id="prompt-header">
+        <div class="prompt-title-row" id="prompt-header">
           <span class="prompt-title">一鍵複製指令貼給 AI</span>
-          <button id="prompt-copy" class="prompt-copy-btn" title="複製">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-            </svg>
-          </button>
-          <span id="prompt-copied" class="prompt-copied" style="display:none;">✅</span>
           <span class="prompt-index" id="prompt-index">1/4</span>
           <button id="prompt-pin" class="prompt-pin-btn" title="釘選/收合">📌</button>
         </div>
@@ -398,6 +394,14 @@
             <button id="prompt-next" class="prompt-nav">▶</button>
           </div>
           <div class="prompt-actions">
+            <button id="prompt-copy" class="prompt-copy-btn" title="複製">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+              </svg>
+              複製
+            </button>
+            <span id="prompt-copied" class="prompt-copied" style="display:none;">✅ 已複製</span>
             <button id="prompt-edit" class="prompt-edit-btn">✏️ 編輯</button>
           </div>
           <div id="prompt-editor" class="prompt-editor" style="display:none;">
