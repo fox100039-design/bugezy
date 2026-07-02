@@ -254,6 +254,12 @@ const HOMEPAGE_HTML = `<!DOCTYPE html>
     .pricing-hint { color:#9aa3b2; font-size:12px; margin-top:12px; margin-bottom:8px; }
     .free-btn { display:block; margin-top:18px; padding:10px; border-radius:10px; background:transparent; border:1px solid #2a2a3e; color:#c4b5fd; font-weight:600; font-size:14px; text-decoration:none; }
     .free-btn:hover { border-color:#7c3aed; }
+    /* PM-110：日票第三欄（橘色，呼應工具列橘光脈衝）+ 方案 badge */
+    .plan.day-pass { border-color:#f59e0b; }
+    .plan .pname.day { color:#f59e0b; }
+    .plan-badge { display:inline-block; background:#7c3aed; color:#fff; font-size:11px; padding:2px 10px; border-radius:10px; margin-bottom:8px; }
+    .day-btn { display:block; margin-top:18px; padding:10px; border-radius:10px; background:#f59e0b; color:#000; font-weight:700; font-size:14px; text-decoration:none; }
+    .day-btn:hover { background:#d97706; }
     footer { border-top:1px solid #2a2a3e; padding:28px 0; text-align:center; color:#888; font-size:13px; margin-top:24px; }
     footer a { margin:0 6px; }
     /* PM-74：聯絡資訊（綠界審核要求，明顯可見） */
@@ -372,8 +378,23 @@ const HOMEPAGE_HTML = `<!DOCTYPE html>
         </ul>
         <a class="free-btn" href="/install">免費安裝 →</a>
       </div>
+      <div class="plan day-pass">
+        <div class="plan-badge">⚡ 試試看</div>
+        <div class="pname day">日票</div>
+        <div class="price">NT$20<small> /24hr</small></div>
+        <ul>
+          <li>全功能無限</li>
+          <li>錄製無限</li>
+          <li>MCP AI 讀取無限</li>
+          <li>Whisper 精準語音</li>
+          <li>信用卡 / ATM / 超商</li>
+        </ul>
+        <p class="pricing-hint">24 小時內享所有付費功能</p>
+        <a class="day-btn" href="/install">安裝後購買 →</a>
+      </div>
       <div class="plan featured">
-        <div class="pname">付費版 ✨</div>
+        <div class="plan-badge">✨ 最划算</div>
+        <div class="pname">付費版</div>
         <div class="price">NT$80<small> /月</small></div>
         <ul>
           <li>全功能無限</li>
