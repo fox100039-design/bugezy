@@ -473,6 +473,33 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summ
           // PM-105：popup 在開麥克風前先問是否錄製中（錄製中不開授權頁，避免搶焦點卡死）
           sendResponse({ recording: recordingTabId !== null });
           break;
+        case 'UPLOAD_MONITOR_REPORT': {
+          // PM-124：即時監控 error panel 打包上傳 → 複用 /api/reports；綁 user_id（PM-98：list_reports 靠 user_id 過濾）
+          const m = msg as { payload: RecordingPayload };
+          const store = await chrome.storage.local.get(SESSION_KEY);
+          const uid = (store[SESSION_KEY] as Session | undefined)?.user_id;
+          const payload = uid ? { ...m.payload, user_id: uid } : m.payload;
+          try {
+            const res = await fetch(`${API_BASE}/api/reports`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = (await res.json()) as { report_id?: string; share_url?: string };
+            if (data.share_url) {
+              await chrome.storage.local.set({ 'bugezy:latest-report-url': data.share_url });
+              blog('即時監控報告上傳成功:', data.share_url);
+              sendResponse({ ok: true, shareUrl: data.share_url, reportId: data.report_id });
+            } else {
+              sendResponse({ ok: false, error: '未取得報告連結' });
+            }
+          } catch (err) {
+            blog('即時監控上傳失敗:', err);
+            sendResponse({ ok: false, error: '上傳失敗' });
+          }
+          break;
+        }
         case 'CLEAR_RECORDING':
           sendResponse(await clearRecording());
           break;

@@ -140,6 +140,26 @@ window.addEventListener('message', async (e: MessageEvent) => {
     });
   }
 
+  // PM-124：即時監控 error panel 上傳報告——inject 打包 payload → 這裡轉給 background 上傳，
+  // 拿到 share_url 後回傳給 inject 更新按鈕（inject 在 MAIN world 無 chrome.runtime，故經此橋接）。
+  if (data.kind === 'UPLOAD_MONITOR') {
+    chrome.runtime.sendMessage(
+      { type: 'UPLOAD_MONITOR_REPORT', payload: data.payload } satisfies ControlMessage,
+      (resp: { ok?: boolean; shareUrl?: string; error?: string } | undefined) => {
+        window.postMessage(
+          {
+            source: BUGEZY_SOURCE,
+            dir: 'to-inject',
+            kind: 'MONITOR_UPLOADED',
+            reportUrl: resp?.shareUrl,
+            error: resp?.ok ? undefined : (resp?.error ?? '上傳失敗'),
+          } satisfies InjectMessage,
+          '*',
+        );
+      },
+    );
+  }
+
   // PM-50：⏪ 回溯打包結果 → 存 storage 後通知 background 開編輯頁
   if (data.kind === 'REWIND_RESULT') {
     const payload = data.payload;

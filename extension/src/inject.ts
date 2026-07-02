@@ -129,6 +129,8 @@ function main() {
 
   // ===== PM-52：即時監控視覺回饋（頁面右下角浮動 badge + error 清單）=====
   let monitorBadge: HTMLElement | null = null;
+  // PM-124：本頁最近一次「上傳監控報告」成功後的報告連結（有值 → badge/按鈕改為開報告頁）
+  let latestReportUrl: string | null = null;
   // PM-69：error 清單改用 DOM 節點 + textContent 建構（見 toggleErrorPanel），
   // 不再拼 HTML 字串，故移除原 escapeHtml（textContent 本身即防注入）。
 
@@ -174,7 +176,11 @@ function main() {
       monitorBadge.style.animation = 'bugezy-badge-pulse 1.5s ease-in-out infinite';
       monitorBadge.textContent = `⚠️ 發現 ${total} 個錯誤（點我查看）`;
       monitorBadge.title = `BugEzy 偵測到 ${total} 個錯誤，點我查看`;
-      monitorBadge.onclick = () => toggleErrorPanel();
+      // PM-124：已上傳過報告 → 點 badge 直接開報告頁；否則展開 error 面板
+      monitorBadge.onclick = () => {
+        if (latestReportUrl) window.open(latestReportUrl, '_blank');
+        else toggleErrorPanel();
+      };
     }
   }
 
@@ -183,6 +189,29 @@ function main() {
     monitorBadge = null;
     document.getElementById('bugezy-error-panel')?.remove();
   }
+
+  // PM-124：接收 content 轉回的監控報告上傳結果 → 更新按鈕 + 記住報告連結
+  window.addEventListener('message', (e: MessageEvent) => {
+    if (e.source !== window) return;
+    const d = e.data as InjectMessage;
+    if (!d || d.source !== BUGEZY_SOURCE || d.dir !== 'to-inject' || d.kind !== 'MONITOR_UPLOADED') {
+      return;
+    }
+    const btn = document.getElementById('bugezy-monitor-upload') as HTMLButtonElement | null;
+    if (d.reportUrl) {
+      latestReportUrl = d.reportUrl;
+      updateMonitorBadge(); // badge 點擊改為開報告頁
+      if (btn) {
+        btn.textContent = '✅ 已上傳！點此查看報告';
+        btn.style.background = '#238636';
+        btn.disabled = false; // 再點由既有 handler 依 latestReportUrl 開報告頁
+      }
+    } else if (btn) {
+      btn.textContent = '❌ 上傳失敗，點此重試';
+      btn.style.background = '#f85149';
+      btn.disabled = false; // 再點由既有 handler（latestReportUrl 仍 null）重新上傳
+    }
+  });
 
   /** 點 badge 展開 / 收合即時 error 清單 */
   function toggleErrorPanel() {
@@ -232,6 +261,39 @@ function main() {
       empty.style.cssText = 'color:#888;text-align:center;padding:12px;';
       empty.textContent = '✓ 目前無錯誤';
       panel.appendChild(empty);
+    }
+
+    // PM-124：panel 底部「上傳報告讓 AI 分析」——打包當前 buffer 的 errors 上傳，產生報告連結
+    if (cLogs.length || nErrs.length) {
+      const uploadBtn = document.createElement('button');
+      uploadBtn.id = 'bugezy-monitor-upload';
+      uploadBtn.textContent = latestReportUrl ? '✅ 已上傳！點此查看報告' : '📤 上傳報告讓 AI 分析';
+      uploadBtn.style.cssText =
+        'pointer-events:auto;display:block;width:100%;margin-top:8px;background:' +
+        (latestReportUrl ? '#238636' : '#7c3aed') +
+        ';color:#fff;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;';
+      uploadBtn.addEventListener('click', () => {
+        if (latestReportUrl) {
+          window.open(latestReportUrl, '_blank');
+          return;
+        }
+        uploadBtn.disabled = true;
+        uploadBtn.textContent = '⏳ 上傳中…';
+        const total = bgConsoleLogs.length + bgNetworkErrors.length;
+        // description 非 RecordingPayload 型別欄位（server 端選讀）→ 交集型別帶入
+        const payload: RecordingPayload & { description: string } = {
+          rrwebEvents: [],
+          consoleLogs: bgConsoleLogs.map((e) => e.data),
+          networkErrors: bgNetworkErrors.map((e) => e.data),
+          voiceTranscript: [],
+          pageInfo: buildPageInfo(),
+          description: `即時監控偵測到 ${total} 個錯誤`,
+          markers: [],
+        };
+        // inject 在 MAIN world 無 chrome.runtime → 走 window.postMessage → content → background 通訊鏈
+        post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'UPLOAD_MONITOR', payload });
+      });
+      panel.appendChild(uploadBtn);
     }
     document.body.appendChild(panel);
   }

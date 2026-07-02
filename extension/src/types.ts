@@ -122,7 +122,9 @@ export type ControlMessage =
   // PM-97：offscreen 即時音量（0~1）→ background 轉發 → content relay → inject 更新音量條
   | { type: 'MIC_VOLUME'; level: number }
   // PM-105：popup 查詢是否錄製中（錄製中開麥克風只存偏好、不開授權頁）
-  | { type: 'GET_RECORDING_STATE' };
+  | { type: 'GET_RECORDING_STATE' }
+  // PM-124：即時監控 error panel 上傳報告（content → background 打包上傳 /api/reports）
+  | { type: 'UPLOAD_MONITOR_REPORT'; payload: RecordingPayload };
 
 /** background → popup 的狀態回應 */
 export interface StateResponse {
@@ -179,6 +181,15 @@ export type InjectMessage =
       kind: 'LIVE_ERRORS_RESULT';
       consoleLogs: ConsoleLog[];
       networkErrors: NetworkError[];
+    }
+  // PM-124：即時監控 error panel 「上傳報告」——inject 打包 payload → content → background 上傳；結果回 inject
+  | { source: typeof BUGEZY_SOURCE; dir: 'to-content'; kind: 'UPLOAD_MONITOR'; payload: RecordingPayload }
+  | {
+      source: typeof BUGEZY_SOURCE;
+      dir: 'to-inject';
+      kind: 'MONITOR_UPLOADED';
+      reportUrl?: string;
+      error?: string;
     };
 
 /** chrome.storage.local 的鍵 */
