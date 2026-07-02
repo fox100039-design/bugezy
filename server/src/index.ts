@@ -236,6 +236,10 @@ const HOMEPAGE_HTML = `<!DOCTYPE html>
     .plan li::before { content:"✓ "; color:#10b981; }
     .plan-cta { display:block; margin-top:18px; padding:10px; border-radius:10px; background:#7c3aed; color:#fff; font-weight:700; font-size:14px; text-decoration:none; }
     .plan-cta:hover { background:#6d28d9; }
+    /* PM-108：定價卡按鈕引導安裝 */
+    .pricing-hint { color:#9aa3b2; font-size:12px; margin-top:12px; margin-bottom:8px; }
+    .free-btn { display:block; margin-top:18px; padding:10px; border-radius:10px; background:transparent; border:1px solid #2a2a3e; color:#c4b5fd; font-weight:600; font-size:14px; text-decoration:none; }
+    .free-btn:hover { border-color:#7c3aed; }
     footer { border-top:1px solid #2a2a3e; padding:28px 0; text-align:center; color:#888; font-size:13px; margin-top:24px; }
     footer a { margin:0 6px; }
     /* PM-74：聯絡資訊（綠界審核要求，明顯可見） */
@@ -352,6 +356,7 @@ const HOMEPAGE_HTML = `<!DOCTYPE html>
           <li>MCP 月 20 次</li>
           <li>報告保留 7 天</li>
         </ul>
+        <a class="free-btn" href="/install">免費安裝 →</a>
       </div>
       <div class="plan featured">
         <div class="pname">付費版 ✨</div>
@@ -365,7 +370,8 @@ const HOMEPAGE_HTML = `<!DOCTYPE html>
           <li>報告保留 90 天</li>
           <li>團隊協作（即將推出）</li>
         </ul>
-        <a class="plan-cta" href="#">立即升級</a>
+        <p class="pricing-hint">安裝 Chrome 擴充後，在工具中一鍵升級付費</p>
+        <a class="plan-cta" href="/install">安裝後即可升級 →</a>
       </div>
     </div>
   </section>
