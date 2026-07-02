@@ -260,6 +260,16 @@ const HOMEPAGE_HTML = `<!DOCTYPE html>
     .plan-badge { display:inline-block; background:#7c3aed; color:#fff; font-size:11px; padding:2px 10px; border-radius:10px; margin-bottom:8px; }
     .day-btn { display:block; margin-top:18px; padding:10px; border-radius:10px; background:#f59e0b; color:#000; font-weight:700; font-size:14px; text-decoration:none; }
     .day-btn:hover { background:#d97706; }
+    /* PM-112：讓 AI 幫你安裝（一鍵複製提示詞） */
+    .ai-install { max-width:720px; margin:48px auto; text-align:center; }
+    .ai-install h2 { color:#fff; font-size:28px; margin-bottom:8px; }
+    .ai-install-desc { color:#9aa3b2; font-size:15px; margin-bottom:24px; }
+    .ai-install-box { background:#161b22; border:1px solid #7c3aed; border-radius:12px; padding:24px; text-align:left; position:relative; }
+    .ai-install-box pre { color:#e6edf3; font-size:13px; font-family:'Consolas','Monaco',monospace; white-space:pre-wrap; word-break:break-word; line-height:1.6; margin:0 0 16px 0; }
+    .copy-btn { background:#7c3aed; color:#fff; border:none; border-radius:10px; padding:12px 24px; font-size:16px; font-weight:600; cursor:pointer; width:100%; transition:background 0.2s; }
+    .copy-btn:hover { background:#6d28d9; }
+    .copy-feedback { color:#3fb950; font-size:14px; margin-top:8px; display:inline-block; }
+    .ai-install-tools { color:#666; font-size:13px; margin-top:16px; }
     footer { border-top:1px solid #2a2a3e; padding:28px 0; text-align:center; color:#888; font-size:13px; margin-top:24px; }
     footer a { margin:0 6px; }
     /* PM-74：聯絡資訊（綠界審核要求，明顯可見） */
@@ -360,6 +370,32 @@ const HOMEPAGE_HTML = `<!DOCTYPE html>
     </div>
   </section>
 
+  <section class="wrap ai-install">
+    <h2>🤖 讓 AI 幫你安裝 BugEzy</h2>
+    <p class="ai-install-desc">不懂技術？沒關係。把下面這段複製貼給你的 AI，它會幫你搞定一切。</p>
+    <div class="ai-install-box">
+      <pre id="ai-install-prompt">請幫我安裝 BugEzy MCP 除錯工具，讓你可以直接讀取我的 Bug 報告來幫我修 Bug。
+
+安裝步驟：
+1. Chrome 擴充功能：https://chromewebstore.google.com/detail/bugezy/mpkakmmfllghcdaeicdlnpogneeanhmb
+2. MCP 連線設定，在你的 MCP config 加入：
+{
+  "mcpServers": {
+    "bugezy": {
+      "url": "https://bugezy.dev/mcp"
+    }
+  }
+}
+
+安裝完成後，我只要用 BugEzy 錄製 Bug，你就能透過 MCP 讀取我的報告（Console 錯誤、Network 問題、語音描述、截圖），直接幫我修。
+
+詳細教學：https://bugezy.dev/install</pre>
+      <button id="copy-ai-prompt" class="copy-btn">📋 一鍵複製，貼給你的 AI</button>
+      <span id="copy-feedback" class="copy-feedback" style="display:none;">✅ 已複製！</span>
+    </div>
+    <p class="ai-install-tools">支援：Claude · Cursor · Windsurf · VS Code + Cline · Claude Code</p>
+  </section>
+
   <section class="wrap" id="pricing">
     <h2>方案與定價</h2>
     <p class="sub">免費開始，需要更多再升級</p>
@@ -421,6 +457,15 @@ const HOMEPAGE_HTML = `<!DOCTYPE html>
     <div style="margin-top:8px;"><a href="/install">安裝指南</a> | <a href="/features">功能說明</a> | <a href="/guide">使用指南</a> | <a href="/faq">常見問題</a> | <a href="/privacy">隱私政策</a></div>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy · 亞洲平價 MCP 語音除錯工具</div>
   </footer>
+  <script>
+    document.getElementById('copy-ai-prompt')?.addEventListener('click', function () {
+      var text = document.getElementById('ai-install-prompt')?.textContent || '';
+      navigator.clipboard.writeText(text).then(function () {
+        var fb = document.getElementById('copy-feedback');
+        if (fb) { fb.style.display = 'inline-block'; setTimeout(function () { fb.style.display = 'none'; }, 2000); }
+      });
+    });
+  </script>
 </body>
 </html>`;
 
@@ -954,6 +999,13 @@ const INSTALL_PAGE_HTML = `<!DOCTYPE html>
     color: #8b8fa3; font-size: 13px;
   }
   footer .links a { margin-right: 16px; }
+  /* PM-112：最快安裝——複製貼給 AI */
+  .ai-install-box { background:#161b22; border:1px solid #7c3aed; border-radius:12px; padding:20px; text-align:left; margin:16px 0 8px; }
+  .ai-install-box pre { color:#e6edf3; font-size:13px; font-family:'Consolas','Monaco',monospace; white-space:pre-wrap; word-break:break-word; line-height:1.6; margin:0 0 14px 0; }
+  .copy-btn { background:#7c3aed; color:#fff; border:none; border-radius:10px; padding:12px 24px; font-size:15px; font-weight:600; cursor:pointer; width:100%; }
+  .copy-btn:hover { background:#6d28d9; }
+  .copy-feedback { color:#3fb950; font-size:14px; margin-top:8px; display:inline-block; }
+  .ai-install-tools { color:#8b8fa3; font-size:13px; margin-top:8px; }
   @media (max-width: 640px) { .wrap { padding: 32px 16px 60px; } h1 { font-size: 24px; } }
 </style>
 </head>
@@ -963,6 +1015,32 @@ const INSTALL_PAGE_HTML = `<!DOCTYPE html>
 
   <h1>🚀 安裝 BugEzy — 三分鐘搞定</h1>
   <p class="lead">從零到能用，跟著五步走，馬上讓 AI 幫你修 Bug。</p>
+
+  <div class="step" style="border-color:#7c3aed;">
+    <h2>🤖 最快的安裝方式：複製貼給 AI</h2>
+    <p style="color:#8b8fa3;margin:0 0 4px;">不懂技術？把下面這段複製貼給你的 AI（Claude / Cursor / Windsurf / VS Code + Cline / Claude Code），它會幫你搞定。</p>
+    <div class="ai-install-box">
+      <pre id="ai-install-prompt">請幫我安裝 BugEzy MCP 除錯工具，讓你可以直接讀取我的 Bug 報告來幫我修 Bug。
+
+安裝步驟：
+1. Chrome 擴充功能：https://chromewebstore.google.com/detail/bugezy/mpkakmmfllghcdaeicdlnpogneeanhmb
+2. MCP 連線設定，在你的 MCP config 加入：
+{
+  "mcpServers": {
+    "bugezy": {
+      "url": "https://bugezy.dev/mcp"
+    }
+  }
+}
+
+安裝完成後，我只要用 BugEzy 錄製 Bug，你就能透過 MCP 讀取我的報告（Console 錯誤、Network 問題、語音描述、截圖），直接幫我修。
+
+詳細教學：https://bugezy.dev/install</pre>
+      <button id="copy-ai-prompt" class="copy-btn">📋 一鍵複製，貼給你的 AI</button>
+      <span id="copy-feedback" class="copy-feedback" style="display:none;">✅ 已複製！</span>
+    </div>
+    <p class="ai-install-tools">或依下方手動五步安裝 ↓</p>
+  </div>
 
   <div class="step">
     <h2><span class="snum">1</span>安裝擴充功能</h2>
@@ -1060,6 +1138,15 @@ const INSTALL_PAGE_HTML = `<!DOCTYPE html>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
   </footer>
 </div>
+<script>
+  document.getElementById('copy-ai-prompt')?.addEventListener('click', function () {
+    var text = document.getElementById('ai-install-prompt')?.textContent || '';
+    navigator.clipboard.writeText(text).then(function () {
+      var fb = document.getElementById('copy-feedback');
+      if (fb) { fb.style.display = 'inline-block'; setTimeout(function () { fb.style.display = 'none'; }, 2000); }
+    });
+  });
+</script>
 </body>
 </html>`;
 
