@@ -819,14 +819,32 @@ function highlightColorOption(color: string) {
   colorOptions.forEach((el) => el.classList.toggle('selected', el.dataset.color === color));
 }
 
-promptPrev.addEventListener('click', () => {
-  promptCurrent = (promptCurrent - 1 + prompts.length) % prompts.length;
+// PM-116：編輯器開著時把 textarea + 選色同步到目前這一則
+function syncEditorToCurrentPrompt() {
+  const item = prompts[promptCurrent];
+  if (!item) return;
+  promptTextarea.value = item.text;
+  editingColor = item.color;
+  highlightColorOption(editingColor);
+}
+
+// PM-116：◀▶ 切換——若編輯器開著，先自動存回當前修改，切換後再同步 textarea/選色
+function switchPrompt(direction: number) {
+  const editing = promptEditor.style.display !== 'none';
+  if (editing) {
+    const newText = promptTextarea.value.trim();
+    if (newText && newText !== prompts[promptCurrent]?.text) {
+      prompts[promptCurrent] = { text: newText, color: editingColor };
+      void chrome.storage.local.set({ [PROMPTS_KEY]: prompts });
+    }
+  }
+  promptCurrent = (promptCurrent + direction + prompts.length) % prompts.length;
   renderPrompt();
-});
-promptNext.addEventListener('click', () => {
-  promptCurrent = (promptCurrent + 1) % prompts.length;
-  renderPrompt();
-});
+  if (editing) syncEditorToCurrentPrompt();
+}
+
+promptPrev.addEventListener('click', () => switchPrompt(-1));
+promptNext.addEventListener('click', () => switchPrompt(1));
 promptCopy.addEventListener('click', async () => {
   await navigator.clipboard.writeText(prompts[promptCurrent]?.text ?? ''); // 複製完整全文（含換行）
   promptCopied.style.display = 'inline-block';
