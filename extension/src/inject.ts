@@ -132,37 +132,49 @@ function main() {
   // PM-69：error 清單改用 DOM 節點 + textContent 建構（見 toggleErrorPanel），
   // 不再拼 HTML 字串，故移除原 escapeHtml（textContent 本身即防注入）。
 
+  // PM-123：即時監控浮動 icon 改為直覺文字狀態條——
+  // 無錯誤：綠色靜態「🟢 BugEzy 監控中」；有錯誤：橘色脈衝「⚠️ 發現 N 個錯誤（點我查看）」，
+  // 點擊展開既有的即時 error 清單面板（toggleErrorPanel）＝「查看」。
   function showMonitorBadge() {
     if (monitorBadge) return;
+    // 橘色脈衝 keyframes（有錯誤時用）
+    if (!document.getElementById('bugezy-badge-pulse-style')) {
+      const s = document.createElement('style');
+      s.id = 'bugezy-badge-pulse-style';
+      s.textContent =
+        '@keyframes bugezy-badge-pulse{0%,100%{box-shadow:0 2px 12px rgba(245,158,11,0.3)}50%{box-shadow:0 2px 20px rgba(245,158,11,0.7),0 0 40px rgba(245,158,11,0.3)}}';
+      document.head.appendChild(s);
+    }
     const badge = document.createElement('div');
     badge.id = 'bugezy-monitor-badge';
     badge.style.cssText =
-      'position:fixed;bottom:20px;right:20px;z-index:2147483647;pointer-events:auto;min-width:48px;height:48px;background:#1a1a2e;border:2px solid #10b981;border-radius:24px;display:flex;align-items:center;justify-content:center;gap:4px;padding:0 14px;font-family:system-ui,sans-serif;font-size:14px;font-weight:700;color:#10b981;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,0.3);transition:all 0.3s;';
-    badge.textContent = '🐛 ✓';
+      'position:fixed;bottom:20px;right:20px;z-index:2147483647;pointer-events:auto;padding:8px 16px;border-radius:20px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:13px;font-weight:600;cursor:default;box-shadow:0 2px 12px rgba(0,0,0,0.3);transition:all 0.3s;user-select:none;background:rgba(22,163,74,0.9);color:#fff;';
+    badge.textContent = '🟢 BugEzy 監控中';
     badge.title = 'BugEzy 即時監控中 — 目前無錯誤';
-    badge.addEventListener('click', () => toggleErrorPanel());
     document.body.appendChild(badge);
     monitorBadge = badge;
-    updateMonitorBadge(); // 立即反映目前計數
+    updateMonitorBadge(); // 立即反映目前計數（含綁定/解綁點擊）
   }
 
   function updateMonitorBadge() {
     if (!monitorBadge) return; // 未開監控就是 no-op（攔截時每次呼叫也便宜）
     const total = bgConsoleLogs.length + bgNetworkErrors.length;
     if (total === 0) {
-      monitorBadge.style.borderColor = '#10b981';
-      monitorBadge.style.color = '#10b981';
-      monitorBadge.textContent = '🐛 ✓';
+      monitorBadge.style.background = 'rgba(22,163,74,0.9)';
+      monitorBadge.style.color = '#fff';
+      monitorBadge.style.cursor = 'default';
+      monitorBadge.style.animation = 'none';
+      monitorBadge.textContent = '🟢 BugEzy 監控中';
       monitorBadge.title = 'BugEzy 即時監控中 — 目前無錯誤';
+      monitorBadge.onclick = null;
     } else {
-      monitorBadge.style.borderColor = '#ef4444';
-      monitorBadge.style.color = '#ef4444';
-      monitorBadge.textContent = `🐛 ${total}`;
-      monitorBadge.title = `BugEzy 偵測到 ${total} 個錯誤`;
-      monitorBadge.style.transform = 'scale(1.2)'; // 閃動提醒
-      window.setTimeout(() => {
-        if (monitorBadge) monitorBadge.style.transform = 'scale(1)';
-      }, 300);
+      monitorBadge.style.background = 'rgba(245,158,11,0.95)';
+      monitorBadge.style.color = '#000';
+      monitorBadge.style.cursor = 'pointer';
+      monitorBadge.style.animation = 'bugezy-badge-pulse 1.5s ease-in-out infinite';
+      monitorBadge.textContent = `⚠️ 發現 ${total} 個錯誤（點我查看）`;
+      monitorBadge.title = `BugEzy 偵測到 ${total} 個錯誤，點我查看`;
+      monitorBadge.onclick = () => toggleErrorPanel();
     }
   }
 
