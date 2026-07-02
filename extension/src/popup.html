@@ -224,6 +224,24 @@
       .day-pass-badge { background: #f59e0b; color: #000; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 8px; }
       .countdown { color: #f59e0b; font-size: 12px; font-family: monospace; }
       .day-pass-hint { color: #9aa3b2; font-size: 11px; text-align: center; margin: 4px 0 0; }
+      /* PM-114：AI 慣用語輪盤 */
+      .prompt-carousel { margin-top: 12px; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 10px; }
+      .prompt-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+      .prompt-title { color: #c9d1d9; font-size: 12px; font-weight: 600; }
+      .prompt-index { color: #7c3aed; font-size: 11px; }
+      .prompt-preview-row { display: flex; align-items: center; gap: 6px; }
+      .prompt-nav { background: #2a2a3e; color: #fff; border: 1px solid #444; border-radius: 6px; width: 28px; height: 28px; cursor: pointer; font-size: 12px; flex-shrink: 0; }
+      .prompt-nav:hover { background: #3a3a5e; }
+      .prompt-preview { flex: 1; color: #e6edf3; font-size: 12px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: #0d1117; padding: 8px 10px; border-radius: 6px; border: 1px solid #21262d; }
+      .prompt-actions { display: flex; gap: 8px; margin-top: 8px; }
+      .prompt-copy-btn { flex: 1; background: #7c3aed; color: #fff; border: none; border-radius: 8px; padding: 6px; font-size: 12px; font-weight: 600; cursor: pointer; }
+      .prompt-edit-btn { background: #2a2a3e; color: #ccc; border: 1px solid #444; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+      .prompt-editor { margin-top: 8px; }
+      .prompt-textarea { width: 100%; background: #0d1117; color: #e6edf3; border: 1px solid #7c3aed; border-radius: 8px; padding: 8px; font-size: 12px; font-family: inherit; resize: vertical; box-sizing: border-box; }
+      .prompt-editor-actions { display: flex; gap: 8px; margin-top: 6px; }
+      .prompt-save-btn { background: #238636; color: #fff; border: none; border-radius: 6px; padding: 4px 12px; font-size: 12px; cursor: pointer; }
+      .prompt-cancel-btn { background: transparent; color: #888; border: 1px solid #444; border-radius: 6px; padding: 4px 12px; font-size: 12px; cursor: pointer; }
+      .prompt-copied { color: #3fb950; font-size: 11px; margin-top: 4px; display: inline-block; }
       /* PM-107：mic OFF 按錄製提示層 */
       .mic-prompt {
         position: fixed; inset: 0; background: rgba(0,0,0,0.6);
@@ -342,6 +360,31 @@
           <span>✨ 工具列特效</span>
           <input type="checkbox" id="toolbarEffect" />
         </label>
+      </div>
+
+      <!-- PM-114：AI 慣用語輪盤（4 則可編輯 + 一鍵複製） -->
+      <div class="prompt-carousel">
+        <div class="prompt-header">
+          <span class="prompt-title">💬 AI 指令</span>
+          <span class="prompt-index" id="prompt-index">1/4</span>
+        </div>
+        <div class="prompt-preview-row">
+          <button id="prompt-prev" class="prompt-nav">◀</button>
+          <div class="prompt-preview" id="prompt-preview">請讀取我最新的 BugEzy 報告...</div>
+          <button id="prompt-next" class="prompt-nav">▶</button>
+        </div>
+        <div class="prompt-actions">
+          <button id="prompt-copy" class="prompt-copy-btn">📋 複製</button>
+          <button id="prompt-edit" class="prompt-edit-btn">✏️ 編輯</button>
+        </div>
+        <div id="prompt-editor" class="prompt-editor" style="display:none;">
+          <textarea id="prompt-textarea" class="prompt-textarea" rows="5"></textarea>
+          <div class="prompt-editor-actions">
+            <button id="prompt-save" class="prompt-save-btn">💾 儲存</button>
+            <button id="prompt-cancel" class="prompt-cancel-btn">取消</button>
+          </div>
+        </div>
+        <span id="prompt-copied" class="prompt-copied" style="display:none;">✅ 已複製！</span>
       </div>
     </section>
 
