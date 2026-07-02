@@ -360,11 +360,10 @@ const HOMEPAGE_HTML = `<!DOCTYPE html>
         <span>Claude Desktop</span>
         <span>Claude Code</span>
         <span>Cursor</span>
-        <span>VS Code</span>
-        <span>Zed</span>
         <span>Windsurf</span>
-        <span>Codex</span>
-        <span>Replit</span>
+        <span>VS Code + Cline</span>
+        <span>Google Antigravity</span>
+        <span>Gemini CLI</span>
       </div>
       <p>一行 URL 連接，零安裝</p>
     </div>
@@ -393,7 +392,7 @@ const HOMEPAGE_HTML = `<!DOCTYPE html>
       <button id="copy-ai-prompt" class="copy-btn">📋 一鍵複製，貼給你的 AI</button>
       <span id="copy-feedback" class="copy-feedback" style="display:none;">✅ 已複製！</span>
     </div>
-    <p class="ai-install-tools">支援：Claude · Cursor · Windsurf · VS Code + Cline · Claude Code</p>
+    <p class="ai-install-tools">支援：Claude Desktop · Claude Code · Cursor · Windsurf · VS Code + Cline · Google Antigravity · Gemini CLI</p>
   </section>
 
   <section class="wrap" id="pricing">
@@ -1018,7 +1017,7 @@ const INSTALL_PAGE_HTML = `<!DOCTYPE html>
 
   <div class="step" style="border-color:#7c3aed;">
     <h2>🤖 最快的安裝方式：複製貼給 AI</h2>
-    <p style="color:#8b8fa3;margin:0 0 4px;">不懂技術？把下面這段複製貼給你的 AI（Claude / Cursor / Windsurf / VS Code + Cline / Claude Code），它會幫你搞定。</p>
+    <p style="color:#8b8fa3;margin:0 0 4px;">不懂技術？把下面這段複製貼給你的 AI（Claude Desktop / Claude Code / Cursor / Windsurf / VS Code + Cline / Google Antigravity / Gemini CLI），它會幫你搞定。</p>
     <div class="ai-install-box">
       <pre id="ai-install-prompt">請幫我安裝 BugEzy MCP 除錯工具，讓你可以直接讀取我的 Bug 報告來幫我修 Bug。
 
@@ -1083,7 +1082,7 @@ const INSTALL_PAGE_HTML = `<!DOCTYPE html>
   <div class="step">
     <h2><span class="snum">5</span>連接 AI（MCP 設定）</h2>
     <p style="margin:0 0 4px;color:#c4b5fd;font-weight:600;">讓 AI 直接讀你的 Bug 報告，不用複製貼上。</p>
-    <p style="margin:0;">支援 Claude Desktop / Claude.ai / Cursor / Windsurf / VS Code + Cline 等。</p>
+    <p style="margin:0;">支援 Claude Desktop · Claude Code · Cursor · Windsurf · VS Code + Cline · Google Antigravity · Gemini CLI 等所有 MCP 工具。</p>
     <div class="mcp-box">
       <b>🔌 BugEzy MCP 網址（所有工具通用）</b><br />
       <code>https://bugezy.dev/mcp</code>
@@ -1099,6 +1098,13 @@ const INSTALL_PAGE_HTML = `<!DOCTYPE html>
 }</pre></div>
       <div class="mcp-tool"><div class="tname">VS Code + Cline</div><div class="tstep">Cline → MCP Servers → Add → 貼上網址</div></div>
       <div class="mcp-tool"><div class="tname">Claude Code（終端機）</div><div class="tstep"><code>claude mcp add --transport http bugezy https://bugezy.dev/mcp</code></div></div>
+      <div class="mcp-tool"><div class="tname">Google Antigravity / Gemini CLI</div><div class="tstep">在 MCP 設定加入（協定通用，格式同上）：</div><pre>{
+  "mcpServers": {
+    "bugezy": {
+      "url": "https://bugezy.dev/mcp"
+    }
+  }
+}</pre></div>
 
       <div style="margin-top:14px;color:#ccc;font-size:13px;">連接成功後直接問：<b style="color:#a78bfa;">「讀我最新的 BugEzy 報告，告訴我怎麼修」</b></div>
 
