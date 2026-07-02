@@ -226,9 +226,12 @@
       .day-pass-hint { color: #9aa3b2; font-size: 11px; text-align: center; margin: 4px 0 0; }
       /* PM-114：AI 慣用語輪盤 */
       .prompt-carousel { margin-top: 12px; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 10px; }
-      .prompt-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
-      .prompt-title { color: #c9d1d9; font-size: 11px; font-weight: 600; flex: 1; }
+      .prompt-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; cursor: pointer; }
+      .prompt-header.expanded { cursor: default; }
+      .prompt-title { color: #e6edf3; font-size: 13px; font-weight: 700; flex: 1; }
       .prompt-index { color: #7c3aed; font-size: 11px; flex-shrink: 0; }
+      .prompt-pin-btn { background: transparent; border: none; cursor: pointer; font-size: 14px; opacity: 0.5; transition: opacity 0.2s; flex-shrink: 0; }
+      .prompt-pin-btn.pinned { opacity: 1; }
       .prompt-preview-row { display: flex; align-items: center; gap: 4px; }
       .prompt-nav { background: #2a2a3e; color: #fff; border: 1px solid #444; border-radius: 6px; width: 28px; height: 28px; cursor: pointer; font-size: 12px; flex-shrink: 0; }
       .prompt-nav:hover { background: #3a3a5e; }
@@ -236,7 +239,7 @@
       .prompt-preview-wrap { flex: 1; display: flex; align-items: center; gap: 6px; background: #0d1117; padding: 8px 10px; border-radius: 6px; border: 1px solid #21262d; overflow: hidden; }
       .prompt-color-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
       .prompt-preview { flex: 1; color: #e6edf3; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .prompt-copy-btn { background: #7c3aed; border: none; border-radius: 6px; width: 26px; height: 26px; cursor: pointer; font-size: 12px; flex-shrink: 0; }
+      .prompt-copy-btn { background: #7c3aed; border: none; border-radius: 6px; width: 26px; height: 26px; cursor: pointer; font-size: 12px; flex-shrink: 0; color: #fff; display: flex; align-items: center; justify-content: center; }
       .prompt-copy-btn:hover { background: #6d28d9; }
       .prompt-actions { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
       .prompt-edit-btn { background: #2a2a3e; color: #ccc; border: 1px solid #444; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
@@ -371,36 +374,44 @@
         </label>
       </div>
 
-      <!-- PM-114/115：AI 慣用語輪盤（4 則可編輯 + 顏色標記 + 一鍵複製；複製鈕右側） -->
-      <div class="prompt-carousel">
-        <div class="prompt-header">
+      <!-- PM-114~118：AI 慣用語輪盤（可編輯 + 顏色標記 + 一鍵複製 + 可收合/釘選，預設收合） -->
+      <div class="prompt-carousel" id="prompt-carousel">
+        <div class="prompt-header" id="prompt-header">
           <span class="prompt-title">一鍵快速複製指令貼給你的 AI</span>
-          <button id="prompt-copy" class="prompt-copy-btn" title="複製">📋</button>
+          <button id="prompt-copy" class="prompt-copy-btn" title="複製">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+            </svg>
+          </button>
           <span id="prompt-copied" class="prompt-copied" style="display:none;">✅</span>
           <span class="prompt-index" id="prompt-index">1/4</span>
+          <button id="prompt-pin" class="prompt-pin-btn" title="釘選/收合">📌</button>
         </div>
-        <div class="prompt-preview-row">
-          <button id="prompt-prev" class="prompt-nav">◀</button>
-          <div class="prompt-preview-wrap">
-            <span class="prompt-color-dot" id="prompt-color-dot"></span>
-            <span class="prompt-preview" id="prompt-preview">請讀取我最新的 BugEzy 報告...</span>
+        <div class="prompt-body" id="prompt-body" style="display:none;">
+          <div class="prompt-preview-row">
+            <button id="prompt-prev" class="prompt-nav">◀</button>
+            <div class="prompt-preview-wrap">
+              <span class="prompt-color-dot" id="prompt-color-dot"></span>
+              <span class="prompt-preview" id="prompt-preview">請讀取我最新的 BugEzy 報告...</span>
+            </div>
+            <button id="prompt-next" class="prompt-nav">▶</button>
           </div>
-          <button id="prompt-next" class="prompt-nav">▶</button>
-        </div>
-        <div class="prompt-actions">
-          <button id="prompt-edit" class="prompt-edit-btn">✏️ 編輯</button>
-        </div>
-        <div id="prompt-editor" class="prompt-editor" style="display:none;">
-          <div class="prompt-color-picker" id="prompt-color-picker">
-            <span class="color-option" data-color="#ef4444" style="background:#ef4444;"></span>
-            <span class="color-option" data-color="#3b82f6" style="background:#3b82f6;"></span>
-            <span class="color-option" data-color="#22c55e" style="background:#22c55e;"></span>
-            <span class="color-option" data-color="#f59e0b" style="background:#f59e0b;"></span>
+          <div class="prompt-actions">
+            <button id="prompt-edit" class="prompt-edit-btn">✏️ 編輯</button>
           </div>
-          <textarea id="prompt-textarea" class="prompt-textarea" rows="5"></textarea>
-          <div class="prompt-editor-actions">
-            <button id="prompt-save" class="prompt-save-btn">💾 儲存</button>
-            <button id="prompt-cancel" class="prompt-cancel-btn">取消</button>
+          <div id="prompt-editor" class="prompt-editor" style="display:none;">
+            <div class="prompt-color-picker" id="prompt-color-picker">
+              <span class="color-option" data-color="#ef4444" style="background:#ef4444;"></span>
+              <span class="color-option" data-color="#3b82f6" style="background:#3b82f6;"></span>
+              <span class="color-option" data-color="#22c55e" style="background:#22c55e;"></span>
+              <span class="color-option" data-color="#f59e0b" style="background:#f59e0b;"></span>
+            </div>
+            <textarea id="prompt-textarea" class="prompt-textarea" rows="5"></textarea>
+            <div class="prompt-editor-actions">
+              <button id="prompt-save" class="prompt-save-btn">💾 儲存</button>
+              <button id="prompt-cancel" class="prompt-cancel-btn">取消</button>
+            </div>
           </div>
         </div>
       </div>

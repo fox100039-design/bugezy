@@ -780,6 +780,10 @@ const promptSave = $<HTMLButtonElement>('prompt-save');
 const promptCancel = $<HTMLButtonElement>('prompt-cancel');
 const promptCopied = $('prompt-copied');
 const colorOptions = Array.from(document.querySelectorAll<HTMLElement>('.color-option'));
+// PM-118：可收合/釘選
+const promptHeader = $('prompt-header');
+const promptBody = $('prompt-body');
+const promptPin = $<HTMLButtonElement>('prompt-pin');
 
 let prompts: PromptItem[] = [];
 let promptCurrent = 0;
@@ -875,7 +879,38 @@ promptSave.addEventListener('click', async () => {
 promptCancel.addEventListener('click', () => {
   promptEditor.style.display = 'none';
 });
+
+// PM-118：整個輪盤可收合/釘選。預設收合（省空間）；釘選後永遠展開且持久化。
+const PIN_KEY = 'bugezy:prompt-pinned';
+let isPinned = false;
+function updatePinUI() {
+  promptBody.style.display = isPinned ? 'block' : 'none';
+  promptPin.classList.toggle('pinned', isPinned);
+  promptHeader.classList.toggle('expanded', isPinned);
+}
+async function initPin() {
+  const store = await chrome.storage.local.get(PIN_KEY);
+  isPinned = store[PIN_KEY] === true;
+  updatePinUI();
+}
+// 點標題列：未釘選時切換展開/收合（避開內部按鈕點擊）
+promptHeader.addEventListener('click', (e) => {
+  if ((e.target as HTMLElement).closest('button')) return;
+  if (isPinned) return;
+  const expanded = promptBody.style.display !== 'none';
+  promptBody.style.display = expanded ? 'none' : 'block';
+  promptHeader.classList.toggle('expanded', !expanded);
+});
+// 📌 釘選：切換 + 持久化；釘選時強制展開
+promptPin.addEventListener('click', async (e) => {
+  e.stopPropagation();
+  isPinned = !isPinned;
+  await chrome.storage.local.set({ [PIN_KEY]: isPinned });
+  updatePinUI();
+});
+
 void initPrompts();
+void initPin();
 
 // 開啟 popup：先看是否已登入，再決定畫面
 void checkVersionNotice();
