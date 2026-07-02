@@ -880,6 +880,26 @@ promptCancel.addEventListener('click', () => {
 
 void initPrompts();
 
+// PM-122：進階設定 accordion（四個 toggle 折疊；預設收合，展開狀態存 storage）
+const SETTINGS_OPEN_KEY = 'bugezy:settings-open';
+const settingsHeader = $('settings-header');
+const settingsBody = $('settings-body');
+const settingsChevron = $('settings-chevron');
+let settingsOpen = false;
+function updateSettingsUI() {
+  settingsBody.style.display = settingsOpen ? 'block' : 'none';
+  settingsChevron.classList.toggle('open', settingsOpen);
+}
+chrome.storage.local.get(SETTINGS_OPEN_KEY, (r) => {
+  settingsOpen = r[SETTINGS_OPEN_KEY] === true; // 預設收合
+  updateSettingsUI();
+});
+settingsHeader.addEventListener('click', () => {
+  settingsOpen = !settingsOpen;
+  void chrome.storage.local.set({ [SETTINGS_OPEN_KEY]: settingsOpen });
+  updateSettingsUI();
+});
+
 // 開啟 popup：先看是否已登入，再決定畫面
 void checkVersionNotice();
 void checkAuth().then((session) => {

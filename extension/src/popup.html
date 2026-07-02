@@ -103,6 +103,15 @@
 
       /* 鍵盤模式 toggle（PM-49） */
       .mode-toggle { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+      /* PM-122：進階設定 accordion */
+      .settings-accordion { margin-top: 8px; border-top: 1px solid var(--line); }
+      .settings-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 4px 6px; cursor: pointer; color: #9aa3b2; font-size: 13px; user-select: none; }
+      .settings-header:hover { color: #e6edf3; }
+      .settings-chevron { font-size: 12px; transition: transform 0.2s; }
+      .settings-chevron.open { transform: rotate(180deg); }
+      .settings-body { padding: 4px 0; }
+      /* accordion 內的 mode-toggle 不需再畫上分隔線（accordion 已有 border-top） */
+      .settings-body .mode-toggle { margin-top: 0; padding-top: 0; border-top: none; }
       .toggle-row {
         display: flex; justify-content: space-between; align-items: center;
         font-size: 13px; color: var(--muted); cursor: pointer;
@@ -355,6 +364,13 @@
         <span>已取消訂閱，可用到 <span id="expiresDate"></span></span>
         <a id="resubBtn" class="cancel-link">重新訂閱</a>
       </div>
+      <!-- PM-122：進階設定 accordion（四個 toggle 折疊收納，預設收合，狀態存 storage） -->
+      <div class="settings-accordion">
+        <div class="settings-header" id="settings-header">
+          <span>⚙️ 進階設定</span>
+          <span class="settings-chevron" id="settings-chevron">▼</span>
+        </div>
+        <div class="settings-body" id="settings-body" style="display:none;">
       <div class="mode-toggle">
         <label class="toggle-row">
           <span>🔍 即時監控（AI 可查 error）</span>
@@ -372,6 +388,8 @@
           <span>✨ 工具列特效</span>
           <input type="checkbox" id="toolbarEffect" />
         </label>
+      </div>
+        </div>
       </div>
 
       <!-- PM-114~118：AI 慣用語輪盤（可編輯 + 顏色標記 + 一鍵複製 + 可收合/釘選，預設收合） -->
