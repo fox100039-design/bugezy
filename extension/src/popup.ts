@@ -910,7 +910,7 @@ async function checkNewVersion() {
     if (data.latest && data.latest !== currentVersion) {
       const badge = $('update-badge');
       badge.style.display = 'flex';
-      badge.textContent = `🆕 新版本 v${data.latest} 可用`;
+      badge.textContent = `🆕 目前 v${currentVersion} → 新版 v${data.latest} 可用`;
       const url = data.changelog_url || `${API_BASE}/changelog`;
       badge.addEventListener('click', () => void chrome.tabs.create({ url }));
     }
@@ -918,6 +918,9 @@ async function checkNewVersion() {
     /* 靜默失敗，不影響使用 */
   }
 }
+
+// PM-127：popup 底部永遠顯示目前版號（不管有無新版）
+$('popup-version').textContent = `BugEzy v${chrome.runtime.getManifest().version}`;
 
 // 開啟 popup：先看是否已登入，再決定畫面
 void checkVersionNotice();

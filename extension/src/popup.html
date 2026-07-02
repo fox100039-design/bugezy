@@ -284,6 +284,8 @@
       /* PM-126：新版通知亮燈 */
       .update-badge { background: linear-gradient(135deg, #7c3aed, #3b82f6); color: #fff; font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 8px; text-align: center; cursor: pointer; margin-bottom: 8px; animation: update-glow 2s ease-in-out infinite; }
       @keyframes update-glow { 0%, 100% { box-shadow: 0 0 8px rgba(124,58,237,0.3); } 50% { box-shadow: 0 0 16px rgba(124,58,237,0.6); } }
+      /* PM-127：popup 底部目前版號 */
+      .popup-version { text-align: center; color: #555; font-size: 10px; padding: 4px 0; margin-top: 8px; }
     </style>
   </head>
   <body>
@@ -473,6 +475,9 @@
     </section>
     </div>
     <!-- /mainView -->
+
+    <!-- PM-127：目前版號（永遠顯示，不管有無新版） -->
+    <div class="popup-version" id="popup-version"></div>
 
     <!-- PM-107：mic OFF 按錄製提示（鍵盤模式除外）-->
     <div id="micPrompt" class="mic-prompt" style="display:none;">
