@@ -1530,9 +1530,9 @@ const REPORT_PAGE_HTML = `<!DOCTYPE html>
       });
       const chromeT = totalT * 15;
       const pct = chromeT > 0 ? Math.round((1-totalT/chromeT)*100) : 0;
-      tokenHtml += '<div class="token-row total"><span>AI 讀取總計</span><span>~'+totalT.toLocaleString()+' tokens ≈ $'+((totalT*8/1e6).toFixed(4))+'</span></div>';
+      tokenHtml += '<div class="token-row total"><span>AI 讀取總計</span><span>~'+totalT.toLocaleString()+' tokens ≈ USD $'+((totalT*8/1e6).toFixed(4))+'</span></div>';
       html += '<div class="token-panel"><div style="font-weight:600;margin-bottom:8px;color:#a78bfa;">📊 Token 估算</div>' + tokenHtml;
-      html += '<div class="token-save">💡 同場景 Claude in Chrome：~'+chromeT.toLocaleString()+' tokens ≈ $'+((chromeT*8/1e6).toFixed(4))+'<br>✅ BugEzy 為你省了 '+pct+'%</div></div>';
+      html += '<div class="token-save">💡 同場景 Claude in Chrome：~'+chromeT.toLocaleString()+' tokens ≈ USD $'+((chromeT*8/1e6).toFixed(4))+'<br>✅ BugEzy 為你省了 '+pct+'%</div></div>';
 
       document.getElementById('app').innerHTML = html;
 
@@ -2915,7 +2915,7 @@ function estimateTokens(responseText: string, toolName: string): TokenEstimate {
 }
 
 function formatTokenFooter(est: TokenEstimate): string {
-  return `\n\n---\n📊 Token 估算：~${est.bugezyTokens.toLocaleString()} tokens ≈ $${est.bugezyUSD}\n💡 同場景 Claude in Chrome：~${est.chromeTokens.toLocaleString()} tokens ≈ $${est.chromeUSD}\n✅ BugEzy 為你省了 ${est.savedPercent}%`;
+  return `\n\n---\n📊 Token 估算：~${est.bugezyTokens.toLocaleString()} tokens ≈ USD $${est.bugezyUSD}\n💡 同場景 Claude in Chrome：~${est.chromeTokens.toLocaleString()} tokens ≈ USD $${est.chromeUSD}\n✅ BugEzy 為你省了 ${est.savedPercent}%`;
 }
 
 // ── PM-56：月度使用量統計（每次 MCP 呼叫記錄到 Supabase mcp_usage 表）──
@@ -3229,9 +3229,9 @@ function createMcpServer(env: Env): McpServer {
       const text =
         `📊 ${data.month} 月度使用報告\n` +
         `MCP 呼叫次數：${data.totalCalls} 次\n` +
-        `BugEzy Token 消耗：~${data.totalTokens.toLocaleString()} tokens ≈ $${data.totalUSD}\n` +
+        `BugEzy Token 消耗：~${data.totalTokens.toLocaleString()} tokens ≈ USD $${data.totalUSD}\n` +
         `同場景 Claude in Chrome：~${data.totalChromeTokens.toLocaleString()} tokens\n` +
-        `省下的 Token：~${data.savedTokens.toLocaleString()} tokens ≈ $${data.savedUSD}\n` +
+        `省下的 Token：~${data.savedTokens.toLocaleString()} tokens ≈ USD $${data.savedUSD}\n` +
         `節省比例：${data.savedPercent}%`;
       const est = estimateTokens(text, 'get_usage_stats');
       await logMcpUsage(env, 'get_usage_stats', est); // PM-56b：await，否則 Workers 提前終止寫不進
@@ -3325,7 +3325,7 @@ function createMcpServer(env: Env): McpServer {
       const totalTokens = Math.ceil(textPart.length / 3.5) + screenshots.length * 5000;
       const chromeTokens = totalTokens * 8;
       const savedPercent = chromeTokens > 0 ? Math.round((1 - totalTokens / chromeTokens) * 100) : 0;
-      const footer = `\n\n---\n📊 Token 估算：~${totalTokens.toLocaleString()} tokens ≈ $${((totalTokens * 8) / 1_000_000).toFixed(4)}（含 ${screenshots.length} 張圖片）\n💡 同場景 Claude in Chrome：~${chromeTokens.toLocaleString()} tokens ≈ $${((chromeTokens * 8) / 1_000_000).toFixed(4)}\n✅ BugEzy 為你省了 ${savedPercent}%`;
+      const footer = `\n\n---\n📊 Token 估算：~${totalTokens.toLocaleString()} tokens ≈ USD $${((totalTokens * 8) / 1_000_000).toFixed(4)}（含 ${screenshots.length} 張圖片）\n💡 同場景 Claude in Chrome：~${chromeTokens.toLocaleString()} tokens ≈ USD $${((chromeTokens * 8) / 1_000_000).toFixed(4)}\n✅ BugEzy 為你省了 ${savedPercent}%`;
       content.push({ type: 'text', text: footer });
 
       await logMcpUsage(
