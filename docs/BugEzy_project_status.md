@@ -1,6 +1,6 @@
 # BugEzy 專案全貌與接手指南
 
-> 最後更新：2026-07-01
+> 最後更新：2026-07-02
 > 維護者：FOX（Claude Chat PM 角色）
 > 用途：新 Chat 對話開始時讀此檔，快速掌握全貌並接手開發
 
@@ -458,6 +458,33 @@ FOX = 創辦人 + 決策者 + 手動驗收
 - Server（已部署）：`supaKey` service_role fallback + `/install` + `/features` + footer 統一 + 報告頁 lightbox + `createReport` user_id 防呆。新 SQL 腳本：`server/rls-lockdown.sql`、`server/backfill-user-id.sql`（皆待 FOX 跑）。
 - Extension（皆 build 過、**未重上架 Web Store**）：Whisper 音量條全鏈（`MIC_VOLUME`）、授權 modal、annotate user_id/語音切換鈕、工具列橘光脈衝 + 開關、錄製中鎖設定、mic OFF 提示；新 storage key `TOOLBAR_EFFECT_KEY`、新訊息 `MIC_VOLUME`/`GET_RECORDING_STATE`。
 - ⚠ 技術債（Day 16）：① **PM-93 service_role secret + `rls-lockdown.sql` 待 FOX 跑（順序關鍵，先切 key 再開 RLS，否則全站 500）**；② **PM-98 `backfill-user-id.sql` 待跑**（否則舊截圖報告仍不在 list_reports）；③ **PM-94（綠界測試 key→正式 key）本日未執行**，Worker 仍 `3002607`/`payment-stage`，正式收款未生效；④ PM-73/82 ALTER 沿用待跑；⑤ extension 整套仍未重上架 Web Store；⑥ PM-95~107 一批 extension 功能待瀏覽器實機驗收；⑦ **無 git remote，push 無法執行**（commit 已在本地）。
+
+---
+
+## §6l Day 17（2026-07-02，PM-94 + 108~127）— ECPay 正式環境 + 日票 NT$20 + AI 指令輪盤 + 監控上傳 + 新版通知/changelog
+
+**目標**：綠界切正式環境（真收款）、上線日票 NT$20/24hr（月費之外的低門檻選項）、popup 加 AI 指令輪盤與版面收納、即時監控能一鍵產報告給 AI、加新版通知與更新日誌。
+
+- **PM-94（部分）綠界正式環境遷移**：wrangler.toml 刪 ECPay 四行明文（測試值）+ deploy 清舊 vars binding（`8882f769`）；Env 型別確認、src 無寫死。**§3 四個 `wrangler secret put`（正式 3505501/HashKey/HashIV/`payment.ecpay.com.tw`）＝ FOX 手動**；wrangler.toml 變更隨 PM-94 一起 commit。
+- **PM-108** 首頁定價按鈕導向 `/install`（首頁不能直接付款）。已部署 `3f683e30`。
+- **日票三部曲**：
+  - **PM-109（後端 1/3）** `day_pass_expires_at` + `POST /api/day-pass/create`（`ChoosePayment:ALL` **一次性、非定期定額**）+ `/callback`（開通 24h）+ `/day-pass-success` + `isActiveUser()`（paid‖cancelled‖day_pass 未到期）+ `getUserPlan` 到期自動降 free。複用 `generateCheckMacValue`/`timingSafeEqualStr`。已部署 `7e0aedff`。
+  - **PM-110（首頁 2/3）** 定價區加日票第三欄（`.plans` auto-fit 天然三欄，橘框 +「⚡ 試試看」badge）。已部署 `70eec402`。
+  - **PM-111（popup 3/3）** 升級區「⚡日票／✨月費」雙鈕 + 日票中 ⚡badge 倒數 + 鎖月費。**因 create 是 POST+auth（不能像月費 GET 直開分頁）→ 新增 `day-pass-checkout.html/ts` 跳板頁**（讀 session POST → 手動 submit 綠界表單，繞 MV3 CSP inline）。
+- **PM-112** 首頁 + `/install`「🤖 讓 AI 幫你安裝」一鍵複製提示詞區。
+- **PM-113** 支援工具列全站統一 7 項（+Google Antigravity / Gemini CLI）。已部署 `d8e2841d`。
+- **PM-114→121 AI 指令輪盤（popup 底部，8 卡迭代）**：建輪盤（`bugezy:ai-prompts`）→ 顏色標記（`PromptItem{text,color}`，`normalizePrompts` 向下相容舊 `string[]`）→ 編輯 ◀▶ 同步 + 自動存 → 複製鈕/標題多次重排 → 收合/釘選 → 修標題直排 bug → 三行式 → **121 定案**：永遠展開、標題「一鍵複製指令貼給 AI」。
+- **PM-122** 四個設定 toggle 折疊進 `⚙️ 進階設定` accordion（`bugezy:settings-open`；toggle id 不動邏輯零改）。
+- **PM-123** 即時監控浮動 icon → 文字狀態條（🟢 監控中 / ⚠️ 發現 N 個錯誤，點擊開既有 error 面板）。
+- **PM-124** error panel 加「📤 上傳報告」——inject（MAIN world 無 chrome.runtime）→ `window.postMessage` → content → background POST `/api/reports`（綁 `user_id`）→ 回鏈更新按鈕。
+- **PM-125** 報告頁 + MCP Token 金額標 `USD $`。已部署 `cde47463`。
+- **PM-126** 新版通知亮燈 + `/api/version`（latest 1.1.0）+ `/changelog`（v1.1.0/v1.0.0）+ 全頁 footer「更新日誌」。已部署 `24d845b9`。
+- **PM-127** popup 亮燈條含當前版號 +「目前 v→新版 v」+ 底部永遠顯示 `BugEzy v{version}`。
+
+### 增量（Day 17）
+- Server（已部署）：綠界 secret 化 + 日票 API/頁 + 三欄定價 + AI 安裝複製區 + 工具列 7 項 + `USD $` + `/api/version` + `/changelog` + 全頁 footer 更新日誌。新檔：`day-pass-checkout.{html,ts}`（extension 跳板頁）。
+- Extension（皆 build 過、**未重上架 Web Store**）：日票 popup + `day-pass-checkout` 跳板 + AI 指令輪盤 + 進階設定 accordion + 監控狀態條/上傳報告 + 新版亮燈/版號。新 storage key：`bugezy:ai-prompts`/`bugezy:settings-open`/`bugezy:latest-report-url`；新訊息：`UPLOAD_MONITOR`/`MONITOR_UPLOADED`/`UPLOAD_MONITOR_REPORT`。
+- ⚠ 技術債（Day 17）：① **PM-94 §3 綠界 4 個 secret 待 FOX 跑**（未跑前結帳/日票付款皆失敗）；② **PM-109 `day_pass_expires_at` ALTER 待跑**；③ 沿用 Day 16：PM-93 service_role secret + rls-lockdown.sql、PM-98 backfill-user-id.sql、PM-73/82 ALTER；④ **上架時 manifest version（現 `0.1.0`）需與 `/api/version` latest（`1.1.0`）對齊**；⑤ extension 整套仍未重上架 Web Store；⑥ 一批 popup/監控功能待瀏覽器實機驗收；⑦ **無 git remote，push 無法執行**（commit 已在本地）。
 
 ---
 
