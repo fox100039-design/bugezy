@@ -281,9 +281,14 @@
       }
       .mic-prompt-btn.primary { background: #7c3aed; color: #fff; font-weight: 600; }
       .mic-prompt-btn.secondary { background: transparent; color: #888; border: 1px solid #444; }
+      /* PM-126：新版通知亮燈 */
+      .update-badge { background: linear-gradient(135deg, #7c3aed, #3b82f6); color: #fff; font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 8px; text-align: center; cursor: pointer; margin-bottom: 8px; animation: update-glow 2s ease-in-out infinite; }
+      @keyframes update-glow { 0%, 100% { box-shadow: 0 0 8px rgba(124,58,237,0.3); } 50% { box-shadow: 0 0 16px rgba(124,58,237,0.6); } }
     </style>
   </head>
   <body>
+    <!-- PM-126：新版通知亮燈（server /api/version 版號 ≠ manifest 時顯示，點擊開 /changelog）-->
+    <div id="update-badge" class="update-badge" style="display:none;"></div>
     <!-- 未登入：Google 登入（PM-61）-->
     <section id="loginView" class="hidden">
       <div class="brand" style="justify-content:center;">

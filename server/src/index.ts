@@ -453,7 +453,7 @@ const HOMEPAGE_HTML = `<!DOCTYPE html>
       <p>📱 電話：<a href="tel:+886983101085">0983-101-085</a></p>
       <p>服務時間：週一至週五 09:00-18:00</p>
     </div>
-    <div style="margin-top:8px;"><a href="/install">安裝指南</a> | <a href="/features">功能說明</a> | <a href="/guide">使用指南</a> | <a href="/faq">常見問題</a> | <a href="/privacy">隱私政策</a></div>
+    <div style="margin-top:8px;"><a href="/install">安裝指南</a> | <a href="/features">功能說明</a> | <a href="/guide">使用指南</a> | <a href="/faq">常見問題</a> | <a href="/privacy">隱私政策</a> | <a href="/changelog">更新日誌</a></div>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy · 亞洲平價 MCP 語音除錯工具</div>
   </footer>
   <script>
@@ -621,6 +621,7 @@ const PRIVACY_PAGE_HTML = `<!DOCTYPE html>
     <a href="/features">功能說明</a>
     <a href="/guide">使用指南</a>
     <a href="/faq">FAQ</a>
+    <a href="/changelog">更新日誌</a>
     <a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
   </footer>
@@ -808,6 +809,7 @@ const GUIDE_PAGE_HTML = `<!DOCTYPE html>
       <a href="/features">功能說明</a>
       <a href="/faq">FAQ</a>
       <a href="/privacy">隱私政策</a>
+      <a href="/changelog">更新日誌</a>
     </div>
     <div style="margin-top:8px;">聯絡：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
@@ -915,6 +917,7 @@ const FAQ_PAGE_HTML = `<!DOCTYPE html>
       <a href="/features">功能說明</a>
       <a href="/guide">使用指南</a>
       <a href="/privacy">隱私政策</a>
+      <a href="/changelog">更新日誌</a>
     </div>
     <div style="margin-top:8px;">聯絡：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
@@ -1139,6 +1142,7 @@ const INSTALL_PAGE_HTML = `<!DOCTYPE html>
       <a href="/guide">使用指南</a>
       <a href="/faq">FAQ</a>
       <a href="/privacy">隱私政策</a>
+      <a href="/changelog">更新日誌</a>
     </div>
     <div style="margin-top:8px;">聯絡：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
@@ -1285,8 +1289,81 @@ const FEATURES_PAGE_HTML = `<!DOCTYPE html>
       <a href="/guide">使用指南</a>
       <a href="/faq">FAQ</a>
       <a href="/privacy">隱私政策</a>
+      <a href="/changelog">更新日誌</a>
     </div>
     <div style="margin-top:8px;">聯絡：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
+    <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
+  </footer>
+</div>
+</body>
+</html>`;
+
+// ── PM-126：更新日誌頁（GET /changelog）——深色主題與其他頁一致 ──
+const CHANGELOG_PAGE_HTML = `<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>更新日誌 · BugEzy</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 0; background: #0f0f1a; color: #e8e8f0;
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif; line-height: 1.75; font-size: 15px; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 48px 24px 80px; }
+  header { border-bottom: 1px solid #2a2a3e; padding-bottom: 20px; margin-bottom: 28px; }
+  .brand { font-size: 24px; font-weight: 700; color: #a78bfa; text-decoration: none; }
+  h1 { font-size: 28px; margin: 18px 0 6px; }
+  .lead { color: #8b8fa3; font-size: 15px; }
+  .changelog-entry { margin: 28px 0 0; padding: 22px 24px; background: #1a1a2e; border: 1px solid #2a2a3e; border-radius: 14px; }
+  .changelog-entry h3 { font-size: 19px; color: #c4b5fd; margin: 0 0 12px; }
+  .changelog-entry ul { margin: 0; padding-left: 22px; }
+  .changelog-entry li { margin: 6px 0; color: #ccc; }
+  a { color: #a78bfa; }
+  footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid #2a2a3e; color: #8b8fa3; font-size: 13px; }
+  footer .links a { margin-right: 16px; }
+  @media (max-width: 640px) { .wrap { padding: 32px 16px 60px; } h1 { font-size: 24px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><a class="brand" href="/">🐛 BugEzy</a></header>
+
+  <h1>📋 BugEzy 更新日誌</h1>
+  <p class="lead">每次更新做了什麼，都記在這裡。</p>
+
+  <section class="changelog-entry">
+    <h3>v1.1.0 — 2026-07-02</h3>
+    <ul>
+      <li>🎙️ Whisper 精準語音轉錄（付費版）</li>
+      <li>⚡ 日票 NT$20/24hr 上線</li>
+      <li>💬 AI 指令輪盤（一鍵複製慣用語）</li>
+      <li>📸 高畫質 AI 分析勾選</li>
+      <li>🟢 即時監控狀態條 + 上傳報告</li>
+      <li>⚙️ 進階設定折疊</li>
+      <li>🔒 Supabase RLS 安全強化</li>
+    </ul>
+  </section>
+
+  <section class="changelog-entry">
+    <h3>v1.0.0 — 2026-06-29</h3>
+    <ul>
+      <li>🎉 首次上架 Chrome Web Store</li>
+      <li>🎬 六種錄製模式</li>
+      <li>🤖 12 個 MCP 工具 + Token 透明度</li>
+      <li>💳 ECPay 付費整合</li>
+    </ul>
+  </section>
+
+  <footer>
+    <div class="links">
+      <a href="/">首頁</a>
+      <a href="/install">安裝指南</a>
+      <a href="/features">功能說明</a>
+      <a href="/guide">使用指南</a>
+      <a href="/faq">FAQ</a>
+      <a href="/privacy">隱私政策</a>
+      <a href="/changelog">更新日誌</a>
+    </div>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
   </footer>
 </div>
@@ -1929,6 +2006,12 @@ export default {
     if (request.method === 'GET' && path === '/faq') return html(FAQ_PAGE_HTML); // PM-66
     if (request.method === 'GET' && path === '/install') return html(INSTALL_PAGE_HTML); // PM-96
     if (request.method === 'GET' && path === '/features') return html(FEATURES_PAGE_HTML); // PM-96
+    // PM-126：版本檢查（popup 亮燈用）+ 更新日誌頁
+    if (request.method === 'GET' && path === '/api/version') {
+      // 每次上新版到 Chrome Web Store 時，同步改 latest + deploy
+      return json({ latest: '1.1.0', changelog_url: 'https://bugezy.dev/changelog' });
+    }
+    if (request.method === 'GET' && path === '/changelog') return html(CHANGELOG_PAGE_HTML); // PM-126
 
     // MCP 端點（Streamable HTTP）— 給 Claude.ai Connectors / IDE 直接連
     if (path === '/mcp' || path.startsWith('/mcp/')) {

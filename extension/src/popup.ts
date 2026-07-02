@@ -900,8 +900,28 @@ settingsHeader.addEventListener('click', () => {
   updateSettingsUI();
 });
 
+// PM-126：向 server 查最新版號，與 manifest 不一致 → popup 頂部亮燈提示（點擊開 /changelog）
+async function checkNewVersion() {
+  try {
+    const currentVersion = chrome.runtime.getManifest().version;
+    const res = await fetch(`${API_BASE}/api/version`);
+    if (!res.ok) return;
+    const data = (await res.json()) as { latest?: string; changelog_url?: string };
+    if (data.latest && data.latest !== currentVersion) {
+      const badge = $('update-badge');
+      badge.style.display = 'flex';
+      badge.textContent = `🆕 新版本 v${data.latest} 可用`;
+      const url = data.changelog_url || `${API_BASE}/changelog`;
+      badge.addEventListener('click', () => void chrome.tabs.create({ url }));
+    }
+  } catch {
+    /* 靜默失敗，不影響使用 */
+  }
+}
+
 // 開啟 popup：先看是否已登入，再決定畫面
 void checkVersionNotice();
+void checkNewVersion();
 void checkAuth().then((session) => {
   if (session) showMainView(session);
   else showLoginView();
