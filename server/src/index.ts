@@ -26,6 +26,8 @@ export interface Env {
   ECPAY_PAYMENT_URL: string;
   // PM-85：Groq Whisper 語音轉文字（用 `wrangler secret put GROQ_API_KEY` 設定，不寫明文）
   GROQ_API_KEY: string;
+  // PM-133：Google OAuth client_id（公開資訊，非機密）。createSession 驗 token audience 用。
+  GOOGLE_CLIENT_ID: string;
 }
 
 // ── 與擴充端一致的 payload 型別 ──────────────────────────
@@ -137,26 +139,11 @@ const FREE_LIMITS = {
 } as const;
 type UsageType = keyof typeof FREE_LIMITS;
 
-/** 【舊·過渡】從 Authorization: Bearer <base64(user_id:ts)> 取 user_id。
- *  ⚠ 無簽章驗證，任何人可偽造 → PM-128 改用 verifySession（查 sessions 表）。
- *  短期保留做 fallback，待 Chrome Web Store 新版全面推送後移除。*/
-function getUserIdFromHeader(request: Request): string | null {
-  const auth = request.headers.get('Authorization');
-  if (!auth) return null;
-  try {
-    const decoded = atob(auth.replace('Bearer ', ''));
-    return decoded.split(':')[0] || null;
-  } catch {
-    return null;
-  }
-}
-
 /** PM-128：驗證 session token（查 sessions 表，不可猜測）。過期自動刪除並回 null。 */
 async function verifySession(request: Request, env: Env): Promise<string | null> {
   const auth = request.headers.get('Authorization');
   if (!auth) return null;
   const token = auth.replace('Bearer ', '').trim();
-  // 舊 base64 token（user_id:ts）通常很短且含 ':'，這裡只放行看起來像 UUID 組合的長 token
   if (!token || token.length < 10) return null;
 
   const { data } = await supa(env)
@@ -175,33 +162,73 @@ async function verifySession(request: Request, env: Env): Promise<string | null>
   return row.user_id;
 }
 
-/** PM-128：統一取 user_id — 優先新 session token，退回舊 base64 header（過渡期）。
- *  等全部使用者更新後移除 getUserIdFromHeader fallback。 */
+/** PM-133：統一取 user_id — 只認 DB session token（PM-128）。base64 fallback 已移除（P0-3）。 */
 async function getAuthUserId(request: Request, env: Env): Promise<string | null> {
-  const sessionUserId = await verifySession(request, env);
-  if (sessionUserId) return sessionUserId;
-  return getUserIdFromHeader(request); // 過渡：舊版擴充仍用 base64
+  return verifySession(request, env);
 }
 
-/** PM-128：POST /api/auth/session — 登入成功後換取隨機 session token（存 sessions 表）。 */
+/** PM-133：驗證 Google access token — 確認 audience 是 BugEzy（防其他 App token 重放，P1-4），
+ *  回 { sub, email }（sub = Google 唯一 ID，作為 user_id）或 null。 */
+async function verifyGoogleToken(
+  accessToken: string,
+  env: Env,
+): Promise<{ sub: string; email: string } | null> {
+  try {
+    // 1. tokeninfo 驗 audience（防其他 App 的 token 重放冒充）
+    const tokenInfoRes = await fetch(
+      `https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${encodeURIComponent(accessToken)}`,
+    );
+    if (!tokenInfoRes.ok) return null;
+    const tokenInfo = (await tokenInfoRes.json()) as { aud?: string; azp?: string };
+    const aud = tokenInfo.aud || tokenInfo.azp || '';
+    if (!env.GOOGLE_CLIENT_ID || aud !== env.GOOGLE_CLIENT_ID) {
+      console.error('Google token audience mismatch');
+      return null;
+    }
+
+    // 2. 取使用者資訊（id = Google sub = user_id）
+    const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!userInfoRes.ok) return null;
+    const userInfo = (await userInfoRes.json()) as { id?: string; email?: string };
+    if (!userInfo.id || !userInfo.email) return null;
+
+    return { sub: userInfo.id, email: userInfo.email };
+  } catch (e) {
+    console.error('verifyGoogleToken failed:', e);
+    return null;
+  }
+}
+
+/** PM-133：POST /api/auth/session — 收 Google access token，server 驗 audience + 推導 user_id
+ *  （絕不信任客戶端傳的 user_id，P0-2），發 DB session token。 */
 async function createSession(request: Request, env: Env): Promise<Response> {
   const body = (await request.json().catch(() => null)) as
-    | { user_id?: string; email?: string; name?: string }
+    | { google_token?: string; name?: string }
     | null;
-  if (!body?.user_id || !body?.email) {
-    return json({ error: 'missing user_id or email' }, 400);
+  if (!body?.google_token) {
+    return json({ error: 'missing google_token' }, 400);
   }
 
-  // 驗證 user 存在（不存在則自動建立，避免孤兒 session）
+  // 關鍵：user_id 由 server 從已驗證的 Google token 推導，絕不信任客戶端
+  const verified = await verifyGoogleToken(body.google_token, env);
+  if (!verified) {
+    return json({ error: 'Google token 驗證失敗' }, 401);
+  }
+  const userId = verified.sub;
+  const email = verified.email;
+
+  // user 不存在則建立
   const { data: user } = await supa(env)
     .from('users')
     .select('user_id')
-    .eq('user_id', body.user_id)
+    .eq('user_id', userId)
     .maybeSingle();
   if (!user) {
     await supa(env)
       .from('users')
-      .insert({ user_id: body.user_id, email: body.email, name: body.name || '', plan: 'free' });
+      .insert({ user_id: userId, email, name: body.name || '', plan: 'free' });
   }
 
   // 產生不可猜測的 session token（雙 UUID）
@@ -210,11 +237,11 @@ async function createSession(request: Request, env: Env): Promise<Response> {
     .from('sessions')
     .insert({
       session_token: sessionToken,
-      user_id: body.user_id,
+      user_id: userId,
       expires_at: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
     });
 
-  return json({ session_token: sessionToken });
+  return json({ session_token: sessionToken, user_id: userId, email });
 }
 
 function html(body: string): Response {
@@ -2192,10 +2219,8 @@ export default {
       if (request.method === 'POST' && path === '/api/transcribe') {
         return await handleTranscribe(request, env); // PM-85：Groq Whisper 語音轉文字
       }
-      if (request.method === 'POST' && path === '/api/auth/google') {
-        return await googleAuth(request, env);
-      }
-      // PM-128：換取真正的 session token（存 sessions 表，取代假 base64）
+      // PM-133：登入唯一入口——收 Google access token，server 驗 audience + 推導 user_id → 發 DB token。
+      // 舊 /api/auth/google（發假 base64 token）已移除（P0-2/P0-3）。
       if (request.method === 'POST' && path === '/api/auth/session') {
         return await createSession(request, env);
       }
@@ -2208,17 +2233,10 @@ export default {
       if (request.method === 'POST' && path === '/api/user/cancel') {
         return await ecpayCancel(request, env); // PM-73：取消訂閱
       }
-      // PM-72：綠界 ECPay 付費
-      // PM-128：新版走 POST + session token（不把 user_id 暴露在 URL）
+      // PM-72：綠界 ECPay 付費 — 只走 POST + session token（PM-133：過渡 GET /checkout?user_id 已移除，P0-2）
       if (request.method === 'POST' && path === '/checkout') {
         const userId = await getAuthUserId(request, env);
         if (!userId) return json({ error: '請先登入' }, 401);
-        return await ecpayCheckout(userId, url.origin, env);
-      }
-      // 過渡：舊版擴充仍用 GET ?user_id=（待新版全面推送後移除）
-      if (request.method === 'GET' && path === '/checkout') {
-        const userId = url.searchParams.get('user_id');
-        if (!userId) return json({ error: 'missing user_id' }, 400);
         return await ecpayCheckout(userId, url.origin, env);
       }
       if (request.method === 'POST' && path === '/api/ecpay/callback') {
@@ -2592,77 +2610,8 @@ async function handleTranscribe(request: Request, env: Env): Promise<Response> {
   }
 }
 
-// POST /api/auth/google — 驗 Google access token → 查/建 Supabase users → 回 session（PM-61）
-// PM-61b：查 user 用 .maybeSingle()（找不到回 null 不拋）；最外層 try/catch 回實際錯誤方便除錯。
-async function googleAuth(request: Request, env: Env): Promise<Response> {
-  try {
-    const { token } = (await request.json().catch(() => ({}))) as { token?: string };
-    if (!token) return json({ error: 'missing token' }, 400);
-
-    // 用 access token 取 Google userinfo（同時驗證 token 有效）
-    const googleRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!googleRes.ok) return json({ error: 'invalid google token' }, 401);
-    const gUser = (await googleRes.json()) as {
-      id?: string;
-      email?: string;
-      name?: string;
-      picture?: string;
-    };
-    if (!gUser.email) return json({ error: 'no email in google profile' }, 401);
-
-    const supabase = supa(env);
-    const { data: existing, error: selErr } = await supabase
-      .from('users')
-      .select('user_id, email, name, avatar_url')
-      .eq('email', gUser.email)
-      .maybeSingle(); // PM-61b：找不到回 null（不像 .single() 會拋 PGRST116）
-    if (selErr) {
-      console.error('查使用者失敗:', selErr.message);
-      return json({ error: GENERIC_500 }, 500);
-    }
-
-    let user = existing as
-      | { user_id: string; email: string; name: string | null; avatar_url: string | null }
-      | null;
-
-    if (!user) {
-      const { data: created, error } = await supabase
-        .from('users')
-        .insert({ email: gUser.email, name: gUser.name ?? '', avatar_url: gUser.picture ?? '' })
-        .select('user_id, email, name, avatar_url')
-        .single();
-      if (error || !created) {
-        console.error('建立使用者失敗:', error?.message ?? 'unknown');
-        return json({ error: GENERIC_500 }, 500);
-      }
-      user = created;
-    } else {
-      await supabase
-        .from('users')
-        .update({
-          last_login_at: new Date().toISOString(),
-          name: gUser.name ?? user.name ?? '',
-          avatar_url: gUser.picture ?? user.avatar_url ?? '',
-        })
-        .eq('user_id', user.user_id);
-    }
-
-    // MVP 簡易 session token（base64(user_id:ts)）；正式環境之後改 JWT（PM-61 §9）
-    const session_token = btoa(`${user.user_id}:${Date.now()}`);
-    return json({
-      user_id: user.user_id,
-      email: user.email,
-      name: gUser.name ?? user.name ?? '',
-      avatar_url: gUser.picture ?? user.avatar_url ?? '',
-      session_token,
-    });
-  } catch (err) {
-    console.error('auth error:', err);
-    return json({ error: GENERIC_500 }, 500);
-  }
-}
+// PM-133：舊 googleAuth（POST /api/auth/google）已移除——它發假 base64 token 且以 email 查 user，
+// 是帳號接管根因（P0-2/P0-3）。登入統一走 createSession（POST /api/auth/session，驗 Google token audience）。
 
 // GET /api/user/plan — 查方案 + 免費版剩餘用量（每月自動重置計數）（PM-63）
 async function getUserPlan(request: Request, env: Env): Promise<Response> {

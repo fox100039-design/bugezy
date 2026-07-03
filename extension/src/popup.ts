@@ -506,12 +506,14 @@ async function checkAuth(): Promise<Session | null> {
   return (r[SESSION_KEY] as Session | undefined) ?? null;
 }
 
-/** chrome.identity.getAuthToken 取 Google access token（需 manifest oauth2 + 擴充 ID 已註冊）。*/
-function googleLogin(): Promise<string> {
+/** chrome.identity.getAuthToken 取 Google access token（需 manifest oauth2 + 擴充 ID 已註冊）。
+ *  interactive=false 用於靜默續期（不彈視窗；未授權則回 null）。 */
+function googleLogin(interactive = true): Promise<string | null> {
   return new Promise((resolve, reject) => {
-    chrome.identity.getAuthToken({ interactive: true }, (token) => {
+    chrome.identity.getAuthToken({ interactive }, (token) => {
       if (chrome.runtime.lastError || !token) {
-        reject(new Error(chrome.runtime.lastError?.message || 'login failed'));
+        if (interactive) reject(new Error(chrome.runtime.lastError?.message || 'login failed'));
+        else resolve(null); // 靜默失敗不算錯誤
       } else {
         resolve(token);
       }
@@ -519,41 +521,70 @@ function googleLogin(): Promise<string> {
   });
 }
 
-/** 把 Google token 交給 server 驗證 + 查/建 user，回 session。*/
-async function authenticate(googleToken: string): Promise<Session> {
-  const res = await fetch(`${API_BASE}/api/auth/google`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token: googleToken }),
-  });
-  if (!res.ok) throw new Error('auth failed');
-  return (await res.json()) as Session;
+/** PM-133：取 Google userinfo 供「顯示用」name/picture（非信任邊界——真實身分由 server 從 token 推導）。*/
+async function fetchGoogleProfile(
+  token: string,
+): Promise<{ name: string; picture: string; email: string }> {
+  try {
+    const res = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return { name: '', picture: '', email: '' };
+    const u = (await res.json()) as { name?: string; picture?: string; email?: string };
+    return { name: u.name ?? '', picture: u.picture ?? '', email: u.email ?? '' };
+  } catch {
+    return { name: '', picture: '', email: '' };
+  }
 }
 
-/** PM-129：登入後換取 DB session token 存 storage（getAuthHeaders 統一使用）。
- *  force=false 時若已有 token 則跳過（避免每次開 popup 都建新 session 列）。 */
-async function ensureSessionToken(session: Session, force = false): Promise<void> {
-  if (!force) {
-    const existing = await chrome.storage.local.get(SESSION_TOKEN_KEY);
-    if (existing[SESSION_TOKEN_KEY]) return;
-  }
+/** PM-133：用 Google access token 換 DB session（server 驗 audience + 推導 user_id）。 */
+async function exchangeSession(
+  googleToken: string,
+  name: string,
+): Promise<{ user_id: string; email: string; session_token: string } | null> {
   try {
     const res = await fetch(`${API_BASE}/api/auth/session`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        user_id: session.user_id,
-        email: session.email,
-        name: session.name,
-      }),
+      body: JSON.stringify({ google_token: googleToken, name }),
     });
-    const data = (await res.json()) as { session_token?: string };
-    if (data.session_token) {
-      await chrome.storage.local.set({ [SESSION_TOKEN_KEY]: data.session_token });
-    }
+    if (!res.ok) return null;
+    return (await res.json()) as { user_id: string; email: string; session_token: string };
   } catch (err) {
-    // 換取失敗不阻擋（getAuthHeaders 過渡期會退回舊 base64）
-    console.error('[BugEzy popup] session token', err);
+    console.error('[BugEzy popup] exchangeSession', err);
+    return null;
+  }
+}
+
+/** PM-133：完整登入——取 Google token → profile（顯示）→ 換 session → 存 storage。 */
+async function doLogin(interactive = true): Promise<Session | null> {
+  const googleToken = await googleLogin(interactive);
+  if (!googleToken) return null;
+  const profile = await fetchGoogleProfile(googleToken);
+  const data = await exchangeSession(googleToken, profile.name);
+  if (!data?.session_token) return null;
+  const session: Session = {
+    user_id: data.user_id,
+    email: data.email || profile.email,
+    name: profile.name,
+    avatar_url: profile.picture,
+    session_token: data.session_token,
+  };
+  await chrome.storage.local.set({
+    [SESSION_KEY]: session,
+    [SESSION_TOKEN_KEY]: data.session_token,
+  });
+  return session;
+}
+
+/** PM-133：靜默把既有登入（可能是舊 base64 token）換成有效 DB session token。
+ *  已授權過的用戶 interactive:false 可無感續期；失敗則等使用者手動重新登入。 */
+async function refreshSessionSilently(): Promise<void> {
+  const session = await doLogin(false);
+  if (session) {
+    userName.textContent = session.name || session.email;
+    if (session.avatar_url) userAvatar.src = session.avatar_url;
+    void loadPlan(); // 換到新 token 後刷新方案顯示
   }
 }
 
@@ -738,9 +769,9 @@ googleLoginBtn.addEventListener('click', async () => {
   googleLoginBtn.disabled = true;
   googleLoginBtn.textContent = '登入中...';
   try {
-    const session = await authenticate(await googleLogin());
-    await chrome.storage.local.set({ [SESSION_KEY]: session });
-    await ensureSessionToken(session, true); // PM-129：登入即換取新 DB session token
+    // PM-133：送 Google token 給 server 驗證 + 推導 user_id（extension 不再自決 user_id）
+    const session = await doLogin(true);
+    if (!session) throw new Error('auth failed');
     showMainView(session);
   } catch (err) {
     console.error('[BugEzy popup] login', err);
@@ -958,8 +989,9 @@ void checkVersionNotice();
 void checkNewVersion();
 void checkAuth().then((session) => {
   if (session) {
-    void ensureSessionToken(session); // PM-129：既有登入但尚無 DB token（升級後首開）→ 補換取
     showMainView(session);
+    // PM-133：既有登入若還是舊 base64 token，靜默換成有效 DB token（已授權者無感）
+    void refreshSessionSilently();
   } else {
     showLoginView();
   }

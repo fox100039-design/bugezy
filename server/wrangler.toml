@@ -6,6 +6,8 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 SUPABASE_URL = "https://fpqlclltjreetlyhzlsd.supabase.co"
 # SUPABASE_ANON_KEY 用 `wrangler secret put SUPABASE_ANON_KEY` 設定，不寫在這
+# PM-133：Google OAuth client_id（公開資訊，非機密；= extension/manifest.json 的 oauth2.client_id）
+GOOGLE_CLIENT_ID = "610395663887-piqtrs4bvbj738iimbk3bre2ij78rvdl.apps.googleusercontent.com"
 
 # PM-94：綠界 ECPay 四個 key（MERCHANT_ID/HASH_KEY/HASH_IV/PAYMENT_URL）已改用 `wrangler secret put`
 # 存正式值（測試值原本寫在此處已刪除）。程式一律讀 env.ECPAY_*，見 src/index.ts。
