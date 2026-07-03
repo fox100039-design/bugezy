@@ -99,6 +99,10 @@ function getCorsHeaders(request: Request): Record<string, string> {
 /** PM-130：對外統一的 500 錯誤訊息（原始錯誤只記 console.error，不外洩內部細節）。 */
 const GENERIC_500 = '伺服器內部錯誤，請稍後再試';
 
+// ── PM-131：POST body 大小上限（防灌爆 R2 / 濫用）───────────────
+const MAX_POST_SIZE = 10 * 1024 * 1024; // 全域 POST 10MB（transcribe 除外，音訊較大另計 25MB）
+const MAX_REPORT_SIZE = 5 * 1024 * 1024; // 單份報告 5MB
+
 // CORS 由 fetch() 的統一出口注入（PM-130），故 json() 只需帶 Content-Type。
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -2095,6 +2099,12 @@ export default {
 
     // PM-130：所有一般回應統一在此出口套上動態 CORS（覆蓋預設）
     const response = await (async (): Promise<Response> => {
+    // PM-131：全域 POST body 上限 10MB（transcribe 音訊另計 25MB，故排除）。
+    // 依 Content-Length 先擋（省下讀 body 的成本）。
+    if (request.method === 'POST' && path !== '/api/transcribe') {
+      const cl = parseInt(request.headers.get('Content-Length') || '0', 10);
+      if (cl > MAX_POST_SIZE) return json({ error: '請求過大' }, 413);
+    }
     // PM-62：產品首頁（根目錄）— 放在所有路由之前
     if (request.method === 'GET' && path === '/') return html(HOMEPAGE_HTML);
     if (request.method === 'GET' && path === '/privacy') return html(PRIVACY_PAGE_HTML); // PM-64
@@ -2265,6 +2275,12 @@ export default {
 
 // POST /api/reports — 上傳報告
 async function createReport(request: Request, env: Env, origin: string): Promise<Response> {
+  // PM-131：報告單份上限 5MB（防灌爆 R2）。依 Content-Length 先擋，省下讀 body 成本。
+  const cl = parseInt(request.headers.get('Content-Length') || '0', 10);
+  if (cl > MAX_REPORT_SIZE) {
+    return json({ error: '報告大小超過 5MB 上限' }, 413);
+  }
+
   const payload = (await request.json().catch(() => null)) as RecordingPayload | null;
   if (!payload || !payload.pageInfo) {
     return json({ error: 'invalid payload：缺少 pageInfo' }, 400);
