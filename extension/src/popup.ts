@@ -12,12 +12,14 @@ import {
   TOOLBAR_EFFECT_KEY,
   USER_PLAN_KEY,
   SESSION_KEY,
+  SESSION_TOKEN_KEY,
   API_BASE,
   type RecordingPayload,
   type RecordingSummary,
   type Session,
   type StateResponse,
 } from './types';
+import { getAuthHeaders } from './auth';
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -528,6 +530,33 @@ async function authenticate(googleToken: string): Promise<Session> {
   return (await res.json()) as Session;
 }
 
+/** PM-129：登入後換取 DB session token 存 storage（getAuthHeaders 統一使用）。
+ *  force=false 時若已有 token 則跳過（避免每次開 popup 都建新 session 列）。 */
+async function ensureSessionToken(session: Session, force = false): Promise<void> {
+  if (!force) {
+    const existing = await chrome.storage.local.get(SESSION_TOKEN_KEY);
+    if (existing[SESSION_TOKEN_KEY]) return;
+  }
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: session.user_id,
+        email: session.email,
+        name: session.name,
+      }),
+    });
+    const data = (await res.json()) as { session_token?: string };
+    if (data.session_token) {
+      await chrome.storage.local.set({ [SESSION_TOKEN_KEY]: data.session_token });
+    }
+  } catch (err) {
+    // 換取失敗不阻擋（getAuthHeaders 過渡期會退回舊 base64）
+    console.error('[BugEzy popup] session token', err);
+  }
+}
+
 function showLoginView() {
   loginView.classList.remove('hidden');
   mainView.classList.add('hidden');
@@ -540,7 +569,7 @@ function showMainView(session: Session) {
   if (session.avatar_url) userAvatar.src = session.avatar_url;
   // 進主畫面後才抓錄製狀態決定 idle/recording/done
   send<StateResponse>('GET_STATE').then(render).catch((e) => console.error('[BugEzy popup]', e));
-  void loadPlan(session); // PM-63：查方案 + 剩餘用量
+  void loadPlan(); // PM-63：查方案 + 剩餘用量
 }
 
 interface PlanInfo {
@@ -567,10 +596,10 @@ function setRecordDesc(text: string) {
 
 // PM-63/75：查方案 → 依 plan 狀態（source of truth）控制 UI。
 // paid：隱藏升級提示 + ✨ + 管理訂閱（含取消）；cancelled：隱藏升級提示 + 顯示到期日；free：剩餘次數 + 升級提示。
-async function loadPlan(session: Session) {
+async function loadPlan() {
   try {
     const res = await fetch(`${API_BASE}/api/user/plan`, {
-      headers: { Authorization: `Bearer ${session.session_token}` },
+      headers: await getAuthHeaders(),
     });
     if (!res.ok) return; // 表未建/未授權等 → 不顯示用量，按鈕維持原樣（非阻擋）
     const plan = (await res.json()) as PlanInfo;
@@ -631,11 +660,12 @@ async function loadPlan(session: Session) {
   }
 }
 
-/** 開新分頁到綠界結帳（帶 user_id）；未登入則退回首頁價目表。 */
+/** 月費升級 → 開結帳跳板頁（該頁讀 session→POST /checkout→送出綠界表單）；未登入退回首頁價目表。
+ *  PM-129：改 POST /checkout（session token 認證），不再把 user_id 放 GET URL。 */
 async function openCheckout() {
   const session = await checkAuth();
   if (session) {
-    chrome.tabs.create({ url: `${API_BASE}/checkout?user_id=${encodeURIComponent(session.user_id)}` });
+    void chrome.tabs.create({ url: 'checkout.html' });
   } else {
     chrome.tabs.create({ url: `${API_BASE}/#pricing` });
   }
@@ -689,12 +719,12 @@ cancelSubBtn.addEventListener('click', async () => {
   try {
     const res = await fetch(`${API_BASE}/api/user/cancel`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${session.session_token}` },
+      headers: await getAuthHeaders(),
     });
     const data = (await res.json()) as { ok?: boolean; message?: string; error?: string };
     if (data.ok) {
       alert(data.message ?? '已取消訂閱');
-      void loadPlan(session); // 重新整理方案狀態（改顯示「已取消，可用到…」）
+      void loadPlan(); // 重新整理方案狀態（改顯示「已取消，可用到…」）
     } else {
       alert(data.error ?? '取消失敗，請稍後再試');
     }
@@ -710,6 +740,7 @@ googleLoginBtn.addEventListener('click', async () => {
   try {
     const session = await authenticate(await googleLogin());
     await chrome.storage.local.set({ [SESSION_KEY]: session });
+    await ensureSessionToken(session, true); // PM-129：登入即換取新 DB session token
     showMainView(session);
   } catch (err) {
     console.error('[BugEzy popup] login', err);
@@ -719,7 +750,7 @@ googleLoginBtn.addEventListener('click', async () => {
 });
 
 logoutBtn.addEventListener('click', async () => {
-  await chrome.storage.local.remove(SESSION_KEY);
+  await chrome.storage.local.remove([SESSION_KEY, SESSION_TOKEN_KEY]); // PM-129：一併清 session token
   chrome.identity.clearAllCachedAuthTokens(() => {});
   showLoginView();
 });
@@ -926,6 +957,10 @@ $('popup-version').textContent = `BugEzy v${chrome.runtime.getManifest().version
 void checkVersionNotice();
 void checkNewVersion();
 void checkAuth().then((session) => {
-  if (session) showMainView(session);
-  else showLoginView();
+  if (session) {
+    void ensureSessionToken(session); // PM-129：既有登入但尚無 DB token（升級後首開）→ 補換取
+    showMainView(session);
+  } else {
+    showLoginView();
+  }
 });

@@ -28,6 +28,7 @@ import {
   type TimeMarker,
   type VoiceSegment,
 } from './types';
+import { getAuthHeaders } from './auth';
 
 /** PM-34：錄製中即時 flush 暫存的所有 buffer key */
 const BUFFER_KEYS = [BUFFER_VOICE_KEY, BUFFER_CONSOLE_KEY, BUFFER_NETWORK_KEY, BUFFER_RRWEB_KEY];
@@ -142,13 +143,12 @@ async function getActiveTab(): Promise<chrome.tabs.Tab | undefined> {
  * - API 不通 → 回 null（不因後端問題卡住錄製）。
  */
 async function checkRecordingUsage(): Promise<string | null> {
-  const r = await chrome.storage.local.get(SESSION_KEY);
-  const token = (r[SESSION_KEY] as Session | undefined)?.session_token;
-  if (!token) return null;
+  const headers = await getAuthHeaders();
+  if (!headers.Authorization) return null; // 未登入 → 不檢查（公測期不阻擋匿名使用）
   try {
     const res = await fetch(`${API_BASE}/api/user/usage`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers,
       body: JSON.stringify({ type: 'recording' }),
     });
     if (res.status === 403) {
@@ -294,7 +294,7 @@ async function uploadReport(
   try {
     const res = await fetch(`${API_BASE}/api/reports`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await getAuthHeaders(), // PM-129：帶 session token（server 可從 header 補回 user_id）
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
@@ -482,7 +482,7 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summ
           try {
             const res = await fetch(`${API_BASE}/api/reports`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: await getAuthHeaders(), // PM-129：帶 session token
               body: JSON.stringify(payload),
             });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);

@@ -14,6 +14,7 @@ import {
   type ControlMessage,
   type Session,
 } from './types';
+import { getAuthHeaders } from './auth';
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -427,11 +428,8 @@ saveBtn.addEventListener('click', async () => {
   try {
     const res = await fetch(`${API_BASE}/api/reports`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        // PM-98：帶 session token，讓 server 端防呆能在漏帶 user_id 時從 header 補回
-        ...(session?.session_token ? { Authorization: `Bearer ${session.session_token}` } : {}),
-      },
+      // PM-98/129：帶 session token，讓 server 端防呆能在漏帶 user_id 時從 header 補回
+      headers: await getAuthHeaders(),
       body: JSON.stringify(payload),
     });
     const data = (await res.json()) as { report_id?: string; share_url?: string };

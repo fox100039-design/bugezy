@@ -23,6 +23,7 @@ function copyStatic() {
   cpSync(resolve(root, 'src/offscreen.html'), resolve(outdir, 'offscreen.html')); // PM-86：麥克風錄音
   cpSync(resolve(root, 'src/mic-permission.html'), resolve(outdir, 'mic-permission.html')); // PM-88：授權頁
   cpSync(resolve(root, 'src/day-pass-checkout.html'), resolve(outdir, 'day-pass-checkout.html')); // PM-111：日票結帳跳板
+  cpSync(resolve(root, 'src/checkout.html'), resolve(outdir, 'checkout.html')); // PM-129：月費結帳跳板（POST /checkout）
   // PM-76：擴充圖示（manifest icons + action.default_icon 引用）
   cpSync(resolve(root, 'icons'), resolve(outdir, 'icons'), { recursive: true });
 }
@@ -49,6 +50,7 @@ const options = {
     offscreen: resolve(root, 'src/offscreen.ts'), // PM-86：麥克風錄音
     'mic-permission': resolve(root, 'src/mic-permission.ts'), // PM-88：麥克風授權頁
     'day-pass-checkout': resolve(root, 'src/day-pass-checkout.ts'), // PM-111：日票結帳跳板
+    checkout: resolve(root, 'src/checkout.ts'), // PM-129：月費結帳跳板（POST /checkout）
   },
   outdir,
   bundle: true,

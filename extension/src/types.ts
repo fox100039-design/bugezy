@@ -204,6 +204,10 @@ export const LAST_SCREENSHOT_KEY = 'bugezy:lastScreenshot';
 /** PM-61：Google 登入後的使用者 session，存 chrome.storage.local */
 export const SESSION_KEY = 'bugezy:session';
 
+/** PM-129：DB 驗證的 session token（POST /api/auth/session 換取，取代舊 base64）。
+ *  所有 API 呼叫經 getAuthHeaders() 統一帶此 token。 */
+export const SESSION_TOKEN_KEY = 'bugezy:session-token';
+
 /** 登入 session（popup 存、background 上傳時帶 user_id） */
 export interface Session {
   user_id: string;

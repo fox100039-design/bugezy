@@ -1,7 +1,7 @@
-// day-pass-checkout.ts — PM-111：日票結帳跳板頁（擴充頁）
-// 為何需要這頁：/api/day-pass/create 是 POST + 需 Authorization（無法直接開分頁）。
-// 這頁讀 session token → POST 建單 → 取回綠界 auto-submit 表單 HTML → 自行 submit。
-// （月費結帳同理走 checkout.html，PM-129 後兩者都是 POST + session token。）
+// checkout.ts — PM-129：月費升級結帳跳板頁（擴充頁）
+// 為何需要這頁：PM-129 把月費結帳從 GET /checkout?user_id 改成 POST /checkout（帶 session token，
+// 不把 user_id 暴露在 URL）。POST + auth 無法直接 tabs.create 開分頁，故沿用日票的跳板做法：
+// 這頁讀 session → POST 建單 → 取回綠界 auto-submit 表單 HTML → 自行 submit。
 // （MV3 擴充頁 CSP 會擋掉綠界表單內嵌的 inline <script>，故不能靠它自動送出，改由本 bundle 手動 submit。）
 
 import { API_BASE } from './types';
@@ -15,17 +15,17 @@ function setStatus(msg: string): void {
 void (async () => {
   const headers = await getAuthHeaders();
   if (!headers.Authorization) {
-    setStatus('請先在 BugEzy 登入後再購買日票。');
+    setStatus('請先在 BugEzy 登入後再升級付費版。');
     return;
   }
   try {
-    const res = await fetch(`${API_BASE}/api/day-pass/create`, {
+    const res = await fetch(`${API_BASE}/checkout`, {
       method: 'POST',
       headers,
     });
     const text = await res.text();
     if (!res.ok) {
-      let msg = '建立日票訂單失敗，請稍後再試。';
+      let msg = '建立訂閱訂單失敗，請稍後再試。';
       try {
         msg = (JSON.parse(text) as { error?: string }).error ?? msg;
       } catch {
