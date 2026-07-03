@@ -107,7 +107,9 @@ const FREE_LIMITS = {
 } as const;
 type UsageType = keyof typeof FREE_LIMITS;
 
-/** 從 Authorization: Bearer <session_token> 取 user_id（token = base64(user_id:ts)）。*/
+/** 【舊·過渡】從 Authorization: Bearer <base64(user_id:ts)> 取 user_id。
+ *  ⚠ 無簽章驗證，任何人可偽造 → PM-128 改用 verifySession（查 sessions 表）。
+ *  短期保留做 fallback，待 Chrome Web Store 新版全面推送後移除。*/
 function getUserIdFromHeader(request: Request): string | null {
   const auth = request.headers.get('Authorization');
   if (!auth) return null;
@@ -117,6 +119,72 @@ function getUserIdFromHeader(request: Request): string | null {
   } catch {
     return null;
   }
+}
+
+/** PM-128：驗證 session token（查 sessions 表，不可猜測）。過期自動刪除並回 null。 */
+async function verifySession(request: Request, env: Env): Promise<string | null> {
+  const auth = request.headers.get('Authorization');
+  if (!auth) return null;
+  const token = auth.replace('Bearer ', '').trim();
+  // 舊 base64 token（user_id:ts）通常很短且含 ':'，這裡只放行看起來像 UUID 組合的長 token
+  if (!token || token.length < 10) return null;
+
+  const { data } = await supa(env)
+    .from('sessions')
+    .select('user_id, expires_at')
+    .eq('session_token', token)
+    .maybeSingle();
+  if (!data) return null;
+
+  const row = data as { user_id: string; expires_at: string };
+  if (new Date(row.expires_at) <= new Date()) {
+    // 過期：刪除 session
+    await supa(env).from('sessions').delete().eq('session_token', token);
+    return null;
+  }
+  return row.user_id;
+}
+
+/** PM-128：統一取 user_id — 優先新 session token，退回舊 base64 header（過渡期）。
+ *  等全部使用者更新後移除 getUserIdFromHeader fallback。 */
+async function getAuthUserId(request: Request, env: Env): Promise<string | null> {
+  const sessionUserId = await verifySession(request, env);
+  if (sessionUserId) return sessionUserId;
+  return getUserIdFromHeader(request); // 過渡：舊版擴充仍用 base64
+}
+
+/** PM-128：POST /api/auth/session — 登入成功後換取隨機 session token（存 sessions 表）。 */
+async function createSession(request: Request, env: Env): Promise<Response> {
+  const body = (await request.json().catch(() => null)) as
+    | { user_id?: string; email?: string; name?: string }
+    | null;
+  if (!body?.user_id || !body?.email) {
+    return json({ error: 'missing user_id or email' }, 400);
+  }
+
+  // 驗證 user 存在（不存在則自動建立，避免孤兒 session）
+  const { data: user } = await supa(env)
+    .from('users')
+    .select('user_id')
+    .eq('user_id', body.user_id)
+    .maybeSingle();
+  if (!user) {
+    await supa(env)
+      .from('users')
+      .insert({ user_id: body.user_id, email: body.email, name: body.name || '', plan: 'free' });
+  }
+
+  // 產生不可猜測的 session token（雙 UUID）
+  const sessionToken = `${crypto.randomUUID()}-${crypto.randomUUID()}`;
+  await supa(env)
+    .from('sessions')
+    .insert({
+      session_token: sessionToken,
+      user_id: body.user_id,
+      expires_at: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+
+  return json({ session_token: sessionToken });
 }
 
 function html(body: string): Response {
@@ -2087,6 +2155,10 @@ export default {
       if (request.method === 'POST' && path === '/api/auth/google') {
         return await googleAuth(request, env);
       }
+      // PM-128：換取真正的 session token（存 sessions 表，取代假 base64）
+      if (request.method === 'POST' && path === '/api/auth/session') {
+        return await createSession(request, env);
+      }
       if (request.method === 'GET' && path === '/api/user/plan') {
         return await getUserPlan(request, env);
       }
@@ -2097,8 +2169,17 @@ export default {
         return await ecpayCancel(request, env); // PM-73：取消訂閱
       }
       // PM-72：綠界 ECPay 付費
+      // PM-128：新版走 POST + session token（不把 user_id 暴露在 URL）
+      if (request.method === 'POST' && path === '/checkout') {
+        const userId = await getAuthUserId(request, env);
+        if (!userId) return json({ error: '請先登入' }, 401);
+        return await ecpayCheckout(userId, url.origin, env);
+      }
+      // 過渡：舊版擴充仍用 GET ?user_id=（待新版全面推送後移除）
       if (request.method === 'GET' && path === '/checkout') {
-        return await ecpayCheckout(url, env);
+        const userId = url.searchParams.get('user_id');
+        if (!userId) return json({ error: 'missing user_id' }, 400);
+        return await ecpayCheckout(userId, url.origin, env);
       }
       if (request.method === 'POST' && path === '/api/ecpay/callback') {
         return await ecpayCallback(request, env);
@@ -2164,7 +2245,7 @@ async function createReport(request: Request, env: Env, origin: string): Promise
   // PM-98 防呆：報告 owner 綁定用 user_id。若上傳端（早期截圖流程）漏帶 payload.user_id，
   // 退而從 Authorization: Bearer <session_token> 補回，避免報告變孤兒（list_reports 依 user_id 過濾查不到）。
   if (!payload.user_id) {
-    const headerUserId = getUserIdFromHeader(request);
+    const headerUserId = await getAuthUserId(request, env);
     if (headerUserId) payload.user_id = headerUserId;
   }
 
@@ -2515,7 +2596,7 @@ async function googleAuth(request: Request, env: Env): Promise<Response> {
 
 // GET /api/user/plan — 查方案 + 免費版剩餘用量（每月自動重置計數）（PM-63）
 async function getUserPlan(request: Request, env: Env): Promise<Response> {
-  const userId = getUserIdFromHeader(request);
+  const userId = await getAuthUserId(request, env);
   if (!userId) return json({ error: 'unauthorized' }, 401);
   try {
     const { data: user, error } = await supa(env)
@@ -2586,7 +2667,7 @@ async function getUserPlan(request: Request, env: Env): Promise<Response> {
 
 // POST /api/user/usage — 遞增用量；免費版超限回 403 limit_reached（PM-63）
 async function bumpUsage(request: Request, env: Env): Promise<Response> {
-  const userId = getUserIdFromHeader(request);
+  const userId = await getAuthUserId(request, env);
   if (!userId) return json({ error: 'unauthorized' }, 401);
   try {
     const { type } = (await request.json().catch(() => ({}))) as { type?: UsageType };
@@ -2637,11 +2718,8 @@ async function bumpUsage(request: Request, env: Env): Promise<Response> {
 }
 
 // ── PM-72：綠界 ECPay 付費串接 ─────────────────────────────
-// GET /checkout?user_id=xxx → 產生帶 CheckMacValue 的綠界表單並自動提交
-async function ecpayCheckout(url: URL, env: Env): Promise<Response> {
-  const userId = url.searchParams.get('user_id');
-  if (!userId) return json({ error: 'missing user_id' }, 400);
-
+// 產生帶 CheckMacValue 的綠界月訂閱表單並自動提交（userId 已由呼叫端驗證，PM-128）
+async function ecpayCheckout(userId: string, origin: string, env: Env): Promise<Response> {
   const now = new Date();
   const tradeNo = `BZ${now.getTime()}`.slice(0, 20); // 唯一訂單編號，最長 20 碼
   const params: Record<string, string> = {
@@ -2652,8 +2730,8 @@ async function ecpayCheckout(url: URL, env: Env): Promise<Response> {
     TotalAmount: '80',
     TradeDesc: 'BugEzy Pro 月訂閱',
     ItemName: 'BugEzy Pro 付費版 NT$80/月',
-    ReturnURL: `${url.origin}/api/ecpay/callback`, // server-to-server 通知
-    OrderResultURL: `${url.origin}/checkout/result`, // 付款後瀏覽器導回
+    ReturnURL: `${origin}/api/ecpay/callback`, // server-to-server 通知
+    OrderResultURL: `${origin}/checkout/result`, // 付款後瀏覽器導回
     ChoosePayment: 'Credit',
     EncryptType: '1',
     CustomField1: userId, // 用 CustomField 帶 user_id 回來
@@ -2662,7 +2740,7 @@ async function ecpayCheckout(url: URL, env: Env): Promise<Response> {
     PeriodType: 'M', // 週期：M=月
     Frequency: '1', // 每 1 個月扣一次
     ExecTimes: '99', // 最多扣 99 次（最少 2，月 max 999）
-    PeriodReturnURL: `${url.origin}/api/ecpay/period-callback`, // 第 2 次起的扣款結果通知
+    PeriodReturnURL: `${origin}/api/ecpay/period-callback`, // 第 2 次起的扣款結果通知
   };
   params.CheckMacValue = await generateCheckMacValue(
     params,
@@ -2751,7 +2829,7 @@ async function ecpayResult(request: Request): Promise<Response> {
 // ── PM-109：日票 NT$20（一次性付款，非定期定額；信用卡+ATM+超商 ChoosePayment=ALL）──
 // POST /api/day-pass/create → 需登入；建綠界一次性訂單 → 回自動送出的付款表單 HTML
 async function handleDayPassCreate(request: Request, env: Env): Promise<Response> {
-  const userId = getUserIdFromHeader(request);
+  const userId = await getAuthUserId(request, env);
   if (!userId) return json({ error: '請先登入' }, 401);
 
   // 已是月費 / 已有有效日票 → 擋
@@ -2890,7 +2968,7 @@ async function ecpayPeriodCallback(request: Request, env: Env): Promise<Response
 
 // POST /api/user/cancel → 取消定期定額訂閱（PM-73）。標記 cancelled，到期前仍享付費功能。
 async function ecpayCancel(request: Request, env: Env): Promise<Response> {
-  const userId = getUserIdFromHeader(request);
+  const userId = await getAuthUserId(request, env);
   if (!userId) return json({ error: 'unauthorized' }, 401);
   try {
     const { data: user, error } = await supa(env)

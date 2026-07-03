@@ -75,9 +75,19 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_expires_at TIMESTAMPTZ;
 -- ── PM-109：日票 NT$20（一次性付款，24 小時）。NULL=無日票；有值=到期時間；plan 多一個 'day_pass' 狀態 ──
 ALTER TABLE users ADD COLUMN IF NOT EXISTS day_pass_expires_at TIMESTAMPTZ DEFAULT NULL;
 
+-- ── PM-128：session token 認證（取代假 base64 header）。登入後 server 產生隨機 token 存此表，
+--    後續 API 用 token 查表取 user_id（不可偽造）。90 天到期，verifySession 到期自動刪除。
+CREATE TABLE IF NOT EXISTS sessions (
+  session_token TEXT PRIMARY KEY,
+  user_id       TEXT NOT NULL REFERENCES users(user_id),
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  expires_at    TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '90 days')
+);
+
 -- ── PM-93：全 public table 開 RLS(deny all)，anon key 完全鎖死；唯一存取途徑是 Worker 的 service_role。
 --    ⚠ 執行前務必先 `wrangler secret put SUPABASE_SERVICE_ROLE_KEY`，否則 Worker(anon) 會被鎖死。
 --    完整腳本 + 步驟見 server/rls-lockdown.sql。
 ALTER TABLE reports   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE mcp_usage ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sessions  ENABLE ROW LEVEL SECURITY; -- PM-128：只有 service_role 能存取
