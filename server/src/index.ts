@@ -2614,9 +2614,10 @@ async function handleTranscribe(request: Request, env: Env): Promise<Response> {
 // 是帳號接管根因（P0-2/P0-3）。登入統一走 createSession（POST /api/auth/session，驗 Google token audience）。
 
 // GET /api/user/plan — 查方案 + 免費版剩餘用量（每月自動重置計數）（PM-63）
+// PM-134：私有 plan 狀態一律 jsonNoStore（避免邊緣快取把 A 的方案跨服給 B，也是 paid 用戶「看不到狀態」主因）。
 async function getUserPlan(request: Request, env: Env): Promise<Response> {
   const userId = await getAuthUserId(request, env);
-  if (!userId) return json({ error: 'unauthorized' }, 401);
+  if (!userId) return jsonNoStore({ error: 'unauthorized' }, 401);
   try {
     const { data: user, error } = await supa(env)
       .from('users')
@@ -2625,9 +2626,9 @@ async function getUserPlan(request: Request, env: Env): Promise<Response> {
       .maybeSingle();
     if (error) {
       console.error('查方案失敗:', error.message);
-      return json({ error: GENERIC_500 }, 500);
+      return jsonNoStore({ error: GENERIC_500 }, 500);
     }
-    if (!user) return json({ error: 'user not found' }, 404);
+    if (!user) return jsonNoStore({ error: 'user not found' }, 404);
 
     const u = user as {
       plan: string | null;
@@ -2670,9 +2671,10 @@ async function getUserPlan(request: Request, env: Env): Promise<Response> {
 
     // PM-73/109：cancelled 未到期、day_pass 未到期皆視同付費（享無限功能）
     const isPaid = isActiveUser(u);
-    return json({
+    return jsonNoStore({
       plan: u.plan ?? 'free',
-      expires_at: u.plan_expires_at ?? null,
+      expires_at: u.plan_expires_at ?? null, // 相容舊 popup（PM-75）
+      plan_expires_at: u.plan_expires_at ?? null, // PM-134：cancelled 顯示到期日
       day_pass_expires_at: u.day_pass_expires_at ?? null, // PM-109
       limits: isPaid
         ? null
@@ -2684,7 +2686,7 @@ async function getUserPlan(request: Request, env: Env): Promise<Response> {
     });
   } catch (err) {
     console.error('plan error:', err);
-    return json({ error: GENERIC_500 }, 500);
+    return jsonNoStore({ error: GENERIC_500 }, 500);
   }
 }
 

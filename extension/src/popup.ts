@@ -606,6 +606,7 @@ function showMainView(session: Session) {
 interface PlanInfo {
   plan: string;
   expires_at?: string | null;
+  plan_expires_at?: string | null; // PM-134：月費到期日（cancelled 顯示用；與 expires_at 同值）
   day_pass_expires_at?: string | null; // PM-111：日票到期時間
   limits: null | {
     recording: { used: number; max: number };
@@ -664,7 +665,7 @@ async function loadPlan() {
       // 已取消未到期 → 仍享無限功能 + 到期日 + 重新訂閱
       setRecordDesc('✨ 無限次');
       startBtn.disabled = false;
-      expiresDate.textContent = fmtDate(plan.expires_at);
+      expiresDate.textContent = fmtDate(plan.plan_expires_at ?? plan.expires_at);
       cancelledBadge.classList.remove('hidden');
     } else if (plan.plan === 'day_pass' && dayPassRemainMs > 0) {
       // PM-111：日票有效中 → 無限功能 + ⚡日票 badge + 倒數；隱藏升級鈕（鎖月費）+ 顯示到期提示
