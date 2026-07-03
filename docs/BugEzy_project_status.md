@@ -1,6 +1,6 @@
 # BugEzy 專案全貌與接手指南
 
-> 最後更新：2026-07-02
+> 最後更新：2026-07-03（Day 18：Fable 5 安全稽核 + 認證信任鏈重構 PM-128~135）
 > 維護者：FOX（Claude Chat PM 角色）
 > 用途：新 Chat 對話開始時讀此檔，快速掌握全貌並接手開發
 
@@ -485,6 +485,26 @@ FOX = 創辦人 + 決策者 + 手動驗收
 - Server（已部署）：綠界 secret 化 + 日票 API/頁 + 三欄定價 + AI 安裝複製區 + 工具列 7 項 + `USD $` + `/api/version` + `/changelog` + 全頁 footer 更新日誌。新檔：`day-pass-checkout.{html,ts}`（extension 跳板頁）。
 - Extension（皆 build 過、**未重上架 Web Store**）：日票 popup + `day-pass-checkout` 跳板 + AI 指令輪盤 + 進階設定 accordion + 監控狀態條/上傳報告 + 新版亮燈/版號。新 storage key：`bugezy:ai-prompts`/`bugezy:settings-open`/`bugezy:latest-report-url`；新訊息：`UPLOAD_MONITOR`/`MONITOR_UPLOADED`/`UPLOAD_MONITOR_REPORT`。
 - ⚠ 技術債（Day 17）：① **PM-94 §3 綠界 4 個 secret 待 FOX 跑**（未跑前結帳/日票付款皆失敗）；② **PM-109 `day_pass_expires_at` ALTER 待跑**；③ 沿用 Day 16：PM-93 service_role secret + rls-lockdown.sql、PM-98 backfill-user-id.sql、PM-73/82 ALTER；④ **上架時 manifest version（現 `0.1.0`）需與 `/api/version` latest（`1.1.0`）對齊**；⑤ extension 整套仍未重上架 Web Store；⑥ 一批 popup/監控功能待瀏覽器實機驗收；⑦ **無 git remote，push 無法執行**（commit 已在本地）。
+
+---
+
+## §6m Day 18（2026-07-03，PM-128~135）— Fable 5 安全稽核 + 認證信任鏈重構
+
+**目標**：正式金流上線後安全第一。仿 LottoShare 的 Fable 5 稽核，對 BugEzy 全面掃描後逐卡修復 P0~P2 缺失。8 卡皆 server 已部署、extension build 過（**未重上架**）。
+
+- **PM-128 session token 認證**（server + `schema.sql`）：新增 `POST /api/auth/session`（`createSession`）+ `verifySession`（查 `sessions` 表）+ `getAuthUserId`；金流端點改用之。過渡期保留 base64 fallback。已部署 `6d9705f9`。**FOX 待辦：跑 `CREATE TABLE sessions` + `ENABLE RLS`**。
+- **PM-129 Extension 改用 session token**（extension）：`popup` 登入後換 DB token 存 `SESSION_TOKEN_KEY`；新 `auth.ts getAuthHeaders()` 統一 header；全站 6 處替換舊 base64；月費升級改 POST（新 `checkout.html/ts` 跳板）；登出清 token。
+- **PM-130 CORS 收緊 + FAQ 去競品 + 錯誤脫敏**（server）：`getCorsHeaders`（白名單動態 origin，統一出口注入，MCP 除外）；FAQ「跟 Jam」→「BugEzy 優勢」；14 處 500 → `GENERIC_500` + `console.error`。已部署 `c81e0d89`。
+- **PM-131 POST body 上限**（server）：全域 10MB（transcribe 除外）+ createReport 5MB + 確認 transcribe 25MB。已部署 `05039693`。**FOX 待辦：Cloudflare Dashboard Rate Limiting 5 條 IP 限流**。
+- **PM-132 `GET /api/reports` 加認證 + user 過濾**（P0-1，server）：`listReports` 未登入 401 + `.eq(user_id)` 只回自己的；getReport 單筆不動（分享）。**額外**：新增 `jsonNoStore()`（`Cache-Control: no-store`）防邊緣快取跨用戶外洩。已部署 `8fd5cca0`。
+- **PM-133 認證信任鏈重構**（P0-2+P0-3+P1-4，server + extension）：**改 server 驗 Google token audience（`verifyGoogleToken`：`aud/azp === GOOGLE_CLIENT_ID`）→ 用 Google sub 當 user_id → 發 DB token**，不信任客戶端 user_id；刪 `getUserIdFromHeader` + `googleAuth`/`/api/auth/google` + 過渡 `GET /checkout`；extension 登入改 `doLogin`（送 google_token）+ 靜默續期；`getAuthHeaders` 只讀 DB token（無 base64 fallback）。wrangler.toml 加 `GOOGLE_CLIENT_ID`。已部署 `3d14c901`。
+- **PM-134 getUserPlan 防快取 + 月費會員狀態**（server + extension）：getUserPlan 全 return 改 `jsonNoStore` + 回傳 `plan_expires_at`（paid「看不到狀態」真因是被邊緣快取）；popup paid/cancelled UI 早已存在（PM-73/75/111），僅打磨徽章文字。已部署 `7bf26d6f`。
+- **PM-135 AI 端點加認證**（P1-3，server + extension）：transcribe/summarize/correct 加 `getAuthUserId`（401）；transcribe 另 `isActiveUser` 403（付費限定）；Groq 錯誤脫敏；extension 補帶 token（`getAuthHeaderOnly()` for multipart transcribe、edit-report correct/summarize 補 `getAuthHeaders`）。已部署 `065f3cab`。
+
+### 增量（Day 18）
+- Server（全部已部署）：`sessions` 表 + session token 全套認證、Google token audience 驗證、報告/方案/AI 端點存取控制、CORS 白名單、`GENERIC_500` 脫敏、body size 上限、`jsonNoStore` 防快取。新常數：`GOOGLE_CLIENT_ID`(vars)/`MAX_POST_SIZE`/`MAX_REPORT_SIZE`/`GENERIC_500`。
+- Extension（皆 build 過、**未重上架**）：`auth.ts`（`getAuthToken`/`getAuthHeaders`/`getAuthHeaderOnly`）、`doLogin`/`refreshSessionSilently`、`checkout.html/ts` 跳板、三 AI 端點與報告上傳全帶 token。新 storage key：`bugezy:session-token`。
+- ⚠ 技術債 / FOX 待辦（Day 18）：① **PM-128 `sessions` 表 SQL 待跑**（未跑登入拿不到 DB token）；② **PM-133 user_id 改 Google sub**——舊 paid 綁舊 UUID，新 user 預設 free，要看付費狀態需重設 `plan` 或重走綠界；舊報告與新 user_id 脫鉤（乾淨切換）；③ **PM-133 登入實機驗收**：`chrome.identity` token `aud/azp` 須 = manifest client_id；④ **PM-131 Cloudflare Rate Limiting**（Dashboard）；⑤ **extension 整套未重上架 Web Store**（session/AI 端點帶 token/checkout.html 皆需重打包送審）；⑥ 沿用：PM-94 綠界 4 secret、PM-93 service_role + rls-lockdown.sql、PM-73/82/109 ALTER、PM-98 backfill；⑦ **無 git remote，push 無法執行**。
 
 ---
 

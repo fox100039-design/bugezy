@@ -71,6 +71,13 @@ job/           每日任務檔
    > - 新增 table 時**必須**跟著 `ALTER TABLE <name> ENABLE ROW LEVEL SECURITY;`，不需寫 policy。
    > - Worker 連線 key 統一走 `supaKey(env)` = `SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY`；**正式環境必須設 `SUPABASE_SERVICE_ROLE_KEY`**（`wrangler secret put`），否則開 RLS 後 Worker(anon) 會被自己鎖死。
    > - 鎖死腳本：`server/rls-lockdown.sql`（含動態對所有 public table 開 RLS）。
+7. **認證信任鏈（PM-133）**：
+   > **絕不信任客戶端傳來的 user_id**。登入唯一入口 `POST /api/auth/session` 收 Google access token → `verifyGoogleToken` 驗 `aud/azp === GOOGLE_CLIENT_ID`（防其他 App 的 token 重放）→ 取 Google `sub` 當 user_id → 發不可猜測的 DB session token（`sessions` 表，90 天）。
+   >
+   > - 所有需認證的 API 走 `getAuthUserId(request, env)` = `verifySession`（查 `sessions` 表）；**無 base64 fallback**（假 base64 token 一律 401）。
+   > - 私有（依 user 過濾）回應一律 `jsonNoStore()`（`Cache-Control: no-store`），防 Cloudflare 邊緣快取以 URL 為鍵把 A 的資料跨服給 B（`/api/reports`、`/api/user/plan`）。
+   > - AI 端點（transcribe/summarize/correct）皆需登入；Whisper `transcribe` 另限 `isActiveUser`（付費才可，防 Groq 荷包型 DoS）。
+   > - CORS 只放行 `bugezy.dev` + `*.workers.dev` + `chrome-extension://`（`getCorsHeaders`，統一出口注入）；500 錯誤一律回 `GENERIC_500`（原始錯誤只 `console.error`）。
 
 ## §5 MCP Server Tool Schema
 
@@ -95,6 +102,7 @@ list_recent_reports   → 最近報告
 | 2026-06-30 | 首頁受眾擴展（所有 Web 框架）+ **bugezy.dev 域名上線**（綁同 Worker）+ 報告頁截圖「高畫質 AI 分析」勾選 + **語音架構升級：Groq Whisper 雙引擎**（offscreen 錄音 + `/api/transcribe` + mic-permission 一次授權 + 付費版模式切換） |
 | 2026-07-01 | **Supabase RLS 安全根治**（§4-6 鐵律：全 table ENABLE RLS + Worker 改 `supaKey` service_role/anon fallback + `rls-lockdown.sql`）+ Whisper 錄音**即時音量條**（offscreen Analyser→`MIC_VOLUME`）+ `/install` 安裝指南 & `/features` 功能總覽雙頁 + 截圖修復（`list_reports` 補 `user_id` + 報告頁點圖改頁內 lightbox）+ 工具列橘光脈衝特效（popup 開關）+ 錄製 UX（錄製中鎖設定 + mic OFF 提示 + 授權時機修復） |
 | 2026-07-02 | **綠界 ECPay 正式環境遷移**（key 從 wrangler.toml 明文→`wrangler secret`；FOX 手動 secret put 4 值）+ **日票 NT$20/24hr 三部曲**（一次性付款 `/api/day-pass/create·callback` + `day_pass_expires_at` + `isActiveUser()` + 首頁三欄 + popup 雙鈕/倒數 + `day-pass-checkout` 跳板頁）+ 首頁/`install`「🤖 讓 AI 幫你安裝」複製區 + 支援工具列統一 7 項（+Antigravity/Gemini CLI）+ **AI 指令輪盤**（popup 底部，可編輯/顏色/一鍵複製，`bugezy:ai-prompts`）+ 進階設定 accordion + 即時監控**文字狀態條 + 上傳報告**（inject→content→background 打包 `/api/reports`）+ Token 金額標 `USD $` + **新版通知亮燈 + `/api/version` + `/changelog`** + popup 版號顯示 |
+| 2026-07-03 | **Fable 5 安全稽核 + 認證信任鏈重構**（PM-128~135）。**登入信任鏈**：`POST /api/auth/session` 收 Google access token → server `verifyGoogleToken` 驗 `aud/azp === GOOGLE_CLIENT_ID`（防其他 App token 重放）→ 用 Google sub 當 user_id 發 DB session token（存 `sessions` 表，90 天）；刪假 base64 token + `getUserIdFromHeader` + `googleAuth`/`/api/auth/google` + 過渡 `GET /checkout`。**存取控制**：`GET /api/reports` 加認證 + `.eq(user_id)` 只回自己的；transcribe/summarize/correct 加 `getAuthUserId`（transcribe 另 `isActiveUser` 403 付費限定）。**打磨**：CORS 收緊（動態 origin 白名單，統一出口注入）、500 錯誤脫敏（`GENERIC_500`）、POST body 上限（全域 10MB / 報告 5MB / transcribe 25MB）、私有端點 `jsonNoStore`（防邊緣快取跨用戶外洩）。extension 全面改用 DB session token（`auth.ts getAuthHeaders`/`getAuthHeaderOnly`）。 |
 
 > 部署：Cloudflare Workers `bugezy-api`（**bugezy.dev** + `bugezy-api.bugezy-api.workers.dev` 雙域名）；每日 03:00 UTC cron 保活 Supabase。
 > （隨開發持續更新）
