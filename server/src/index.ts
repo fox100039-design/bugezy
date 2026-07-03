@@ -111,6 +111,14 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
+/** PM-132：私有（依 user 過濾）回應——加 `Cache-Control: no-store`，
+ *  避免 Cloudflare 邊緣快取以 URL 為鍵把 A 使用者的資料跨服給 B（實測此端點會被快取）。 */
+function jsonNoStore(data: unknown, status = 200): Response {
+  const res = json(data, status);
+  res.headers.set('Cache-Control', 'no-store');
+  return res;
+}
+
 /** PM-93：Supabase 連線 key — 優先 service_role（繞過 RLS），未設定則退回 anon（安全過渡）。
  *  全 table 開 RLS(deny all) 後，唯一能存取資料的途徑就是這把 service_role key。 */
 function supaKey(env: Env): string {
@@ -2236,7 +2244,7 @@ export default {
         return await createReport(request, env, url.origin);
       }
       if (request.method === 'GET' && path === '/api/reports') {
-        return await listReports(url, env);
+        return await listReports(request, env);
       }
       // PM-82：報告設定（允許 AI 讀截圖）— 有 share link 就能改，不需登入
       const settingsMatch = path.match(/^\/api\/reports\/([^/]+)\/settings$/);
@@ -2417,8 +2425,13 @@ async function updateReportSettings(
   return json({ ok: true });
 }
 
-// GET /api/reports — 列出最近報告（metadata only，不含 rrweb / JSONB 大欄位）
-async function listReports(url: URL, env: Env): Promise<Response> {
+// GET /api/reports — 列出「自己的」最近報告（metadata only，不含 rrweb / JSONB 大欄位）
+// PM-132（P0-1）：加認證 + user 過濾。原本無認證無過濾，匿名者可列舉全站報告 ID → 隱私外洩。
+async function listReports(request: Request, env: Env): Promise<Response> {
+  const userId = await getAuthUserId(request, env);
+  if (!userId) return jsonNoStore({ error: '請先登入' }, 401);
+
+  const url = new URL(request.url);
   let limit = parseInt(url.searchParams.get('limit') ?? '10', 10);
   if (!Number.isFinite(limit) || limit < 1) limit = 10;
   if (limit > 50) limit = 50;
@@ -2428,6 +2441,7 @@ async function listReports(url: URL, env: Env): Promise<Response> {
     .select(
       'report_id, url, title, browser, screen_size, console_count, network_count, voice_count, rrweb_count, screenshot_count, created_at',
     )
+    .eq('user_id', userId) // ← 關鍵：只回自己的報告
     .order('created_at', { ascending: false })
     .limit(limit);
 
@@ -2437,9 +2451,9 @@ async function listReports(url: URL, env: Env): Promise<Response> {
   const { data, error } = await query;
   if (error) {
     console.error('supabase query failed:', error.message);
-    return json({ error: GENERIC_500 }, 500);
+    return jsonNoStore({ error: GENERIC_500 }, 500);
   }
-  return json({ reports: data ?? [] });
+  return jsonNoStore({ reports: data ?? [] });
 }
 
 // POST /api/summarize — 用 Workers AI 把語音記錄精簡成重點（PM-25）
