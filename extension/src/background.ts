@@ -28,7 +28,7 @@ import {
   type TimeMarker,
   type VoiceSegment,
 } from './types';
-import { getAuthHeaders } from './auth';
+import { getAuthHeaders, getAuthHeaderOnly } from './auth';
 
 /** PM-34：錄製中即時 flush 暫存的所有 buffer key */
 const BUFFER_KEYS = [BUFFER_VOICE_KEY, BUFFER_CONSOLE_KEY, BUFFER_NETWORK_KEY, BUFFER_RRWEB_KEY];
@@ -406,7 +406,12 @@ async function stopMicAndTranscribe(): Promise<{ ok?: boolean; text?: string; er
     const blob = await (await fetch(res.audioBlob)).blob();
     const form = new FormData();
     form.append('audio', blob, 'recording.webm');
-    const transcribeRes = await fetch(`${API_BASE}/api/transcribe`, { method: 'POST', body: form });
+    // PM-135：帶 session token（transcribe 需登入 + 付費驗證）。multipart 不可手動設 Content-Type。
+    const transcribeRes = await fetch(`${API_BASE}/api/transcribe`, {
+      method: 'POST',
+      headers: await getAuthHeaderOnly(),
+      body: form,
+    });
     const result = (await transcribeRes.json()) as {
       ok?: boolean;
       text?: string;

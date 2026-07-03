@@ -14,6 +14,7 @@ import {
   type RecordingSummary,
   type TimeMarker,
 } from './types';
+import { getAuthHeaders } from './auth';
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -669,7 +670,7 @@ correctBtn.addEventListener('click', async () => {
   try {
     const res = await fetch(`${API_BASE}/api/correct`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await getAuthHeaders(), // PM-135：帶 session token（需登入）
       body: JSON.stringify({ text }),
     });
     const data = (await res.json()) as { corrected?: string };
@@ -702,7 +703,7 @@ summarizeBtn.addEventListener('click', async () => {
   try {
     const res = await fetch(`${API_BASE}/api/summarize`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await getAuthHeaders(), // PM-135：帶 session token（需登入）
       body: JSON.stringify({ text }),
     });
     const data = (await res.json()) as { summary?: string };

@@ -5,12 +5,24 @@
 
 import { SESSION_TOKEN_KEY } from './types';
 
+/** 取原始 session token（未登入回 undefined）。 */
+export async function getAuthToken(): Promise<string | undefined> {
+  const store = await chrome.storage.local.get(SESSION_TOKEN_KEY);
+  return store[SESSION_TOKEN_KEY] as string | undefined;
+}
+
 /** 統一的 API 認證 header（含 Content-Type）。未登入則不帶 Authorization。 */
 export async function getAuthHeaders(): Promise<Record<string, string>> {
-  const store = await chrome.storage.local.get(SESSION_TOKEN_KEY);
-  const token = store[SESSION_TOKEN_KEY] as string | undefined;
+  const token = await getAuthToken();
   return {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
+}
+
+/** 只回 Authorization header（不含 Content-Type）——給 multipart/FormData 用，
+ *  否則手動設 Content-Type 會蓋掉瀏覽器自動加的 multipart boundary（PM-135 transcribe）。 */
+export async function getAuthHeaderOnly(): Promise<Record<string, string>> {
+  const token = await getAuthToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }

@@ -2476,6 +2476,10 @@ async function listReports(request: Request, env: Env): Promise<Response> {
 
 // POST /api/summarize — 用 Workers AI 把語音記錄精簡成重點（PM-25）
 async function summarizeText(request: Request, env: Env): Promise<Response> {
+  // PM-135：需登入（Workers AI 會產生費用，防匿名濫用）
+  const userId = await getAuthUserId(request, env);
+  if (!userId) return json({ error: '請先登入' }, 401);
+
   const { text } = (await request.json().catch(() => ({}))) as { text?: string };
   if (!text || text.length < 10) {
     return json({ summary: text ?? '' });
@@ -2506,6 +2510,10 @@ async function summarizeText(request: Request, env: Env): Promise<Response> {
 //        Windows Git-Bash 測試環境的編碼坑，非 server）。選 llama-3.3：非推理模型（無 <think> 額外開銷/
 //        洩漏風險）、與 summarize 同款、4 樣本實測穩定。
 async function correctText(request: Request, env: Env): Promise<Response> {
+  // PM-135：需登入（Workers AI 會產生費用，防匿名濫用）
+  const userId = await getAuthUserId(request, env);
+  if (!userId) return json({ error: '請先登入' }, 401);
+
   const { text } = (await request.json().catch(() => ({}))) as { text?: string };
   if (!text?.trim()) {
     return json({ error: '沒有文字可校正' }, 400);
@@ -2551,6 +2559,22 @@ async function correctText(request: Request, env: Env): Promise<Response> {
 // POST /api/transcribe — Groq Whisper 語音轉文字（PM-85：麥克風架構升級 1/3）
 // 接收音訊（multipart form-data 的 audio 欄位，或 raw binary）→ Groq Whisper → 回中文逐字稿。
 async function handleTranscribe(request: Request, env: Env): Promise<Response> {
+  // PM-135：需登入（Groq Whisper 每次 25MB 音訊成本放大，防匿名荷包型 DoS）
+  const userId = await getAuthUserId(request, env);
+  if (!userId) return json({ error: '請先登入' }, 401);
+
+  // PM-135：Whisper 是付費功能——僅有效付費用戶（paid/cancelled 未到期/day_pass）可用。
+  // 免費版走前端 Web Speech API，本來就不該打 Groq。
+  const { data: uData } = await supa(env)
+    .from('users')
+    .select('plan, day_pass_expires_at')
+    .eq('user_id', userId)
+    .maybeSingle();
+  const u = (uData ?? {}) as { plan?: string | null; day_pass_expires_at?: string | null };
+  if (!isActiveUser(u)) {
+    return json({ error: 'Whisper 語音為付費功能，請升級' }, 403);
+  }
+
   // 1. 讀取音訊
   const contentType = request.headers.get('content-type') || '';
   let audioBlob: Blob;
@@ -2588,8 +2612,8 @@ async function handleTranscribe(request: Request, env: Env): Promise<Response> {
     });
     if (!groqRes.ok) {
       const errText = await groqRes.text();
-      console.error('Groq API error:', groqRes.status, errText);
-      return json({ error: 'Groq 轉錄失敗', detail: errText }, 502);
+      console.error('Groq transcribe failed:', groqRes.status, errText); // PM-135：原始錯誤只記 log
+      return json({ error: '語音轉錄失敗，請稍後再試' }, 502);
     }
     const result = (await groqRes.json()) as {
       text?: string;
