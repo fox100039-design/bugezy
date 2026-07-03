@@ -75,17 +75,35 @@ interface RecordingPayload {
   user_id?: string; // PM-61：已登入時綁定的使用者
 }
 
-// ── CORS（MVP 先全開，第 5 代再收緊）────────────────────
-const CORS: Record<string, string> = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
+// ── CORS（PM-130：收緊，只允許自家域名 + chrome-extension）────────
+const CORS_ALLOWED_ORIGINS = [
+  'https://bugezy.dev',
+  'https://bugezy-api.bugezy-api.workers.dev',
+];
 
+/** 依請求 Origin 動態決定 CORS 標頭：只放行自家域名 + 任意 chrome-extension://（擴充 ID 可能變）。
+ *  不在白名單者回退 https://bugezy.dev（等同拒絕跨源讀取）。 */
+function getCorsHeaders(request: Request): Record<string, string> {
+  const origin = request.headers.get('Origin') || '';
+  const isAllowed =
+    CORS_ALLOWED_ORIGINS.includes(origin) || origin.startsWith('chrome-extension://');
+  return {
+    'Access-Control-Allow-Origin': isAllowed ? origin : 'https://bugezy.dev',
+    'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Max-Age': '86400',
+    Vary: 'Origin',
+  };
+}
+
+/** PM-130：對外統一的 500 錯誤訊息（原始錯誤只記 console.error，不外洩內部細節）。 */
+const GENERIC_500 = '伺服器內部錯誤，請稍後再試';
+
+// CORS 由 fetch() 的統一出口注入（PM-130），故 json() 只需帶 Content-Type。
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json', ...CORS },
+    headers: { 'Content-Type': 'application/json' },
   });
 }
 
@@ -936,8 +954,8 @@ const FAQ_PAGE_HTML = `<!DOCTYPE html>
   <div class="faq-q">BugEzy 是什麼？</div>
   <div class="faq-a"><p>BugEzy 是一款 Chrome 擴充功能，讓開發者用語音 + 錄製的方式記錄 Bug，AI 透過 MCP 自動讀取報告並提供修復建議。省下 95% 的 debug 溝通時間。</p></div>
 
-  <div class="faq-q">跟 Jam 有什麼不同？</div>
-  <div class="faq-a"><p>BugEzy 專為亞洲開發者設計，支援中文語音辨識。價格只有 Jam 的 1/5（NT$80 vs $14 USD）。獨家功能：即時監控、30 秒回溯、終端機 CLI、Token 透明度。</p></div>
+  <div class="faq-q">BugEzy 最大的優勢是什麼？</div>
+  <div class="faq-a"><p>專為亞洲開發者設計：中文/粵語/日韓語音支援、NT$80 超平價月費、MCP 整合讓 AI 直接讀報告。獨家功能：即時監控、30 秒回溯、Whisper 精準語音、終端機 CLI、Token 透明度。</p></div>
 
   <div class="faq-q">支援哪些 AI 工具？</div>
   <div class="faq-a"><p>任何支援 MCP 的 AI 工具都能用，包括 Claude Desktop、Claude Code、Cursor、VS Code + Copilot、Zed、Windsurf、Codex、Replit 等。只需要一行 URL：<code>https://bugezy-api.bugezy-api.workers.dev/mcp</code></p></div>
@@ -2060,13 +2078,23 @@ ${Array.from(
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const cors = getCorsHeaders(request); // PM-130：動態 CORS（只放行自家域名 + chrome-extension）
     if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: CORS });
+      return new Response(null, { headers: cors });
     }
 
     const url = new URL(request.url);
     const path = url.pathname;
 
+    // MCP 端點（Streamable HTTP）— 給 Claude.ai Connectors / IDE 直接連。
+    // PM-130：不套自訂 CORS（交給 handler 自理，避免破壞 Claude.ai 連線）。
+    if (path === '/mcp' || path.startsWith('/mcp/')) {
+      const handler = createMcpHandler(createMcpServer(env), { route: '/mcp' });
+      return handler(request, env, ctx);
+    }
+
+    // PM-130：所有一般回應統一在此出口套上動態 CORS（覆蓋預設）
+    const response = await (async (): Promise<Response> => {
     // PM-62：產品首頁（根目錄）— 放在所有路由之前
     if (request.method === 'GET' && path === '/') return html(HOMEPAGE_HTML);
     if (request.method === 'GET' && path === '/privacy') return html(PRIVACY_PAGE_HTML); // PM-64
@@ -2080,12 +2108,6 @@ export default {
       return json({ latest: '1.1.0', changelog_url: 'https://bugezy.dev/changelog' });
     }
     if (request.method === 'GET' && path === '/changelog') return html(CHANGELOG_PAGE_HTML); // PM-126
-
-    // MCP 端點（Streamable HTTP）— 給 Claude.ai Connectors / IDE 直接連
-    if (path === '/mcp' || path.startsWith('/mcp/')) {
-      const handler = createMcpHandler(createMcpServer(env), { route: '/mcp' });
-      return handler(request, env, ctx);
-    }
 
     // PM-59：報告頁——Server 直接回完整 HTML（vanilla JS 讀 /api/reports/:id 渲染），
     // 放在 /api/reports/:id 之前匹配。
@@ -2104,7 +2126,7 @@ export default {
       const status = Number.isFinite(parsed) && parsed >= 100 && parsed <= 599 ? parsed : 200;
       return new Response(JSON.stringify({ error: `Test ${status} response` }), {
         status,
-        headers: { 'Content-Type': 'application/json', ...CORS },
+        headers: { 'Content-Type': 'application/json' },
       });
     }
 
@@ -2216,9 +2238,15 @@ export default {
         return await getReport(match[1], env);
       }
       return json({ error: 'not found' }, 404);
-    } catch (err) {
-      return json({ error: err instanceof Error ? err.message : String(err) }, 500);
-    }
+      } catch (err) {
+        console.error('[fetch] unhandled error:', err); // PM-130：原始錯誤只記 log，不外洩
+        return json({ error: GENERIC_500 }, 500);
+      }
+    })();
+
+    // PM-130：統一出口注入動態 CORS（覆蓋 json()/html() 預設）
+    for (const [k, v] of Object.entries(cors)) response.headers.set(k, v);
+    return response;
   },
 
   // PM-79：Cron 保活 Supabase（免費版閒置 7 天會自動暫停 DB）。每天 ping 一次。
@@ -2298,7 +2326,8 @@ async function createReport(request: Request, env: Env, origin: string): Promise
     ({ error } = await supa(env).from('reports').insert(baseRow));
   }
   if (error) {
-    return json({ error: `supabase insert failed: ${error.message}` }, 500);
+    console.error('supabase insert failed:', error.message);
+    return json({ error: GENERIC_500 }, 500);
   }
 
   return json({
@@ -2365,7 +2394,10 @@ async function updateReportSettings(
     .from('reports')
     .update({ allow_screenshot_images: body.allow_screenshot_images })
     .eq('report_id', reportId);
-  if (error) return json({ error: `更新失敗: ${error.message}` }, 500);
+  if (error) {
+    console.error('更新報告設定失敗:', error.message);
+    return json({ error: GENERIC_500 }, 500);
+  }
   return json({ ok: true });
 }
 
@@ -2388,7 +2420,8 @@ async function listReports(url: URL, env: Env): Promise<Response> {
 
   const { data, error } = await query;
   if (error) {
-    return json({ error: `supabase query failed: ${error.message}` }, 500);
+    console.error('supabase query failed:', error.message);
+    return json({ error: GENERIC_500 }, 500);
   }
   return json({ reports: data ?? [] });
 }
@@ -2414,7 +2447,8 @@ async function summarizeText(request: Request, env: Env): Promise<Response> {
     const summary = (result as { response?: string }).response ?? '';
     return json({ summary });
   } catch (err) {
-    return json({ error: `AI 精簡失敗: ${err instanceof Error ? err.message : String(err)}` }, 500);
+    console.error('AI 精簡失敗:', err);
+    return json({ error: GENERIC_500 }, 500);
   }
 }
 
@@ -2461,7 +2495,8 @@ async function correctText(request: Request, env: Env): Promise<Response> {
     corrected = corrected.replace(/<think>[\s\S]*?<\/think>/g, '').trim() || text;
     return json({ corrected });
   } catch (err) {
-    return json({ error: `AI 校正失敗: ${err instanceof Error ? err.message : String(err)}` }, 500);
+    console.error('AI 校正失敗:', err);
+    return json({ error: GENERIC_500 }, 500);
   }
 }
 
@@ -2553,7 +2588,10 @@ async function googleAuth(request: Request, env: Env): Promise<Response> {
       .select('user_id, email, name, avatar_url')
       .eq('email', gUser.email)
       .maybeSingle(); // PM-61b：找不到回 null（不像 .single() 會拋 PGRST116）
-    if (selErr) return json({ error: `查使用者失敗: ${selErr.message}` }, 500);
+    if (selErr) {
+      console.error('查使用者失敗:', selErr.message);
+      return json({ error: GENERIC_500 }, 500);
+    }
 
     let user = existing as
       | { user_id: string; email: string; name: string | null; avatar_url: string | null }
@@ -2566,7 +2604,8 @@ async function googleAuth(request: Request, env: Env): Promise<Response> {
         .select('user_id, email, name, avatar_url')
         .single();
       if (error || !created) {
-        return json({ error: `建立使用者失敗: ${error?.message ?? 'unknown'}` }, 500);
+        console.error('建立使用者失敗:', error?.message ?? 'unknown');
+        return json({ error: GENERIC_500 }, 500);
       }
       user = created;
     } else {
@@ -2590,7 +2629,8 @@ async function googleAuth(request: Request, env: Env): Promise<Response> {
       session_token,
     });
   } catch (err) {
-    return json({ error: `auth error: ${err instanceof Error ? err.message : String(err)}` }, 500);
+    console.error('auth error:', err);
+    return json({ error: GENERIC_500 }, 500);
   }
 }
 
@@ -2604,7 +2644,10 @@ async function getUserPlan(request: Request, env: Env): Promise<Response> {
       .select('plan, recording_count, rewind_count, mcp_count, usage_reset_at, plan_expires_at, day_pass_expires_at')
       .eq('user_id', userId)
       .maybeSingle();
-    if (error) return json({ error: `查方案失敗: ${error.message}` }, 500);
+    if (error) {
+      console.error('查方案失敗:', error.message);
+      return json({ error: GENERIC_500 }, 500);
+    }
     if (!user) return json({ error: 'user not found' }, 404);
 
     const u = user as {
@@ -2661,7 +2704,8 @@ async function getUserPlan(request: Request, env: Env): Promise<Response> {
           },
     });
   } catch (err) {
-    return json({ error: `plan error: ${err instanceof Error ? err.message : String(err)}` }, 500);
+    console.error('plan error:', err);
+    return json({ error: GENERIC_500 }, 500);
   }
 }
 
@@ -2678,7 +2722,10 @@ async function bumpUsage(request: Request, env: Env): Promise<Response> {
       .select('plan, recording_count, rewind_count, mcp_count, day_pass_expires_at')
       .eq('user_id', userId)
       .maybeSingle();
-    if (error) return json({ error: `查用量失敗: ${error.message}` }, 500);
+    if (error) {
+      console.error('查用量失敗:', error.message);
+      return json({ error: GENERIC_500 }, 500);
+    }
     if (!user) return json({ error: 'user not found' }, 404);
 
     const u = user as {
@@ -2713,7 +2760,8 @@ async function bumpUsage(request: Request, env: Env): Promise<Response> {
       .eq('user_id', userId);
     return json({ ok: true, used: currentCount + 1, max: limit });
   } catch (err) {
-    return json({ error: `usage error: ${err instanceof Error ? err.message : String(err)}` }, 500);
+    console.error('usage error:', err);
+    return json({ error: GENERIC_500 }, 500);
   }
 }
 
@@ -2976,7 +3024,10 @@ async function ecpayCancel(request: Request, env: Env): Promise<Response> {
       .select('plan, ecpay_trade_no, plan_expires_at')
       .eq('user_id', userId)
       .maybeSingle();
-    if (error) return json({ error: `查用戶失敗: ${error.message}` }, 500);
+    if (error) {
+      console.error('查用戶失敗:', error.message);
+      return json({ error: GENERIC_500 }, 500);
+    }
     const u = user as {
       plan?: string;
       ecpay_trade_no?: string | null;
@@ -3023,7 +3074,8 @@ async function ecpayCancel(request: Request, env: Env): Promise<Response> {
       expires_at: expires,
     });
   } catch (err) {
-    return json({ error: `cancel error: ${err instanceof Error ? err.message : String(err)}` }, 500);
+    console.error('cancel error:', err);
+    return json({ error: GENERIC_500 }, 500);
   }
 }
 
