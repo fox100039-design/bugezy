@@ -21,7 +21,7 @@ import {
   type StateResponse,
 } from './types';
 import { getAuthHeaders } from './auth';
-import { t, getUILang, type UILang } from './i18n';
+import { t, getUILang, DEFAULT_PROMPTS, type UILang, type PromptItem } from './i18n';
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -133,11 +133,26 @@ chrome.storage.local.get(LANG_KEY, (r) => {
   currentUILang = getUILang(speechLang);
   applyTranslations();
   void loadPlan(); // 依語言重繪動態文字（用量/倒數/paid 等）
+  void initPrompts(); // PM-139：依當前 UI 語言初始化 AI 輪盤預設（currentUILang 已設好）
 });
 langSelect.addEventListener('change', () => {
   const speechLang = langSelect.value;
   void chrome.storage.local.set({ [LANG_KEY]: speechLang });
-  currentUILang = getUILang(speechLang);
+  const newUILang = getUILang(speechLang);
+  if (newUILang === currentUILang) return; // UI 語言沒變（如 zh↔yue）→ 不重繪 UI
+  const oldUILang = currentUILang; // 先存舊語言（closure 內判斷「是否還是舊語言預設」）
+  // PM-139：AI 輪盤——只有使用者「沒自訂過」（仍是舊語言的預設值）時，才換成新語言的預設
+  void chrome.storage.local.get(PROMPTS_KEY).then((store) => {
+    const cur = store[PROMPTS_KEY];
+    const isDefault = !cur || JSON.stringify(cur) === JSON.stringify(DEFAULT_PROMPTS[oldUILang]);
+    if (isDefault) {
+      prompts = [...DEFAULT_PROMPTS[newUILang]];
+      void chrome.storage.local.set({ [PROMPTS_KEY]: prompts });
+      promptCurrent = 0;
+      renderPrompt();
+    }
+  });
+  currentUILang = newUILang;
   applyTranslations(); // 先套靜態文字（會覆寫 record-desc 等為預設）
   void loadPlan(); // 再依方案重繪動態文字（覆寫回用量/無限次/倒數）
 });
@@ -777,9 +792,7 @@ function showDayPassActive(remainMs: number) {
 
 // PM-73：取消訂閱（二次確認 → POST /api/user/cancel）
 cancelSubBtn.addEventListener('click', async () => {
-  const confirmed = confirm(
-    '確定要取消訂閱嗎？\n取消後當月剩餘天數仍可使用付費功能，下個月恢復為免費版。',
-  );
+  const confirmed = confirm(t('confirm-cancel-sub', currentUILang));
   if (!confirmed) return;
   const session = await checkAuth();
   if (!session) return;
@@ -790,14 +803,14 @@ cancelSubBtn.addEventListener('click', async () => {
     });
     const data = (await res.json()) as { ok?: boolean; message?: string; error?: string };
     if (data.ok) {
-      alert(data.message ?? '已取消訂閱');
+      alert(data.message ?? t('alert-cancelled', currentUILang));
       void loadPlan(); // 重新整理方案狀態（改顯示「已取消，可用到…」）
     } else {
-      alert(data.error ?? '取消失敗，請稍後再試');
+      alert(data.error ?? t('alert-cancel-fail', currentUILang));
     }
   } catch (err) {
     console.error('[BugEzy popup] cancel', err);
-    alert('取消失敗，請稍後再試');
+    alert(t('alert-cancel-fail', currentUILang));
   }
 });
 
@@ -849,21 +862,8 @@ async function checkVersionNotice() {
 
 // ── PM-114/115：AI 慣用語輪盤（4 則可編輯 + 顏色標記 + ◀▶ 切換 + 複製全文，存 chrome.storage）──
 const PROMPTS_KEY = 'bugezy:ai-prompts';
-// PM-115：資料結構改為 { text, color }。
-interface PromptItem {
-  text: string;
-  color: string;
-}
+// PM-115：資料結構 { text, color }（PromptItem/DEFAULT_PROMPTS 移到 i18n.ts，PM-139 多語）。
 const DEFAULT_COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b'];
-const DEFAULT_PROMPTS: PromptItem[] = [
-  { text: '請讀取我最新的 BugEzy 報告，幫我找出問題並修復', color: '#ef4444' },
-  {
-    text: '請讀取最新 BugEzy 報告，分析：\n1. 真正的 root cause\n2. 修復方案\n3. 修改哪些檔案\n4. 產生 fix plan\n請不要猜測，如果資料不足請告知需要哪些資訊',
-    color: '#3b82f6',
-  },
-  { text: '請讀取我最新的截圖報告，看畫面哪裡有問題，給我 CSS/HTML 修復建議', color: '#22c55e' },
-  { text: '請讀取最新 BugEzy 報告，直接給我可以貼上的修復程式碼', color: '#f59e0b' },
-];
 
 const promptPreview = $('prompt-preview');
 const promptColorDot = $('prompt-color-dot');
@@ -893,7 +893,7 @@ function renderPrompt() {
 
 // PM-115 向下相容：舊版存的是 string[]，自動轉成 PromptItem[]（依序分配預設顏色）。
 function normalizePrompts(raw: unknown): PromptItem[] {
-  if (!Array.isArray(raw) || raw.length === 0) return [...DEFAULT_PROMPTS];
+  if (!Array.isArray(raw) || raw.length === 0) return [...DEFAULT_PROMPTS[currentUILang]];
   return raw.map((entry, i) => {
     if (typeof entry === 'string') {
       return { text: entry, color: DEFAULT_COLORS[i % DEFAULT_COLORS.length] };
@@ -975,8 +975,7 @@ promptCancel.addEventListener('click', () => {
 });
 
 // PM-121：移除釘選/收合——輪盤永遠展開（prompt-body 於 HTML 即 display:block）。
-
-void initPrompts();
+// PM-139：initPrompts 改由語言初始化 callback 呼叫（確保依當前 UI 語言載入預設）。
 
 // PM-122：進階設定 accordion（四個 toggle 折疊；預設收合，展開狀態存 storage）
 const SETTINGS_OPEN_KEY = 'bugezy:settings-open';

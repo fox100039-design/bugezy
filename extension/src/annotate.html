@@ -98,25 +98,25 @@
 </head>
 <body>
   <div class="toolbar">
-    <button id="penTool" class="active" title="畫筆">✏️ 畫筆</button>
-    <button id="arrowTool" title="箭頭">➡️ 箭頭</button>
-    <button id="rectTool" title="框框">⬜ 框框</button>
-    <button id="textTool" title="文字">📝 文字</button>
+    <button id="penTool" class="active" title="畫筆" data-i18n="annotate-pen">✏️ 畫筆</button>
+    <button id="arrowTool" title="箭頭" data-i18n="annotate-arrow">➡️ 箭頭</button>
+    <button id="rectTool" title="框框" data-i18n="annotate-rect">⬜ 框框</button>
+    <button id="textTool" title="文字" data-i18n="annotate-text">📝 文字</button>
     <div class="separator"></div>
-    <label>顏色</label>
+    <label data-i18n="annotate-color">顏色</label>
     <input type="color" id="colorPicker" value="#ff0000">
-    <label>粗細</label>
+    <label data-i18n="annotate-thickness">粗細</label>
     <select id="lineWidth">
-      <option value="2">細</option>
-      <option value="4" selected>中</option>
-      <option value="8">粗</option>
+      <option value="2" data-i18n="annotate-thin">細</option>
+      <option value="4" selected data-i18n="annotate-mid">中</option>
+      <option value="8" data-i18n="annotate-thick">粗</option>
     </select>
     <div class="separator"></div>
-    <button id="undoBtn">↩️ 復原</button>
-    <button id="clearBtn">🗑️ 清除全部</button>
+    <button id="undoBtn" data-i18n="annotate-undo">↩️ 復原</button>
+    <button id="clearBtn" data-i18n="annotate-clear">🗑️ 清除全部</button>
     <div style="flex:1"></div>
-    <button id="cancelBtn" class="cancel">✗ 取消</button>
-    <button id="saveBtn" class="save">✅ 完成儲存</button>
+    <button id="cancelBtn" class="cancel" data-i18n="annotate-cancel">✗ 取消</button>
+    <button id="saveBtn" class="save" data-i18n="annotate-save">✅ 完成儲存</button>
   </div>
   <div class="canvas-wrapper">
     <div class="canvas-container">
@@ -125,16 +125,16 @@
   </div>
   <!-- 即時字幕（浮在畫布底部，不擋畫圖）（PM-21） -->
   <div id="liveCaptions" class="hidden">
-    <span id="captionText">🔴 聆聽中，邊畫邊說描述問題...</span>
+    <span id="captionText" data-i18n="annotate-listening">🔴 聆聽中，邊畫邊說描述問題...</span>
   </div>
   <!-- 文字說明區（PM-20） -->
   <div class="description-area">
     <div class="desc-header">
-      <label for="descInput">💬 問題描述（選填）</label>
+      <label for="descInput" data-i18n="annotate-desc-label">💬 問題描述（選填）</label>
     </div>
     <div class="desc-row">
       <button id="voice-toggle" class="voice-toggle-btn" title="切換到鍵盤輸入">⌨️</button>
-      <textarea id="descInput" placeholder="描述你看到的問題，或按右邊麥克風語音輸入..." rows="3"></textarea>
+      <textarea id="descInput" placeholder="描述你看到的問題，或按右邊麥克風語音輸入..." data-i18n-ph="annotate-desc-ph" rows="3"></textarea>
       <button id="voiceInputBtn" class="voice-btn" title="語音輸入">🎤</button>
     </div>
     <div id="voiceStatus" class="voice-status"></div>

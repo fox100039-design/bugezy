@@ -94,6 +94,95 @@ const dict: Record<string, Record<UILang, string>> = {
     zh: '🆕 目前 v{cur} → 新版 v{new} 可用',
     en: '🆕 v{cur} → v{new} available',
   },
+
+  // ── PM-139：截圖工具列（content.ts）──
+  'toolbar-fullpage': { zh: '📷 整頁', en: '📷 Full Page' },
+  'toolbar-region': { zh: '⬜ 區域（兩點）', en: '⬜ Region (2 clicks)' },
+  'toolbar-freeform': { zh: '✂️ 自由形狀', en: '✂️ Freeform' },
+  'toolbar-cancel': { zh: '✗ 取消', en: '✗ Cancel' },
+  'toolbar-select-mode': { zh: '選擇截圖模式', en: 'Select screenshot mode' },
+  'toolbar-region-hint': { zh: '可自由捲動頁面，點第二下標記終點', en: 'Scroll freely, click again to set the end point' },
+  'transcribing': { zh: '⏳ 語音轉錄中…', en: '⏳ Transcribing…' },
+
+  // ── PM-139：即時監控（inject.ts，經 it()）──
+  'monitor-active': { zh: '🟢 BugEzy 監控中', en: '🟢 BugEzy Monitoring' },
+  'monitor-errors': { zh: '⚠️ 發現 {n} 個錯誤（點我查看）', en: '⚠️ {n} error(s) found (click to view)' },
+  'monitor-errors-title': { zh: 'BugEzy 偵測到 {n} 個錯誤，點我查看', en: 'BugEzy found {n} error(s), click to view' },
+  'monitor-panel-title': { zh: '🐛 即時監控錯誤', en: '🐛 Live Monitor Errors' },
+  'monitor-empty': { zh: '✓ 目前無錯誤', en: '✓ No errors' },
+  'monitor-upload': { zh: '📤 上傳報告讓 AI 分析', en: '📤 Upload report for AI analysis' },
+  'monitor-uploading': { zh: '⏳ 上傳中…', en: '⏳ Uploading…' },
+  'monitor-uploaded': { zh: '✅ 已上傳！點此查看報告', en: '✅ Uploaded! Click to view report' },
+  'monitor-upload-fail': { zh: '❌ 上傳失敗，點此重試', en: '❌ Upload failed, click to retry' },
+  'monitor-desc': { zh: '即時監控偵測到 {n} 個錯誤', en: 'Live monitor found {n} error(s)' },
+
+  // ── PM-139：錄製字幕 / 麥克風授權（inject.ts，經 it()）──
+  'caption-recording': { zh: '🎙 錄製中，可以用中文描述問題…', en: '🎙 Recording — describe the issue by voice…' },
+  'caption-voice-log': { zh: '📝 語音記錄', en: '📝 Voice Log' },
+  'keyboard-bar': { zh: '🔇 鍵盤模式 — 錄製中（語音已關閉）', en: '🔇 Keyboard mode — recording (voice off)' },
+  'whisper-bar': { zh: '🎙️ 錄音中…（停止後自動轉錄）', en: '🎙️ Recording…（auto-transcribe on stop）' },
+  'mic-perm-title': { zh: 'BugEzy 需要麥克風權限', en: 'BugEzy needs microphone access' },
+  'mic-perm-desc': { zh: '允許後可用語音描述 Bug · 此網站只需授權一次', en: 'Allow to describe bugs by voice · one-time per site' },
+  'mic-perm-allow': { zh: '允許麥克風', en: 'Allow microphone' },
+  'mic-perm-skip': { zh: '跳過（不錄語音）', en: 'Skip (no voice)' },
+
+  // ── PM-139：截圖標注頁（annotate）──
+  'annotate-pen': { zh: '✏️ 畫筆', en: '✏️ Pen' },
+  'annotate-arrow': { zh: '➡️ 箭頭', en: '➡️ Arrow' },
+  'annotate-rect': { zh: '⬜ 框框', en: '⬜ Box' },
+  'annotate-text': { zh: '📝 文字', en: '📝 Text' },
+  'annotate-color': { zh: '顏色', en: 'Color' },
+  'annotate-thickness': { zh: '粗細', en: 'Width' },
+  'annotate-thin': { zh: '細', en: 'Thin' },
+  'annotate-mid': { zh: '中', en: 'Medium' },
+  'annotate-thick': { zh: '粗', en: 'Thick' },
+  'annotate-undo': { zh: '↩️ 復原', en: '↩️ Undo' },
+  'annotate-clear': { zh: '🗑️ 清除全部', en: '🗑️ Clear All' },
+  'annotate-cancel': { zh: '✗ 取消', en: '✗ Cancel' },
+  'annotate-save': { zh: '✅ 完成儲存', en: '✅ Save' },
+  'annotate-desc-label': { zh: '💬 問題描述（選填）', en: '💬 Description (optional)' },
+  'annotate-desc-ph': { zh: '描述你看到的問題，或按右邊麥克風語音輸入...', en: 'Describe the issue, or tap the mic on the right to dictate...' },
+  'annotate-listening': { zh: '🔴 聆聽中，邊畫邊說描述問題...', en: '🔴 Listening — describe while you draw...' },
+  'annotate-uploading': { zh: '⏳ 上傳中...', en: '⏳ Uploading...' },
+
+  // ── PM-139：alert / confirm（popup.ts）──
+  'confirm-cancel-sub': {
+    zh: '確定要取消月費訂閱嗎？\n取消後到期日前仍可使用付費功能，到期後自動降回免費版。',
+    en: 'Cancel your monthly subscription?\nYou can still use premium features until the end of your billing period.',
+  },
+  'alert-cancelled': {
+    zh: '已取消訂閱。到期日前仍可使用付費功能。',
+    en: 'Subscription cancelled. Premium features remain active until end of billing period.',
+  },
+  'alert-cancel-fail': { zh: '取消失敗，請稍後再試', en: 'Cancellation failed, please try again later' },
+};
+
+/** PM-115：AI 慣用語輪盤的一則（文字 + 顏色標記）。 */
+export interface PromptItem {
+  text: string;
+  color: string;
+}
+
+/** PM-139：AI 輪盤多語預設慣用語（語言切換時，若使用者未自訂則重置為對應語言預設）。 */
+export const DEFAULT_PROMPTS: Record<UILang, PromptItem[]> = {
+  zh: [
+    { text: '請讀取我最新的 BugEzy 報告，幫我找出問題並修復', color: '#ef4444' },
+    {
+      text: '請讀取最新 BugEzy 報告，分析：\n1. 真正的 root cause\n2. 修復方案\n3. 修改哪些檔案\n4. 產生 fix plan\n請不要猜測，如果資料不足請告知需要哪些資訊',
+      color: '#3b82f6',
+    },
+    { text: '請讀取我最新的截圖報告，看畫面哪裡有問題，給我 CSS/HTML 修復建議', color: '#22c55e' },
+    { text: '請讀取最新 BugEzy 報告，直接給我可以貼上的修復程式碼', color: '#f59e0b' },
+  ],
+  en: [
+    { text: 'Read my latest BugEzy report and help me find and fix the bug', color: '#ef4444' },
+    {
+      text: "Read my latest BugEzy report and analyze:\n1. Root cause\n2. Fix approach\n3. Which files to change\n4. Generate a fix plan\nDon't guess — if you need more info, tell me what to provide",
+      color: '#3b82f6',
+    },
+    { text: 'Read my latest screenshot report, identify UI issues, and give me CSS/HTML fixes', color: '#22c55e' },
+    { text: 'Read my latest BugEzy report and give me copy-paste ready fix code', color: '#f59e0b' },
+  ],
 };
 
 /** 取翻譯字串。找不到 key 回 key 本身；找不到該語言回中文；支援 {name} 佔位替換。 */

@@ -22,8 +22,27 @@ import {
   type RecordingSummary,
   type StateResponse,
 } from './types';
+import { t, getUILang, type UILang } from './i18n';
 
 blog('content loaded（ISOLATED world）', location.href);
+
+// PM-139：把語言設定注入 DOM（data-bugezy-lang），讓 MAIN world 的 inject.ts 讀得到（它沒有 chrome.storage）。
+// 同時快取一份 UI 語言供 content 自己的截圖工具列翻譯用。
+let contentUILang: UILang = 'zh';
+function ct(key: string, params?: Record<string, string | number>): string {
+  return t(key, contentUILang, params);
+}
+function applyBugezyLang(speechLang: string) {
+  document.documentElement.setAttribute('data-bugezy-lang', speechLang);
+  contentUILang = getUILang(speechLang);
+}
+void chrome.storage.local.get(LANG_KEY, (r) => applyBugezyLang((r[LANG_KEY] as string) || 'zh'));
+// 使用者在 popup 改語言 → 即時更新 DOM attr（開著的頁面也跟著切）
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes[LANG_KEY]) {
+    applyBugezyLang((changes[LANG_KEY].newValue as string) || 'zh');
+  }
+});
 
 let injectReady = false;
 
@@ -206,7 +225,7 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
   } else if (msg.type === 'WHISPER_TRANSCRIBING') {
     // PM-91：Whisper 模式停止 → 字幕切成「轉錄中」（caption DOM 由 inject 建於頁面，content 共用 DOM 直接改）
     const el = document.getElementById('bugezy-caption-text');
-    if (el) el.textContent = '⏳ 語音轉錄中…';
+    if (el) el.textContent = ct('transcribing');
     sendResponse({ ok: true });
   } else if (msg.type === 'MIC_VOLUME') {
     // PM-97：轉發即時音量給 inject（MAIN world）——CustomEvent 派在共用的 window EventTarget 上跨世界
@@ -373,10 +392,10 @@ function createToolbar(onMode: (mode: string) => void) {
     if (store[TOOLBAR_EFFECT_KEY] !== false) applyOrangePulse(bar);
   });
   const modes: Array<[string, string]> = [
-    ['full', '📷 整頁'],
-    ['area', '⬜ 區域（兩點）'],
-    ['free', '✂️ 自由形狀'],
-    ['cancel', '✗ 取消'],
+    ['full', ct('toolbar-fullpage')],
+    ['area', ct('toolbar-region')],
+    ['free', ct('toolbar-freeform')],
+    ['cancel', ct('toolbar-cancel')],
   ];
   for (const [mode, label] of modes) {
     const b = document.createElement('button');
@@ -388,7 +407,7 @@ function createToolbar(onMode: (mode: string) => void) {
   }
   const hint = document.createElement('span');
   hint.id = 'bugezy-ss-hint';
-  hint.textContent = '選擇截圖模式';
+  hint.textContent = ct('toolbar-select-mode');
   hint.style.cssText = 'margin-left:8px;color:#9aa3b2;';
   bar.appendChild(hint);
   document.body.appendChild(bar);
@@ -465,7 +484,7 @@ function startAreaCapture() {
   overlay.addEventListener('click', (e) => {
     if (!start) {
       start = toDoc(e);
-      setHint('可自由捲動頁面，點第二下標記終點');
+      setHint(ct('toolbar-region-hint'));
       const dot = document.createElement('div');
       dot.id = SS_DOT_ID;
       dot.style.cssText = `position:absolute;left:${start.x - 5}px;top:${start.y - 5}px;width:10px;height:10px;border-radius:50%;background:#ef4444;z-index:${Z_TOP};pointer-events:none;`;

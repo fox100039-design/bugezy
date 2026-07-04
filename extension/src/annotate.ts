@@ -8,6 +8,7 @@ import {
   ALLOW_SCREENSHOT_KEY,
   API_BASE,
   KEYBOARD_MODE_KEY,
+  LANG_KEY,
   SESSION_KEY,
   TOOLBAR_EFFECT_KEY,
   blog,
@@ -15,6 +16,24 @@ import {
   type Session,
 } from './types';
 import { getAuthHeaders } from './auth';
+import { t, getUILang, type UILang } from './i18n';
+
+// PM-139：截圖標注頁 i18n（annotate 是擴充頁，有 chrome.storage，直接讀 LANG_KEY）。
+let annotateUILang: UILang = 'zh';
+function applyAnnotateTranslations() {
+  document.querySelectorAll<HTMLElement>('[data-i18n]').forEach((el) => {
+    const key = el.getAttribute('data-i18n');
+    if (key) el.textContent = t(key, annotateUILang);
+  });
+  document.querySelectorAll<HTMLElement>('[data-i18n-ph]').forEach((el) => {
+    const key = el.getAttribute('data-i18n-ph');
+    if (key) (el as HTMLTextAreaElement | HTMLInputElement).placeholder = t(key, annotateUILang);
+  });
+}
+void chrome.storage.local.get(LANG_KEY, (r) => {
+  annotateUILang = getUILang((r[LANG_KEY] as string) || 'zh');
+  applyAnnotateTranslations();
+});
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);

@@ -18,6 +18,16 @@ import {
   type RecordingPayload,
   type VoiceSegment,
 } from './types';
+import { t, getUILang } from './i18n';
+
+// PM-139：inject 在 MAIN world 無 chrome.storage，語言由 content.ts 注入 DOM（data-bugezy-lang）。
+// it() = 讀 DOM 語言後翻譯（每次讀，支援使用者中途切語言）。
+function getBugezyUILang() {
+  return getUILang(document.documentElement.getAttribute('data-bugezy-lang') || 'zh');
+}
+function it(key: string, params?: Record<string, string | number>): string {
+  return t(key, getBugezyUILang(), params);
+}
 
 // ── 最小 SpeechRecognition 型別（TS DOM lib 未含此 API 宣告）──
 interface SRAlternative {
@@ -151,8 +161,8 @@ function main() {
     badge.id = 'bugezy-monitor-badge';
     badge.style.cssText =
       'position:fixed;bottom:20px;right:20px;z-index:2147483647;pointer-events:auto;padding:8px 16px;border-radius:20px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:13px;font-weight:600;cursor:default;box-shadow:0 2px 12px rgba(0,0,0,0.3);transition:all 0.3s;user-select:none;background:rgba(22,163,74,0.9);color:#fff;';
-    badge.textContent = '🟢 BugEzy 監控中';
-    badge.title = 'BugEzy 即時監控中 — 目前無錯誤';
+    badge.textContent = it('monitor-active');
+    badge.title = it('monitor-active');
     document.body.appendChild(badge);
     monitorBadge = badge;
     updateMonitorBadge(); // 立即反映目前計數（含綁定/解綁點擊）
@@ -166,16 +176,16 @@ function main() {
       monitorBadge.style.color = '#fff';
       monitorBadge.style.cursor = 'default';
       monitorBadge.style.animation = 'none';
-      monitorBadge.textContent = '🟢 BugEzy 監控中';
-      monitorBadge.title = 'BugEzy 即時監控中 — 目前無錯誤';
+      monitorBadge.textContent = it('monitor-active');
+      monitorBadge.title = it('monitor-active');
       monitorBadge.onclick = null;
     } else {
       monitorBadge.style.background = 'rgba(245,158,11,0.95)';
       monitorBadge.style.color = '#000';
       monitorBadge.style.cursor = 'pointer';
       monitorBadge.style.animation = 'bugezy-badge-pulse 1.5s ease-in-out infinite';
-      monitorBadge.textContent = `⚠️ 發現 ${total} 個錯誤（點我查看）`;
-      monitorBadge.title = `BugEzy 偵測到 ${total} 個錯誤，點我查看`;
+      monitorBadge.textContent = it('monitor-errors', { n: total });
+      monitorBadge.title = it('monitor-errors-title', { n: total });
       // PM-124：已上傳過報告 → 點 badge 直接開報告頁；否則展開 error 面板
       monitorBadge.onclick = () => {
         if (latestReportUrl) window.open(latestReportUrl, '_blank');
@@ -202,12 +212,12 @@ function main() {
       latestReportUrl = d.reportUrl;
       updateMonitorBadge(); // badge 點擊改為開報告頁
       if (btn) {
-        btn.textContent = '✅ 已上傳！點此查看報告';
+        btn.textContent = it('monitor-uploaded');
         btn.style.background = '#238636';
         btn.disabled = false; // 再點由既有 handler 依 latestReportUrl 開報告頁
       }
     } else if (btn) {
-      btn.textContent = '❌ 上傳失敗，點此重試';
+      btn.textContent = it('monitor-upload-fail');
       btn.style.background = '#f85149';
       btn.disabled = false; // 再點由既有 handler（latestReportUrl 仍 null）重新上傳
     }
@@ -229,7 +239,7 @@ function main() {
     // 避免在啟用 Trusted Types 的 CSP 網站（如 GitHub）assign innerHTML 直接拋錯。
     const title = document.createElement('div');
     title.style.cssText = 'font-weight:600;margin-bottom:8px;color:#a78bfa;';
-    title.textContent = '🐛 即時監控錯誤';
+    title.textContent = it('monitor-panel-title');
     panel.appendChild(title);
 
     /** 一列錯誤：彩色標記 span + 內容 span（內容走 textContent 自動轉義） */
@@ -259,7 +269,7 @@ function main() {
     if (!cLogs.length && !nErrs.length) {
       const empty = document.createElement('div');
       empty.style.cssText = 'color:#888;text-align:center;padding:12px;';
-      empty.textContent = '✓ 目前無錯誤';
+      empty.textContent = it('monitor-empty');
       panel.appendChild(empty);
     }
 
@@ -267,7 +277,7 @@ function main() {
     if (cLogs.length || nErrs.length) {
       const uploadBtn = document.createElement('button');
       uploadBtn.id = 'bugezy-monitor-upload';
-      uploadBtn.textContent = latestReportUrl ? '✅ 已上傳！點此查看報告' : '📤 上傳報告讓 AI 分析';
+      uploadBtn.textContent = latestReportUrl ? it('monitor-uploaded') : it('monitor-upload');
       uploadBtn.style.cssText =
         'pointer-events:auto;display:block;width:100%;margin-top:8px;background:' +
         (latestReportUrl ? '#238636' : '#7c3aed') +
@@ -278,7 +288,7 @@ function main() {
           return;
         }
         uploadBtn.disabled = true;
-        uploadBtn.textContent = '⏳ 上傳中…';
+        uploadBtn.textContent = it('monitor-uploading');
         const total = bgConsoleLogs.length + bgNetworkErrors.length;
         // description 非 RecordingPayload 型別欄位（server 端選讀）→ 交集型別帶入
         const payload: RecordingPayload & { description: string } = {
@@ -287,7 +297,7 @@ function main() {
           networkErrors: bgNetworkErrors.map((e) => e.data),
           voiceTranscript: [],
           pageInfo: buildPageInfo(),
-          description: `即時監控偵測到 ${total} 個錯誤`,
+          description: it('monitor-desc', { n: total }),
           markers: [],
         };
         // inject 在 MAIN world 無 chrome.runtime → 走 window.postMessage → content → background 通訊鏈
@@ -310,7 +320,7 @@ function main() {
     const textSpan = document.createElement('span');
     textSpan.id = 'bugezy-caption-text';
     textSpan.style.cssText = 'flex:1;pointer-events:none;text-align:center;';
-    textSpan.textContent = '🎙 錄製中，可以用中文描述問題…'; // PM-70：啟動後 onstart 會切到 🟢 聽取中
+    textSpan.textContent = it('caption-recording'); // PM-70：啟動後 onstart 會切到 🟢 聽取中
 
     // 永久重啟按鈕（PM-30：靜默中斷時使用者隨時可手動重啟）
     const restartBtn = document.createElement('button');
@@ -345,7 +355,7 @@ function main() {
     // PM-69：用 DOM 節點建構，避免 innerHTML 在 Trusted-Types CSP 網站（如 GitHub）拋錯
     const headerLabel = document.createElement('span');
     headerLabel.style.cssText = 'font-size:12px;color:#a78bfa;';
-    headerLabel.textContent = '📝 語音記錄';
+    headerLabel.textContent = it('caption-voice-log');
     header.appendChild(headerLabel);
 
     const content = document.createElement('div');
@@ -389,7 +399,7 @@ function main() {
     bar.id = 'bugezy-live-caption';
     bar.style.cssText =
       'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);z-index:2147483647;pointer-events:none;background:rgba(0,0,0,0.85);color:#fff;padding:12px 28px;border-radius:12px;font-size:18px;font-family:system-ui,sans-serif;';
-    bar.textContent = '🔇 鍵盤模式 — 錄製中（語音已關閉）';
+    bar.textContent = it('keyboard-bar');
     document.body.appendChild(bar);
     captionBar = bar;
   }
@@ -420,7 +430,7 @@ function main() {
 
     const text = document.createElement('span');
     text.id = 'bugezy-caption-text';
-    text.textContent = '🎙️ 錄音中…（停止後自動轉錄）';
+    text.textContent = it('whisper-bar');
     bar.appendChild(text);
     document.body.appendChild(bar);
     captionBar = bar;
@@ -886,7 +896,7 @@ function main() {
     icon.style.cssText = 'font-size: 48px; line-height: 1;';
 
     const title = document.createElement('h3');
-    title.textContent = 'BugEzy 需要麥克風權限';
+    title.textContent = it('mic-perm-title');
     title.style.cssText = `
       color: #fff;
       font-size: 18px;
@@ -895,7 +905,7 @@ function main() {
     `;
 
     const desc = document.createElement('p');
-    desc.textContent = '允許後可用語音描述 Bug · 此網站只需授權一次';
+    desc.textContent = it('mic-perm-desc');
     desc.style.cssText = `
       color: #aaa;
       font-size: 14px;
@@ -904,7 +914,7 @@ function main() {
     `;
 
     const allowBtn = document.createElement('button');
-    allowBtn.textContent = '允許麥克風';
+    allowBtn.textContent = it('mic-perm-allow');
     allowBtn.style.cssText = `
       display: block;
       width: 100%;
@@ -919,7 +929,7 @@ function main() {
     `;
 
     const skipBtn = document.createElement('button');
-    skipBtn.textContent = '跳過（不錄語音）';
+    skipBtn.textContent = it('mic-perm-skip');
     skipBtn.style.cssText = `
       display: block;
       width: 100%;
