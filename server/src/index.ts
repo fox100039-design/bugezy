@@ -699,17 +699,22 @@ Full guide: https://bugezy.dev/install`,
 
 // ── PM-64：隱私政策頁（Chrome Web Store 上架 + 綠界審核要求可訪問的隱私政策 URL）──
 // 中英雙語，深色主題與首頁/報告頁統一（#0f0f1a / #7c3aed / #a78bfa），一頁式無 JS、RWD。
-const PRIVACY_PAGE_HTML = `<!DOCTYPE html>
-<html lang="zh-Hant">
+// PM-152：/privacy 改為函式（依 lang 只顯示對應語言區塊；原本中英雙語堆疊 → 改語言切換）。
+function privacyPage(lang: PageLang): string {
+  const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
+  return `<!DOCTYPE html>
+<html lang="${lang === 'zh' ? 'zh-Hant' : 'en'}">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>隱私政策 · BugEzy</title>
-<meta name="description" content="BugEzy 隱私政策：我們收集什麼資料、如何使用與保護。中英雙語說明。">
+<title>${t('隱私政策 · BugEzy', 'Privacy Policy · BugEzy')}</title>
+<meta name="description" content="${t('BugEzy 隱私政策：我們收集什麼資料、如何使用與保護。', 'BugEzy privacy policy — what data we collect, how we use it, and how we protect your information.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
 <link rel="canonical" href="https://bugezy.dev/privacy">
 <style>
   * { box-sizing: border-box; }
+  .lang-switch { position:fixed; top:14px; right:16px; z-index:10; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:5px 12px; font-size:13px; color:#c4b5fd; text-decoration:none; }
+  .lang-switch:hover { background:#2a2a3e; }
   body {
     margin: 0; padding: 0; background: #0f0f1a; color: #e8e8f0;
     font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
@@ -737,12 +742,13 @@ const PRIVACY_PAGE_HTML = `<!DOCTYPE html>
 </style>
 </head>
 <body>
+<a class="lang-switch" href="?lang=${lang === 'zh' ? 'en' : 'zh'}">${t('EN', '中文')}</a>
 <div class="wrap">
   <header>
     <a class="brand" href="/">🐛 BugEzy</a>
   </header>
-
-  <!-- 中文版 -->
+${t(
+    `
   <h1>隱私政策</h1>
   <div class="updated">最後更新：2026 年 6 月 25 日</div>
 
@@ -792,10 +798,8 @@ const PRIVACY_PAGE_HTML = `<!DOCTYPE html>
     <li>隱私政策變更時，我們會在首頁公告</li>
   </ul>
 
-  <p>聯絡方式：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></p>
-
-  <!-- English version -->
-  <div class="lang-divider"></div>
+  <p>聯絡方式：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></p>`,
+    `
   <h1>Privacy Policy</h1>
   <div class="updated">Last updated: June 25, 2026</div>
 
@@ -845,35 +849,42 @@ const PRIVACY_PAGE_HTML = `<!DOCTYPE html>
     <li>When this policy changes, we will announce it on the homepage</li>
   </ul>
 
-  <p>Contact: <a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></p>
+  <p>Contact: <a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></p>`,
+  )}
 
   <footer>
-    <a href="/">首頁</a>
-    <a href="/install">安裝指南</a>
-    <a href="/features">功能說明</a>
-    <a href="/guide">使用指南</a>
+    <a href="/">${t('首頁', 'Home')}</a>
+    <a href="/install">${t('安裝指南', 'Install')}</a>
+    <a href="/features">${t('功能說明', 'Features')}</a>
+    <a href="/guide">${t('使用指南', 'Guide')}</a>
     <a href="/faq">FAQ</a>
-    <a href="/changelog">更新日誌</a>
+    <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
     <a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
   </footer>
 </div>
 </body>
 </html>`;
+}
 
 // ── PM-66：操作說明頁（新手三步上手 + 六種模式 + MCP 設定 + 小技巧）──
 // 深色主題與首頁/隱私頁統一（#0f0f1a / #7c3aed / #a78bfa），一頁式無 JS、RWD、繁中。
-const GUIDE_PAGE_HTML = `<!DOCTYPE html>
-<html lang="zh-Hant">
+// PM-152：/guide 改為函式（依 lang 中英切換）。
+function guidePage(lang: PageLang): string {
+  const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
+  return `<!DOCTYPE html>
+<html lang="${lang === 'zh' ? 'zh-Hant' : 'en'}">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>使用指南 · BugEzy</title>
-<meta name="description" content="BugEzy 使用指南：安裝登入、六種錄製模式、編輯上傳、讓 AI 透過 MCP 讀報告修 Bug。">
+<title>${t('使用指南 · BugEzy', 'User Guide · BugEzy')}</title>
+<meta name="description" content="${t('BugEzy 使用指南：安裝登入、六種錄製模式、編輯上傳、讓 AI 透過 MCP 讀報告修 Bug。', 'Learn how to use BugEzy to record bugs, annotate screenshots, and connect with AI via MCP.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
 <link rel="canonical" href="https://bugezy.dev/guide">
 <style>
   * { box-sizing: border-box; }
+  .lang-switch { position:fixed; top:14px; right:16px; z-index:10; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:5px 12px; font-size:13px; color:#c4b5fd; text-decoration:none; }
+  .lang-switch:hover { background:#2a2a3e; }
   body {
     margin: 0; padding: 0; background: #0f0f1a; color: #e8e8f0;
     font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
@@ -925,146 +936,153 @@ const GUIDE_PAGE_HTML = `<!DOCTYPE html>
 </style>
 </head>
 <body>
+<a class="lang-switch" href="?lang=${lang === 'zh' ? 'en' : 'zh'}">${t('EN', '中文')}</a>
 <div class="wrap">
   <header><a class="brand" href="/">🐛 BugEzy</a></header>
 
-  <h1>🐛 BugEzy 使用指南</h1>
-  <p class="lead">讓 AI 幫你修 Bug，只需三步。</p>
-  <div class="mcp-box" style="border-color:#2a2a3e;">詳細安裝流程 → <a href="/install">安裝指南</a>　·　完整功能說明 → <a href="/features">功能說明</a></div>
+  <h1>${t('🐛 BugEzy 使用指南', '🐛 BugEzy User Guide')}</h1>
+  <p class="lead">${t('讓 AI 幫你修 Bug，只需三步。', 'Let AI fix your bugs in just three steps.')}</p>
+  <div class="mcp-box" style="border-color:#2a2a3e;">${t('詳細安裝流程 → <a href="/install">安裝指南</a>　·　完整功能說明 → <a href="/features">功能說明</a>', 'Full install steps → <a href="/install">Install Guide</a>　·　All features → <a href="/features">Features</a>')}</div>
 
   <div class="step">
-    <h2>🚀 第一步：安裝與登入</h2>
+    <h2>${t('🚀 第一步：安裝與登入', '🚀 Step 1: Install & Sign in')}</h2>
     <ol>
-      <li>從 Chrome Web Store 安裝 BugEzy 擴充功能</li>
-      <li>點擊右上角 BugEzy 圖示 🐛</li>
-      <li>按「用 Google 登入」→ 完成</li>
+      <li>${t('從 Chrome Web Store 安裝 BugEzy 擴充功能', 'Install the BugEzy extension from the Chrome Web Store')}</li>
+      <li>${t('點擊右上角 BugEzy 圖示 🐛', 'Click the BugEzy icon 🐛 at the top right')}</li>
+      <li>${t('按「用 Google 登入」→ 完成', 'Click "Sign in with Google" → done')}</li>
     </ol>
   </div>
 
   <div class="step">
-    <h2>🎯 第二步：錄下 Bug（六種模式任選）</h2>
+    <h2>${t('🎯 第二步：錄下 Bug（六種模式任選）', '🎯 Step 2: Capture the bug (choose from six modes)')}</h2>
 
     <div class="mode">
-      <div class="mname">🎬 錄製</div>
-      <div class="mrow"><b>適合：</b>完整重現 Bug 過程</div>
-      <div class="mrow"><b>用法：</b>按「錄製」→ 操作網頁重現 Bug → 語音描述問題 → 按「停止」</div>
-      <div class="mrow"><b>錄到：</b>DOM 變化 + Console + Network + 語音</div>
+      <div class="mname">${t('🎬 錄製', '🎬 Record')}</div>
+      <div class="mrow"><b>${t('適合：', 'Best for: ')}</b>${t('完整重現 Bug 過程', 'Fully reproducing the bug')}</div>
+      <div class="mrow"><b>${t('用法：', 'How: ')}</b>${t('按「錄製」→ 操作網頁重現 Bug → 語音描述問題 → 按「停止」', 'Click "Record" → reproduce on the page → describe by voice → click "Stop"')}</div>
+      <div class="mrow"><b>${t('錄到：', 'Captures: ')}</b>${t('DOM 變化 + Console + Network + 語音', 'DOM changes + Console + Network + voice')}</div>
     </div>
 
     <div class="mode">
-      <div class="mname">⏪ 30 秒回溯</div>
-      <div class="mrow"><b>適合：</b>Bug 已經發生，來不及錄</div>
-      <div class="mrow"><b>用法：</b>按「回溯 30s」→ 自動抓回最近 30 秒的操作</div>
-      <div class="mrow">不用提前按錄製，BugEzy 在背景持續記錄</div>
+      <div class="mname">${t('⏪ 30 秒回溯', '⏪ Rewind 30s')}</div>
+      <div class="mrow"><b>${t('適合：', 'Best for: ')}</b>${t('Bug 已經發生，來不及錄', 'The bug already happened, too late to record')}</div>
+      <div class="mrow"><b>${t('用法：', 'How: ')}</b>${t('按「回溯 30s」→ 自動抓回最近 30 秒的操作', 'Click "Rewind 30s" → auto-grabs the last 30 seconds')}</div>
+      <div class="mrow">${t('不用提前按錄製，BugEzy 在背景持續記錄', 'No need to start early — BugEzy records in the background')}</div>
     </div>
 
     <div class="mode">
-      <div class="mname">📸 截圖標注</div>
-      <div class="mrow"><b>適合：</b>快速指出畫面問題</div>
-      <div class="mrow"><b>用法：</b>按「截圖標注」→ 畫筆/箭頭/框框標出問題 → 加文字說明</div>
-      <div class="mrow"><b>三種模式：</b>整頁截圖 / 可見範圍 / 自選區域</div>
+      <div class="mname">${t('📸 截圖標注', '📸 Screenshot Annotate')}</div>
+      <div class="mrow"><b>${t('適合：', 'Best for: ')}</b>${t('快速指出畫面問題', 'Quickly pointing out an on-screen issue')}</div>
+      <div class="mrow"><b>${t('用法：', 'How: ')}</b>${t('按「截圖標注」→ 畫筆/箭頭/框框標出問題 → 加文字說明', 'Click "Screenshot" → pen/arrow/box to mark → add a note')}</div>
+      <div class="mrow"><b>${t('三種模式：', 'Three modes: ')}</b>${t('整頁截圖 / 可見範圍 / 自選區域', 'Full page / visible area / custom region')}</div>
     </div>
 
     <div class="mode">
-      <div class="mname">🔇 鍵盤模式</div>
-      <div class="mrow"><b>適合：</b>吵雜環境（咖啡廳、辦公室）</div>
-      <div class="mrow"><b>用法：</b>開啟鍵盤模式 → 關閉語音辨識 → 用文字描述 Bug</div>
+      <div class="mname">${t('🔇 鍵盤模式', '🔇 Keyboard Mode')}</div>
+      <div class="mrow"><b>${t('適合：', 'Best for: ')}</b>${t('吵雜環境（咖啡廳、辦公室）', 'Noisy environments (cafés, offices)')}</div>
+      <div class="mrow"><b>${t('用法：', 'How: ')}</b>${t('開啟鍵盤模式 → 關閉語音辨識 → 用文字描述 Bug', 'Enable keyboard mode → voice off → type the description')}</div>
     </div>
 
     <div class="mode">
-      <div class="mname">🔍 即時監控</div>
-      <div class="mrow"><b>適合：</b>掛著等 Bug 自己出現</div>
-      <div class="mrow"><b>用法：</b>開啟即時監控 → 頁面右下角出現 🐛 badge → 有 error 自動變紅 + 顯示數字</div>
-      <div class="mrow">點 badge 展開 error 清單</div>
+      <div class="mname">${t('🔍 即時監控', '🔍 Live Monitor')}</div>
+      <div class="mrow"><b>${t('適合：', 'Best for: ')}</b>${t('掛著等 Bug 自己出現', 'Leaving it on to catch bugs as they appear')}</div>
+      <div class="mrow"><b>${t('用法：', 'How: ')}</b>${t('開啟即時監控 → 頁面右下角出現 🐛 badge → 有 error 自動變紅 + 顯示數字', 'Enable live monitor → a 🐛 badge appears bottom-right → turns red with a count on errors')}</div>
+      <div class="mrow">${t('點 badge 展開 error 清單', 'Click the badge to expand the error list')}</div>
     </div>
 
     <div class="mode">
-      <div class="mname">🖥 終端機</div>
-      <div class="mrow"><b>適合：</b>Server 端的錯誤（Node.js、Python 等）</div>
-      <div class="mrow"><b>用法：</b>終端機輸入 <code style="color:#7ee0c5;">npx bugezy-watch -- npm run dev</code></div>
-      <div class="mrow">自動攔截 stderr / throw / crash</div>
+      <div class="mname">${t('🖥 終端機', '🖥 Terminal')}</div>
+      <div class="mrow"><b>${t('適合：', 'Best for: ')}</b>${t('Server 端的錯誤（Node.js、Python 等）', 'Server-side errors (Node.js, Python, etc.)')}</div>
+      <div class="mrow"><b>${t('用法：', 'How: ')}</b>${t('終端機輸入', 'Run in the terminal')} <code style="color:#7ee0c5;">npx bugezy-watch -- npm run dev</code></div>
+      <div class="mrow">${t('自動攔截 stderr / throw / crash', 'Auto-captures stderr / throw / crash')}</div>
     </div>
   </div>
 
   <div class="step">
-    <h2>📝 第三步：編輯與上傳</h2>
+    <h2>${t('📝 第三步：編輯與上傳', '📝 Step 3: Edit & upload')}</h2>
     <ol>
-      <li>錄製停止後進入編輯頁</li>
-      <li>可以編輯語音文字、加補充說明</li>
-      <li>按「🔧 AI 校正」修正錯字（選用）</li>
-      <li>按「🤖 AI 精簡」濃縮重點（選用）</li>
-      <li>按「上傳」→ 報告自動儲存到雲端</li>
+      <li>${t('錄製停止後進入編輯頁', 'The editor opens after you stop recording')}</li>
+      <li>${t('可以編輯語音文字、加補充說明', 'Edit the voice text and add extra notes')}</li>
+      <li>${t('按「🔧 AI 校正」修正錯字（選用）', 'Click "🔧 AI Correct" to fix typos (optional)')}</li>
+      <li>${t('按「🤖 AI 精簡」濃縮重點（選用）', 'Click "🤖 AI Summarize" to condense (optional)')}</li>
+      <li>${t('按「上傳」→ 報告自動儲存到雲端', 'Click "Upload" → the report is saved to the cloud')}</li>
     </ol>
   </div>
 
   <div class="step">
-    <h2>🤖 第四步：讓 AI 幫你修</h2>
-    <p><b style="color:#c4b5fd;">方法一：在 Claude / Cursor / VS Code 直接問</b><br />
-      「讀我最新的 BugEzy 報告，告訴我怎麼修」<br />
-      AI 透過 MCP 自動讀取報告 → 分析 Console error + Network error → 給出修復建議</p>
-    <p style="margin-top:12px;"><b style="color:#c4b5fd;">方法二：分享報告連結</b><br />
-      上傳後會產生報告連結，傳給同事或貼到 Issue</p>
+    <h2>${t('🤖 第四步：讓 AI 幫你修', '🤖 Step 4: Let AI fix it')}</h2>
+    <p><b style="color:#c4b5fd;">${t('方法一：在 Claude / Cursor / VS Code 直接問', 'Option 1: Ask directly in Claude / Cursor / VS Code')}</b><br />
+      ${t('「讀我最新的 BugEzy 報告，告訴我怎麼修」', '"Read my latest BugEzy report and tell me how to fix it"')}<br />
+      ${t('AI 透過 MCP 自動讀取報告 → 分析 Console error + Network error → 給出修復建議', 'AI reads the report via MCP → analyzes Console + Network errors → suggests a fix')}</p>
+    <p style="margin-top:12px;"><b style="color:#c4b5fd;">${t('方法二：分享報告連結', 'Option 2: Share the report link')}</b><br />
+      ${t('上傳後會產生報告連結，傳給同事或貼到 Issue', 'Uploading generates a link — send it to teammates or paste into an issue')}</p>
     <div class="mcp-box">
-      <b>🔌 MCP 連接設定</b><br />
-      BugEzy MCP 網址（所有工具通用）：<br />
+      <b>${t('🔌 MCP 連接設定', '🔌 MCP connection setup')}</b><br />
+      ${t('BugEzy MCP 網址（所有工具通用）：', 'BugEzy MCP URL (same for all tools):')}<br />
       <code>https://bugezy-api.bugezy-api.workers.dev/mcp</code>
-      <div class="mcp-warn">⚠ 注意：這個網址<b>不能用瀏覽器開</b>，它是專給 AI 工具連接的協議。用瀏覽器開只會看到一段錯誤訊息，屬正常現象——請依下方步驟在 AI 工具裡設定。</div>
+      <div class="mcp-warn">${t('⚠ 注意：這個網址<b>不能用瀏覽器開</b>，它是專給 AI 工具連接的協議。用瀏覽器開只會看到一段錯誤訊息，屬正常現象——請依下方步驟在 AI 工具裡設定。', '⚠ Note: <b>do not open this URL in a browser</b> — it is a protocol endpoint for AI tools. Opening it in a browser just shows an error, which is normal. Set it up in your AI tool per the steps below.')}</div>
 
-      <div class="mcp-tool"><div class="tname">Claude.ai</div><div class="tstep">Settings → Connectors → Add → 貼上網址 → 連接</div></div>
-      <div class="mcp-tool"><div class="tname">Claude Desktop</div><div class="tstep">編輯 claude_desktop_config.json，加入：</div><pre>{
+      <div class="mcp-tool"><div class="tname">Claude.ai</div><div class="tstep">${t('Settings → Connectors → Add → 貼上網址 → 連接', 'Settings → Connectors → Add → paste the URL → Connect')}</div></div>
+      <div class="mcp-tool"><div class="tname">Claude Desktop</div><div class="tstep">${t('編輯 claude_desktop_config.json，加入：', 'Edit claude_desktop_config.json, add:')}</div><pre>{
   "mcpServers": {
     "bugezy": {
       "url": "https://bugezy-api.bugezy-api.workers.dev/mcp"
     }
   }
 }</pre></div>
-      <div class="mcp-tool"><div class="tname">Cursor</div><div class="tstep">Settings → MCP → Add Server → 貼上網址</div></div>
-      <div class="mcp-tool"><div class="tname">VS Code</div><div class="tstep">Settings → 搜尋 MCP → Add Server → 貼上網址</div></div>
-      <div class="mcp-tool"><div class="tname">Claude Code（終端機）</div><div class="tstep">執行：<code>claude mcp add --transport http bugezy https://bugezy-api.bugezy-api.workers.dev/mcp</code></div></div>
-      <div class="mcp-tool"><div class="tname">Zed</div><div class="tstep">設定檔加 context_servers</div></div>
+      <div class="mcp-tool"><div class="tname">Cursor</div><div class="tstep">${t('Settings → MCP → Add Server → 貼上網址', 'Settings → MCP → Add Server → paste the URL')}</div></div>
+      <div class="mcp-tool"><div class="tname">VS Code</div><div class="tstep">${t('Settings → 搜尋 MCP → Add Server → 貼上網址', 'Settings → search MCP → Add Server → paste the URL')}</div></div>
+      <div class="mcp-tool"><div class="tname">${t('Claude Code（終端機）', 'Claude Code (terminal)')}</div><div class="tstep">${t('執行：', 'Run:')} <code>claude mcp add --transport http bugezy https://bugezy-api.bugezy-api.workers.dev/mcp</code></div></div>
+      <div class="mcp-tool"><div class="tname">Zed</div><div class="tstep">${t('設定檔加 context_servers', 'Add context_servers to the config file')}</div></div>
 
-      <div style="margin-top:14px;color:#ccc;font-size:13px;">連接成功後，直接問 AI：<br /><b style="color:#a78bfa;">「讀我最新的 BugEzy 報告，告訴我怎麼修」</b><br />AI 就會透過 MCP 自動讀取你的 Bug 報告。</div>
+      <div style="margin-top:14px;color:#ccc;font-size:13px;">${t('連接成功後，直接問 AI：', 'Once connected, just ask your AI:')}<br /><b style="color:#a78bfa;">${t('「讀我最新的 BugEzy 報告，告訴我怎麼修」', '"Read my latest BugEzy report and tell me how to fix it"')}</b><br />${t('AI 就會透過 MCP 自動讀取你的 Bug 報告。', 'The AI will read your bug report automatically via MCP.')}</div>
     </div>
   </div>
 
   <div class="step">
-    <h2>💡 小技巧</h2>
+    <h2>${t('💡 小技巧', '💡 Tips')}</h2>
     <ul class="tips">
-      <li>錄製時對著麥克風說「這個按鈕按下去沒反應」比打字快 10 倍</li>
-      <li>即時監控可以掛一整天，有 error 才通知你</li>
-      <li>免費版每月可錄 10 次，截圖和即時監控無限用</li>
-      <li>用 BugEzy MCP 讀報告比截圖貼給 AI 省 95% Token</li>
+      <li>${t('錄製時對著麥克風說「這個按鈕按下去沒反應」比打字快 10 倍', 'Saying "this button does nothing when clicked" by voice is 10× faster than typing')}</li>
+      <li>${t('即時監控可以掛一整天，有 error 才通知你', 'Live monitor can run all day and only alerts you on errors')}</li>
+      <li>${t('免費版每月可錄 10 次，截圖和即時監控無限用', 'Free plan: 10 recordings/mo; screenshots and live monitor are unlimited')}</li>
+      <li>${t('用 BugEzy MCP 讀報告比截圖貼給 AI 省 95% Token', 'Reading reports via BugEzy MCP saves 95% tokens vs pasting screenshots to AI')}</li>
     </ul>
   </div>
 
   <footer>
     <div class="links">
-      <a href="/">首頁</a>
-      <a href="/install">安裝指南</a>
-      <a href="/features">功能說明</a>
+      <a href="/">${t('首頁', 'Home')}</a>
+      <a href="/install">${t('安裝指南', 'Install')}</a>
+      <a href="/features">${t('功能說明', 'Features')}</a>
       <a href="/faq">FAQ</a>
-      <a href="/privacy">隱私政策</a>
-      <a href="/changelog">更新日誌</a>
+      <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
+      <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
     </div>
-    <div style="margin-top:8px;">聯絡：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
+    <div style="margin-top:8px;">${t('聯絡', 'Contact')}：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
   </footer>
 </div>
 </body>
 </html>`;
+}
 
 // ── PM-66：FAQ 頁（四大類問答，手風琴點擊展開/收合，單一展開）──
-const FAQ_PAGE_HTML = `<!DOCTYPE html>
-<html lang="zh-Hant">
+// PM-152：/faq 改為函式（依 lang 中英切換）。🔴 英文版禁止提及任何競品名稱（延續 PM-130 去競品）。
+function faqPage(lang: PageLang): string {
+  const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
+  return `<!DOCTYPE html>
+<html lang="${lang === 'zh' ? 'zh-Hant' : 'en'}">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>常見問題 · BugEzy</title>
-<meta name="description" content="BugEzy 常見問題：安裝、錄製、語音辨識、MCP 設定、付費方案等問答。">
+<title>${t('常見問題 · BugEzy', 'FAQ · BugEzy')}</title>
+<meta name="description" content="${t('BugEzy 常見問題：安裝、錄製、語音辨識、MCP 設定、付費方案等問答。', 'Frequently asked questions about BugEzy — pricing, AI tool support, data security, and more.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
 <link rel="canonical" href="https://bugezy.dev/faq">
 <style>
   * { box-sizing: border-box; }
+  .lang-switch { position:fixed; top:14px; right:16px; z-index:10; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:5px 12px; font-size:13px; color:#c4b5fd; text-decoration:none; }
+  .lang-switch:hover { background:#2a2a3e; }
   body {
     margin: 0; padding: 0; background: #0f0f1a; color: #e8e8f0;
     font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
@@ -1097,67 +1115,68 @@ const FAQ_PAGE_HTML = `<!DOCTYPE html>
 </style>
 </head>
 <body>
+<a class="lang-switch" href="?lang=${lang === 'zh' ? 'en' : 'zh'}">${t('EN', '中文')}</a>
 <div class="wrap">
   <header><a class="brand" href="/">🐛 BugEzy</a></header>
 
-  <h1>🐛 BugEzy 常見問題</h1>
+  <h1>${t('🐛 BugEzy 常見問題', '🐛 BugEzy FAQ')}</h1>
 
-  <h2>📌 關於產品</h2>
-  <div class="faq-q">BugEzy 是什麼？</div>
-  <div class="faq-a"><p>BugEzy 是一款 Chrome 擴充功能，讓開發者用語音 + 錄製的方式記錄 Bug，AI 透過 MCP 自動讀取報告並提供修復建議。省下 95% 的 debug 溝通時間。</p></div>
+  <h2>${t('📌 關於產品', '📌 About the product')}</h2>
+  <div class="faq-q">${t('BugEzy 是什麼？', 'What is BugEzy?')}</div>
+  <div class="faq-a"><p>${t('BugEzy 是一款 Chrome 擴充功能，讓開發者用語音 + 錄製的方式記錄 Bug，AI 透過 MCP 自動讀取報告並提供修復建議。省下 95% 的 debug 溝通時間。', 'BugEzy is a Chrome extension that lets developers capture bugs by voice + recording. AI reads the report automatically via MCP and suggests fixes — saving 95% of debugging communication time.')}</p></div>
 
-  <div class="faq-q">BugEzy 最大的優勢是什麼？</div>
-  <div class="faq-a"><p>專為亞洲開發者設計：中文/粵語/日韓語音支援、NT$80 超平價月費、MCP 整合讓 AI 直接讀報告。獨家功能：即時監控、30 秒回溯、Whisper 精準語音、終端機 CLI、Token 透明度。</p></div>
+  <div class="faq-q">${t('BugEzy 最大的優勢是什麼？', 'What makes BugEzy special?')}</div>
+  <div class="faq-a"><p>${t('專為亞洲開發者設計：中文/粵語/日韓語音支援、NT$80 超平價月費、MCP 整合讓 AI 直接讀報告。獨家功能：即時監控、30 秒回溯、Whisper 精準語音、終端機 CLI、Token 透明度。', 'Built for Asian developers: Chinese / Cantonese / Japanese / Korean voice support, an affordable NT$80/mo plan, and MCP integration so AI reads reports directly. Signature features: live monitor, 30-second rewind, Whisper precise voice, terminal CLI, and token transparency.')}</p></div>
 
-  <div class="faq-q">支援哪些 AI 工具？</div>
-  <div class="faq-a"><p>任何支援 MCP 的 AI 工具都能用，包括 Claude Desktop、Claude Code、Cursor、VS Code + Copilot、Zed、Windsurf、Codex、Replit 等。只需要一行 URL：<code>https://bugezy-api.bugezy-api.workers.dev/mcp</code></p></div>
+  <div class="faq-q">${t('支援哪些 AI 工具？', 'Which AI tools are supported?')}</div>
+  <div class="faq-a"><p>${t('任何支援 MCP 的 AI 工具都能用，包括 Claude Desktop、Claude Code、Cursor、VS Code + Copilot、Zed、Windsurf、Codex、Replit 等。只需要一行 URL：', 'Any MCP-capable AI tool works, including Claude Desktop, Claude Code, Cursor, VS Code, Zed, Windsurf, Google Antigravity, Gemini CLI, and more. Just one URL:')}<code>https://bugezy-api.bugezy-api.workers.dev/mcp</code></p></div>
 
-  <h2>🔒 關於隱私與安全</h2>
-  <div class="faq-q">BugEzy 會錄到我的密碼嗎？</div>
-  <div class="faq-a"><p>BugEzy 錄製的是 DOM 結構變化，不是螢幕截圖。密碼輸入框（type="password"）的內容會被 rrweb 自動遮蔽，不會錄到實際密碼。</p></div>
+  <h2>${t('🔒 關於隱私與安全', '🔒 Privacy & security')}</h2>
+  <div class="faq-q">${t('BugEzy 會錄到我的密碼嗎？', 'Will BugEzy record my passwords?')}</div>
+  <div class="faq-a"><p>${t('BugEzy 錄製的是 DOM 結構變化，不是螢幕截圖。密碼輸入框（type="password"）的內容會被 rrweb 自動遮蔽，不會錄到實際密碼。', 'BugEzy records DOM structure changes, not screen video. Password fields (type="password") are automatically masked by rrweb, so actual passwords are never captured.')}</p></div>
 
-  <div class="faq-q">我的報告誰能看到？</div>
-  <div class="faq-a"><p>只有你自己。報告預設為私人，只有當你主動分享報告連結時，別人才能看到。</p></div>
+  <div class="faq-q">${t('我的報告誰能看到？', 'Who can see my reports?')}</div>
+  <div class="faq-a"><p>${t('只有你自己。報告預設為私人，只有當你主動分享報告連結時，別人才能看到。', 'Only you. Reports are private by default — others can see one only when you actively share its link.')}</p></div>
 
-  <div class="faq-q">資料存在哪裡？</div>
-  <div class="faq-a"><p>報告存在 Cloudflare R2（全球 CDN），使用者資料存在 Supabase（PostgreSQL）。所有傳輸都經過 HTTPS 加密。</p></div>
+  <div class="faq-q">${t('資料存在哪裡？', 'Where is my data stored?')}</div>
+  <div class="faq-a"><p>${t('報告存在 Cloudflare R2（全球 CDN），使用者資料存在 Supabase（PostgreSQL）。所有傳輸都經過 HTTPS 加密。', 'Reports are stored on Cloudflare R2 (global CDN); user data on Supabase (PostgreSQL). All transfers are encrypted over HTTPS.')}</p></div>
 
-  <h2>💰 關於方案與付費</h2>
-  <div class="faq-q">免費版有什麼限制？</div>
-  <div class="faq-a"><p>免費版每月可錄製 10 次、回溯 5 次、MCP 查詢 20 次。截圖標注和即時監控無限使用。報告保留 7 天。</p></div>
+  <h2>${t('💰 關於方案與付費', '💰 Plans & billing')}</h2>
+  <div class="faq-q">${t('免費版有什麼限制？', 'What are the free plan limits?')}</div>
+  <div class="faq-a"><p>${t('免費版每月可錄製 10 次、回溯 5 次、MCP 查詢 20 次。截圖標注和即時監控無限使用。報告保留 7 天。', 'The free plan includes 10 recordings, 5 rewinds, and 20 MCP queries per month. Screenshot annotation and live monitor are unlimited. Reports are kept for 7 days.')}</p></div>
 
-  <div class="faq-q">付費版多少錢？</div>
-  <div class="faq-a"><p>NT$80/月（約 $3 USD），解鎖全功能無限次使用，報告保留 90 天，加上終端機 CLI、Whisper 精準語音等進階功能。</p></div>
+  <div class="faq-q">${t('付費版多少錢？', 'How much is Premium?')}</div>
+  <div class="faq-a"><p>${t('NT$80/月（約 $3 USD），解鎖全功能無限次使用，報告保留 90 天，加上終端機 CLI、Whisper 精準語音等進階功能。', 'NT$80/mo (about US$3) unlocks unlimited use of all features, 90-day report retention, plus advanced features like terminal CLI and Whisper precise voice.')}</p></div>
 
-  <div class="faq-q">如何升級付費版？</div>
-  <div class="faq-a"><p>在 BugEzy popup 點「升級」按鈕，透過信用卡或 ATM 付款。</p></div>
+  <div class="faq-q">${t('如何升級付費版？', 'How to upgrade to Premium?')}</div>
+  <div class="faq-a"><p>${t('在 BugEzy popup 點「升級」按鈕，透過信用卡或 ATM 付款。', 'Click "Upgrade" in the BugEzy popup and pay by credit card or ATM.')}</p></div>
 
-  <div class="faq-q">可以取消訂閱嗎？</div>
-  <div class="faq-a"><p>可以，隨時取消。取消後當月剩餘天數仍可使用付費功能，下個月恢復為免費版。</p></div>
+  <div class="faq-q">${t('可以取消訂閱嗎？', 'Can I cancel my subscription?')}</div>
+  <div class="faq-a"><p>${t('可以，隨時取消。取消後當月剩餘天數仍可使用付費功能，下個月恢復為免費版。', 'Yes, anytime. After cancelling you keep premium features for the rest of the billing period, then revert to the free plan.')}</p></div>
 
-  <h2>🛠 關於技術</h2>
-  <div class="faq-q">哪些瀏覽器支援？</div>
-  <div class="faq-a"><p>目前支援 Chrome 和所有 Chromium 瀏覽器（Edge、Brave、Arc 等）。</p></div>
+  <h2>${t('🛠 關於技術', '🛠 Technical')}</h2>
+  <div class="faq-q">${t('哪些瀏覽器支援？', 'Which browsers are supported?')}</div>
+  <div class="faq-a"><p>${t('目前支援 Chrome 和所有 Chromium 瀏覽器（Edge、Brave、Arc 等）。', 'Chrome and all Chromium-based browsers (Edge, Brave, Arc, etc.).')}</p></div>
 
-  <div class="faq-q">會影響網頁效能嗎？</div>
-  <div class="faq-a"><p>影響極小。BugEzy 只在你主動錄製時才記錄 DOM 變化，即時監控模式只攔截 Console error 和 Network error，不錄 DOM。</p></div>
+  <div class="faq-q">${t('會影響網頁效能嗎？', 'Does it affect page performance?')}</div>
+  <div class="faq-a"><p>${t('影響極小。BugEzy 只在你主動錄製時才記錄 DOM 變化，即時監控模式只攔截 Console error 和 Network error，不錄 DOM。', 'Minimal. BugEzy only records DOM changes while you are actively recording; live monitor mode only captures Console and Network errors, not the DOM.')}</p></div>
 
-  <div class="faq-q">MCP 是什麼？</div>
-  <div class="faq-a"><p>Model Context Protocol（模型上下文協議），是 Anthropic 推出的開放標準，讓 AI 工具可以連接外部服務。BugEzy 的 MCP 讓 AI 直接讀取你的 Bug 報告，不需要複製貼上。</p></div>
+  <div class="faq-q">${t('MCP 是什麼？', 'What is MCP?')}</div>
+  <div class="faq-a"><p>${t('Model Context Protocol（模型上下文協議），是 Anthropic 推出的開放標準，讓 AI 工具可以連接外部服務。BugEzy 的 MCP 讓 AI 直接讀取你的 Bug 報告，不需要複製貼上。', 'Model Context Protocol — an open standard from Anthropic that lets AI tools connect to external services. BugEzy MCP lets AI read your bug reports directly, with no copy-paste.')}</p></div>
 
-  <div class="faq-q">Token 是什麼？為什麼 BugEzy 能省 Token？</div>
-  <div class="faq-a"><p>Token 是 AI 處理文字的計量單位，等於你的 AI 使用費用。BugEzy 用結構化文字（而非截圖）傳送報告給 AI，同樣的 Bug 資訊只需要 1/20 的 Token。每次 MCP 查詢都會顯示 Token 估算，讓你看到省了多少。</p></div>
+  <div class="faq-q">${t('Token 是什麼？為什麼 BugEzy 能省 Token？', 'What are tokens, and how does BugEzy save them?')}</div>
+  <div class="faq-a"><p>${t('Token 是 AI 處理文字的計量單位，等於你的 AI 使用費用。BugEzy 用結構化文字（而非截圖）傳送報告給 AI，同樣的 Bug 資訊只需要 1/20 的 Token。每次 MCP 查詢都會顯示 Token 估算，讓你看到省了多少。', 'Tokens are the unit AI uses to process text — effectively your AI cost. BugEzy sends reports as structured text (not screenshots), so the same bug info takes 1/20 the tokens. Every MCP query shows a token estimate so you can see the savings.')}</p></div>
 
   <footer>
     <div class="links">
-      <a href="/">首頁</a>
-      <a href="/install">安裝指南</a>
-      <a href="/features">功能說明</a>
-      <a href="/guide">使用指南</a>
-      <a href="/privacy">隱私政策</a>
-      <a href="/changelog">更新日誌</a>
+      <a href="/">${t('首頁', 'Home')}</a>
+      <a href="/install">${t('安裝指南', 'Install')}</a>
+      <a href="/features">${t('功能說明', 'Features')}</a>
+      <a href="/guide">${t('使用指南', 'Guide')}</a>
+      <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
+      <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
     </div>
-    <div style="margin-top:8px;">聯絡：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
+    <div style="margin-top:8px;">${t('聯絡', 'Contact')}：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
   </footer>
 </div>
@@ -1177,6 +1196,7 @@ document.querySelectorAll('.faq-q').forEach(function (q) {
 </script>
 </body>
 </html>`;
+}
 
 // ── PM-96：安裝指南頁（GET /install）— 從零到能用的完整五步流程 + MCP 設定 ──
 // PM-150：/install 改為函式（依 lang 中英切換）。
@@ -2309,9 +2329,22 @@ export default {
       res.headers.set('Cache-Control', 'no-store');
       return res;
     }
-    if (request.method === 'GET' && path === '/privacy') return html(PRIVACY_PAGE_HTML); // PM-64
-    if (request.method === 'GET' && path === '/guide') return html(GUIDE_PAGE_HTML); // PM-66
-    if (request.method === 'GET' && path === '/faq') return html(FAQ_PAGE_HTML); // PM-66
+    // PM-152：guide/faq/privacy 依語言變動——no-store 避免 CF 跨語言快取誤送
+    if (request.method === 'GET' && path === '/privacy') {
+      const res = html(privacyPage(getLang(request))); // PM-64/152
+      res.headers.set('Cache-Control', 'no-store');
+      return res;
+    }
+    if (request.method === 'GET' && path === '/guide') {
+      const res = html(guidePage(getLang(request))); // PM-66/152
+      res.headers.set('Cache-Control', 'no-store');
+      return res;
+    }
+    if (request.method === 'GET' && path === '/faq') {
+      const res = html(faqPage(getLang(request))); // PM-66/152
+      res.headers.set('Cache-Control', 'no-store');
+      return res;
+    }
     if (request.method === 'GET' && path === '/install') {
       const res = html(installPage(getLang(request))); // PM-96/150
       res.headers.set('Cache-Control', 'no-store');
