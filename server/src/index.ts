@@ -346,10 +346,13 @@ function timingSafeEqualStr(a: string, b: string): boolean {
   return diff === 0;
 }
 
-/** 綠界 MerchantTradeDate 格式：yyyy/MM/dd HH:mm:ss（Workers 為 UTC，測試環境可接受）。 */
+/** 綠界 MerchantTradeDate 格式：yyyy/MM/dd HH:mm:ss。
+ *  PM-149（P3-2）：綠界預期台灣時間（UTC+8）。Workers 跑在 UTC edge，故手動加 8 小時 + 用 getUTC*，
+ *  確保不管 edge 節點在哪都輸出台灣時間（原本用本地 get* = UTC，跨日邊界會差一天，對帳出錯）。 */
 function formatEcpayDate(d: Date): string {
+  const tw = new Date(d.getTime() + 8 * 60 * 60 * 1000);
   const p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  return `${tw.getUTCFullYear()}/${p(tw.getUTCMonth() + 1)}/${p(tw.getUTCDate())} ${p(tw.getUTCHours())}:${p(tw.getUTCMinutes())}:${p(tw.getUTCSeconds())}`;
 }
 
 /** HTML 屬性值轉義（表單 input value 用） */
