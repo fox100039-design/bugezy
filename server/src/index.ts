@@ -1427,17 +1427,22 @@ Full guide: https://bugezy.dev/install`,
 }
 
 // ── PM-96：功能說明頁（GET /features）— 六種模式 + 語音 + 高畫質 AI 的操作說明 ──
-const FEATURES_PAGE_HTML = `<!DOCTYPE html>
-<html lang="zh-Hant">
+// PM-151：/features 改為函式（依 lang 中英切換，延續 PM-150 模式）。
+function featuresPage(lang: PageLang): string {
+  const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
+  return `<!DOCTYPE html>
+<html lang="${lang === 'zh' ? 'zh-Hant' : 'en'}">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>BugEzy 功能 — 六種錄製模式、Whisper 語音、即時監控</title>
-<meta name="description" content="BugEzy 六種除錯模式：錄製、回溯 30 秒、截圖標注、即時監控、終端機 CLI、MCP AI 讀取。Whisper 精準語音轉錄。">
+<title>${t('BugEzy 功能 — 六種錄製模式、Whisper 語音、即時監控', 'BugEzy Features — Six Recording Modes, Whisper Voice, Live Monitor')}</title>
+<meta name="description" content="${t('BugEzy 六種除錯模式：錄製、回溯 30 秒、截圖標注、即時監控、終端機 CLI、MCP AI 讀取。Whisper 精準語音轉錄。', 'BugEzy offers six debugging modes: Record, Rewind, Screenshot, Live Monitor, Terminal CLI, and MCP AI. Whisper voice transcription for premium users.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
 <link rel="canonical" href="https://bugezy.dev/features">
 <style>
   * { box-sizing: border-box; }
+  .lang-switch { position:fixed; top:14px; right:16px; z-index:10; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:5px 12px; font-size:13px; color:#c4b5fd; text-decoration:none; }
+  .lang-switch:hover { background:#2a2a3e; }
   body {
     margin: 0; padding: 0; background: #0f0f1a; color: #e8e8f0;
     font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
@@ -1478,107 +1483,114 @@ const FEATURES_PAGE_HTML = `<!DOCTYPE html>
 </style>
 </head>
 <body>
+<a class="lang-switch" href="?lang=${lang === 'zh' ? 'en' : 'zh'}">${t('EN', '中文')}</a>
 <div class="wrap">
   <header><a class="brand" href="/">🐛 BugEzy</a></header>
 
-  <h1>🎯 BugEzy 功能總覽</h1>
-  <p class="lead">六種抓 Bug 模式 + 語音設定 + 高畫質 AI 分析，挑最順手的用。</p>
+  <h1>${t('🎯 BugEzy 功能總覽', '🎯 BugEzy Features')}</h1>
+  <p class="lead">${t('六種抓 Bug 模式 + 語音設定 + 高畫質 AI 分析，挑最順手的用。', 'Six bug-catching modes + voice options + HQ AI analysis — pick what works best.')}</p>
 
   <div class="feat">
-    <h2>🎬 錄製</h2>
-    <div class="row"><b>適合：</b>完整重現 Bug</div>
-    <div class="row"><b>操作：</b>按「錄製」→ 操作重現 → 語音描述 → 按「停止」</div>
-    <div class="row"><b>AI 收到：</b>DOM 軌跡 + Console + Network + 語音</div>
-    <div class="row"><b>小提示：</b>底部字幕條會即時顯示，確認語音有在收音</div>
+    <h2>${t('🎬 錄製', '🎬 Record')}</h2>
+    <div class="row"><b>${t('適合：', 'Best for: ')}</b>${t('完整重現 Bug', 'Fully reproducing a bug')}</div>
+    <div class="row"><b>${t('操作：', 'How: ')}</b>${t('按「錄製」→ 操作重現 → 語音描述 → 按「停止」', 'Click "Record" → reproduce → describe by voice → click "Stop"')}</div>
+    <div class="row"><b>${t('AI 收到：', 'AI gets: ')}</b>${t('DOM 軌跡 + Console + Network + 語音', 'DOM trace + Console + Network + voice')}</div>
+    <div class="row"><b>${t('小提示：', 'Tip: ')}</b>${t('底部字幕條會即時顯示，確認語音有在收音', 'The caption bar shows live text so you know the mic is picking up')}</div>
   </div>
 
   <div class="feat">
-    <h2>⏪ 30 秒回溯</h2>
-    <div class="row"><b>適合：</b>Bug 已經發生，來不及按錄製</div>
-    <div class="row"><b>操作：</b>按「回溯 30s」→ 自動抓回最近 30 秒</div>
-    <div class="row"><b>AI 收到：</b>最近 30 秒的 DOM + Console + Network</div>
-    <div class="row"><b>小提示：</b>BugEzy 在背景持續記錄，不用提前按</div>
+    <h2>${t('⏪ 30 秒回溯', '⏪ Rewind 30s')}</h2>
+    <div class="row"><b>${t('適合：', 'Best for: ')}</b>${t('Bug 已經發生，來不及按錄製', 'The bug already happened, too late to press record')}</div>
+    <div class="row"><b>${t('操作：', 'How: ')}</b>${t('按「回溯 30s」→ 自動抓回最近 30 秒', 'Click "Rewind 30s" → grabs the last 30 seconds automatically')}</div>
+    <div class="row"><b>${t('AI 收到：', 'AI gets: ')}</b>${t('最近 30 秒的 DOM + Console + Network', 'DOM + Console + Network from the last 30 seconds')}</div>
+    <div class="row"><b>${t('小提示：', 'Tip: ')}</b>${t('BugEzy 在背景持續記錄，不用提前按', 'BugEzy records in the background — no need to start early')}</div>
   </div>
 
   <div class="feat">
-    <h2>📸 截圖標注</h2>
-    <div class="row"><b>適合：</b>快速指出畫面上的問題</div>
-    <div class="row"><b>操作：</b>截圖 → 選模式（整頁／可見範圍／自選區域）→ 畫筆箭頭標注 → 上傳</div>
-    <div class="row"><b>AI 收到：</b>截圖 metadata（勾「高畫質 AI 分析」才讓 AI 直接看圖）</div>
-    <div class="row"><b>小提示：</b>純視覺 Bug 建議開高畫質分析</div>
+    <h2>${t('📸 截圖標注', '📸 Screenshot Annotate')}</h2>
+    <div class="row"><b>${t('適合：', 'Best for: ')}</b>${t('快速指出畫面上的問題', 'Quickly pointing out an on-screen issue')}</div>
+    <div class="row"><b>${t('操作：', 'How: ')}</b>${t('截圖 → 選模式（整頁／可見範圍／自選區域）→ 畫筆箭頭標注 → 上傳', 'Capture → pick mode (full page / visible / region) → annotate → upload')}</div>
+    <div class="row"><b>${t('AI 收到：', 'AI gets: ')}</b>${t('截圖 metadata（勾「高畫質 AI 分析」才讓 AI 直接看圖）', 'Screenshot metadata (enable "HQ AI analysis" to let AI view the image)')}</div>
+    <div class="row"><b>${t('小提示：', 'Tip: ')}</b>${t('純視覺 Bug 建議開高畫質分析', 'For visual-only bugs, turn on HQ analysis')}</div>
   </div>
 
   <div class="feat">
-    <h2>⌨️ 鍵盤模式</h2>
-    <div class="row"><b>適合：</b>吵雜環境（咖啡廳、辦公室）</div>
-    <div class="row"><b>操作：</b>開啟鍵盤模式 → 關閉語音辨識 → 用打字描述 Bug</div>
-    <div class="row"><b>小提示：</b>專注打字、不收音，適合不方便說話時</div>
+    <h2>${t('⌨️ 鍵盤模式', '⌨️ Keyboard Mode')}</h2>
+    <div class="row"><b>${t('適合：', 'Best for: ')}</b>${t('吵雜環境（咖啡廳、辦公室）', 'Noisy environments (cafés, offices)')}</div>
+    <div class="row"><b>${t('操作：', 'How: ')}</b>${t('開啟鍵盤模式 → 關閉語音辨識 → 用打字描述 Bug', 'Enable keyboard mode → voice off → type the bug description')}</div>
+    <div class="row"><b>${t('小提示：', 'Tip: ')}</b>${t('專注打字、不收音，適合不方便說話時', 'Type-only, no audio — good when you can not speak')}</div>
   </div>
 
   <div class="feat">
-    <h2>👁️ 即時監控</h2>
-    <div class="row"><b>適合：</b>掛著等偶發 Bug 自己出現</div>
-    <div class="row"><b>操作：</b>開啟即時監控 → 背景自動攔截 Console error / Network error</div>
-    <div class="row"><b>小提示：</b>適合難重現、偶發性的問題，可以掛一整天</div>
+    <h2>${t('👁️ 即時監控', '👁️ Live Monitor')}</h2>
+    <div class="row"><b>${t('適合：', 'Best for: ')}</b>${t('掛著等偶發 Bug 自己出現', 'Leaving it on to catch intermittent bugs')}</div>
+    <div class="row"><b>${t('操作：', 'How: ')}</b>${t('開啟即時監控 → 背景自動攔截 Console error / Network error', 'Enable live monitor → auto-captures Console / Network errors in the background')}</div>
+    <div class="row"><b>${t('小提示：', 'Tip: ')}</b>${t('適合難重現、偶發性的問題，可以掛一整天', 'Great for hard-to-reproduce issues — leave it running all day')}</div>
   </div>
 
   <div class="feat">
-    <h2>💻 終端機 CLI</h2>
-    <div class="row"><b>適合：</b>後端開發（Node.js、Python 等）</div>
-    <div class="row"><b>操作：</b><code>npx bugezy-watch -- node server.js</code></div>
-    <div class="row"><b>小提示：</b>不需開瀏覽器，自動攔截 stderr / throw / crash</div>
+    <h2>${t('💻 終端機 CLI', '💻 Terminal CLI')}</h2>
+    <div class="row"><b>${t('適合：', 'Best for: ')}</b>${t('後端開發（Node.js、Python 等）', 'Backend development (Node.js, Python, etc.)')}</div>
+    <div class="row"><b>${t('操作：', 'How: ')}</b><code>npx bugezy-watch -- node server.js</code></div>
+    <div class="row"><b>${t('小提示：', 'Tip: ')}</b>${t('不需開瀏覽器，自動攔截 stderr / throw / crash', 'No browser needed — auto-captures stderr / throw / crash')}</div>
   </div>
 
   <div class="feat paid">
-    <h2>🎙️ 語音設定<span class="tag pro">付費</span></h2>
-    <div class="row"><b>即時字幕（免費）：</b>Web Speech 頁面內即時轉字幕，零成本</div>
-    <div class="row"><b>精準轉錄（付費）：</b>Groq Whisper 高準確度轉錄，適合專有名詞多的描述</div>
-    <div class="row"><b>操作：</b>popup 開麥克風 toggle → 付費版可切「即時字幕／精準轉錄」</div>
-    <div class="row"><b>小提示：</b>首次使用會請你授權麥克風，該網站只需授權一次</div>
+    <h2>${t('🎙️ 語音設定', '🎙️ Voice Options')}<span class="tag pro">${t('付費', 'Premium')}</span></h2>
+    <div class="row"><b>${t('即時字幕（免費）：', 'Live captions (free): ')}</b>${t('Web Speech 頁面內即時轉字幕，零成本', 'In-page Web Speech captions, zero cost')}</div>
+    <div class="row"><b>${t('精準轉錄（付費）：', 'Precise transcription (premium): ')}</b>${t('Groq Whisper 高準確度轉錄，適合專有名詞多的描述', 'High-accuracy Groq Whisper, great for jargon-heavy descriptions')}</div>
+    <div class="row"><b>${t('操作：', 'How: ')}</b>${t('popup 開麥克風 toggle → 付費版可切「即時字幕／精準轉錄」', 'Toggle the mic in the popup → premium can switch "Live captions / Precise"')}</div>
+    <div class="row"><b>${t('小提示：', 'Tip: ')}</b>${t('首次使用會請你授權麥克風，該網站只需授權一次', 'First use asks for mic permission — only once per site')}</div>
   </div>
 
   <div class="feat paid">
-    <h2>📸 高畫質 AI 分析<span class="tag pro">高 Token</span></h2>
-    <div class="row"><b>適合：</b>版面跑版、樣式錯亂等純視覺 Bug</div>
-    <div class="row"><b>操作：</b>在 popup 或報告頁勾選「高畫質 AI 分析」</div>
-    <div class="row"><b>AI 收到：</b>勾選後 AI 會直接讀截圖圖片（否則只給 metadata 省 Token）</div>
-    <div class="row"><b>小提示：</b>看圖較耗 Token，非視覺 Bug 建議關閉</div>
+    <h2>${t('📸 高畫質 AI 分析', '📸 HQ AI Analysis')}<span class="tag pro">${t('高 Token', 'High token')}</span></h2>
+    <div class="row"><b>${t('適合：', 'Best for: ')}</b>${t('版面跑版、樣式錯亂等純視覺 Bug', 'Layout breaks, styling glitches, visual-only bugs')}</div>
+    <div class="row"><b>${t('操作：', 'How: ')}</b>${t('在 popup 或報告頁勾選「高畫質 AI 分析」', 'Enable "HQ AI analysis" in the popup or report page')}</div>
+    <div class="row"><b>${t('AI 收到：', 'AI gets: ')}</b>${t('勾選後 AI 會直接讀截圖圖片（否則只給 metadata 省 Token）', 'When enabled, AI reads the screenshot image (otherwise metadata only to save tokens)')}</div>
+    <div class="row"><b>${t('小提示：', 'Tip: ')}</b>${t('看圖較耗 Token，非視覺 Bug 建議關閉', 'Viewing images costs more tokens — turn off for non-visual bugs')}</div>
   </div>
 
   <div class="bottom-cta">
-    <a class="cta-btn" href="/install">還沒安裝？前往安裝指南 →</a>
-    <a class="cta-btn ghost" href="/">回首頁</a>
+    <a class="cta-btn" href="/install">${t('還沒安裝？前往安裝指南 →', 'Not installed yet? Go to install guide →')}</a>
+    <a class="cta-btn ghost" href="/">${t('回首頁', 'Home')}</a>
   </div>
 
   <footer>
     <div class="links">
-      <a href="/">首頁</a>
-      <a href="/install">安裝指南</a>
-      <a href="/features">功能說明</a>
-      <a href="/guide">使用指南</a>
+      <a href="/">${t('首頁', 'Home')}</a>
+      <a href="/install">${t('安裝指南', 'Install')}</a>
+      <a href="/features">${t('功能說明', 'Features')}</a>
+      <a href="/guide">${t('使用指南', 'Guide')}</a>
       <a href="/faq">FAQ</a>
-      <a href="/privacy">隱私政策</a>
-      <a href="/changelog">更新日誌</a>
+      <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
+      <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
     </div>
-    <div style="margin-top:8px;">聯絡：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
+    <div style="margin-top:8px;">${t('聯絡', 'Contact')}：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
   </footer>
 </div>
 </body>
 </html>`;
+}
 
 // ── PM-126：更新日誌頁（GET /changelog）——深色主題與其他頁一致 ──
-const CHANGELOG_PAGE_HTML = `<!DOCTYPE html>
-<html lang="zh-Hant">
+// PM-151：/changelog 改為函式（依 lang 中英切換）。版號/日期不翻，只翻功能描述。
+function changelogPage(lang: PageLang): string {
+  const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
+  return `<!DOCTYPE html>
+<html lang="${lang === 'zh' ? 'zh-Hant' : 'en'}">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>更新日誌 · BugEzy</title>
-<meta name="description" content="BugEzy 每次更新做了什麼，都記在這裡。">
+<title>${t('更新日誌 · BugEzy', 'Changelog · BugEzy')}</title>
+<meta name="description" content="${t('BugEzy 每次更新做了什麼，都記在這裡。', 'What changed in each BugEzy update, all in one place.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
 <link rel="canonical" href="https://bugezy.dev/changelog">
 <style>
   * { box-sizing: border-box; }
+  .lang-switch { position:fixed; top:14px; right:16px; z-index:10; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:5px 12px; font-size:13px; color:#c4b5fd; text-decoration:none; }
+  .lang-switch:hover { background:#2a2a3e; }
   body { margin: 0; padding: 0; background: #0f0f1a; color: #e8e8f0;
     font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif; line-height: 1.75; font-size: 15px; }
   .wrap { max-width: 720px; margin: 0 auto; padding: 48px 24px 80px; }
@@ -1597,50 +1609,52 @@ const CHANGELOG_PAGE_HTML = `<!DOCTYPE html>
 </style>
 </head>
 <body>
+<a class="lang-switch" href="?lang=${lang === 'zh' ? 'en' : 'zh'}">${t('EN', '中文')}</a>
 <div class="wrap">
   <header><a class="brand" href="/">🐛 BugEzy</a></header>
 
-  <h1>📋 BugEzy 更新日誌</h1>
-  <p class="lead">每次更新做了什麼，都記在這裡。</p>
+  <h1>${t('📋 BugEzy 更新日誌', '📋 BugEzy Changelog')}</h1>
+  <p class="lead">${t('每次更新做了什麼，都記在這裡。', 'What changed in each update, all here.')}</p>
 
   <section class="changelog-entry">
     <h3>v1.1.0 — 2026-07-02</h3>
     <ul>
-      <li>🎙️ Whisper 精準語音轉錄（付費版）</li>
-      <li>⚡ 日票 NT$20/24hr 上線</li>
-      <li>💬 AI 指令輪盤（一鍵複製慣用語）</li>
-      <li>📸 高畫質 AI 分析勾選</li>
-      <li>🟢 即時監控狀態條 + 上傳報告</li>
-      <li>⚙️ 進階設定折疊</li>
-      <li>🔒 Supabase RLS 安全強化</li>
+      <li>${t('🎙️ Whisper 精準語音轉錄（付費版）', '🎙️ Whisper voice transcription (Premium)')}</li>
+      <li>${t('⚡ 日票 NT$20/24hr 上線', '⚡ Day Pass NT$20/24hr launched')}</li>
+      <li>${t('💬 AI 指令輪盤（一鍵複製慣用語）', '💬 AI prompt carousel (one-click copy)')}</li>
+      <li>${t('📸 高畫質 AI 分析勾選', '📸 HQ AI analysis toggle')}</li>
+      <li>${t('🟢 即時監控狀態條 + 上傳報告', '🟢 Live monitor status bar + upload report')}</li>
+      <li>${t('⚙️ 進階設定折疊', '⚙️ Collapsible advanced settings')}</li>
+      <li>${t('🔒 Supabase RLS 安全強化', '🔒 Supabase RLS security hardening')}</li>
     </ul>
   </section>
 
   <section class="changelog-entry">
     <h3>v1.0.0 — 2026-06-29</h3>
     <ul>
-      <li>🎉 首次上架 Chrome Web Store</li>
-      <li>🎬 六種錄製模式</li>
-      <li>🤖 12 個 MCP 工具 + Token 透明度</li>
-      <li>💳 ECPay 付費整合</li>
+      <li>${t('🎉 首次上架 Chrome Web Store', '🎉 First release on Chrome Web Store')}</li>
+      <li>${t('🎬 六種錄製模式', '🎬 Six recording modes')}</li>
+      <li>${t('🤖 12 個 MCP 工具 + Token 透明度', '🤖 12 MCP tools + Token transparency')}</li>
+      <li>${t('💳 ECPay 付費整合', '💳 ECPay payment integration')}</li>
     </ul>
   </section>
 
   <footer>
     <div class="links">
-      <a href="/">首頁</a>
-      <a href="/install">安裝指南</a>
-      <a href="/features">功能說明</a>
-      <a href="/guide">使用指南</a>
+      <a href="/">${t('首頁', 'Home')}</a>
+      <a href="/install">${t('安裝指南', 'Install')}</a>
+      <a href="/features">${t('功能說明', 'Features')}</a>
+      <a href="/guide">${t('使用指南', 'Guide')}</a>
       <a href="/faq">FAQ</a>
-      <a href="/privacy">隱私政策</a>
-      <a href="/changelog">更新日誌</a>
+      <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
+      <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
     </div>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
   </footer>
 </div>
 </body>
 </html>`;
+}
 
 // ── PM-59：Server 直接 serve 報告頁 HTML（vanilla JS 讀 /api/reports/:id 渲染）──
 // ⚠ 規格 HTML 讀 snake_case（console_logs / rrweb_count），但 GET /api/reports/:id 實際回
@@ -2303,13 +2317,21 @@ export default {
       res.headers.set('Cache-Control', 'no-store');
       return res;
     }
-    if (request.method === 'GET' && path === '/features') return html(FEATURES_PAGE_HTML); // PM-96
+    if (request.method === 'GET' && path === '/features') {
+      const res = html(featuresPage(getLang(request))); // PM-96/151
+      res.headers.set('Cache-Control', 'no-store');
+      return res;
+    }
     // PM-126：版本檢查（popup 亮燈用）+ 更新日誌頁
     if (request.method === 'GET' && path === '/api/version') {
       // 每次上新版到 Chrome Web Store 時，同步改 latest + deploy
       return json({ latest: '1.1.0', changelog_url: 'https://bugezy.dev/changelog' });
     }
-    if (request.method === 'GET' && path === '/changelog') return html(CHANGELOG_PAGE_HTML); // PM-126
+    if (request.method === 'GET' && path === '/changelog') {
+      const res = html(changelogPage(getLang(request))); // PM-126/151
+      res.headers.set('Cache-Control', 'no-store');
+      return res;
+    }
     // PM-136：SEO — sitemap + robots（讓 Google/Bing 收錄 bugezy.dev）
     if (request.method === 'GET' && path === '/sitemap.xml') return sitemapXml();
     if (request.method === 'GET' && path === '/robots.txt') return robotsTxt();
