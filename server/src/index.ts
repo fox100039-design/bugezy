@@ -248,6 +248,41 @@ function html(body: string): Response {
   return new Response(body, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
 }
 
+// ── PM-136：SEO — sitemap.xml + robots.txt（讓搜尋引擎收錄 bugezy.dev）──
+function sitemapXml(): Response {
+  const urls: Array<[string, string, string]> = [
+    ['/', 'weekly', '1.0'],
+    ['/install', 'monthly', '0.9'],
+    ['/features', 'monthly', '0.8'],
+    ['/changelog', 'weekly', '0.7'],
+    ['/guide', 'monthly', '0.6'],
+    ['/faq', 'monthly', '0.5'],
+    ['/privacy', 'yearly', '0.3'],
+  ];
+  const body =
+    `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+    urls
+      .map(
+        ([loc, freq, pri]) =>
+          `  <url><loc>https://bugezy.dev${loc}</loc><changefreq>${freq}</changefreq><priority>${pri}</priority></url>`,
+      )
+      .join('\n') +
+    `\n</urlset>\n`;
+  return new Response(body, { headers: { 'Content-Type': 'application/xml; charset=utf-8' } });
+}
+
+function robotsTxt(): Response {
+  const body =
+    `User-agent: *\n` +
+    `Allow: /\n` +
+    `Disallow: /api/\n` +
+    `Disallow: /mcp\n` +
+    `Disallow: /report/\n\n` +
+    `Sitemap: https://bugezy.dev/sitemap.xml\n`;
+  return new Response(body, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+}
+
 // ── PM-72：綠界 ECPay CheckMacValue（依官方 AI Skill ECPay-API-Skill guides/13）──
 // AIO 金流用 SHA256；TypeScript 的 encodeURIComponent 需額外把 %20→+、~→%7e、'→%27，
 // 再轉小寫並還原 .NET 7 個特殊字元（-_.!*()）。順序與綠界 PHP SDK ecpayUrlEncode 一致。
@@ -343,7 +378,13 @@ const HOMEPAGE_HTML = `<!DOCTYPE html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>BugEzy — 開發者 Bug 報告工具，AI 幫你修</title>
-  <meta name="description" content="BugEzy：用中文語音描述 Bug，AI 自動分析。6 種錄製模式 + MCP 整合，省 95% Token 費用。">
+  <meta name="description" content="亞洲最平價的 MCP 語音除錯工具。錄製 Bug、AI 自動分析、一鍵報告。支援 Claude、Cursor、Windsurf 等 7 大 AI 工具。月費 NT$80 起。">
+  <meta name="keywords" content="BugEzy, bug reporter, MCP, AI debugging, Chrome extension, 語音除錯, bug tracking">
+  <meta property="og:title" content="BugEzy — AI 幫你修 Bug">
+  <meta property="og:description" content="錄製 Bug、AI 自動分析、一鍵報告。亞洲最平價 MCP 語音除錯工具。">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://bugezy.dev">
+  <link rel="canonical" href="https://bugezy.dev">
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     body { background:#0f0f1a; color:#e0e0e0; font-family:system-ui,"Microsoft JhengHei",sans-serif; line-height:1.6; }
@@ -601,6 +642,8 @@ const PRIVACY_PAGE_HTML = `<!DOCTYPE html>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>隱私政策 · BugEzy</title>
+<meta name="description" content="BugEzy 隱私政策：我們收集什麼資料、如何使用與保護。中英雙語說明。">
+<link rel="canonical" href="https://bugezy.dev/privacy">
 <style>
   * { box-sizing: border-box; }
   body {
@@ -762,6 +805,8 @@ const GUIDE_PAGE_HTML = `<!DOCTYPE html>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>使用指南 · BugEzy</title>
+<meta name="description" content="BugEzy 使用指南：安裝登入、六種錄製模式、編輯上傳、讓 AI 透過 MCP 讀報告修 Bug。">
+<link rel="canonical" href="https://bugezy.dev/guide">
 <style>
   * { box-sizing: border-box; }
   body {
@@ -950,6 +995,8 @@ const FAQ_PAGE_HTML = `<!DOCTYPE html>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>常見問題 · BugEzy</title>
+<meta name="description" content="BugEzy 常見問題：安裝、錄製、語音辨識、MCP 設定、付費方案等問答。">
+<link rel="canonical" href="https://bugezy.dev/faq">
 <style>
   * { box-sizing: border-box; }
   body {
@@ -1071,7 +1118,9 @@ const INSTALL_PAGE_HTML = `<!DOCTYPE html>
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>安裝 BugEzy · 三分鐘搞定</title>
+<title>安裝 BugEzy — 3 分鐘搞定 Chrome 擴充 + MCP 設定</title>
+<meta name="description" content="安裝 BugEzy Chrome 擴充功能，設定 MCP 連線，讓 AI 直接讀取你的 Bug 報告。支援 Claude、Cursor、Windsurf、Google Antigravity、Gemini CLI。">
+<link rel="canonical" href="https://bugezy.dev/install">
 <style>
   * { box-sizing: border-box; }
   body {
@@ -1291,7 +1340,9 @@ const FEATURES_PAGE_HTML = `<!DOCTYPE html>
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>功能總覽 · BugEzy</title>
+<title>BugEzy 功能 — 六種錄製模式、Whisper 語音、即時監控</title>
+<meta name="description" content="BugEzy 六種除錯模式：錄製、回溯 30 秒、截圖標注、即時監控、終端機 CLI、MCP AI 讀取。Whisper 精準語音轉錄。">
+<link rel="canonical" href="https://bugezy.dev/features">
 <style>
   * { box-sizing: border-box; }
   body {
@@ -1430,6 +1481,8 @@ const CHANGELOG_PAGE_HTML = `<!DOCTYPE html>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>更新日誌 · BugEzy</title>
+<meta name="description" content="BugEzy 每次更新做了什麼，都記在這裡。">
+<link rel="canonical" href="https://bugezy.dev/changelog">
 <style>
   * { box-sizing: border-box; }
   body { margin: 0; padding: 0; background: #0f0f1a; color: #e8e8f0;
@@ -2153,6 +2206,9 @@ export default {
       return json({ latest: '1.1.0', changelog_url: 'https://bugezy.dev/changelog' });
     }
     if (request.method === 'GET' && path === '/changelog') return html(CHANGELOG_PAGE_HTML); // PM-126
+    // PM-136：SEO — sitemap + robots（讓 Google/Bing 收錄 bugezy.dev）
+    if (request.method === 'GET' && path === '/sitemap.xml') return sitemapXml();
+    if (request.method === 'GET' && path === '/robots.txt') return robotsTxt();
 
     // PM-59：報告頁——Server 直接回完整 HTML（vanilla JS 讀 /api/reports/:id 渲染），
     // 放在 /api/reports/:id 之前匹配。
