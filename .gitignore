@@ -1,9 +1,21 @@
+# 環境
 node_modules/
 dist/
 .wrangler/
 .dev.vars
+.env
+.env.*
 *.log
+
+# PM-141：敏感檔（憑證 / 真實報告 payload）——絕不進版控
 debug/
+*.secret
+client_secret_*.json
+
 # PM-71：Chrome Web Store 打包產物（建置輸出，不進版控）
 dist-zip/
 bugezy-v*.zip
+
+# OS
+.DS_Store
+Thumbs.db
