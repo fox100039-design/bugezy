@@ -3299,12 +3299,16 @@ function createMcpServer(env: Env): McpServer {
   // Tool 1: list_reports（PM-78：需 user_email 過濾，只回該使用者的報告）
   server.tool(
     'list_reports',
-    '列出某使用者的 Bug 報告（需提供 user_email）。List a user\'s bug reports — requires user_email.',
+    '列出某使用者的 Bug 報告（需提供 user_email；可選 session_token 驗證身分）。List a user\'s bug reports — requires user_email.',
     {
       user_email: z
         .string()
         .optional()
         .describe('使用者 email；只回傳該 email 的報告。未提供則不回任何報告（安全預設）。'),
+      session_token: z
+        .string()
+        .optional()
+        .describe('你的 BugEzy session token（從 Chrome 擴充複製）。有帶就嚴格驗證身分。'),
       limit: z.number().min(1).max(50).optional(),
       url: z.string().optional(),
     },
@@ -3325,8 +3329,24 @@ function createMcpServer(env: Env): McpServer {
         .select('user_id')
         .eq('email', args.user_email)
         .maybeSingle();
-      if (uErr) return txt(`查詢失敗: ${uErr.message}`);
+      if (uErr) {
+        console.error('MCP list_reports user lookup failed:', uErr.message); // PM-142：原始錯誤只記 log
+        return txt('查詢失敗，請稍後再試。');
+      }
       if (!user) return txtWithTokens([], 'list_reports'); // 查無此 email → 回空
+
+      // PM-142（P1-1）：有帶 session_token 就嚴格驗證身分——查 sessions 表比對 user_id，
+      // 防止「知道某人 email 就能列他報告」。optional 保持向下相容（MCP 客戶端不便自動帶 token）。
+      if (args.session_token) {
+        const { data: session } = await supabase()
+          .from('sessions')
+          .select('user_id')
+          .eq('session_token', args.session_token)
+          .maybeSingle();
+        if (!session || (session as { user_id: string }).user_id !== (user as { user_id: string }).user_id) {
+          return txt('session_token 驗證失敗，請確認 token 正確。');
+        }
+      }
 
       const limit = Math.min(Math.max(args.limit ?? 10, 1), 50);
       let query = supabase()
@@ -3337,7 +3357,10 @@ function createMcpServer(env: Env): McpServer {
         .limit(limit);
       if (args.url) query = query.ilike('url', `%${args.url}%`);
       const { data, error } = await query;
-      if (error) return txt(`查詢失敗: ${error.message}`);
+      if (error) {
+        console.error('MCP list_reports query failed:', error.message); // PM-142：原始錯誤只記 log
+        return txt('查詢失敗，請稍後再試。');
+      }
       return txtWithTokens(data ?? [], 'list_reports');
     },
   );
