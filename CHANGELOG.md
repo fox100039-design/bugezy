@@ -312,6 +312,15 @@ Day 19（PM-136~152）。SEO + 多語系 + i18n + 語言暫鎖 + 清敏感檔 + 
 
 - PM-136：**SEO — sitemap.xml + robots.txt + meta tags**（只改 `server/src/index.ts`）— bugezy.dev 上線一週搜尋引擎搜不到。①新增 `GET /sitemap.xml`（`sitemapXml()`，7 個對外頁 URL + changefreq/priority，`application/xml`）；②`GET /robots.txt`（`robotsTxt()`，`Allow: /` + `Disallow: /api//mcp//report/` + Sitemap 指引，`text/plain`）；③首頁補完整 SEO（description 改行銷版 + keywords + og:title/description/type/url + canonical）；install/features 改 SEO 友善 title + description + canonical；changelog/guide/faq/privacy 補 description + canonical。已部署（`a35f9d9b`）+ curl 驗證（sitemap 7 URL/正確 Content-Type、robots 含 Sitemap、各頁 canonical/meta 到位）。tsc ✅。**FOX 手動**：Google Search Console + Bing Webmaster 提交 sitemap。
 
+- FOX 待辦 / 技術債（Day 19 收尾）：
+  - **Supabase SQL**：PM-145 `CREATE TABLE payments`（+RLS）待跑（未跑 callback 照常但無冪等/對帳）；沿用 Day 18 的 `CREATE TABLE sessions`（未跑登入拿不到 DB token）。
+  - **CLI 重新發佈**：PM-144 `bugezy-watch@1.1.0`（`cd cli && npm publish`，需 npm login）；用法改 `BUGEZY_TOKEN=<擴充複製的 session token> npx bugezy-watch -- <command>`。擴充尚無「複製 Session Token」按鈕（UX 待辦）。
+  - **extension 未重上架**：PM-137~148（多語系語音 + i18n + Whisper 截圖 + manifest 1.1.0）整套 build 過未打包送審；上架用 manifest 1.1.0 zip。
+  - **日韓越暫鎖**（PM-140）：金流特約商店開通後解鎖 popup `disabled` + server `ALLOWED_LANGS` 加回 + 補日韓越 UI 字典。
+  - **報告頁 PATCH toggle**（PM-146 副作用）：公開分享頁的「高畫質 AI 分析」勾選因無 token 會 401（owner-only 預期後果）；owner 改在擴充上傳時設定。
+  - 沿用 Day 18：PM-133 user_id=Google sub（舊報告脫鉤 + 登入需 token aud=client_id 實機驗收）、Cloudflare Rate Limiting、綠界 4 secret + service_role secret + rls-lockdown.sql。
+- 收工：CHANGELOG + ARCHITECTURE + project_status 同步 + commit + push（remote 已設）。
+
 ## 2026-07-03
 
 Day 18（PM-128~135，8 卡）。**Fable 5 雙輪安全稽核 → 逐一修復**。核心：認證信任鏈重構（session token 取代假 base64 + Google token audience 驗證 + user_id 由 Google sub 推導、不信任客戶端）、報告/方案/AI 端點全加認證與存取控制、CORS 收緊、錯誤脫敏、body size 上限、私有端點防邊緣快取。server 全部已部署；extension 全部 build 過、**未重上架 Web Store**。詳見 `docs/security-audit-round1.md`（若已產）與各卡。

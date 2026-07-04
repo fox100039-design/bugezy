@@ -1,6 +1,6 @@
 # BugEzy 專案全貌與接手指南
 
-> 最後更新：2026-07-03（Day 18：Fable 5 安全稽核 + 認證信任鏈重構 PM-128~135）
+> 最後更新：2026-07-04（Day 19：SEO + 全站國際化 + 安全 P1-P2 收尾 PM-136~152）
 > 維護者：FOX（Claude Chat PM 角色）
 > 用途：新 Chat 對話開始時讀此檔，快速掌握全貌並接手開發
 
@@ -505,6 +505,30 @@ FOX = 創辦人 + 決策者 + 手動驗收
 - Server（全部已部署）：`sessions` 表 + session token 全套認證、Google token audience 驗證、報告/方案/AI 端點存取控制、CORS 白名單、`GENERIC_500` 脫敏、body size 上限、`jsonNoStore` 防快取。新常數：`GOOGLE_CLIENT_ID`(vars)/`MAX_POST_SIZE`/`MAX_REPORT_SIZE`/`GENERIC_500`。
 - Extension（皆 build 過、**未重上架**）：`auth.ts`（`getAuthToken`/`getAuthHeaders`/`getAuthHeaderOnly`）、`doLogin`/`refreshSessionSilently`、`checkout.html/ts` 跳板、三 AI 端點與報告上傳全帶 token。新 storage key：`bugezy:session-token`。
 - ⚠ 技術債 / FOX 待辦（Day 18）：① **PM-128 `sessions` 表 SQL 待跑**（未跑登入拿不到 DB token）；② **PM-133 user_id 改 Google sub**——舊 paid 綁舊 UUID，新 user 預設 free，要看付費狀態需重設 `plan` 或重走綠界；舊報告與新 user_id 脫鉤（乾淨切換）；③ **PM-133 登入實機驗收**：`chrome.identity` token `aud/azp` 須 = manifest client_id；④ **PM-131 Cloudflare Rate Limiting**（Dashboard）；⑤ **extension 整套未重上架 Web Store**（session/AI 端點帶 token/checkout.html 皆需重打包送審）；⑥ 沿用：PM-94 綠界 4 secret、PM-93 service_role + rls-lockdown.sql、PM-73/82/109 ALTER、PM-98 backfill；⑦ **無 git remote，push 無法執行**。
+
+---
+
+## §6n Day 19（2026-07-04，PM-136~152）— SEO + 全站國際化 + 安全 P1-P2 收尾
+
+**目標**：讓 bugezy.dev 被搜尋引擎收錄、打開亞洲多語市場（語音 + UI + 對外頁全英文化）、把 Fable 5 稽核剩下的 P1/P2 缺失補完。server 部分皆已部署；extension 部分皆 build 過、**未重上架**。
+
+**SEO（PM-136 + GSC 驗證）**：`GET /sitemap.xml`（7 頁）+ `/robots.txt` + 各頁 meta/og/canonical + 全頁 `google-site-verification`。**FOX 已手動**：GSC 驗證通過 + sitemap 提交、Bing 自動匯入。
+
+**多語系語音（PM-137/140）**：popup 進階設定加語言下拉（zh/yue/日韓英越；**PM-140 日韓越暫鎖 disabled**，金流開通再放）；server `handleTranscribe` 從 multipart `language` 讀 + 白名單（現 `['zh','yue','en']`）；`types.ts` 加 `LANG_KEY`/`SPEECH_LANG_MAP`/`InjectCommand.speechLang`；inject（MAIN world 無 storage）語言由 content 經 `data-bugezy-lang` 注入 DOM 傳入。
+
+**擴充 UI i18n（PM-138/139）**：新 `extension/src/i18n.ts`（`UILang`/`getUILang`/`t()` + ~100 條中英字典 + `DEFAULT_PROMPTS` 多語）；popup 49 處 `data-i18n` + `applyTranslations`；inject/content 監控·工具列·字幕·授權用 `it()`/`ct()`；annotate 16 處 `data-i18n`。粵語共用中文 UI、日韓英越用英文 UI。
+
+**對外頁英文版（PM-150~152）**：`getLang(request)`（`?lang=` 覆蓋 + `Accept-Language`）；七頁改函式 `homePage/installPage/featuresPage/changelogPage/guidePage/faqPage/privacyPage(lang)`，本地 `t(zh,en)` 全文切換 + 右上角語言切換鈕 + `Cache-Control: no-store`（防 CF 跨語言快取）。privacy 由中英雙語堆疊改單語言。🔴 FAQ 英文版無競品名稱。
+
+**安全 P1-P2（PM-142~146/149）**：MCP `list_reports` 加 `session_token` 選填驗證、`get_live_errors`/`get_terminal_logs` 加 `user_email` + per-user R2 key；live-errors/terminal-logs POST/GET 加認證（**terminal-logs 付費限定 403**）；`POST /api/auth/logout` 撤銷 server session + extension 登出先呼叫；`PATCH /api/reports/:id/settings` 加 owner 驗證（403）；**ECPay callback 冪等 + `payments` 表 + 金額比對**（月費 80/日票 20/續扣用 `MerchantTradeNo-Gwsr` 組合 key）；`formatEcpayDate` 改 UTC+8；MCP 錯誤脫敏。
+
+**其他（PM-141/143/144/147/148）**：刪 `debug/` 敏感檔（含 OAuth client secret，本就未進 git）+ `.gitignore` 加硬；截圖標注付費版走 Whisper（MediaRecorder→`/api/transcribe`）；CLI `bugezy-watch` 加 `BUGEZY_TOKEN` + 改名/版號 1.1.0；manifest `version 1.1.0` + 描述英文化 + `<all_urls>` 審核說明。
+
+### 增量（Day 19）
+- Server（全部已部署）：SEO 端點、Whisper 語言白名單、七頁 i18n 函式 + `getLang`、MCP/監控日誌認證、`payments` 表冪等、logout、PATCH owner、UTC+8、錯誤脫敏。
+- Extension（皆 build 過、**未重上架**）：`i18n.ts`、popup/inject/content/annotate 全面 i18n、語言下拉、截圖 Whisper、manifest 1.1.0。
+- CLI（**改檔未發佈**）：`bugezy-watch@1.1.0` + `BUGEZY_TOKEN`。
+- ⚠ 技術債 / FOX 待辦（Day 19）：① **PM-145 `CREATE TABLE payments` + RLS 待跑**（+ 沿用 PM-128 `sessions` 表）；② **PM-144 CLI 待 `npm publish`**（需 npm login；擴充尚無「複製 token」按鈕 UX 待補）；③ **extension 未重上架**（PM-137~148 整套，用 manifest 1.1.0 zip）；④ **PM-140 日韓越解鎖**待金流特約商店 + 補日韓越 UI 字典；⑤ **PM-146 報告頁 PATCH toggle** 公開頁 401（owner-only 後果）；⑥ 沿用 Day 18：sessions SQL、user_id=Google sub 資料遷移、Rate Limiting、綠界 4 secret + service_role + rls-lockdown.sql。
 
 ---
 
