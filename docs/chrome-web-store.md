@@ -90,7 +90,7 @@ https://bugezy-api.bugezy-api.workers.dev
 
 ## 權限說明（Chrome 會問用戶為什麼需要這些權限）
 
-> ⚠ 以下對應 `extension/manifest.json` **實際宣告** 的權限（`activeTab`、`scripting`、`storage`、`downloads`、`identity`）。
+> ⚠ 以下對應 `extension/manifest.json` **實際宣告** 的權限（`activeTab`、`scripting`、`storage`、`downloads`、`identity`、`offscreen`）+ host permission `<all_urls>`（content_scripts matches）。
 > Chrome Web Store 審核要求權限理由必須與 manifest 一致，故已依實際 manifest 校正（詳見本檔末「權限校正說明」）。
 
 • activeTab — 錄製當前頁面的 DOM 和 Console
@@ -98,10 +98,21 @@ https://bugezy-api.bugezy-api.workers.dev
 • storage — 儲存登入狀態和設定（chrome.storage.local）
 • downloads — 將 Bug 報告 JSON 匯出到本機（給 AI 讀）
 • identity — Google 帳號登入（chrome.identity.getAuthToken）
+• offscreen — 付費版 Whisper 精準語音：在隱藏 offscreen document 用 MediaRecorder 錄音（PM-86）
+• `<all_urls>`（host / content_scripts matches）— 見下方「單一用途說明」
+
+### 單一用途說明（Single Purpose，`<all_urls>` 審核回覆，PM-148 §3）
+`<all_urls>` 是除錯工具的必要條件——開發者需要在**任何正在除錯的網站**上注入 content script 才能：
+- 攔截 console.error / network 4xx-5xx（inject.ts，MAIN world）
+- 建立工具列 UI / 錄製控制（content.ts，ISOLATED world）
+- 即時監控浮動狀態條
+
+> 審核回覆英文版：
+> BugEzy is a bug reporting tool that captures DOM changes, console errors, network failures, and voice descriptions on any webpage the developer is debugging. The `<all_urls>` permission is required because developers need to record bugs on any website they work on.
 
 ### 權限校正說明（給 FOX）
-PM-67 規格原列的權限清單含 `tabs` 與 `offscreen`，但與目前 `extension/manifest.json` 不符，已校正：
-- **`offscreen`**：第 2 代曾用，PM-08 已移除（語音改在 inject.ts MAIN world 跑，不再用 offscreen document）。manifest 已無此權限 → 不列。
+PM-67 規格原列的權限清單含 `tabs` 與 `offscreen`，已依實際 `extension/manifest.json` 校正：
+- **`offscreen`**：第 2 代曾用 → PM-08 移除 → **PM-86 重新加回**（付費版 Whisper 用隱藏 offscreen document 錄音）。manifest 目前**有**此權限 → 已列入。
 - **`tabs`**：目前 manifest 未宣告 `tabs` 權限（跨頁錄製靠 content script 在每頁注入 + background `chrome.storage.local` buffer 接力，不需 `tabs` 權限）。`chrome.tabs.create`（開升級頁/標注頁）在 MV3 不需要 `tabs` 權限 → 不列。
 - **補列 `scripting`、`downloads`**：manifest 實際有宣告，Chrome Web Store 會要求逐項說明用途。
 - OAuth：manifest 另有 `oauth2` 區塊（client_id + scopes），非 `permissions` 陣列項目，於上架表單的 OAuth 同意畫面設定處理，不在本權限清單。
