@@ -830,6 +830,12 @@ googleLoginBtn.addEventListener('click', async () => {
 });
 
 logoutBtn.addEventListener('click', async () => {
+  // PM-146：先呼叫 server 撤銷 session（從 sessions 表刪 token，舊 token 立即失效）
+  try {
+    await fetch(`${API_BASE}/api/auth/logout`, { method: 'POST', headers: await getAuthHeaders() });
+  } catch {
+    /* 靜默失敗，不影響本地登出 */
+  }
   await chrome.storage.local.remove([SESSION_KEY, SESSION_TOKEN_KEY]); // PM-129：一併清 session token
   chrome.identity.clearAllCachedAuthTokens(() => {});
   showLoginView();

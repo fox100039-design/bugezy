@@ -244,6 +244,17 @@ async function createSession(request: Request, env: Env): Promise<Response> {
   return json({ session_token: sessionToken, user_id: userId, email });
 }
 
+/** PM-146：POST /api/auth/logout — 從 sessions 表刪除 token（登出即撤銷，舊 token 立即失效）。
+ *  無 token 也回 ok（登出本就冪等）。 */
+async function handleLogout(request: Request, env: Env): Promise<Response> {
+  const auth = request.headers.get('Authorization');
+  const token = auth ? auth.replace('Bearer ', '').trim() : '';
+  if (token) {
+    await supa(env).from('sessions').delete().eq('session_token', token);
+  }
+  return json({ ok: true });
+}
+
 function html(body: string): Response {
   return new Response(body, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
 }
@@ -2314,6 +2325,10 @@ export default {
       if (request.method === 'POST' && path === '/api/auth/session') {
         return await createSession(request, env);
       }
+      // PM-146（P2-3）：登出撤銷 server session（從 sessions 表刪 token，舊 token 立即失效）
+      if (request.method === 'POST' && path === '/api/auth/logout') {
+        return await handleLogout(request, env);
+      }
       if (request.method === 'GET' && path === '/api/user/plan') {
         return await getUserPlan(request, env);
       }
@@ -2512,12 +2527,26 @@ async function getReport(reportId: string, env: Env): Promise<Response> {
   });
 }
 
-// PATCH /api/reports/:id/settings — 報告設定（PM-82：允許 AI 讀截圖）。不需登入（有 share link 即可改）。
+// PATCH /api/reports/:id/settings — 報告設定（PM-82：允許 AI 讀截圖）。
+// PM-146（P2-5）：必須登入 + 必須是報告 owner（原本無認證，任何有 report_id 的人可翻轉截圖曝光設定）。
 async function updateReportSettings(
   reportId: string,
   request: Request,
   env: Env,
 ): Promise<Response> {
+  const userId = await getAuthUserId(request, env);
+  if (!userId) return json({ error: '請先登入' }, 401);
+
+  // 確認是報告 owner
+  const { data: report } = await supa(env)
+    .from('reports')
+    .select('user_id')
+    .eq('report_id', reportId)
+    .maybeSingle();
+  if (!report || (report as { user_id: string | null }).user_id !== userId) {
+    return json({ error: '無權限修改此報告' }, 403);
+  }
+
   const body = (await request.json().catch(() => ({}))) as { allow_screenshot_images?: boolean };
   if (typeof body.allow_screenshot_images !== 'boolean') {
     return json({ error: 'allow_screenshot_images (boolean) required' }, 400);
