@@ -2662,8 +2662,9 @@ async function handleTranscribe(request: Request, env: Env): Promise<Response> {
     return json({ error: '音訊太短' }, 400);
   }
 
-  // PM-137：語言白名單（防濫用；非白名單一律 fallback zh）
-  const ALLOWED_LANGS = ['zh', 'yue', 'ja', 'ko', 'en', 'vi'];
+  // PM-137/140：語言白名單（防濫用；非白名單一律 fallback zh）。
+  // PM-140：金流（綠界特約商店）未開通前只放行 zh/yue/en；日韓越（ja/ko/vi）暫鎖，開放時再加回。
+  const ALLOWED_LANGS = ['zh', 'yue', 'en'];
   const finalLang = ALLOWED_LANGS.includes(language) ? language : 'zh';
 
   // 3. 呼叫 Groq Whisper API
