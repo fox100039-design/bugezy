@@ -21,6 +21,7 @@ import {
   type StateResponse,
 } from './types';
 import { getAuthHeaders } from './auth';
+import { t, getUILang, type UILang } from './i18n';
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -114,13 +115,31 @@ toolbarEffect.addEventListener('change', () => {
   chrome.storage.local.set({ [TOOLBAR_EFFECT_KEY]: toolbarEffect.checked });
 });
 
-// PM-137：語音語言選擇（Whisper language / Web Speech lang；預設 zh，存 storage）
+// PM-137/138：語音語言選擇（Whisper/Web Speech）+ 連動 popup UI 語言（中/英）
 const langSelect = $<HTMLSelectElement>('langSelect');
+let currentUILang: UILang = 'zh';
+
+/** PM-138：依 currentUILang 把所有 [data-i18n] 元素的文字換掉（保留 emoji，字典值已含）。 */
+function applyTranslations() {
+  document.querySelectorAll<HTMLElement>('[data-i18n]').forEach((el) => {
+    const key = el.getAttribute('data-i18n');
+    if (key) el.textContent = t(key, currentUILang);
+  });
+}
+
 chrome.storage.local.get(LANG_KEY, (r) => {
-  langSelect.value = (r[LANG_KEY] as string) || 'zh';
+  const speechLang = (r[LANG_KEY] as string) || 'zh';
+  langSelect.value = speechLang;
+  currentUILang = getUILang(speechLang);
+  applyTranslations();
+  void loadPlan(); // 依語言重繪動態文字（用量/倒數/paid 等）
 });
 langSelect.addEventListener('change', () => {
-  void chrome.storage.local.set({ [LANG_KEY]: langSelect.value });
+  const speechLang = langSelect.value;
+  void chrome.storage.local.set({ [LANG_KEY]: speechLang });
+  currentUILang = getUILang(speechLang);
+  applyTranslations(); // 先套靜態文字（會覆寫 record-desc 等為預設）
+  void loadPlan(); // 再依方案重繪動態文字（覆寫回用量/無限次/倒數）
 });
 
 // PM-86：麥克風 toggle（標題列）— offscreen 錄音 + Groq Whisper 架構；預設開啟，狀態存 storage
@@ -317,7 +336,9 @@ function render(state: StateResponse) {
     consoleCount.textContent = String(state.summary.consoleLogs);
     networkCount.textContent = String(state.summary.networkErrors);
     voiceCount.textContent = String(state.summary.voiceSegments ?? 0);
-    durationVal.textContent = `${Math.round(state.summary.durationMs / 1000)} 秒`;
+    durationVal.textContent = t('duration-sec', currentUILang, {
+      n: Math.round(state.summary.durationMs / 1000),
+    });
     pageUrl.textContent = state.summary.pageInfo.url;
     renderUpload(state.summary);
 
@@ -366,7 +387,7 @@ async function doStartRecording() {
     const res = await send<StateResponse>('START_RECORDING');
     // PM-63：免費版用量已達上限 → 不進入錄製，顯示升級提示
     if (res.limitReached) {
-      setRecordDesc('已用完（升級解鎖）');
+      setRecordDesc(t('used-up', currentUILang));
       const span = upgradeHint.querySelector('span');
       if (span) span.textContent = res.limitReached;
       upgradeHint.classList.remove('hidden');
@@ -672,18 +693,18 @@ async function loadPlan() {
 
     if (plan.plan === 'paid') {
       // 付費版 → 無限功能 + ✨付費版徽章（含取消訂閱）
-      setRecordDesc('✨ 無限次');
+      setRecordDesc(t('unlimited', currentUILang));
       startBtn.disabled = false;
       paidBadge.classList.remove('hidden');
     } else if (plan.plan === 'cancelled') {
       // 已取消未到期 → 仍享無限功能 + 到期日 + 重新訂閱
-      setRecordDesc('✨ 無限次');
+      setRecordDesc(t('unlimited', currentUILang));
       startBtn.disabled = false;
       expiresDate.textContent = fmtDate(plan.plan_expires_at ?? plan.expires_at);
       cancelledBadge.classList.remove('hidden');
     } else if (plan.plan === 'day_pass' && dayPassRemainMs > 0) {
       // PM-111：日票有效中 → 無限功能 + ⚡日票 badge + 倒數；隱藏升級鈕（鎖月費）+ 顯示到期提示
-      setRecordDesc('✨ 無限次');
+      setRecordDesc(t('unlimited', currentUILang));
       startBtn.disabled = false;
       showDayPassActive(dayPassRemainMs);
     } else {
@@ -692,10 +713,10 @@ async function loadPlan() {
       if (rec) {
         const remain = rec.max - rec.used;
         if (remain > 0) {
-          setRecordDesc(`剩 ${remain} 次`);
+          setRecordDesc(t('remaining', currentUILang, { n: remain }));
           startBtn.disabled = false;
         } else {
-          setRecordDesc('已用完（升級解鎖）');
+          setRecordDesc(t('used-up', currentUILang));
           startBtn.disabled = true;
         }
       }
@@ -733,7 +754,7 @@ function updateCountdown(ms: number) {
   const h = Math.floor(clamped / 3600000);
   const m = Math.floor((clamped % 3600000) / 60000);
   const s = Math.floor((clamped % 60000) / 1000);
-  dayPassCountdown.textContent = `剩餘 ${h}h ${m}m ${s}s`;
+  dayPassCountdown.textContent = t('day-pass-remaining', currentUILang, { h, m, s });
 }
 function showDayPassActive(remainMs: number) {
   upgradeHint.classList.add('hidden'); // 鎖月費：日票中不顯示升級鈕
@@ -782,7 +803,7 @@ cancelSubBtn.addEventListener('click', async () => {
 
 googleLoginBtn.addEventListener('click', async () => {
   googleLoginBtn.disabled = true;
-  googleLoginBtn.textContent = '登入中...';
+  googleLoginBtn.textContent = t('login-loading', currentUILang);
   try {
     // PM-133：送 Google token 給 server 驗證 + 推導 user_id（extension 不再自決 user_id）
     const session = await doLogin(true);
@@ -791,7 +812,7 @@ googleLoginBtn.addEventListener('click', async () => {
   } catch (err) {
     console.error('[BugEzy popup] login', err);
     googleLoginBtn.disabled = false;
-    googleLoginBtn.textContent = '登入失敗，重試';
+    googleLoginBtn.textContent = t('login-failed', currentUILang);
   }
 });
 
@@ -987,7 +1008,10 @@ async function checkNewVersion() {
     if (data.latest && data.latest !== currentVersion) {
       const badge = $('update-badge');
       badge.style.display = 'flex';
-      badge.textContent = `🆕 目前 v${currentVersion} → 新版 v${data.latest} 可用`;
+      badge.textContent = t('update-available', currentUILang, {
+        cur: currentVersion,
+        new: data.latest,
+      });
       const url = data.changelog_url || `${API_BASE}/changelog`;
       badge.addEventListener('click', () => void chrome.tabs.create({ url }));
     }

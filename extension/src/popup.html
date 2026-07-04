@@ -299,10 +299,10 @@
         <span class="brand-icon">🐛</span>
         <span class="brand-name">BugEzy</span>
       </div>
-      <p class="login-hint">登入後開始使用</p>
+      <p class="login-hint" data-i18n="login-hint">登入後開始使用</p>
       <button id="googleLoginBtn" class="btn-google">
         <img src="https://developers.google.com/identity/images/g-logo.png" width="18" alt="" />
-        用 Google 登入
+        <span data-i18n="login-google">用 Google 登入</span>
       </button>
     </section>
 
@@ -311,7 +311,7 @@
       <div class="user-bar">
         <img id="userAvatar" class="avatar" width="24" height="24" alt="" />
         <span id="userName"></span>
-        <button id="logoutBtn" class="btn-sm">登出</button>
+        <button id="logoutBtn" class="btn-sm" data-i18n="logout">登出</button>
       </div>
       <div class="brand">
         <span class="brand-icon">🐛</span>
@@ -323,66 +323,66 @@
             <span class="mic-slider"></span>
           </label>
         </div>
-        <span class="brand-tag">語音 Bug 回報</span>
+        <span class="brand-tag" data-i18n="voice-bug-report">語音 Bug 回報</span>
       </div>
       <div class="mic-mode" id="micMode" style="display:none;">
-        <span class="mic-mode-label">語音模式</span>
-        <button class="mic-mode-btn" data-mode="realtime">即時字幕</button>
-        <button class="mic-mode-btn" data-mode="whisper">精準轉錄</button>
+        <span class="mic-mode-label" data-i18n="voice-mode">語音模式</span>
+        <button class="mic-mode-btn" data-mode="realtime" data-i18n="mode-realtime">即時字幕</button>
+        <button class="mic-mode-btn" data-mode="whisper" data-i18n="mode-whisper">精準轉錄</button>
       </div>
       <!-- PM-106：錄製中設定鎖定提示 -->
-      <div id="settingsHint" style="display:none;font-size:11px;color:#f59e0b;text-align:center;margin:2px 0 0;">🔒 錄製中，設定已鎖定</div>
+      <div id="settingsHint" data-i18n="settings-locked" style="display:none;font-size:11px;color:#f59e0b;text-align:center;margin:2px 0 0;">🔒 錄製中，設定已鎖定</div>
 
     <!-- 狀態一：閒置（兩個獨立入口） -->
     <section id="idleView" class="hidden">
       <div class="action-grid">
         <button id="startBtn" class="main-action record">
           <span class="action-icon">🎬</span>
-          <span class="action-label">錄製</span>
-          <span class="action-desc">DOM + 語音 + Console</span>
+          <span class="action-label" data-i18n="mode-record">錄製</span>
+          <span class="action-desc" data-i18n="mode-record-desc">DOM + 語音 + Console</span>
         </button>
         <button id="rewindBtn" class="main-action rewind">
           <span class="action-icon">⏪</span>
-          <span class="action-label">回溯 30s</span>
-          <span class="action-desc">抓剛才的 Bug</span>
+          <span class="action-label" data-i18n="mode-rewind">回溯 30s</span>
+          <span class="action-desc" data-i18n="mode-rewind-desc">抓剛才的 Bug</span>
         </button>
         <button id="screenshotBtn" class="main-action screenshot">
           <span class="action-icon">📸</span>
-          <span class="action-label">截圖標注</span>
-          <span class="action-desc">快速擷取 + 畫重點</span>
+          <span class="action-label" data-i18n="mode-screenshot">截圖標注</span>
+          <span class="action-desc" data-i18n="mode-screenshot-desc">快速擷取 + 畫重點</span>
         </button>
       </div>
       <div id="lastScreenshot" class="meta" style="display:none;"></div>
       <div id="upgradeHint" class="upgrade-hint hidden">
-        <span>升級解鎖無限次</span>
+        <span data-i18n="upgrade-unlock">升級解鎖無限次</span>
         <div class="upgrade-section">
-          <button id="dayPassBtn" class="day-pass-btn">⚡ 日票 NT$20（24hr）</button>
-          <button id="upgradeBtn" class="monthly-btn">✨ 月費 NT$80/月</button>
+          <button id="dayPassBtn" class="day-pass-btn" data-i18n="day-pass-btn">⚡ 日票 NT$20（24hr）</button>
+          <button id="upgradeBtn" class="monthly-btn" data-i18n="monthly-btn">✨ 月費 NT$80/月</button>
         </div>
       </div>
       <div id="dayPassStatus" class="day-pass-status hidden">
-        <span class="day-pass-badge">⚡ 日票</span>
+        <span class="day-pass-badge" data-i18n="day-pass-badge">⚡ 日票</span>
         <span id="dayPassCountdown" class="countdown"></span>
       </div>
-      <p id="dayPassHint" class="day-pass-hint hidden">日票到期後可升級月費</p>
+      <p id="dayPassHint" class="day-pass-hint hidden" data-i18n="day-pass-expire-hint">日票到期後可升級月費</p>
       <div id="paidBadge" class="paid-badge hidden">
-        <span>✨ 付費版會員</span>
-        <a id="cancelSubBtn" class="cancel-link">取消訂閱</a>
+        <span data-i18n="paid-badge">✨ 付費版會員</span>
+        <a id="cancelSubBtn" class="cancel-link" data-i18n="cancel-sub">取消訂閱</a>
       </div>
       <div id="cancelledBadge" class="cancelled-badge hidden">
-        <span>已取消訂閱，可用到 <span id="expiresDate"></span></span>
-        <a id="resubBtn" class="cancel-link">重新訂閱</a>
+        <span><span data-i18n="cancelled-prefix">已取消訂閱，可用到</span> <span id="expiresDate"></span></span>
+        <a id="resubBtn" class="cancel-link" data-i18n="resub">重新訂閱</a>
       </div>
       <!-- PM-122：進階設定 accordion（四個 toggle 折疊收納，預設收合，狀態存 storage） -->
       <div class="settings-accordion">
         <div class="settings-header" id="settings-header">
-          <span>⚙️ 進階設定</span>
+          <span data-i18n="advanced-settings">⚙️ 進階設定</span>
           <span class="settings-chevron" id="settings-chevron">▼</span>
         </div>
         <div class="settings-body" id="settings-body" style="display:none;">
       <div class="mode-toggle">
         <label class="toggle-row">
-          <span>🌐 語音語言</span>
+          <span data-i18n="lang-label">🌐 語音語言</span>
           <select id="langSelect" class="lang-select">
             <option value="zh">🇹🇼 繁體中文</option>
             <option value="yue">🇭🇰 粵語</option>
@@ -393,19 +393,19 @@
           </select>
         </label>
         <label class="toggle-row">
-          <span>🔍 即時監控（AI 可查 error）</span>
+          <span data-i18n="monitor-toggle">🔍 即時監控（AI 可查 error）</span>
           <input type="checkbox" id="monitorMode" />
         </label>
         <label class="toggle-row">
-          <span>🔇 鍵盤模式（關閉語音）</span>
+          <span data-i18n="keyboard-toggle">🔇 鍵盤模式（關閉語音）</span>
           <input type="checkbox" id="keyboardMode" />
         </label>
         <label class="toggle-row">
-          <span>📸 高畫質 AI 分析（高 Token）</span>
+          <span data-i18n="hq-toggle">📸 高畫質 AI 分析（高 Token）</span>
           <input type="checkbox" id="allowScreenshots" />
         </label>
         <label class="toggle-row">
-          <span>✨ 工具列特效</span>
+          <span data-i18n="effect-toggle">✨ 工具列特效</span>
           <input type="checkbox" id="toolbarEffect" />
         </label>
       </div>
@@ -415,7 +415,7 @@
       <!-- PM-114~118：AI 慣用語輪盤（可編輯 + 顏色標記 + 一鍵複製 + 可收合/釘選，預設收合） -->
       <div class="prompt-carousel" id="prompt-carousel">
         <div class="prompt-title-row">
-          <span class="prompt-title">一鍵複製指令貼給 AI</span>
+          <span class="prompt-title" data-i18n="carousel-title">一鍵複製指令貼給 AI</span>
           <span class="prompt-index" id="prompt-index">1/4</span>
         </div>
         <div class="prompt-body" id="prompt-body" style="display:block;">
@@ -433,10 +433,10 @@
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                 <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
               </svg>
-              複製
+              <span data-i18n="copy-btn">複製</span>
             </button>
             <span id="prompt-copied" class="prompt-copied" style="display:none;">✅ 已複製</span>
-            <button id="prompt-edit" class="prompt-edit-btn">✏️ 編輯</button>
+            <button id="prompt-edit" class="prompt-edit-btn" data-i18n="edit-btn">✏️ 編輯</button>
           </div>
           <div id="prompt-editor" class="prompt-editor" style="display:none;">
             <div class="prompt-color-picker" id="prompt-color-picker">
@@ -447,8 +447,8 @@
             </div>
             <textarea id="prompt-textarea" class="prompt-textarea" rows="5"></textarea>
             <div class="prompt-editor-actions">
-              <button id="prompt-save" class="prompt-save-btn">💾 儲存</button>
-              <button id="prompt-cancel" class="prompt-cancel-btn">取消</button>
+              <button id="prompt-save" class="prompt-save-btn" data-i18n="save-btn">💾 儲存</button>
+              <button id="prompt-cancel" class="prompt-cancel-btn" data-i18n="cancel-btn">取消</button>
             </div>
           </div>
         </div>
@@ -458,18 +458,18 @@
     <!-- 狀態二：錄製中 -->
     <section id="recordingView" class="hidden">
       <div class="recording-timer"><span class="rec-dot"></span><span id="elapsed">00:00</span></div>
-      <button id="stopBtn">⏹ 停止錄製</button>
+      <button id="stopBtn" data-i18n="stop-recording">⏹ 停止錄製</button>
     </section>
 
     <!-- 狀態三：錄製完成 -->
     <section id="doneView" class="hidden">
-      <div class="done-title">✅ 錄製完成！</div>
+      <div class="done-title" data-i18n="done-title">✅ 錄製完成！</div>
       <div class="summary-card">
-        <div class="summary-row"><span class="label">DOM 事件</span><span class="value" id="domCount">0</span></div>
-        <div class="summary-row"><span class="label">Console</span><span class="value" id="consoleCount">0</span></div>
-        <div class="summary-row"><span class="label">Network 錯誤</span><span class="value" id="networkCount">0</span></div>
-        <div class="summary-row"><span class="label">語音片段</span><span class="value" id="voiceCount">0</span></div>
-        <div class="summary-row"><span class="label">時間</span><span class="value" id="durationVal">0 秒</span></div>
+        <div class="summary-row"><span class="label" data-i18n="sum-dom">DOM 事件</span><span class="value" id="domCount">0</span></div>
+        <div class="summary-row"><span class="label" data-i18n="sum-console">Console</span><span class="value" id="consoleCount">0</span></div>
+        <div class="summary-row"><span class="label" data-i18n="sum-network">Network 錯誤</span><span class="value" id="networkCount">0</span></div>
+        <div class="summary-row"><span class="label" data-i18n="sum-voice">語音片段</span><span class="value" id="voiceCount">0</span></div>
+        <div class="summary-row"><span class="label" data-i18n="sum-time">時間</span><span class="value" id="durationVal">0 秒</span></div>
         <div class="meta" id="pageUrl"></div>
       </div>
 
@@ -478,13 +478,13 @@
         <div id="uploadStatus" class="meta"></div>
         <div id="shareUrlRow" class="share-card" style="display:none;">
           <a id="shareLink" href="#" target="_blank"></a>
-          <button id="copyLinkBtn" class="link-btn">📋 複製連結</button>
+          <button id="copyLinkBtn" class="link-btn" data-i18n="copy-link">📋 複製連結</button>
         </div>
       </div>
 
-      <button id="copyBtn">📋 複製 JSON</button>
-      <button id="exportBtn">💾 匯出 JSON（給 AI 讀）</button>
-      <button id="clearBtn">🗑️ 清除，重新錄製</button>
+      <button id="copyBtn" data-i18n="copy-json">📋 複製 JSON</button>
+      <button id="exportBtn" data-i18n="export-json">💾 匯出 JSON（給 AI 讀）</button>
+      <button id="clearBtn" data-i18n="clear-restart">🗑️ 清除，重新錄製</button>
     </section>
     </div>
     <!-- /mainView -->
@@ -496,10 +496,10 @@
     <div id="micPrompt" class="mic-prompt" style="display:none;">
       <div class="mic-prompt-card">
         <p class="mic-prompt-icon">🎙️</p>
-        <p class="mic-prompt-title">麥克風目前關閉</p>
-        <p class="mic-prompt-desc">要用語音描述 Bug 嗎？</p>
-        <button id="micPromptOn" class="mic-prompt-btn primary">開啟並錄製</button>
-        <button id="micPromptSkip" class="mic-prompt-btn secondary">直接錄製（不錄語音）</button>
+        <p class="mic-prompt-title" data-i18n="mic-prompt-title">麥克風目前關閉</p>
+        <p class="mic-prompt-desc" data-i18n="mic-prompt-desc">要用語音描述 Bug 嗎？</p>
+        <button id="micPromptOn" class="mic-prompt-btn primary" data-i18n="mic-prompt-on">開啟並錄製</button>
+        <button id="micPromptSkip" class="mic-prompt-btn secondary" data-i18n="mic-prompt-skip">直接錄製（不錄語音）</button>
       </div>
     </div>
 
