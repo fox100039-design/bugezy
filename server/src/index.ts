@@ -384,6 +384,7 @@ const HOMEPAGE_HTML = `<!DOCTYPE html>
   <meta property="og:description" content="錄製 Bug、AI 自動分析、一鍵報告。亞洲最平價 MCP 語音除錯工具。">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://bugezy.dev">
+  <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
   <link rel="canonical" href="https://bugezy.dev">
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
@@ -643,6 +644,7 @@ const PRIVACY_PAGE_HTML = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>隱私政策 · BugEzy</title>
 <meta name="description" content="BugEzy 隱私政策：我們收集什麼資料、如何使用與保護。中英雙語說明。">
+<meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
 <link rel="canonical" href="https://bugezy.dev/privacy">
 <style>
   * { box-sizing: border-box; }
@@ -806,6 +808,7 @@ const GUIDE_PAGE_HTML = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>使用指南 · BugEzy</title>
 <meta name="description" content="BugEzy 使用指南：安裝登入、六種錄製模式、編輯上傳、讓 AI 透過 MCP 讀報告修 Bug。">
+<meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
 <link rel="canonical" href="https://bugezy.dev/guide">
 <style>
   * { box-sizing: border-box; }
@@ -996,6 +999,7 @@ const FAQ_PAGE_HTML = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>常見問題 · BugEzy</title>
 <meta name="description" content="BugEzy 常見問題：安裝、錄製、語音辨識、MCP 設定、付費方案等問答。">
+<meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
 <link rel="canonical" href="https://bugezy.dev/faq">
 <style>
   * { box-sizing: border-box; }
@@ -1120,6 +1124,7 @@ const INSTALL_PAGE_HTML = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>安裝 BugEzy — 3 分鐘搞定 Chrome 擴充 + MCP 設定</title>
 <meta name="description" content="安裝 BugEzy Chrome 擴充功能，設定 MCP 連線，讓 AI 直接讀取你的 Bug 報告。支援 Claude、Cursor、Windsurf、Google Antigravity、Gemini CLI。">
+<meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
 <link rel="canonical" href="https://bugezy.dev/install">
 <style>
   * { box-sizing: border-box; }
@@ -1342,6 +1347,7 @@ const FEATURES_PAGE_HTML = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>BugEzy 功能 — 六種錄製模式、Whisper 語音、即時監控</title>
 <meta name="description" content="BugEzy 六種除錯模式：錄製、回溯 30 秒、截圖標注、即時監控、終端機 CLI、MCP AI 讀取。Whisper 精準語音轉錄。">
+<meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
 <link rel="canonical" href="https://bugezy.dev/features">
 <style>
   * { box-sizing: border-box; }
@@ -1482,6 +1488,7 @@ const CHANGELOG_PAGE_HTML = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>更新日誌 · BugEzy</title>
 <meta name="description" content="BugEzy 每次更新做了什麼，都記在這裡。">
+<meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
 <link rel="canonical" href="https://bugezy.dev/changelog">
 <style>
   * { box-sizing: border-box; }
