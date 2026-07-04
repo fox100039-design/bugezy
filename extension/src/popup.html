@@ -112,6 +112,8 @@
       .settings-body { padding: 4px 0; }
       /* accordion 內的 mode-toggle 不需再畫上分隔線（accordion 已有 border-top） */
       .settings-body .mode-toggle { margin-top: 0; padding-top: 0; border-top: none; }
+      /* PM-137：語音語言下拉 */
+      .lang-select { background: #2a2a3e; color: #e6edf3; border: 1px solid #444; border-radius: 6px; padding: 4px 8px; font-size: 12px; cursor: pointer; }
       .toggle-row {
         display: flex; justify-content: space-between; align-items: center;
         font-size: 13px; color: var(--muted); cursor: pointer;
@@ -379,6 +381,17 @@
         </div>
         <div class="settings-body" id="settings-body" style="display:none;">
       <div class="mode-toggle">
+        <label class="toggle-row">
+          <span>🌐 語音語言</span>
+          <select id="langSelect" class="lang-select">
+            <option value="zh">🇹🇼 繁體中文</option>
+            <option value="yue">🇭🇰 粵語</option>
+            <option value="ja">🇯🇵 日本語</option>
+            <option value="ko">🇰🇷 한국어</option>
+            <option value="en">🇬🇧 English</option>
+            <option value="vi">🇻🇳 Tiếng Việt</option>
+          </select>
+        </label>
         <label class="toggle-row">
           <span>🔍 即時監控（AI 可查 error）</span>
           <input type="checkbox" id="monitorMode" />

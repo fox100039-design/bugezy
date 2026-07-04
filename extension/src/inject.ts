@@ -455,6 +455,9 @@ function main() {
   // PM-33：自動重啟連續失敗計數（放在 createRecognition 外，建新實例不重置）
   let autoRestartFails = 0;
 
+  // PM-137：Web Speech 語言（BCP-47）。inject 在 MAIN world 無 chrome.storage，由 START 指令帶入。
+  let currentSpeechLang = 'zh-TW';
+
   /**
    * PM-32：建立一個全新的 SpeechRecognition 實例（可重複呼叫）。
    * 每次都掛上「全新」的 event handlers，不複製舊實例的閉包——
@@ -469,7 +472,7 @@ function main() {
     if (!SR) return null;
 
     const rec = new SR();
-    rec.lang = 'zh-TW';
+    rec.lang = currentSpeechLang; // PM-137：使用者選的語言（預設 zh-TW）
     rec.continuous = true;
     rec.interimResults = false;
 
@@ -738,11 +741,14 @@ function main() {
     keyboardMode?: boolean;
     micEnabled?: boolean;
     whisperMode?: boolean;
+    speechLang?: string;
   }): boolean {
     if (recording) {
       blog('START 重複呼叫，已在錄製中');
       return stopRrweb !== null;
     }
+    // PM-137：記住本次錄製的語音語言（createRecognition 讀取）
+    currentSpeechLang = options?.speechLang || 'zh-TW';
     // PM-50：停掉背景 rrweb（同頁不能同時跑兩個 record），切換到錄製用 rrweb
     if (bgStopRrweb) {
       try {
@@ -1054,6 +1060,7 @@ function main() {
         keyboardMode: data.keyboardMode === true,
         micEnabled: data.micEnabled,
         whisperMode: data.whisperMode === true,
+        speechLang: data.speechLang, // PM-137：使用者選的語音語言
       });
       post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'STARTED', rrwebOk });
     } else if (data.cmd === 'STOP') {

@@ -155,6 +155,7 @@ export interface InjectCommand {
   keyboardMode?: boolean;
   micEnabled?: boolean; // PM-87：是否啟動頁面 SpeechRecognition（即時字幕模式→true；whisper/mic off→false）
   whisperMode?: boolean; // PM-91：付費版 Whisper 模式 → 顯示「錄音中」bar，不啟 SpeechRecognition
+  speechLang?: string; // PM-137：Web Speech API 的 BCP-47 語碼（如 zh-TW/zh-HK/ja）；inject 在 MAIN world 無 chrome.storage，故由 content 帶入
 }
 
 /** inject → content：狀態回報（握手 / 開始確認）與打包資料 */
@@ -207,6 +208,19 @@ export const SESSION_KEY = 'bugezy:session';
 /** PM-129：DB 驗證的 session token（POST /api/auth/session 換取，取代舊 base64）。
  *  所有 API 呼叫經 getAuthHeaders() 統一帶此 token。 */
 export const SESSION_TOKEN_KEY = 'bugezy:session-token';
+
+/** PM-137：語音辨識語言（Whisper `language` 代碼；Web Speech 用 LANG_MAP 轉 BCP-47）。預設 zh。 */
+export const LANG_KEY = 'bugezy:language';
+export type SupportedLang = 'zh' | 'yue' | 'ja' | 'ko' | 'en' | 'vi';
+/** Whisper language 代碼 → Web Speech API BCP-47 lang。 */
+export const SPEECH_LANG_MAP: Record<string, string> = {
+  zh: 'zh-TW',
+  yue: 'zh-HK',
+  ja: 'ja',
+  ko: 'ko',
+  en: 'en',
+  vi: 'vi',
+};
 
 /** 登入 session（popup 存、background 上傳時帶 user_id） */
 export interface Session {

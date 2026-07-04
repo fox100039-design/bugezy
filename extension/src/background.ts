@@ -8,6 +8,7 @@ import {
   BUFFER_NETWORK_KEY,
   BUFFER_RRWEB_KEY,
   BUFFER_VOICE_KEY,
+  LANG_KEY,
   LAST_SCREENSHOT_KEY,
   MIC_KEY,
   MIC_MODE_KEY,
@@ -406,6 +407,9 @@ async function stopMicAndTranscribe(): Promise<{ ok?: boolean; text?: string; er
     const blob = await (await fetch(res.audioBlob)).blob();
     const form = new FormData();
     form.append('audio', blob, 'recording.webm');
+    // PM-137：帶使用者選的 Whisper 語言（server 端有白名單驗證，非白名單 fallback zh）
+    const langStore = await chrome.storage.local.get(LANG_KEY);
+    form.append('language', (langStore[LANG_KEY] as string) || 'zh');
     // PM-135：帶 session token（transcribe 需登入 + 付費驗證）。multipart 不可手動設 Content-Type。
     const transcribeRes = await fetch(`${API_BASE}/api/transcribe`, {
       method: 'POST',

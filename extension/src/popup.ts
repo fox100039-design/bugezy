@@ -4,6 +4,7 @@
 import {
   ALLOW_SCREENSHOT_KEY,
   KEYBOARD_MODE_KEY,
+  LANG_KEY,
   LAST_SCREENSHOT_KEY,
   MIC_KEY,
   MIC_MODE_KEY,
@@ -111,6 +112,15 @@ chrome.storage.local.get(TOOLBAR_EFFECT_KEY, (r) => {
 });
 toolbarEffect.addEventListener('change', () => {
   chrome.storage.local.set({ [TOOLBAR_EFFECT_KEY]: toolbarEffect.checked });
+});
+
+// PM-137：語音語言選擇（Whisper language / Web Speech lang；預設 zh，存 storage）
+const langSelect = $<HTMLSelectElement>('langSelect');
+chrome.storage.local.get(LANG_KEY, (r) => {
+  langSelect.value = (r[LANG_KEY] as string) || 'zh';
+});
+langSelect.addEventListener('change', () => {
+  void chrome.storage.local.set({ [LANG_KEY]: langSelect.value });
 });
 
 // PM-86：麥克風 toggle（標題列）— offscreen 錄音 + Groq Whisper 架構；預設開啟，狀態存 storage
@@ -280,6 +290,10 @@ function lockSettings(locked: boolean) {
     b.style.opacity = locked ? '0.4' : '1';
     b.style.cursor = locked ? 'not-allowed' : 'pointer';
   });
+  // PM-137：語言下拉也一併鎖（錄製中改語言不會生效）
+  langSelect.disabled = locked;
+  langSelect.style.opacity = locked ? '0.4' : '1';
+  langSelect.style.cursor = locked ? 'not-allowed' : 'pointer';
   settingsHint.style.display = locked ? 'block' : 'none';
 }
 

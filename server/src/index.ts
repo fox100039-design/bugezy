@@ -2638,9 +2638,10 @@ async function handleTranscribe(request: Request, env: Env): Promise<Response> {
     return json({ error: 'Whisper 語音為付費功能，請升級' }, 403);
   }
 
-  // 1. 讀取音訊
+  // 1. 讀取音訊（+ PM-137：可選 language 欄位）
   const contentType = request.headers.get('content-type') || '';
   let audioBlob: Blob;
+  let language = 'zh';
   if (contentType.includes('multipart/form-data')) {
     const formData = await request.formData();
     const file = formData.get('audio');
@@ -2648,6 +2649,7 @@ async function handleTranscribe(request: Request, env: Env): Promise<Response> {
       return json({ error: '缺少 audio 欄位' }, 400);
     }
     audioBlob = file;
+    language = formData.get('language')?.toString() || 'zh';
   } else {
     audioBlob = await request.blob();
   }
@@ -2660,11 +2662,15 @@ async function handleTranscribe(request: Request, env: Env): Promise<Response> {
     return json({ error: '音訊太短' }, 400);
   }
 
+  // PM-137：語言白名單（防濫用；非白名單一律 fallback zh）
+  const ALLOWED_LANGS = ['zh', 'yue', 'ja', 'ko', 'en', 'vi'];
+  const finalLang = ALLOWED_LANGS.includes(language) ? language : 'zh';
+
   // 3. 呼叫 Groq Whisper API
   const groqForm = new FormData();
   groqForm.append('file', audioBlob, 'audio.webm');
   groqForm.append('model', 'whisper-large-v3-turbo');
-  groqForm.append('language', 'zh'); // 預設中文
+  groqForm.append('language', finalLang); // PM-137：使用者選的語言（預設 zh）
   groqForm.append('response_format', 'verbose_json');
 
   try {

@@ -7,8 +7,10 @@
 import {
   BUGEZY_SOURCE,
   KEYBOARD_MODE_KEY,
+  LANG_KEY,
   MIC_KEY,
   MIC_MODE_KEY,
+  SPEECH_LANG_MAP,
   STORAGE_KEY,
   TOOLBAR_EFFECT_KEY,
   USER_PLAN_KEY,
@@ -30,6 +32,7 @@ function sendToInject(
   keyboardMode?: boolean,
   micEnabled?: boolean,
   whisperMode?: boolean,
+  speechLang?: string,
 ) {
   const msg: InjectCommand = {
     source: BUGEZY_SOURCE,
@@ -38,6 +41,7 @@ function sendToInject(
     keyboardMode,
     micEnabled,
     whisperMode,
+    speechLang,
   };
   blog(
     `→ 轉送 ${cmd} 給 inject（keyboardMode=${keyboardMode === true}, micEnabled=${micEnabled === true}, whisperMode=${whisperMode === true}）`,
@@ -51,14 +55,28 @@ async function computeStartFlags(): Promise<{
   keyboardMode: boolean;
   useOldVoice: boolean;
   whisperMode: boolean;
+  speechLang: string;
 }> {
-  const r = await chrome.storage.local.get([KEYBOARD_MODE_KEY, MIC_KEY, USER_PLAN_KEY, MIC_MODE_KEY]);
+  const r = await chrome.storage.local.get([
+    KEYBOARD_MODE_KEY,
+    MIC_KEY,
+    USER_PLAN_KEY,
+    MIC_MODE_KEY,
+    LANG_KEY,
+  ]);
   const keyboardMode = r[KEYBOARD_MODE_KEY] === true;
+  // PM-137：Web Speech BCP-47 語碼（inject 在 MAIN world 無 chrome.storage，由此帶入）
+  const speechLang = SPEECH_LANG_MAP[(r[LANG_KEY] as string) || 'zh'] || 'zh-TW';
   const micEnabled = r[MIC_KEY] === true; // PM-90：預設關閉
-  if (!micEnabled) return { keyboardMode, useOldVoice: false, whisperMode: false };
+  if (!micEnabled) return { keyboardMode, useOldVoice: false, whisperMode: false, speechLang };
   const plan = (r[USER_PLAN_KEY] as string) || 'free';
   const mode = plan === 'free' ? 'realtime' : (r[MIC_MODE_KEY] as string) || 'whisper';
-  return { keyboardMode, useOldVoice: mode === 'realtime', whisperMode: mode === 'whisper' };
+  return {
+    keyboardMode,
+    useOldVoice: mode === 'realtime',
+    whisperMode: mode === 'whisper',
+    speechLang,
+  };
 }
 
 function summarize(payload: RecordingPayload): RecordingSummary {
@@ -178,8 +196,8 @@ window.addEventListener('message', async (e: MessageEvent) => {
 chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse) => {
   if (msg.type === 'START_RECORDING') {
     // PM-49/87/91：送 START 前算語音旗標（即時字幕 / Whisper / 鍵盤），一併帶給 inject
-    void computeStartFlags().then(({ keyboardMode, useOldVoice, whisperMode }) => {
-      sendToInject('START', keyboardMode, useOldVoice, whisperMode);
+    void computeStartFlags().then(({ keyboardMode, useOldVoice, whisperMode, speechLang }) => {
+      sendToInject('START', keyboardMode, useOldVoice, whisperMode, speechLang);
       sendResponse({ ok: true });
     });
   } else if (msg.type === 'STOP_RECORDING') {
@@ -235,10 +253,10 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
     if (!state?.recording) return;
     blog('偵測到正在錄製中，自動恢復 inject 錄製');
     // PM-49/87/91：跨頁恢復也帶語音旗標（付費 whisper 跨頁由 offscreen 持續錄、頁面只顯示錄音 bar）
-    const { keyboardMode: km, useOldVoice, whisperMode } = await computeStartFlags();
+    const { keyboardMode: km, useOldVoice, whisperMode, speechLang } = await computeStartFlags();
     const waitForInject = (retries = 0) => {
       if (injectReady) {
-        sendToInject('START', km, useOldVoice, whisperMode); // inject 全新（recording=false）會正常啟動
+        sendToInject('START', km, useOldVoice, whisperMode, speechLang); // inject 全新（recording=false）會正常啟動
         blog('已送 START 給 inject（跳頁恢復）');
       } else if (retries < 40) {
         // PM-36：inject 尚未 READY，縮短為每 50ms 再試（最多 40×50ms = 2 秒），恢復更滑順
