@@ -87,15 +87,18 @@ const userCommand = process.argv.slice(separatorIndex + 1);
 const cmd = userCommand[0];
 const args = userCommand.slice(1);
 
+// PM-144：終端機 CLI 為付費功能，必須帶 session token（缺 token 直接退出，不啟動子程序）
+if (!API_TOKEN) {
+  console.error('❌ 請設定 BUGEZY_TOKEN 環境變數');
+  console.error('   從 BugEzy Chrome 擴充 → 進階設定 → 複製 Session Token');
+  console.error('   用法：BUGEZY_TOKEN=<token> npx bugezy-watch -- <command>');
+  process.exit(1);
+}
+
 console.log('🐛 BugEzy Terminal Agent — 監控中');
 console.log(`   指令: ${userCommand.join(' ')}`);
 console.log(`   API:  ${API_BASE}`);
 console.log('   只攔截 stderr + error（正常輸出不影響）');
-if (!API_TOKEN) {
-  console.log(
-    '   ⚠ 未設定 BUGEZY_TOKEN — 日誌上傳會被拒（401）。請 set BUGEZY_TOKEN=<擴充複製的 session token>',
-  );
-}
 console.log('─'.repeat(50));
 
 // ── 定時推送 ──
@@ -107,7 +110,7 @@ async function flushBuffer(): Promise<void> {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(API_TOKEN ? { Authorization: `Bearer ${API_TOKEN}` } : {}),
+        Authorization: `Bearer ${API_TOKEN}`, // PM-144：token 必填（啟動時已檢查）
       },
       body: JSON.stringify({
         logs,
@@ -116,6 +119,12 @@ async function flushBuffer(): Promise<void> {
         timestamp: Date.now(),
       }),
     });
+    // PM-144：付費限定端點——403 = 免費版，明確提示升級後結束（避免一直重試/印一堆錯）
+    if (res.status === 403) {
+      console.error('❌ 終端機 CLI 為付費功能，請升級至付費版（bugezy.dev）');
+      clearInterval(flushTimer);
+      process.exit(1);
+    }
     if (!res.ok) console.error(`🐛 推送失敗: ${res.status}`);
   } catch {
     // API 不通就靜默（不影響使用者的程式）

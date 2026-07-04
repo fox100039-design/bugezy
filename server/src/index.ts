@@ -371,6 +371,16 @@ function isActiveUser(u: { plan?: string | null; day_pass_expires_at?: string | 
   return false;
 }
 
+// PM-144：以 user_id 查 users 表判斷是否為有效付費用戶（terminal-logs 付費限定用）。
+async function isActiveUserId(userId: string, env: Env): Promise<boolean> {
+  const { data } = await supa(env)
+    .from('users')
+    .select('plan, day_pass_expires_at')
+    .eq('user_id', userId)
+    .maybeSingle();
+  return data ? isActiveUser(data as { plan?: string | null; day_pass_expires_at?: string | null }) : false;
+}
+
 // ── PM-62：產品首頁（GET /）— 一頁式、深色主題、無 JS、RWD（綠界審核 + 客戶訪問用）──
 const HOMEPAGE_HTML = `<!DOCTYPE html>
 <html lang="zh-TW">
@@ -2265,10 +2275,13 @@ export default {
         return jsonNoStore(await readLiveErrors(env, userId));
       }
       // PM-53：終端機 CLI agent 日誌（POST 覆蓋最新；GET 讀最新，>30s 視為過期）
-      // PM-143：同 live-errors——加認證 + per-user key
+      // PM-143：同 live-errors——加認證 + per-user key。PM-144：終端機 CLI 為付費功能（isActiveUser 403）。
       if (request.method === 'POST' && path === '/api/terminal-logs') {
         const userId = await getAuthUserId(request, env);
         if (!userId) return json({ error: '請先登入' }, 401);
+        if (!(await isActiveUserId(userId, env))) {
+          return json({ error: '終端機 CLI 為付費功能，請升級' }, 403);
+        }
         const data = (await request.json().catch(() => ({}))) as Record<string, unknown>;
         await env.R2.put(terminalLogsKey(userId), JSON.stringify({ ...data, updatedAt: Date.now() }), {
           httpMetadata: { contentType: 'application/json' },
@@ -2278,6 +2291,9 @@ export default {
       if (request.method === 'GET' && path === '/api/terminal-logs') {
         const userId = await getAuthUserId(request, env);
         if (!userId) return json({ error: '請先登入' }, 401);
+        if (!(await isActiveUserId(userId, env))) {
+          return json({ error: '終端機 CLI 為付費功能，請升級' }, 403);
+        }
         return jsonNoStore(await readTerminalLogs(env, userId));
       }
       // PM-56：當月 MCP 使用量統計

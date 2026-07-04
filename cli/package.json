@@ -1,7 +1,7 @@
 {
-  "name": "@bugezy/cli",
-  "version": "0.1.0",
-  "description": "BugEzy Terminal Agent — 自動攔截 stderr/throw/crash",
+  "name": "bugezy-watch",
+  "version": "1.1.0",
+  "description": "BugEzy terminal error watcher — captures stderr/crash for AI debugging via MCP",
   "bin": {
     "bugezy-watch": "./dist/index.js"
   },
