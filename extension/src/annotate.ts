@@ -9,13 +9,15 @@ import {
   API_BASE,
   KEYBOARD_MODE_KEY,
   LANG_KEY,
+  MIC_MODE_KEY,
   SESSION_KEY,
   TOOLBAR_EFFECT_KEY,
+  USER_PLAN_KEY,
   blog,
   type ControlMessage,
   type Session,
 } from './types';
-import { getAuthHeaders } from './auth';
+import { getAuthHeaders, getAuthHeaderOnly } from './auth';
 import { t, getUILang, type UILang } from './i18n';
 
 // PM-139：截圖標注頁 i18n（annotate 是擴充頁，有 chrome.storage，直接讀 LANG_KEY）。
@@ -355,7 +357,8 @@ function createAnnotateRecognition(): SRInst | null {
 }
 
 // PM-21：載入即自動聽。final → 寫入文字框，interim → 即時字幕（浮在畫布上）
-async function startListening() {
+// PM-147：免費版/未開 Whisper 走這條（Web Speech API，即時字幕、零成本）。
+async function startWebSpeech() {
   if (!SR || listening) return;
   // PM-42：先用 getUserMedia 刷新音訊管線
   try {
@@ -377,7 +380,7 @@ async function startListening() {
   liveCaptions.classList.remove('hidden');
 }
 
-function stopListening() {
+function stopWebSpeech() {
   if (!listening) return;
   listening = false;
   if (recognition) {
@@ -394,6 +397,107 @@ function stopListening() {
   liveCaptions.classList.add('hidden');
 }
 
+// ── PM-147：付費版 Whisper 語音（MediaRecorder 錄音 → /api/transcribe）──────────
+// 條件：付費（paid/cancelled/day_pass）+ popup Whisper toggle（MIC_MODE_KEY==='whisper'）。
+// 免費版或 toggle OFF 走 Web Speech（上方）。server /api/transcribe 另有付費檢查（PM-135），
+// 故非付費即使誤走 Whisper 也會被 403 擋，這裡以 UI 提示引導。
+let useWhisper = false;
+let whisperRecorder: MediaRecorder | null = null;
+let whisperChunks: Blob[] = [];
+let whisperStream: MediaStream | null = null;
+
+function releaseWhisperStream() {
+  whisperStream?.getTracks().forEach((tk) => tk.stop());
+  whisperStream = null;
+}
+
+async function startWhisper() {
+  if (listening) return;
+  try {
+    whisperStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch {
+    voiceStatus.textContent = '❌ 麥克風無法存取';
+    return;
+  }
+  whisperChunks = [];
+  whisperRecorder = new MediaRecorder(whisperStream, { mimeType: 'audio/webm' });
+  whisperRecorder.ondataavailable = (e) => {
+    if (e.data.size) whisperChunks.push(e.data);
+  };
+  whisperRecorder.start();
+  listening = true;
+  voiceInputBtn.classList.add('listening');
+  voiceInputBtn.textContent = '⏹';
+  voiceStatus.textContent = '';
+  captionText.textContent = '🔴 Whisper 錄音中，講完按 ⏹ 轉錄…';
+  liveCaptions.classList.remove('hidden');
+}
+
+async function stopWhisper() {
+  if (!listening) return;
+  listening = false;
+  voiceInputBtn.classList.remove('listening');
+  voiceInputBtn.textContent = '🎤';
+  const rec = whisperRecorder;
+  whisperRecorder = null;
+  if (!rec || rec.state === 'inactive') {
+    releaseWhisperStream();
+    liveCaptions.classList.add('hidden');
+    return;
+  }
+  // 等 recorder 真的停止 + chunks 收齊
+  await new Promise<void>((resolve) => {
+    rec.onstop = () => resolve();
+    try {
+      rec.stop();
+    } catch {
+      resolve();
+    }
+  });
+  releaseWhisperStream();
+  const blob = new Blob(whisperChunks, { type: 'audio/webm' });
+  whisperChunks = [];
+  if (blob.size < 1000) {
+    voiceStatus.textContent = '語音太短';
+    liveCaptions.classList.add('hidden');
+    return;
+  }
+  voiceStatus.textContent = '⏳ Whisper 轉錄中…';
+  captionText.textContent = '⏳ 轉錄中…';
+  try {
+    const form = new FormData();
+    form.append('audio', blob, 'annotate-voice.webm'); // server handleTranscribe 讀 'audio' 欄
+    const langStore = await chrome.storage.local.get(LANG_KEY);
+    form.append('language', (langStore[LANG_KEY] as string) || 'zh'); // PM-147：帶語言設定
+    const res = await fetch(`${API_BASE}/api/transcribe`, {
+      method: 'POST',
+      headers: await getAuthHeaderOnly(), // multipart：只帶 Authorization，不設 Content-Type
+      body: form,
+    });
+    const data = (await res.json()) as { text?: string; error?: string };
+    if (res.ok && data.text) {
+      descInput.value += (descInput.value ? ' ' : '') + data.text;
+      voiceStatus.textContent = '✅ 已轉錄';
+    } else if (res.status === 403) {
+      voiceStatus.textContent = 'Whisper 為付費功能，請升級（或改用鍵盤）';
+    } else {
+      voiceStatus.textContent = '轉錄失敗，可改用鍵盤輸入';
+    }
+  } catch {
+    voiceStatus.textContent = '轉錄失敗，可改用鍵盤輸入';
+  } finally {
+    liveCaptions.classList.add('hidden');
+  }
+}
+
+// PM-147：語音輸入分派——依 useWhisper 走 Whisper 或 Web Speech。
+async function startListening() {
+  return useWhisper ? startWhisper() : startWebSpeech();
+}
+async function stopListening() {
+  return useWhisper ? stopWhisper() : stopWebSpeech();
+}
+
 voiceInputBtn.addEventListener('click', () => {
   if (!SR) {
     voiceStatus.textContent = '此瀏覽器不支援語音辨識';
@@ -404,20 +508,29 @@ voiceInputBtn.addEventListener('click', () => {
 });
 
 // 載入後自動開始聽（延遲等 canvas 渲染 + 麥克風授權）
-// PM-49：鍵盤模式則不自動啟動語音
-chrome.storage.local.get(KEYBOARD_MODE_KEY, (r) => {
+// PM-49：鍵盤模式則不自動啟動語音。PM-147：付費 + Whisper toggle → 走 Whisper（不自動錄，按 🎤 才錄）。
+chrome.storage.local.get([KEYBOARD_MODE_KEY, USER_PLAN_KEY, MIC_MODE_KEY], (r) => {
+  // PM-147：判斷語音引擎——付費（paid/cancelled/day_pass）+ popup Whisper toggle 才走 Whisper
+  const plan = (r[USER_PLAN_KEY] as string) || 'free';
+  const isPaid = plan === 'paid' || plan === 'cancelled' || plan === 'day_pass';
+  const micMode = (r[MIC_MODE_KEY] as string) || 'whisper'; // 付費預設 whisper（與錄製流程 computeStartFlags 一致）
+  useWhisper = isPaid && micMode === 'whisper';
+
   if (r[KEYBOARD_MODE_KEY] === true) {
     voiceStatus.textContent = '🔇 鍵盤模式（語音已關閉）';
     setVoiceToggleUI(false); // PM-100：頁面本就鍵盤模式 → 切換鈕同步顯示 🎙️
+  } else if (useWhisper) {
+    // Whisper 模式不自動錄音（避免整段長錄音爆量/超 25MB）——引導使用者手動按 🎤
+    voiceStatus.textContent = '🎙️ 付費版 Whisper：按 🎤 錄音描述，講完按 ⏹ 轉錄';
   } else {
-    window.setTimeout(() => startListening(), 800);
+    window.setTimeout(() => void startListening(), 800);
   }
 });
 
 // ── 儲存（PM-18：截圖獨立上傳為一份報告）/ 取消 ──────────
 saveBtn.addEventListener('click', async () => {
   const annotatedDataUrl = canvas.toDataURL('image/png');
-  stopListening(); // 存檔前停止語音辨識
+  await stopListening(); // PM-147：存檔前停止語音；Whisper 模式會等轉錄完成才續（描述才進得去）
   // PM-83：讀 popup「高畫質 AI 分析」開關，截圖上傳時帶入報告設定（預設 false 省 token）
   // PM-98：同時讀登入 session，把 user_id 綁進報告（與 background 錄製上傳一致）——
   // 否則截圖報告沒有 owner，MCP list_reports（依 user_id 過濾）永遠查不到。
