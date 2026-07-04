@@ -84,6 +84,20 @@ CREATE TABLE IF NOT EXISTS sessions (
   expires_at    TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '90 days')
 );
 
+-- ── PM-145：ECPay 付款記錄（冪等 + 金額比對 + 對帳）。callback 先查此表防重放/重複授權。
+--    merchant_trade_no 為 PK：單次付款用 MerchantTradeNo；定期定額每期用「MerchantTradeNo-Gwsr」組合。
+CREATE TABLE IF NOT EXISTS payments (
+  merchant_trade_no TEXT PRIMARY KEY,
+  user_id           TEXT NOT NULL,
+  payment_type      TEXT NOT NULL,        -- 'monthly' | 'day_pass' | 'monthly_renewal'
+  amount            INTEGER NOT NULL,     -- 預期金額（80 / 20）
+  rtn_code          TEXT,                 -- 綠界回傳碼
+  status            TEXT DEFAULT 'pending', -- 'pending' | 'paid' | 'failed'
+  raw_callback      JSONB,                -- 完整 callback（除錯/對帳）
+  created_at        TIMESTAMPTZ DEFAULT NOW(),
+  paid_at           TIMESTAMPTZ
+);
+
 -- ── PM-93：全 public table 開 RLS(deny all)，anon key 完全鎖死；唯一存取途徑是 Worker 的 service_role。
 --    ⚠ 執行前務必先 `wrangler secret put SUPABASE_SERVICE_ROLE_KEY`，否則 Worker(anon) 會被鎖死。
 --    完整腳本 + 步驟見 server/rls-lockdown.sql。
@@ -91,3 +105,4 @@ ALTER TABLE reports   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE mcp_usage ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sessions  ENABLE ROW LEVEL SECURITY; -- PM-128：只有 service_role 能存取
+ALTER TABLE payments  ENABLE ROW LEVEL SECURITY; -- PM-145：只有 service_role 能存取

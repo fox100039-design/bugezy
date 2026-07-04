@@ -2913,6 +2913,35 @@ async function ecpayCheckout(userId: string, origin: string, env: Env): Promise<
 }
 
 // POST /api/ecpay/callback → 綠界 server-to-server 付款結果通知（驗 CheckMacValue → 更新 plan）
+// ── PM-145（P2-1）：ECPay callback 冪等 + payments 表（防重放/重複授權 + 金額比對）──
+/** 查某交易 key 是否已成功入帳。已 paid 的 callback 重送 → 直接略過（冪等）。 */
+async function paymentAlreadyPaid(env: Env, key: string): Promise<boolean> {
+  const { data } = await supa(env)
+    .from('payments')
+    .select('status')
+    .eq('merchant_trade_no', key)
+    .maybeSingle();
+  return (data as { status?: string } | null)?.status === 'paid';
+}
+
+/** upsert 一筆 payments 記錄（PK=merchant_trade_no）。失敗只記 log 不阻斷 callback（表未建也不掛）。 */
+async function recordPayment(
+  env: Env,
+  row: {
+    merchant_trade_no: string;
+    user_id: string;
+    payment_type: string;
+    amount: number;
+    rtn_code?: string;
+    status: 'paid' | 'failed';
+    raw_callback: unknown;
+    paid_at?: string;
+  },
+): Promise<void> {
+  const { error } = await supa(env).from('payments').upsert(row);
+  if (error) console.error('recordPayment failed:', error.message);
+}
+
 async function ecpayCallback(request: Request, env: Env): Promise<Response> {
   const formData = await request.formData();
   const params: Record<string, string> = {};
@@ -2931,20 +2960,52 @@ async function ecpayCallback(request: Request, env: Env): Promise<Response> {
     return new Response('1|OK', { status: 200 });
   }
 
+  const tradeNo = params.MerchantTradeNo ?? '';
+  // PM-145：冪等——已成功入帳的重送直接回 1|OK（不重複展延到期日）
+  if (tradeNo && (await paymentAlreadyPaid(env, tradeNo))) {
+    return new Response('1|OK', { status: 200 });
+  }
+  // PM-145：金額比對（月費固定 80）——被竄改則不授權，仍回 1|OK 讓綠界停止重送
+  const amount = parseInt(params.TradeAmt ?? '0', 10);
+  if (amount !== 80) {
+    console.error(`ECPay monthly amount mismatch: expected 80, got ${params.TradeAmt}`);
+    return new Response('1|OK', { status: 200 });
+  }
+
   // 付款成功（RtnCode=1）→ 用 CustomField1 帶回的 user_id 升級為 paid
   // PM-73：同時記錄 ecpay_trade_no（取消訂閱要用）+ plan_expires_at（到期日）
+  const userId = params.CustomField1 ?? '';
   if (params.RtnCode === '1') {
-    const userId = params.CustomField1;
     if (userId) {
       await supa(env)
         .from('users')
         .update({
           plan: 'paid',
-          ecpay_trade_no: params.MerchantTradeNo,
+          ecpay_trade_no: tradeNo,
           plan_expires_at: oneMonthLaterISO(),
         })
         .eq('user_id', userId);
     }
+    await recordPayment(env, {
+      merchant_trade_no: tradeNo,
+      user_id: userId,
+      payment_type: 'monthly',
+      amount,
+      rtn_code: params.RtnCode,
+      status: 'paid',
+      raw_callback: params,
+      paid_at: new Date().toISOString(),
+    });
+  } else {
+    await recordPayment(env, {
+      merchant_trade_no: tradeNo,
+      user_id: userId,
+      payment_type: 'monthly',
+      amount,
+      rtn_code: params.RtnCode,
+      status: 'failed',
+      raw_callback: params,
+    });
   }
 
   // 綠界要求成功時回傳 1|OK（否則會重送通知）
@@ -3048,15 +3109,47 @@ async function handleDayPassCallback(request: Request, env: Env): Promise<Respon
     return new Response('1|OK', { status: 200 });
   }
 
+  const tradeNo = params.MerchantTradeNo ?? '';
+  // PM-145：冪等——已成功入帳的重送直接回 1|OK（不重複 +24h）
+  if (tradeNo && (await paymentAlreadyPaid(env, tradeNo))) {
+    return new Response('1|OK', { status: 200 });
+  }
+  // PM-145：金額比對（日票固定 20）
+  const amount = parseInt(params.TradeAmt ?? '0', 10);
+  if (amount !== 20) {
+    console.error(`ECPay day-pass amount mismatch: expected 20, got ${params.TradeAmt}`);
+    return new Response('1|OK', { status: 200 });
+  }
+
   // 付款成功（RtnCode=1）→ 用 CustomField1 帶回的 user_id 開通 24 小時日票
+  const userId = params.CustomField1 ?? '';
   if (params.RtnCode === '1') {
-    const userId = params.CustomField1;
     if (userId) {
       await supa(env)
         .from('users')
         .update({ plan: 'day_pass', day_pass_expires_at: dayPassExpiryISO() })
         .eq('user_id', userId);
     }
+    await recordPayment(env, {
+      merchant_trade_no: tradeNo,
+      user_id: userId,
+      payment_type: 'day_pass',
+      amount,
+      rtn_code: params.RtnCode,
+      status: 'paid',
+      raw_callback: params,
+      paid_at: new Date().toISOString(),
+    });
+  } else {
+    await recordPayment(env, {
+      merchant_trade_no: tradeNo,
+      user_id: userId,
+      payment_type: 'day_pass',
+      amount,
+      rtn_code: params.RtnCode,
+      status: 'failed',
+      raw_callback: params,
+    });
   }
 
   return new Response('1|OK', { status: 200 });
@@ -3094,7 +3187,23 @@ async function ecpayPeriodCallback(request: Request, env: Env): Promise<Response
     return new Response('0|ErrorMessage=CheckMacValue Error', { status: 200 });
   }
 
-  const userId = params.CustomField1;
+  // PM-145：定期定額每期重用同一 MerchantTradeNo，但每期有不同 Gwsr（交易單號）→
+  // 冪等 key 用「MerchantTradeNo-Gwsr」組合，才不會把第 2、3… 期誤判為第 1 期的重送。
+  const periodKey = `${params.MerchantTradeNo ?? ''}-${
+    params.Gwsr || params.TotalSuccessTimes || params.ProcessDate || 'p'
+  }`;
+  if (await paymentAlreadyPaid(env, periodKey)) {
+    return new Response('1|OK', { status: 200 });
+  }
+  // PM-145：金額比對（定期定額每期 80，欄位為 Amount）。缺欄位（=0）不擋，避免誤殺續扣；
+  // 只在「有明確金額且 ≠ 80」時視為異常不授權。
+  const amount = parseInt(params.Amount ?? params.TradeAmt ?? '0', 10);
+  if (amount > 0 && amount !== 80) {
+    console.error(`ECPay period amount mismatch: expected 80, got ${params.Amount ?? params.TradeAmt}`);
+    return new Response('1|OK', { status: 200 });
+  }
+
+  const userId = params.CustomField1 ?? '';
   if (userId) {
     if (params.RtnCode === '1') {
       // 本期扣款成功 → 維持 paid + 展延到期日（PM-73），順手更新最近活躍時間
@@ -3111,6 +3220,17 @@ async function ecpayPeriodCallback(request: Request, env: Env): Promise<Response
       await supa(env).from('users').update({ plan: 'free' }).eq('user_id', userId);
     }
   }
+  // PM-145：記錄本期扣款（冪等 key 用 periodKey）
+  await recordPayment(env, {
+    merchant_trade_no: periodKey,
+    user_id: userId,
+    payment_type: 'monthly_renewal',
+    amount: amount || 80,
+    rtn_code: params.RtnCode,
+    status: params.RtnCode === '1' ? 'paid' : 'failed',
+    raw_callback: params,
+    paid_at: params.RtnCode === '1' ? new Date().toISOString() : undefined,
+  });
 
   // 綠界要求每期通知後回 1|OK（否則視為未收到）
   return new Response('1|OK', { status: 200 });
