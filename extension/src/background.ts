@@ -322,17 +322,22 @@ function startMonitoring() {
         type: 'GET_LIVE_ERRORS',
       } satisfies ControlMessage)) as { consoleLogs?: unknown[]; networkErrors?: unknown[] } | undefined;
       if (!result) return;
-      await fetch(`${API_BASE}/api/live-errors`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          url: tab.url,
-          title: tab.title,
-          consoleLogs: result.consoleLogs ?? [],
-          networkErrors: result.networkErrors ?? [],
-          timestamp: Date.now(),
-        }),
-      });
+      // PM-143：帶 session token（live-errors 端點已加認證 + per-user key）。
+      // 未登入 → 無 Authorization → server 回 401（fetch 失敗靜默略過，不影響頁面）。
+      const leHeaders = await getAuthHeaders();
+      if (leHeaders.Authorization) {
+        await fetch(`${API_BASE}/api/live-errors`, {
+          method: 'POST',
+          headers: leHeaders,
+          body: JSON.stringify({
+            url: tab.url,
+            title: tab.title,
+            consoleLogs: result.consoleLogs ?? [],
+            networkErrors: result.networkErrors ?? [],
+            timestamp: Date.now(),
+          }),
+        });
+      }
       // PM-52：擴充圖示 badge 顯示 error 數（錄製中讓 REC badge 優先，不覆蓋）
       const total = (result.consoleLogs?.length ?? 0) + (result.networkErrors?.length ?? 0);
       if (!(await getState()).recording) {

@@ -1856,7 +1856,8 @@ const REPORT_PAGE_HTML = `<!DOCTYPE html>
 // 改用 R2 單一物件（非全域 Map）：擴充 POST 與雲端 MCP GET 通常落在不同 Worker isolate，
 // per-isolate Map 不共享（實測 POST 後即時 GET 仍 stale）；R2 對單一 key 有強讀後寫一致性，
 // 才能讓「擴充推送 → AI 查」真的拿到資料。POST 覆蓋最新一筆，>30 秒視為過期（stale）。
-const LIVE_ERRORS_KEY = 'live-errors/latest.json';
+// PM-143（P1-2）：改 per-user R2 key（原本全站共用單一 key → A 的 errors 被 B 讀到，含 stderr 密鑰）。
+const liveErrorsKey = (userId: string) => `live-errors/${userId}/latest.json`;
 interface LiveErrors {
   url?: string;
   title?: string;
@@ -1866,8 +1867,8 @@ interface LiveErrors {
   updatedAt: number;
 }
 
-async function readLiveErrors(env: Env): Promise<Record<string, unknown>> {
-  const obj = await env.R2.get(LIVE_ERRORS_KEY);
+async function readLiveErrors(env: Env, userId: string): Promise<Record<string, unknown>> {
+  const obj = await env.R2.get(liveErrorsKey(userId));
   const data = obj ? ((await obj.json()) as LiveErrors) : null;
   if (!data || Date.now() - data.updatedAt > 30_000) {
     return { consoleLogs: [], networkErrors: [], stale: true };
@@ -1875,11 +1876,11 @@ async function readLiveErrors(env: Env): Promise<Record<string, unknown>> {
   return { ...data, stale: false };
 }
 
-// ── PM-53：終端機 CLI agent 日誌暫存（R2 單一物件，同 live-errors 跨 isolate 一致）──
-const TERMINAL_LOGS_KEY = 'terminal-logs/latest.json';
+// ── PM-53：終端機 CLI agent 日誌暫存（R2；PM-143 改 per-user key）──
+const terminalLogsKey = (userId: string) => `terminal-logs/${userId}/latest.json`;
 
-async function readTerminalLogs(env: Env): Promise<Record<string, unknown>> {
-  const obj = await env.R2.get(TERMINAL_LOGS_KEY);
+async function readTerminalLogs(env: Env, userId: string): Promise<Record<string, unknown>> {
+  const obj = await env.R2.get(terminalLogsKey(userId));
   const data = obj ? ((await obj.json()) as { updatedAt?: number }) : null;
   if (!data || !data.updatedAt || Date.now() - data.updatedAt > 30_000) {
     return { logs: [], stale: true };
@@ -2240,7 +2241,10 @@ export default {
 
     try {
       // PM-51：即時監控暫存（POST 覆蓋最新；GET 讀最新，>30s 視為過期）
+      // PM-143（P1-2）：加認證 + per-user R2 key（防跨用戶讀到彼此的 error/stderr）
       if (request.method === 'POST' && path === '/api/live-errors') {
+        const userId = await getAuthUserId(request, env);
+        if (!userId) return json({ error: '請先登入' }, 401);
         const data = (await request.json().catch(() => ({}))) as Partial<LiveErrors>;
         const entry: LiveErrors = {
           url: data.url,
@@ -2250,24 +2254,31 @@ export default {
           timestamp: data.timestamp,
           updatedAt: Date.now(),
         };
-        await env.R2.put(LIVE_ERRORS_KEY, JSON.stringify(entry), {
+        await env.R2.put(liveErrorsKey(userId), JSON.stringify(entry), {
           httpMetadata: { contentType: 'application/json' },
         });
         return json({ ok: true });
       }
       if (request.method === 'GET' && path === '/api/live-errors') {
-        return json(await readLiveErrors(env));
+        const userId = await getAuthUserId(request, env);
+        if (!userId) return json({ error: '請先登入' }, 401);
+        return jsonNoStore(await readLiveErrors(env, userId));
       }
       // PM-53：終端機 CLI agent 日誌（POST 覆蓋最新；GET 讀最新，>30s 視為過期）
+      // PM-143：同 live-errors——加認證 + per-user key
       if (request.method === 'POST' && path === '/api/terminal-logs') {
+        const userId = await getAuthUserId(request, env);
+        if (!userId) return json({ error: '請先登入' }, 401);
         const data = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-        await env.R2.put(TERMINAL_LOGS_KEY, JSON.stringify({ ...data, updatedAt: Date.now() }), {
+        await env.R2.put(terminalLogsKey(userId), JSON.stringify({ ...data, updatedAt: Date.now() }), {
           httpMetadata: { contentType: 'application/json' },
         });
         return json({ ok: true });
       }
       if (request.method === 'GET' && path === '/api/terminal-logs') {
-        return json(await readTerminalLogs(env));
+        const userId = await getAuthUserId(request, env);
+        if (!userId) return json({ error: '請先登入' }, 401);
+        return jsonNoStore(await readTerminalLogs(env, userId));
       }
       // PM-56：當月 MCP 使用量統計
       if (request.method === 'GET' && path === '/api/usage/monthly') {
@@ -3493,13 +3504,33 @@ function createMcpServer(env: Env): McpServer {
     },
   );
 
+  // PM-143：MCP 讀 per-user R2 key → 需 user_email 查 user_id（跟 list_reports 一致）。
+  const lookupUserId = async (email?: string): Promise<string | null> => {
+    if (!email) return null;
+    const { data: user, error } = await supabase()
+      .from('users')
+      .select('user_id')
+      .eq('email', email)
+      .maybeSingle();
+    if (error) {
+      console.error('MCP user lookup failed:', error.message);
+      return null;
+    }
+    return user ? (user as { user_id: string }).user_id : null;
+  };
+
   // Tool 9（PM-51）: get_live_errors — 不需錄製，讀當前頁面即時 console/network errors
   server.tool(
     'get_live_errors',
-    '取得當前頁面的即時 Console/Network 錯誤（背景監控，不需錄製或上傳，token 極低）。Live console/network errors of the current page (no recording needed).',
-    {},
-    async () => {
-      const data = await readLiveErrors(env);
+    '取得某使用者當前頁面的即時 Console/Network 錯誤（需 user_email）。Live console/network errors — requires user_email.',
+    {
+      user_email: z.string().describe('你的 BugEzy email（只讀你自己的即時錯誤）'),
+    },
+    async (args) => {
+      if (!args.user_email) return txt('請提供 user_email 參數。');
+      const userId = await lookupUserId(args.user_email);
+      if (!userId) return txt('查無此使用者。');
+      const data = await readLiveErrors(env, userId);
       if (data.stale) {
         return txt('即時監控未啟用或資料已過期（>30 秒）。請在 BugEzy popup 開啟「🔍 即時監控」後再查。');
       }
@@ -3510,10 +3541,15 @@ function createMcpServer(env: Env): McpServer {
   // Tool 10（PM-53）: get_terminal_logs — 終端機 stderr/throw/crash（需跑 npx bugezy-watch）
   server.tool(
     'get_terminal_logs',
-    '取得終端機的即時錯誤日誌（stderr/throw/crash）。開發者需執行 npx bugezy-watch -- <command>。Terminal error logs.',
-    {},
-    async () => {
-      const data = await readTerminalLogs(env);
+    '取得某使用者終端機的即時錯誤日誌（stderr/throw/crash，需 user_email）。開發者需執行 npx bugezy-watch -- <command>。Terminal error logs — requires user_email.',
+    {
+      user_email: z.string().describe('你的 BugEzy email（只讀你自己的終端機日誌）'),
+    },
+    async (args) => {
+      if (!args.user_email) return txt('請提供 user_email 參數。');
+      const userId = await lookupUserId(args.user_email);
+      if (!userId) return txt('查無此使用者。');
+      const data = await readTerminalLogs(env, userId);
       if (data.stale) {
         return txt('終端機 Agent 未啟動或資料已過期（>30 秒）。請在終端機執行：npx bugezy-watch -- npm run dev');
       }

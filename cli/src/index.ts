@@ -7,6 +7,9 @@
 import { spawn } from 'node:child_process';
 
 const API_BASE = process.env.BUGEZY_API_URL || 'https://bugezy-api.bugezy-api.workers.dev';
+// PM-143：/api/terminal-logs 已加認證 + per-user key。CLI 需帶 session token（從 BugEzy 擴充複製）。
+// 設定：BUGEZY_TOKEN=<你的 session token> npx bugezy-watch -- <command>
+const API_TOKEN = process.env.BUGEZY_TOKEN || '';
 const BUFFER_INTERVAL = 10_000; // 每 10 秒推送一次
 const MAX_BUFFER = 50; // 最多暫存 50 筆
 
@@ -88,6 +91,11 @@ console.log('🐛 BugEzy Terminal Agent — 監控中');
 console.log(`   指令: ${userCommand.join(' ')}`);
 console.log(`   API:  ${API_BASE}`);
 console.log('   只攔截 stderr + error（正常輸出不影響）');
+if (!API_TOKEN) {
+  console.log(
+    '   ⚠ 未設定 BUGEZY_TOKEN — 日誌上傳會被拒（401）。請 set BUGEZY_TOKEN=<擴充複製的 session token>',
+  );
+}
 console.log('─'.repeat(50));
 
 // ── 定時推送 ──
@@ -97,7 +105,10 @@ async function flushBuffer(): Promise<void> {
   try {
     const res = await fetch(`${API_BASE}/api/terminal-logs`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(API_TOKEN ? { Authorization: `Bearer ${API_TOKEN}` } : {}),
+      },
       body: JSON.stringify({
         logs,
         command: userCommand.join(' '),
