@@ -635,28 +635,56 @@ function main() {
       .join(' ');
   }
 
-  // ── A. Console 攔截（只抓 warn + error）──────────────────
+  // ── A. Console 攔截（只抓 warn + error）+ 全域錯誤兜底（PM-154）──────────
   // PM-50：永遠存背景 buffer（回溯用）；recording 時也存錄製 buffer + flush。
-  console.warn = (...args: unknown[]) => {
-    const entry: ConsoleLog = { level: 'warn', message: stringifyArgs(args), timestamp: Date.now() };
+  // PM-154：統一收集入口 + 去重——console.error / window.onerror / unhandledrejection
+  //         可能對同一錯誤重複觸發，去重避免報告塞滿重複列。
+  const recentErrors = new Set<string>();
+  function collectConsoleLog(entry: ConsoleLog): void {
+    // 去重 key = level + 訊息前 100 字；5 秒後清除（允許相同錯誤日後再記）
+    const key = `${entry.level}:${entry.message.slice(0, 100)}`;
+    if (recentErrors.has(key)) return;
+    recentErrors.add(key);
+    setTimeout(() => recentErrors.delete(key), 5000);
     bgConsoleLogs.push({ data: entry, timestamp: entry.timestamp });
     updateMonitorBadge(); // PM-52
     if (recording) {
       consoleLogs.push(entry);
       post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'FLUSH_CONSOLE', log: entry }); // PM-34
     }
+  }
+
+  console.warn = (...args: unknown[]) => {
+    collectConsoleLog({ level: 'warn', message: stringifyArgs(args), timestamp: Date.now() });
     return originalWarn(...args);
   };
   console.error = (...args: unknown[]) => {
-    const entry: ConsoleLog = { level: 'error', message: stringifyArgs(args), timestamp: Date.now() };
-    bgConsoleLogs.push({ data: entry, timestamp: entry.timestamp });
-    updateMonitorBadge(); // PM-52
-    if (recording) {
-      consoleLogs.push(entry);
-      post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'FLUSH_CONSOLE', log: entry }); // PM-34
-    }
+    collectConsoleLog({ level: 'error', message: stringifyArgs(args), timestamp: Date.now() });
     return originalError(...args);
   };
+
+  // PM-154 #8：未捕捉的 Promise rejection（async/await 忘了 catch → console 什麼都沒有）
+  window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
+    const reason = event.reason;
+    const message =
+      reason instanceof Error
+        ? `Unhandled Promise Rejection: ${reason.message}${reason.stack ? '\n' + reason.stack : ''}`
+        : `Unhandled Promise Rejection: ${stringifyArgs([reason])}`;
+    collectConsoleLog({ level: 'error', message, timestamp: Date.now(), source: 'unhandledrejection' });
+  });
+
+  // PM-154 #6：框架吞掉的 JS 執行錯誤（React Error Boundary / Vue errorHandler 攔下不進 console）。
+  // 只抓 JS 錯誤（target = window/document）；資源載入失敗（img/script/link，capture phase）留給 PM-155。
+  window.addEventListener(
+    'error',
+    (event: ErrorEvent) => {
+      if (event.target !== window && event.target !== document) return; // 資源載入錯誤 → 不在此處理
+      const loc = `${event.filename || 'unknown'}:${event.lineno || 0}:${event.colno || 0}`;
+      const message = `${event.message || 'Script Error'} at ${loc}`;
+      collectConsoleLog({ level: 'error', message, timestamp: Date.now(), source: 'window.onerror' });
+    },
+    false, // bubbling phase：只收 JS 執行錯誤，不收不冒泡的資源載入錯誤
+  );
 
   // ── B. Network 攔截 — fetch（只抓 4xx / 5xx）─────────────
   // PM-50：永遠存背景 buffer；recording 時也存錄製 buffer + flush。

@@ -5,6 +5,8 @@ export interface ConsoleLog {
   level: 'warn' | 'error';
   message: string;
   timestamp: number;
+  /** PM-154：來源標記（'console' 省略；'unhandledrejection' / 'window.onerror' 兜漏網錯誤）。 */
+  source?: string;
 }
 
 /** Network 攔截紀錄（只抓 4xx / 5xx） */
