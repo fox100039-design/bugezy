@@ -2,7 +2,9 @@
 
 ## 2026-07-05
 
-Day 20（PM-153~156）。Bug 捕捉升級（漏網錯誤 + 效能兜底 + 網路環境）。
+Day 20（PM-153~157）。Bug 捕捉升級（漏網錯誤 + 效能兜底 + 網路環境 + 儲存狀態）。
+
+- PM-157：**儲存空間快照 + PII 遮罩**（`extension/storage.ts`(新) + `inject.ts` + `types.ts` + `server/index.ts` + `schema.sql`）— 診斷「登入狀態突然消失／資料不見」（localStorage/sessionStorage/cookie 問題）。①共用 `getStorageSnapshot()` → localStorage/sessionStorage（`{key,size,value}[]`）+ cookie **只留名稱不留值**（try/catch 兜 SecurityError）；②`maskPII()` **三層本機遮罩**：敏感 key（password/token/secret/auth/card/cvv/ssn/session…）→整值 `***MASKED***`、>500 字元→截斷、值含 email/卡號/JWT→局部 `***`；③**遮罩全在 extension 端執行，server 只收遮罩後結果，敏感原值零外洩**；④錄製/回溯/監控三處 payload 帶 `storageSnapshot`；⑤server `createReport` 存 `storage_snapshot` JSONB（graceful fallback 不 500），`getReport` 回傳；⑥報告頁「💾 儲存狀態」區塊 `fmtItems` 列各項 + Cookies 名稱 + 遮罩提示。**判斷**：截圖標注頁（`chrome-extension://` 情境）讀不到被測站 storage，故不帶（免上傳誤導資料）。線上實測 round-trip ✅（`user_token:***MASKED***`、cookieNames 正確）。`wrangler deploy`（`cb910db5`）+ `npm run build` ✅。至此 PM-153~157 五卡完成：五類漏網錯誤 + 網路 + 儲存三維上下文。
 
 - PM-156：**網路環境快照**（`extension/net.ts`(新) + `inject.ts` + `annotate.ts` + `types.ts` + `server/index.ts` + `schema.sql`）— 診斷小白最常見的「我這好好的、客戶那壞」（3G/高延遲/離線）。①抽共用 `getNetworkSnapshot()`（`navigator.onLine` + `navigator.connection`：online/effectiveType/rtt/downlink/saveData/type，不支援回 unknown/null）；②錄製 `startRecording` 抓 atStart、`stopRecording` 抓 atEnd → payload `networkSnapshot:{atStart,atEnd}` 一頭一尾留痕；③即時監控上傳 / 回溯 / 截圖標注各帶單次 `{atStart}`；④server `createReport` 存 `network_snapshot` JSONB（沿用 PM-82 graceful fallback，欄位不存在自動退回不 500），`getReport` 回 `networkSnapshot`；⑤報告頁「📡 網路環境」區塊 `fmtNet` 顯示 狀態🟢/🔴 + 類型 + 延遲 + 頻寬，atEnd 異動另列。線上實測 round-trip ✅（atStart 4g/wifi/online + atEnd offline/unknown 完整寫入取回）。`wrangler deploy`（`13aea42e`）+ `npm run build` ✅。至此 PM-153~156 四卡完成：五類漏網錯誤 + 網路環境上下文。
 

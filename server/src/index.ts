@@ -76,6 +76,7 @@ interface RecordingPayload {
   markers?: TimeMarker[]; // PM-28：時間軸標記
   user_id?: string; // PM-61：已登入時綁定的使用者
   networkSnapshot?: unknown; // PM-156：網路環境快照（atStart/atEnd），存 JSONB
+  storageSnapshot?: unknown; // PM-157：儲存空間快照（已在 extension 端遮罩），存 JSONB
 }
 
 // ── CORS（PM-130：收緊，只允許自家域名 + chrome-extension）────────
@@ -1850,6 +1851,31 @@ const REPORT_PAGE_HTML = `<!DOCTYPE html>
         }
         html += '</p></div>';
       }
+      // PM-157：儲存狀態（值已在 extension 端遮罩，server 只顯示遮罩後結果）
+      if (r.storageSnapshot) {
+        var ss = r.storageSnapshot;
+        var fmtItems = function (label, items) {
+          var arr = Array.isArray(items) ? items : [];
+          var h = '<div style="margin-bottom:8px"><strong>' + esc(label) + ' (' + arr.length + ' items)</strong>';
+          if (arr.length) {
+            h += '<ul style="margin:4px 0 0;padding-left:20px">';
+            arr.forEach(function (it) {
+              h += '<li><code>' + esc(String(it.key)) + '</code>: ' + esc(String(it.value)) +
+                ' <span style="color:#8b949e">(' + (it.size != null ? it.size : 0) + ' chars)</span></li>';
+            });
+            h += '</ul>';
+          }
+          return h + '</div>';
+        };
+        html += '<div class="info-section"><h3>💾 儲存狀態</h3>';
+        html += fmtItems('localStorage', ss.localStorage);
+        html += fmtItems('sessionStorage', ss.sessionStorage);
+        var cookieNames = Array.isArray(ss.cookieNames) ? ss.cookieNames : [];
+        html += '<div><strong>Cookies: ' + (ss.cookieCount != null ? ss.cookieCount : cookieNames.length) + '</strong>' +
+          (cookieNames.length ? ' <span style="color:#8b949e">(' + esc(cookieNames.join(', ')) + ')</span>' : '') + '</div>';
+        html += '<p style="color:#8b949e;font-size:12px;margin-top:8px">🔒 敏感值（密碼/token/email/卡號）已於使用者端自動遮罩</p>';
+        html += '</div>';
+      }
       html += '<div class="info-section"><h3>📊 摘要</h3><div class="info-grid">';
       html += '<div>DOM 事件：'+(r.rrwebEvents?.length||0)+'</div>';
       html += '<div>Console：'+consoleCount+'</div>';
@@ -2615,16 +2641,17 @@ async function createReport(request: Request, env: Env, origin: string): Promise
 
   // PM-61：只在有登入（payload.user_id）時才帶 user_id 欄，避免未跑 ALTER 時整批 insert 失敗
   const baseRow = payload.user_id ? { ...row, user_id: payload.user_id } : row;
-  // PM-83/156：可選欄位（allow_screenshot_images / network_snapshot）欄位若尚未建（ALTER 未跑）
+  // PM-83/156/157：可選欄位（allow_screenshot_images / network_snapshot / storage_snapshot）若尚未建（ALTER 未跑）
   // 會讓 insert 失敗 → 退回不含這些欄位重試，確保上傳永不因此中斷。
   const allowImages = (payload as { allow_screenshot_images?: boolean }).allow_screenshot_images === true;
   const insertRow = {
     ...baseRow,
     ...(allowImages ? { allow_screenshot_images: true } : {}),
     ...(payload.networkSnapshot ? { network_snapshot: payload.networkSnapshot } : {}), // PM-156
+    ...(payload.storageSnapshot ? { storage_snapshot: payload.storageSnapshot } : {}), // PM-157（已遮罩）
   };
   let { error } = await supa(env).from('reports').insert(insertRow);
-  if (error && /allow_screenshot_images|network_snapshot/.test(error.message)) {
+  if (error && /allow_screenshot_images|network_snapshot|storage_snapshot/.test(error.message)) {
     ({ error } = await supa(env).from('reports').insert(baseRow)); // 退回僅必要欄位
   }
   if (error) {
@@ -2677,6 +2704,7 @@ async function getReport(reportId: string, env: Env): Promise<Response> {
     markers: data.markers ?? [], // PM-28：時間軸標記
     allowScreenshotImages: data.allow_screenshot_images ?? false, // PM-82（select('*') → 欄位未建時為 undefined→false）
     networkSnapshot: data.network_snapshot ?? null, // PM-156：網路環境快照（欄位未建時 undefined→null）
+    storageSnapshot: data.storage_snapshot ?? null, // PM-157：儲存空間快照（遮罩後；欄位未建時 undefined→null）
     rrwebEvents,
     screenshots,
     created_at: data.created_at,

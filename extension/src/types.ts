@@ -66,6 +66,20 @@ export interface NetworkSnapshotBundle {
   atEnd?: NetworkSnapshot;
 }
 
+/** PM-157：單筆儲存項（value 已在本機 maskPII 遮罩，server 永不碰原值）。 */
+export interface StorageItem {
+  key: string;
+  size: number; // 原值字元數（遮罩前）
+  value: string; // 遮罩/截斷後的值
+}
+/** PM-157：儲存空間快照（localStorage/sessionStorage 遮罩後 + cookie 只留名稱）。 */
+export interface StorageSnapshot {
+  localStorage: StorageItem[];
+  sessionStorage: StorageItem[];
+  cookieCount: number;
+  cookieNames: string[];
+}
+
 export interface RecordingPayload {
   rrwebEvents: unknown[];
   consoleLogs: ConsoleLog[];
@@ -74,6 +88,7 @@ export interface RecordingPayload {
   voiceTranscript: VoiceSegment[]; // 語音轉文字（content.ts 合併）
   markers?: TimeMarker[]; // PM-28：時間軸標記（選填，向後相容）
   networkSnapshot?: NetworkSnapshotBundle; // PM-156：網路環境快照（選填，向後相容）
+  storageSnapshot?: StorageSnapshot; // PM-157：儲存空間快照（遮罩後，選填，向後相容）
 }
 
 /** 上傳狀態 */

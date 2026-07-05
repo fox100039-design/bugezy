@@ -21,6 +21,7 @@ import {
 } from './types';
 import { t, getUILang } from './i18n';
 import { getNetworkSnapshot } from './net'; // PM-156：網路環境快照
+import { getStorageSnapshot } from './storage'; // PM-157：儲存空間快照（本機遮罩）
 
 // PM-139：inject 在 MAIN world 無 chrome.storage，語言由 content.ts 注入 DOM（data-bugezy-lang）。
 // it() = 讀 DOM 語言後翻譯（每次讀，支援使用者中途切語言）。
@@ -316,6 +317,7 @@ function main() {
           description: it('monitor-desc', { n: total }),
           markers: [],
           networkSnapshot: { atStart: getNetworkSnapshot() }, // PM-156：即時監控上傳也帶網路快照
+          storageSnapshot: getStorageSnapshot(), // PM-157：儲存空間快照（本機遮罩）
         };
         // inject 在 MAIN world 無 chrome.runtime → 走 window.postMessage → content → background 通訊鏈
         post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'UPLOAD_MONITOR', payload });
@@ -1170,6 +1172,7 @@ function main() {
       voiceTranscript: voiceSegments, // 直接用 MAIN world 收到的語音
       // PM-156：錄製開始/結束各一份網路快照（AI 可看到「開始 4G、結束離線」）
       networkSnapshot: { atStart: networkAtStart ?? getNetworkSnapshot(), atEnd: getNetworkSnapshot() },
+      storageSnapshot: getStorageSnapshot(), // PM-157：儲存空間快照（本機遮罩）
     };
     blog('STOP：打包', {
       dom: payload.rrwebEvents.length,
@@ -1220,6 +1223,7 @@ function main() {
         pageInfo: buildPageInfo(),
         voiceTranscript: [], // 回溯沒有語音
         networkSnapshot: { atStart: getNetworkSnapshot() }, // PM-156：回溯只有一個時間點
+        storageSnapshot: getStorageSnapshot(), // PM-157：儲存空間快照（本機遮罩）
       };
       blog('REWIND 打包', {
         dom: payload.rrwebEvents.length,

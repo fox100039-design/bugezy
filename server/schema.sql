@@ -31,6 +31,9 @@ ALTER TABLE reports ADD COLUMN IF NOT EXISTS screenshots_r2_key TEXT;
 -- ── PM-156：網路環境快照（online/effectiveType/rtt/downlink/saveData，錄製 atStart+atEnd）──
 ALTER TABLE reports ADD COLUMN IF NOT EXISTS network_snapshot JSONB DEFAULT NULL;
 
+-- ── PM-157：儲存空間快照（localStorage/sessionStorage/cookieNames）。值已在 extension 端 maskPII 遮罩，server 永不碰敏感原值。──
+ALTER TABLE reports ADD COLUMN IF NOT EXISTS storage_snapshot JSONB DEFAULT NULL;
+
 -- ── PM-20：開發者文字描述 ──
 ALTER TABLE reports ADD COLUMN IF NOT EXISTS description TEXT DEFAULT '';
 
