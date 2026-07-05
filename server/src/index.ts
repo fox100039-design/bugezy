@@ -3524,6 +3524,116 @@ function txt(data: unknown) {
   return { content: [{ type: 'text' as const, text }] };
 }
 
+// ── PM-159：Bug 分析規則引擎（零成本，不呼叫 Workers AI）──────
+// 分析 rejection / CORS / network fail / resource error / 離線 / token 丟失 / Web Vitals，
+// 產生「AI Bug 導航摘要」貼在 get_timeline / get_report_overview 最前面，讓 AI 直接定位問題。
+interface SummaryLog {
+  level?: string;
+  message?: string;
+  source?: string;
+}
+interface SummaryNet {
+  method?: string;
+  url?: string;
+  status?: number;
+}
+function generateBugSummary(report: {
+  console_logs?: SummaryLog[] | null;
+  network_errors?: SummaryNet[] | null;
+  voice_transcript?: Array<{ text?: string }> | null;
+  network_snapshot?: unknown;
+  storage_snapshot?: unknown;
+}): string {
+  const consoleLogs: SummaryLog[] = report.console_logs || [];
+  const networkErrors: SummaryNet[] = report.network_errors || [];
+  const voiceTranscript: Array<{ text?: string }> = report.voice_transcript || [];
+  const ns = (report.network_snapshot || {}) as {
+    atStart?: Record<string, unknown>;
+    online?: boolean;
+    effectiveType?: string;
+    rtt?: number | null;
+  };
+  const ss = (report.storage_snapshot || {}) as { localStorage?: Array<{ key?: string; value?: string }> };
+
+  const errors = consoleLogs.filter((l) => l.level === 'error');
+  const warnings = consoleLogs.filter((l) => l.level === 'warn');
+  const rejections = consoleLogs.filter((l) => l.source === 'unhandledrejection');
+  const resourceErrors = consoleLogs.filter((l) => l.source === 'resource-error');
+  const webVitals = consoleLogs.filter((l) => l.source === 'web-vitals');
+  const netFails = networkErrors.filter((n) => (n.status ?? 0) >= 400);
+  const clip = (s: string | undefined, n = 150) => (s || '').slice(0, n);
+
+  const lines: string[] = ['🔍 AI Bug 導航摘要', ''];
+
+  // ── 根因判斷 ──
+  if (rejections.length > 0) {
+    lines.push(`⚡ 根因線索：發現 ${rejections.length} 個未捕捉的 Promise Rejection（async/await 可能缺少 catch）`);
+    lines.push(`   → ${clip(rejections[0].message)}`);
+  }
+
+  if (netFails.length > 0) {
+    const corsErrors = warnings.filter((w) => /CORS|Access-Control/i.test(w.message || ''));
+    if (corsErrors.length > 0) {
+      lines.push('⚡ 根因線索：CORS 跨域錯誤 — API 請求被瀏覽器擋掉');
+      lines.push('   → 建議檢查 server 的 Access-Control-Allow-Origin header');
+    } else {
+      const first = netFails[0];
+      lines.push(`⚡ 根因線索：API 呼叫失敗 ${first.method || '?'} ${first.url || ''} → ${first.status}`);
+      if (first.status === 404) lines.push('   → 端點不存在，檢查 URL 拼寫或 server 路由');
+      if (first.status === 500) lines.push('   → Server 內部錯誤，檢查 server logs');
+      if (first.status === 401 || first.status === 403) lines.push('   → 認證/權限問題，檢查 token 或登入狀態');
+    }
+  }
+
+  if (resourceErrors.length > 0) {
+    lines.push(`⚡ 根因線索：${resourceErrors.length} 個資源載入失敗（頁面可能破版）`);
+    lines.push(`   → ${clip(resourceErrors[0].message)}`);
+  }
+
+  if (errors.length > 0 && rejections.length === 0 && netFails.length === 0) {
+    lines.push('⚡ 根因線索：JavaScript 執行錯誤');
+    lines.push(`   → ${clip(errors[0].message)}`);
+  }
+
+  // ── 環境資訊 ──
+  const atStart = (ns.atStart || ns) as { online?: boolean; effectiveType?: string; rtt?: number | null };
+  if (atStart.online === false) {
+    lines.push('🌐 注意：使用者處於離線狀態');
+  } else if (atStart.effectiveType === 'slow-2g' || atStart.effectiveType === '2g') {
+    lines.push(`🌐 注意：使用者網路極慢（${atStart.effectiveType}，RTT ${atStart.rtt ?? '?'}ms）`);
+  }
+
+  // ── 儲存線索（token 丟失）──
+  const ls = ss.localStorage || [];
+  const tokenItem = ls.find((i) => /token|auth|session/i.test(i.key || ''));
+  if (tokenItem && (tokenItem.value === 'null' || tokenItem.value === '')) {
+    lines.push('💾 注意：localStorage 的 token/auth 為空 — 可能是登入狀態丟失');
+  }
+
+  // ── 語音描述 ──
+  const firstVoice = voiceTranscript[0]?.text || '';
+  if (firstVoice) lines.push(`🎙️ 使用者描述：「${firstVoice.slice(0, 100)}」`);
+
+  // ── Web Vitals 警告 ──
+  const badVitals = webVitals.filter((v) => v.level === 'warn');
+  if (badVitals.length > 0) {
+    lines.push(`⚡ 效能問題：${badVitals.map((v) => (v.message || '').replace('Web Vital ', '')).join(' / ')}`);
+  }
+
+  // 無任何線索 → 明示（在統計之前判斷，否則 lines 永遠 >3；修正規格 §1 判斷位置）
+  if (lines.length <= 2) {
+    lines.push('✅ 未偵測到明顯異常，建議查看完整時間軸');
+  }
+
+  // ── 統計 ──
+  lines.push('');
+  lines.push(
+    `📊 統計：${errors.length} error / ${warnings.length} warn / ${netFails.length} network fail / ${resourceErrors.length} resource fail`,
+  );
+
+  return lines.join('\n');
+}
+
 // ── PM-54：每次 MCP 回應附 token 估算 + 對比 Claude in Chrome 的省錢 ──
 interface TokenEstimate {
   bugezyTokens: number;
@@ -3730,16 +3840,33 @@ function createMcpServer(env: Env): McpServer {
   // Tool 2: get_report_overview
   server.tool(
     'get_report_overview',
-    '取得報告概覽（metadata + 各筆數，不含原始資料）。Report overview.',
+    '取得報告概覽（metadata + 各筆數 + AI Bug 導航摘要，不含原始資料）。Report overview with AI bug summary.',
     { report_id: z.string() },
     async (args) => {
+      // PM-159：改 select('*') 以供 generateBugSummary 分析原始 logs；回傳仍只給 metadata + 摘要（不含原始陣列，省 token）
       const { data, error } = await supabase()
         .from('reports')
-        .select(META_COLS)
+        .select('*')
         .eq('report_id', args.report_id)
         .single();
       if (error || !data) return txt('找不到報告');
-      return txtWithTokens(data, 'get_report_overview', args.report_id);
+      const overview = {
+        report_id: data.report_id,
+        url: data.url,
+        title: data.title,
+        browser: data.browser,
+        screen_size: data.screen_size,
+        console_count: data.console_count,
+        network_count: data.network_count,
+        voice_count: data.voice_count,
+        rrweb_count: data.rrweb_count,
+        screenshot_count: data.screenshot_count,
+        description: data.description,
+        markers: data.markers,
+        created_at: data.created_at,
+        ai_bug_summary: generateBugSummary(data), // PM-159：規則引擎導航摘要
+      };
+      return txtWithTokens(overview, 'get_report_overview', args.report_id);
     },
   );
 
@@ -4102,8 +4229,10 @@ function createMcpServer(env: Env): McpServer {
 
       events.sort((a, b) => a.time - b.time);
 
+      // PM-159：最前面加 AI Bug 導航摘要（規則引擎，AI 直接定位問題不用盲讀）
+      let timeline = generateBugSummary(report) + '\n\n';
       // 組裝時間軸文字
-      let timeline = `📋 報告時間軸 — ${report.title || report.url || report.report_id}\n`;
+      timeline += `📋 報告時間軸 — ${report.title || report.url || report.report_id}\n`;
       timeline += `頁面：${report.url || '（無）'}\n`;
       timeline += `瀏覽器：${report.browser || 'unknown'}\n`;
       timeline += `螢幕：${report.screen_size || 'unknown'}\n`;

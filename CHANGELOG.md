@@ -2,7 +2,9 @@
 
 ## 2026-07-05
 
-Day 20（PM-153~158）。Bug 捕捉升級（漏網錯誤 + 效能兜底 + 網路環境 + 儲存狀態）+ MCP 時序麵包屑。
+Day 20（PM-153~159）。Bug 捕捉升級（漏網錯誤 + 效能兜底 + 網路環境 + 儲存狀態）+ MCP 時序麵包屑 + AI 導航摘要。
+
+- PM-159：**MCP 報告摘要 — AI 導航提示（規則引擎，零成本）**（`server/index.ts`）— 在 `get_timeline` / `get_report_overview` 最前面自動附「🔍 AI Bug 導航摘要」，AI 直接看結論定位根因不用盲讀時間軸。①`generateBugSummary()` 分析 Promise Rejection / CORS / network fail（依 404·500·401/403 給建議）/ 資源載入失敗 / 純 JS 錯誤 / 離線·慢網 / token 丟失 / 語音描述 / Web Vitals，無線索則「未偵測到明顯異常」+ 統計；②不呼叫 Workers AI（純規則零 API 費）；③get_report_overview 改 `select('*')` 供分析但只回 metadata + `ai_bug_summary`（不含原始陣列，維持省 token）。**修正規格 bug**：原 `lines.length<=3` 判斷放在 stats 之後恆不成立→「未偵測到明顯異常」永不顯示，改到 stats 前判斷 `<=2`。線上 `/mcp` 實測 5 情境 round-trip ✅（rejection/500/CORS/離線+token/空報告 摘要皆正確）。`wrangler deploy`（`b38d6757`）。
 
 - PM-158：**MCP 新增第 13 個 tool `get_timeline`（時序麵包屑）**（`server/index.ts`）— 把一份報告的 Console/Network/語音/標記 按時間排序 + 網路環境 + 儲存摘要合成**一條人類可讀故事線**，AI 呼叫一次即掌握完整 Bug 脈絡（省去逐一呼叫 5+ tool）。①事件用相對時間 `[0.0s][0.5s][1.5s]`（startTime=最早正時間戳）；②表頭含網路（在線/類型/RTT/頻寬）+ 儲存（項數/Cookie 數/敏感值已遮罩）；③`chromeMultiplier` 加 `get_timeline:25`；④/install 工具數 12→13 + 清單加 get_timeline（中英）。**修正規格 3 處**：標記實為 `time_sec`(相對秒)+`note`（非 timestamp/label）→換算絕對時間再排序；欄位 `browser`（非 user_agent）；token 用 `chromeMultiplier`（`TOOL_TOKEN_ESTIMATES` 不存在）。線上 `/mcp` JSON-RPC 實測 round-trip ✅（5 事件正確排序 + 標記精準落點 + Token 省 96%）。`wrangler deploy`（`0a6b9318`）。
 
