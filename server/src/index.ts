@@ -522,7 +522,13 @@ function homePage(lang: PageLang): string {
     .ai-tools { background:#1a1a2e; border:1px solid #2a2a3e; border-radius:12px; padding:20px; margin-top:24px; text-align:center; }
     .ai-tools h3 { font-size:16px; color:#a78bfa; margin-bottom:14px; }
     .ai-tools p { color:#888; font-size:13px; margin-top:12px; }
-    @media (max-width:600px) { .framework-grid { grid-template-columns:1fr; } }
+    /* PM-164：BugEzy 能捕捉什麼 */
+    .capture-grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin:24px 0; text-align:left; }
+    .capture-col { background:#1a1a2e; border:1px solid #2a2a3e; border-radius:12px; padding:20px 24px; }
+    .capture-col h3 { font-size:15px; color:#a78bfa; margin:0 0 12px; }
+    .capture-col ul { margin:0; padding-left:20px; }
+    .capture-col li { margin:7px 0; font-size:14px; color:#d0d0d8; line-height:1.5; }
+    @media (max-width:600px) { .framework-grid { grid-template-columns:1fr; } .capture-grid { grid-template-columns:1fr; } }
   </style>
 </head>
 <body>
@@ -530,7 +536,7 @@ function homePage(lang: PageLang): string {
   <header class="hero">
     <div class="logo">🐛</div>
     <h1>BugEzy</h1>
-    <p class="tagline">${t('Web 開發者的 AI Bug 報告工具<br>前端後端一起抓，10 分鐘修好 Bug', 'AI Bug Reporter for Web Developers<br>Catch frontend & backend bugs, fix in 10 minutes')}</p>
+    <p class="tagline">${t('Web 開發者的 AI Bug 報告工具<br>捕捉 95% 以上的 Web Bug — JS 錯誤 / Promise 靜默 / CORS / 效能 / 網路 / 儲存狀態，AI 一鍵分析', 'AI Bug Reporter for Web Developers<br>Catches 95%+ of Web Bugs — JS errors / silent Promise failures / CORS / performance / network / storage state, AI analyzes in one click')}</p>
     <div class="bullets">
       <span>${t('✅ 語音描述 Bug，AI 自動分析', '✅ Describe bugs by voice, AI auto-analyzes')}</span>
       <span>${t('✅ 6 種錄製模式，完整重現問題', '✅ 6 recording modes, fully reproduce the issue')}</span>
@@ -556,6 +562,43 @@ function homePage(lang: PageLang): string {
     </div>
   </section>
 
+  <section class="wrap" id="capture">
+    <h2>${t('🔍 BugEzy 能捕捉什麼？', '🔍 What Can BugEzy Capture?')}</h2>
+    <p class="sub">${t('前端自動捕捉、後端終端機攔截、AI 一鍵分析——一份報告全都有', 'Auto-captured on the frontend, caught on the backend, analyzed by AI — all in one report')}</p>
+    <div class="capture-grid">
+      <div class="capture-col">
+        <h3>${t('🖥 前端（Chrome 擴充自動捕捉）', '🖥 Frontend (auto-captured by the Chrome extension)')}</h3>
+        <ul>
+          <li>${t('JS 執行錯誤（TypeError / ReferenceError / SyntaxError）', 'JS runtime errors (TypeError / ReferenceError / SyntaxError)')}</li>
+          <li>${t('Promise 靜默失敗（未捕捉的 async/await 錯誤）', 'Silent Promise failures (unhandled async/await errors)')}</li>
+          <li>${t('Console 警告（CORS / Mixed Content / Deprecated API）', 'Console warnings (CORS / Mixed Content / Deprecated API)')}</li>
+          <li>${t('Network 失敗（API 4xx/5xx / timeout / CORS blocked）', 'Network failures (API 4xx/5xx / timeout / CORS blocked)')}</li>
+          <li>${t('資源載入失敗（圖片 / CSS / JS / 字型 404）', 'Resource load failures (image / CSS / JS / font 404)')}</li>
+          <li>${t('Web Vitals 效能（LCP / CLS / FID 超標警告）', 'Web Vitals performance (LCP / CLS / FID threshold alerts)')}</li>
+          <li>${t('網路環境快照（WiFi / 4G / 離線 / 延遲 / 頻寬）', 'Network snapshot (WiFi / 4G / offline / latency / bandwidth)')}</li>
+          <li>${t('儲存空間快照（localStorage / sessionStorage / Cookie，敏感值自動遮罩）', 'Storage snapshot (localStorage / sessionStorage / Cookie, sensitive values auto-masked)')}</li>
+          <li>${t('DOM 變化（rrweb 全紀錄）', 'DOM changes (full rrweb recording)')}</li>
+          <li>${t('語音描述（Whisper 精準轉錄 / Web Speech 即時字幕）', 'Voice notes (Whisper transcription / Web Speech live captions)')}</li>
+          <li>${t('截圖標注（全頁 / 區域 / 自由形狀）', 'Screenshot annotation (full page / region / freehand)')}</li>
+        </ul>
+      </div>
+      <div class="capture-col">
+        <h3>${t('⚙ 後端（Terminal CLI 捕捉）', '⚙ Backend (captured by the Terminal CLI)')}</h3>
+        <ul>
+          <li>${t('Python traceback / exception', 'Python traceback / exception')}</li>
+          <li>${t('Node.js uncaughtException / unhandledRejection', 'Node.js uncaughtException / unhandledRejection')}</li>
+          <li>${t('任何語言的 stderr / crash log', 'stderr / crash logs from any language')}</li>
+        </ul>
+        <h3 style="margin-top:20px;">${t('🤖 AI 一鍵分析', '🤖 One-click AI analysis')}</h3>
+        <ul>
+          <li>${t('時序麵包屑 — 所有事件按時間排序成一條故事線', 'Timeline breadcrumb — every event sorted into one story')}</li>
+          <li>${t('AI Bug 導航 — 自動分析根因、環境線索、修復建議', 'AI bug navigator — auto root-cause, environment clues, fix suggestions')}</li>
+          <li>${t('13 個 MCP 工具 — AI 直接讀取，不用複製貼上', '13 MCP tools — AI reads directly, no copy-paste')}</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
   <section class="wrap" id="frameworks">
     <h2>${t('支援所有 Web 開發框架', 'Works with All Web Frameworks')}</h2>
     <p class="sub">${t('只要你的產品跑在瀏覽器上，BugEzy 就能用', 'If your product runs in a browser, BugEzy works')}</p>
@@ -578,10 +621,13 @@ function homePage(lang: PageLang): string {
           <span>Django</span>
           <span>Flask</span>
           <span>FastAPI</span>
+          <span>Express</span>
+          <span>Nest.js</span>
           <span>Laravel</span>
           <span>Rails</span>
           <span>Spring Boot</span>
-          <span>Express</span>
+          <span>Go</span>
+          <span>Rust</span>
           <span>Node.js</span>
         </div>
       </div>
@@ -1440,6 +1486,15 @@ Full guide: https://bugezy.dev/install`,
     </div>
   </div>
 
+  <div class="ai-install-box" style="margin-top:28px;">
+    <h3 style="margin:0 0 8px;color:#a78bfa;font-size:18px;">${t('🐍 後端開發者？試試 Terminal CLI', '🐍 Backend developer? Try the Terminal CLI')}</h3>
+    <p style="color:#9aa3b2;font-size:14px;margin:0 0 14px;">${t('捕捉 Python / Node.js / Go 的終端機錯誤（stderr / traceback / crash），AI 直接讀取分析——不需開瀏覽器。付費功能。', 'Capture terminal errors (stderr / traceback / crash) from Python / Node.js / Go — AI reads and analyzes them directly, no browser needed. Premium feature.')}</p>
+    <pre style="margin:0;padding:14px 16px;background:#0f0f1a;border-radius:8px;color:#7ee0c5;font-family:ui-monospace,monospace;font-size:13px;overflow-x:auto;white-space:pre;line-height:1.7;">$ BUGEZY_TOKEN=&lt;${t('你的 token', 'your token')}&gt; npx bugezy-watch -- python manage.py runserver
+$ BUGEZY_TOKEN=&lt;${t('你的 token', 'your token')}&gt; npx bugezy-watch -- node server.js
+$ BUGEZY_TOKEN=&lt;${t('你的 token', 'your token')}&gt; npx bugezy-watch -- go run main.go</pre>
+    <p style="color:#888;font-size:12px;margin:12px 0 0;">${t('AI 之後用 <code style="background:#2a2a3e;padding:1px 5px;border-radius:4px;color:#7ee0c5;">get_terminal_logs</code> MCP 工具讀取這些錯誤。', 'AI then reads these errors via the <code style="background:#2a2a3e;padding:1px 5px;border-radius:4px;color:#7ee0c5;">get_terminal_logs</code> MCP tool.')}</p>
+  </div>
+
   <div class="bottom-cta">
     <a class="cta-btn" href="/features">${t('來看看有哪些功能 →', 'See all features →')}</a>
   </div>
@@ -1578,6 +1633,15 @@ function featuresPage(lang: PageLang): string {
     <div class="row"><b>${t('適合：', 'Best for: ')}</b>${t('後端開發（Node.js、Python 等）', 'Backend development (Node.js, Python, etc.)')}</div>
     <div class="row"><b>${t('操作：', 'How: ')}</b><code>npx bugezy-watch -- node server.js</code></div>
     <div class="row"><b>${t('小提示：', 'Tip: ')}</b>${t('不需開瀏覽器，自動攔截 stderr / throw / crash', 'No browser needed — auto-captures stderr / throw / crash')}</div>
+  </div>
+
+  <div class="feat">
+    <h2>${t('🔍 全方位 Bug 捕捉', '🔍 Full-Spectrum Bug Capture')}<span class="tag free">${t('免費', 'Free')}</span></h2>
+    <div class="row"><b>${t('漏網錯誤：', 'Missed errors: ')}</b>${t('console.warn 完整捕捉、未捕捉的 Promise Rejection、框架吞掉的 window.onerror、資源載入失敗（圖片/CSS/JS/字型 404）', 'Full console.warn capture, unhandled Promise Rejections, framework-swallowed window.onerror, resource load failures (image/CSS/JS/font 404)')}</div>
+    <div class="row"><b>${t('效能：', 'Performance: ')}</b>${t('Web Vitals（LCP / CLS / FID）超標自動警告', 'Web Vitals (LCP / CLS / FID) auto-alerts when thresholds are exceeded')}</div>
+    <div class="row"><b>${t('環境快照：', 'Environment: ')}</b>${t('網路環境（WiFi/4G/離線/延遲/頻寬）+ 儲存空間（localStorage/sessionStorage/Cookie，敏感值本機自動遮罩）', 'Network snapshot (WiFi/4G/offline/latency/bandwidth) + storage snapshot (localStorage/sessionStorage/Cookie, sensitive values masked locally)')}</div>
+    <div class="row"><b>${t('AI 分析：', 'AI analysis: ')}</b>${t('時序麵包屑（get_timeline 把所有事件排成一條故事線）+ AI Bug 導航摘要（自動根因+修復建議）', 'Timeline breadcrumb (get_timeline sorts every event into one story) + AI bug navigator (auto root-cause & fix suggestions)')}</div>
+    <div class="row"><b>${t('小提示：', 'Tip: ')}</b>${t('這些全自動，錄製或即時監控時默默收好，一份報告全都有', 'All automatic — quietly collected during recording or live monitor, all in one report')}</div>
   </div>
 
   <div class="feat paid">

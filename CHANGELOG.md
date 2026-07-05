@@ -2,7 +2,9 @@
 
 ## 2026-07-05
 
-Day 20（PM-153~163）。Bug 捕捉升級（漏網錯誤 + 效能兜底 + 網路環境 + 儲存狀態）+ MCP 時序麵包屑 + AI 導航摘要 + Stored XSS 縱深防禦 + 存取模型文案釐清 + MCP live/terminal 授權補強 + ECPay 原子性 + PII 規則擴充。
+Day 20（PM-153~164）。Bug 捕捉升級（漏網錯誤 + 效能兜底 + 網路環境 + 儲存狀態）+ MCP 時序麵包屑 + AI 導航摘要 + Stored XSS 縱深防禦 + 存取模型文案釐清 + MCP live/terminal 授權補強 + ECPay 原子性 + PII 規則擴充 + 首頁行銷更新。
+
+- PM-164：**首頁/features/install 行銷更新——展示新捕捉能力 + 後端開發者支援**（`server/index.ts`，全中英雙語）。①首頁新增「🔍 BugEzy 能捕捉什麼？」區塊（前端 11 項 + 後端 3 項 + AI 分析 3 項）；②框架區補 Nest.js/Go/Rust；③Hero 副標改「捕捉 95% 以上的 Web Bug — JS 錯誤/Promise 靜默/CORS/效能/網路/儲存狀態，AI 一鍵分析」；④/features 加「全方位 Bug 捕捉」卡（漏網錯誤/Web Vitals/環境快照/AI 導航）；⑤/install 加「🐍 後端開發者？試試 Terminal CLI」（Python/Node.js/Go `bugezy-watch` 範例）；⑥全站現況 MCP 數量一致 13（v1.0.0 歷史 changelog 條目保留 12）。`wrangler deploy`（`d4d4272f`），線上中英雙語實測全區塊 ✅。
 
 - PM-163：**Fable5-#5+#8 ECPay 原子性 + PII 遮罩擴充**（`server/index.ts` + `extension/storage.ts`）。**#5 原子性**：三個 ECPay callback（月費/日票/定期定額）原「先 `update users` 再 `recordPayment`」→ payments 寫入失敗時 users 已升級卻無冪等記錄，重送時重複展延。改 `recordPayment` 回 `boolean`，callback **先寫 payments（status paid）成功才升級 users，失敗回 `0|ErrorMessage=Payment record failed`(HTTP 500) 讓綠界重送**（前置：payments 表須存在，研判 schema.sql 已套用）。**#8 PII**：`SENSITIVE_KEYS` 加 `jwt/bearer/refresh/access`；`SENSITIVE_VALUES` 加 Amex 15 位/台灣手機/台灣身分證/OpenAI sk-/Google AIza key。`wrangler deploy`（`1acc4cec`）+ `npm run build` ✅（node 實測 maskPII 新規則全中；三 callback CheckMacValue guard 未動）。
 
