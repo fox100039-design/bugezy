@@ -1,5 +1,11 @@
 # BugEzy Changelog
 
+## 2026-07-05
+
+Day 20（PM-153~）。Bug 捕捉稽核。
+
+- PM-153：**console.warn 完整捕捉稽核**（無程式碼變更）— 核對 inject.ts console 攔截是否含 warn。結論：**四項需求早已實作**——`inject.ts:640` 已攔 `console.warn`（level:'warn' 進 bgConsoleLogs + 錄製 buffer）、監控 badge 算 `bgConsoleLogs`（含 warn）、error panel 顏色區分（error ❌ `#ef4444` / warn ⚠ `#f59e0b`，`inject.ts:262`）、server `console_logs` 原封存 + MCP `get_console_logs` 原封回（無 level 過濾）。`npm run build` ✅ 確認 dist 含 warn。⚠ 澄清：**瀏覽器引擎自印的 CORS/Mixed-Content 警告不經 JS console API，monkey-patch 抓不到**（需 DevTools Protocol，MV3 content script 做不到）；真正補捉 CORS 應在網路攔截層 catch rejected fetch（本卡 §5 network 不動，建議另開卡）。未 deploy。
+
 ## 2026-06-16
 
 - 專案建立（`C:\dev\bugezy`）
