@@ -2,7 +2,9 @@
 
 ## 2026-07-05
 
-Day 20（PM-153~164）。Bug 捕捉升級（漏網錯誤 + 效能兜底 + 網路環境 + 儲存狀態）+ MCP 時序麵包屑 + AI 導航摘要 + Stored XSS 縱深防禦 + 存取模型文案釐清 + MCP live/terminal 授權補強 + ECPay 原子性 + PII 規則擴充 + 首頁行銷更新。
+Day 20（PM-153~165）。Bug 捕捉升級（漏網錯誤 + 效能兜底 + 網路環境 + 儲存狀態）+ MCP 時序麵包屑 + AI 導航摘要 + Stored XSS 縱深防禦 + 存取模型文案釐清 + MCP live/terminal 授權補強 + ECPay 原子性 + PII 規則擴充 + 首頁行銷更新 + MCP 必填 session + 上傳額度縱深。
+
+- PM-165：**MCP session_token 改必填 + createReport server 端用量檢查**（`server/index.ts`）。①`list_reports`/`get_live_errors`/`get_terminal_logs` 的 `session_token` 由 optional 改 **required**（schema 拿掉 `.optional()`，不帶就 MCP 協議層擋下不回資料）——杜絕「知 email 即讀」殘留；②createReport 以認證身分（非 client 傳的 user_id）查 users，免費用戶上傳含 rrweb 報告且本月錄製+回溯額度皆用盡 → 403（server 端縱深）。**修正規格**：欄位 `recording_count`（非 record_count）；因回溯報告也有 rrweb 且 payload 無型別旗標，改以「錄製10+回溯5 皆用盡」為界避免誤擋合法回溯；跨月唯讀重置。線上實測 ✅（三 tool required、匿名上傳無回歸）。**限制**：count-based 檢查對「完全跳過 bumpUsage」無效（計數停 0），徹底堵需 createReport 改為權威計數點（列後續）。`wrangler deploy`（`570d70ab`）。
 
 - PM-164：**首頁/features/install 行銷更新——展示新捕捉能力 + 後端開發者支援**（`server/index.ts`，全中英雙語）。①首頁新增「🔍 BugEzy 能捕捉什麼？」區塊（前端 11 項 + 後端 3 項 + AI 分析 3 項）；②框架區補 Nest.js/Go/Rust；③Hero 副標改「捕捉 95% 以上的 Web Bug — JS 錯誤/Promise 靜默/CORS/效能/網路/儲存狀態，AI 一鍵分析」；④/features 加「全方位 Bug 捕捉」卡（漏網錯誤/Web Vitals/環境快照/AI 導航）；⑤/install 加「🐍 後端開發者？試試 Terminal CLI」（Python/Node.js/Go `bugezy-watch` 範例）；⑥全站現況 MCP 數量一致 13（v1.0.0 歷史 changelog 條目保留 12）。`wrangler deploy`（`d4d4272f`），線上中英雙語實測全區塊 ✅。
 

@@ -2684,9 +2684,49 @@ async function createReport(request: Request, env: Env, origin: string): Promise
 
   // PM-98 防呆：報告 owner 綁定用 user_id。若上傳端（早期截圖流程）漏帶 payload.user_id，
   // 退而從 Authorization: Bearer <session_token> 補回，避免報告變孤兒（list_reports 依 user_id 過濾查不到）。
-  if (!payload.user_id) {
-    const headerUserId = await getAuthUserId(request, env);
-    if (headerUserId) payload.user_id = headerUserId;
+  const authUserId = await getAuthUserId(request, env); // 認證身分（session token）
+  if (!payload.user_id && authUserId) payload.user_id = authUserId;
+
+  // PM-165：server 端用量檢查（最後防線）——免費用戶可能改 extension JS 跳過 bumpUsage，
+  // 這裡以「認證身分」再擋一次。無 rrweb（截圖/監控）不受限；未登入報告放行（匿名上傳場景）。
+  // 註：payload 無「錄製 vs 回溯」型別旗標，server 無法分辨（兩者皆有 rrweb），故以「錄製+回溯額度皆用盡」
+  //     為界（每月 10 錄製 + 5 回溯 = 15 份 rrweb 報告），避免誤擋「錄製額度滿但回溯還有」的合法回溯。
+  if (authUserId) {
+    const { data: usageUser } = await supa(env)
+      .from('users')
+      .select('plan, day_pass_expires_at, recording_count, rewind_count, usage_reset_at')
+      .eq('user_id', authUserId)
+      .maybeSingle();
+    if (usageUser) {
+      const uu = usageUser as {
+        plan?: string | null;
+        day_pass_expires_at?: string | null;
+        recording_count?: number;
+        rewind_count?: number;
+        usage_reset_at?: string | null;
+      };
+      const hasRrweb = Array.isArray(payload.rrwebEvents) && payload.rrwebEvents.length > 0;
+      if (hasRrweb && !isActiveUser(uu)) {
+        // 跨月重置（唯讀比對，不寫 DB；實際重置由 getUserPlan 負責）：新月份不計舊額度
+        const resetAt = new Date(uu.usage_reset_at ?? 0);
+        const now = new Date();
+        const sameMonth =
+          now.getMonth() === resetAt.getMonth() && now.getFullYear() === resetAt.getFullYear();
+        const recordingCount = sameMonth ? uu.recording_count || 0 : 0;
+        const rewindCount = sameMonth ? uu.rewind_count || 0 : 0;
+        if (recordingCount >= FREE_LIMITS.recording && rewindCount >= FREE_LIMITS.rewind) {
+          return json(
+            {
+              error: 'limit_reached',
+              message: `免費版每月錄製/回溯額度已用盡（${FREE_LIMITS.recording} 次錄製 + ${FREE_LIMITS.rewind} 次回溯），升級付費版解鎖無限次`,
+              used: recordingCount + rewindCount,
+              max: FREE_LIMITS.recording + FREE_LIMITS.rewind,
+            },
+            403,
+          );
+        }
+      }
+    }
   }
 
   const report_id = crypto.randomUUID();
@@ -3890,7 +3930,7 @@ function createMcpServer(env: Env): McpServer {
   // Tool 1: list_reports（PM-78：需 user_email 過濾，只回該使用者的報告）
   server.tool(
     'list_reports',
-    '列出某使用者的 Bug 報告（需提供 user_email；可選 session_token 驗證身分）。List a user\'s bug reports — requires user_email.',
+    '列出某使用者的 Bug 報告（需提供 user_email + session_token 驗證身分）。List a user\'s bug reports — requires user_email and session_token.',
     {
       user_email: z
         .string()
@@ -3898,8 +3938,7 @@ function createMcpServer(env: Env): McpServer {
         .describe('使用者 email；只回傳該 email 的報告。未提供則不回任何報告（安全預設）。'),
       session_token: z
         .string()
-        .optional()
-        .describe('你的 BugEzy session token（從 Chrome 擴充複製）。有帶就嚴格驗證身分。'),
+        .describe('你的 BugEzy session token（從 Chrome 擴充進階設定複製）。必填，用於驗證身分。'),
       limit: z.number().min(1).max(50).optional(),
       url: z.string().optional(),
     },
@@ -3913,6 +3952,10 @@ function createMcpServer(env: Env): McpServer {
           },
           'list_reports',
         );
+      }
+      // PM-165：session_token 改必填——不帶就不回任何資料（堵住「知道 email 就能讀」）
+      if (!args.session_token) {
+        return txt('請提供 session_token 參數。可從 BugEzy Chrome 擴充的進階設定中複製。');
       }
       // 以 email 查 user_id
       const { data: user, error: uErr } = await supabase()
@@ -4131,19 +4174,22 @@ function createMcpServer(env: Env): McpServer {
   // Tool 9（PM-51）: get_live_errors — 不需錄製，讀當前頁面即時 console/network errors
   server.tool(
     'get_live_errors',
-    '取得某使用者當前頁面的即時 Console/Network 錯誤（需 user_email；可選 session_token 驗證身分）。Live console/network errors — requires user_email.',
+    '取得某使用者當前頁面的即時 Console/Network 錯誤（需 user_email + session_token 驗證身分）。Live console/network errors — requires user_email and session_token.',
     {
       user_email: z.string().describe('你的 BugEzy email（只讀你自己的即時錯誤）'),
       session_token: z
         .string()
-        .optional()
-        .describe('你的 BugEzy session token（從 Chrome 擴充複製）。有帶就嚴格驗證身分。'),
+        .describe('你的 BugEzy session token（從 Chrome 擴充進階設定複製）。必填，用於驗證身分。'),
     },
     async (args) => {
       if (!args.user_email) return txt('請提供 user_email 參數。');
+      // PM-165：session_token 改必填——不帶就不回資料
+      if (!args.session_token) {
+        return txt('請提供 session_token 參數。可從 BugEzy Chrome 擴充的進階設定中複製。');
+      }
       const userId = await lookupUserId(args.user_email);
       if (!userId) return txt('查無此使用者。');
-      // PM-162：有帶 session_token 就驗證屬於此 user，防「知道 email 就能讀他即時錯誤」
+      // PM-162/165：驗證 session_token 屬於此 user，防「知道 email 就能讀他即時錯誤」
       if (!(await sessionMatchesUser(args.session_token, userId))) {
         return txt('session_token 驗證失敗，請確認 token 正確。');
       }
@@ -4158,19 +4204,22 @@ function createMcpServer(env: Env): McpServer {
   // Tool 10（PM-53）: get_terminal_logs — 終端機 stderr/throw/crash（需跑 npx bugezy-watch）
   server.tool(
     'get_terminal_logs',
-    '取得某使用者終端機的即時錯誤日誌（stderr/throw/crash，需 user_email；可選 session_token 驗證；付費功能）。開發者需執行 npx bugezy-watch -- <command>。Terminal error logs — requires user_email, paid feature.',
+    '取得某使用者終端機的即時錯誤日誌（stderr/throw/crash，需 user_email + session_token 驗證；付費功能）。開發者需執行 npx bugezy-watch -- <command>。Terminal error logs — requires user_email and session_token, paid feature.',
     {
       user_email: z.string().describe('你的 BugEzy email（只讀你自己的終端機日誌）'),
       session_token: z
         .string()
-        .optional()
-        .describe('你的 BugEzy session token（從 Chrome 擴充複製）。有帶就嚴格驗證身分。'),
+        .describe('你的 BugEzy session token（從 Chrome 擴充進階設定複製）。必填，用於驗證身分。'),
     },
     async (args) => {
       if (!args.user_email) return txt('請提供 user_email 參數。');
+      // PM-165：session_token 改必填——不帶就不回資料
+      if (!args.session_token) {
+        return txt('請提供 session_token 參數。可從 BugEzy Chrome 擴充的進階設定中複製。');
+      }
       const userId = await lookupUserId(args.user_email);
       if (!userId) return txt('查無此使用者。');
-      // PM-162：有帶 session_token 就驗證屬於此 user，防「知道 email 就能讀他終端機 stderr（可能含密鑰）」
+      // PM-162/165：驗證 session_token 屬於此 user，防「知道 email 就能讀他終端機 stderr（可能含密鑰）」
       if (!(await sessionMatchesUser(args.session_token, userId))) {
         return txt('session_token 驗證失敗，請確認 token 正確。');
       }
