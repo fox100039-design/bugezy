@@ -800,7 +800,7 @@ ${t(
   <h2>4. 資料分享</h2>
   <ul>
     <li>我們不會將您的資料出售給第三方</li>
-    <li>報告資料僅在您主動分享連結時才對外可見</li>
+    <li>報告列表僅限您本人查看（需登入驗證）；單份報告可透過報告連結查看——持有連結者即可存取，類似 Google Docs「知道連結的人皆可檢視」模式，故請謹慎分享、避免在公開場合張貼</li>
     <li>AI 分析由 Cloudflare Workers AI 處理，不會將資料傳送給其他 AI 服務商</li>
   </ul>
 
@@ -851,7 +851,7 @@ ${t(
   <h2>4. Data Sharing</h2>
   <ul>
     <li>We do not sell your data to third parties</li>
-    <li>Report data is only publicly visible when you actively share its link</li>
+    <li>Your report list is private (login required); individual report content can be accessed via the report link — anyone with the link can view it, similar to Google Docs' "anyone with the link can view" model, so share report links carefully and avoid posting them publicly</li>
     <li>AI analysis is processed by Cloudflare Workers AI and is not sent to any other AI provider</li>
   </ul>
 
@@ -1160,7 +1160,7 @@ function faqPage(lang: PageLang): string {
   <div class="faq-a"><p>${t('BugEzy 錄製的是 DOM 結構變化，不是螢幕截圖。密碼輸入框（type="password"）的內容會被 rrweb 自動遮蔽，不會錄到實際密碼。', 'BugEzy records DOM structure changes, not screen video. Password fields (type="password") are automatically masked by rrweb, so actual passwords are never captured.')}</p></div>
 
   <div class="faq-q">${t('我的報告誰能看到？', 'Who can see my reports?')}</div>
-  <div class="faq-a"><p>${t('只有你自己。報告預設為私人，只有當你主動分享報告連結時，別人才能看到。', 'Only you. Reports are private by default — others can see one only when you actively share its link.')}</p></div>
+  <div class="faq-a"><p>${t('報告連結採用隨機加密 ID（UUID），無法被猜測或搜尋，只有擁有連結的人才能查看報告內容。若你將連結分享給同事或 AI 工具，他們就能查看；未分享的報告連結不會出現在任何公開列表中。建議不要把報告連結貼在公開場合（如公開 issue、論壇），避免非預期的存取。', 'Each report has a random encrypted ID (UUID) that cannot be guessed or searched — only people with the report link can view its content. If you share the link with colleagues or AI tools, they can access the report; unshared report links never appear in any public listing. Tip: avoid posting report links in public places (issues, forums) to prevent unintended access.')}</p></div>
 
   <div class="faq-q">${t('資料存在哪裡？', 'Where is my data stored?')}</div>
   <div class="faq-a"><p>${t('報告存在 Cloudflare R2（全球 CDN），使用者資料存在 Supabase（PostgreSQL）。所有傳輸都經過 HTTPS 加密。', 'Reports are stored on Cloudflare R2 (global CDN); user data on Supabase (PostgreSQL). All transfers are encrypted over HTTPS.')}</p></div>
@@ -2570,7 +2570,7 @@ export default {
       if (request.method === 'GET' && path === '/api/reports') {
         return await listReports(request, env);
       }
-      // PM-82：報告設定（允許 AI 讀截圖）— 有 share link 就能改，不需登入
+      // PM-146：報告設定（允許 AI 讀截圖）— 需登入 + 報告 owner 驗證（PM-82 原「有 share link 就能改」已於 PM-146 收緊）
       const settingsMatch = path.match(/^\/api\/reports\/([^/]+)\/settings$/);
       if (request.method === 'PATCH' && settingsMatch) {
         return await updateReportSettings(settingsMatch[1], request, env);
@@ -2724,7 +2724,8 @@ async function getReport(reportId: string, env: Env): Promise<Response> {
     if (obj) screenshots = (await obj.json()) as unknown[];
   }
 
-  return json({
+  return jsonNoStore({
+    // PM-161（Fable5 #3）：報告內容改 no-store，防 Cloudflare 邊緣快取跨使用者/分享後外洩
     report_id: data.report_id,
     url: data.url,
     title: data.title,
