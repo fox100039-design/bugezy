@@ -14,7 +14,9 @@
 
 ```
 Chrome 擴充（Manifest V3）
-    ├── inject.ts（MAIN world）：rrweb DOM 軌跡 + Network 攔截(4xx/5xx) + Console(warn/error) + Web Speech 即時字幕
+    ├── inject.ts（MAIN world）：rrweb DOM 軌跡 + Network 攔截(4xx/5xx) + Console(warn/error/info) + Web Speech 即時字幕
+    │   └── Day 20 Bug 捕捉升級：unhandledrejection + window.onerror + 資源載入失敗(capture) + Web Vitals(LCP/CLS/FID) + 去重入口 collectConsoleLog
+    ├── net.ts / storage.ts（共用 MAIN world）：網路環境快照(navigator.connection) + 儲存快照(localStorage/sessionStorage/cookieNames，PII 本機 maskPII 遮罩)
     ├── content.ts（ISOLATED world）：橋接 + 依 plan/mode 算語音旗標（computeStartFlags）
     ├── offscreen.ts（隱藏頁）：getUserMedia + MediaRecorder 原始錄音（付費版 Whisper 路徑）
     ├── mic-permission.html（可見授權頁）：一次性麥克風授權（offscreen 隱藏頁不會彈授權）
@@ -29,7 +31,8 @@ Cloudflare Workers（API，server/src/index.ts）
     ├── Supabase（PostgreSQL + 自建 session）
     └── Cloudflare R2（rrweb / 截圖 大檔）
          ↓
-    └── MCP Server（/mcp，Streamable HTTP，12 Tool，Pull 模式 + token 省錢 footer）
+    └── MCP Server（/mcp，Streamable HTTP，13 Tool，Pull 模式 + token 省錢 footer）
+         └── Day 20 get_timeline（時序麵包屑：所有資料合成一條故事線）+ generateBugSummary 規則引擎（AI Bug 導航摘要，貼在 get_timeline / get_report_overview 最前面，零 API 成本）
 ```
 
 ### §2a 語音雙引擎架構（PM-85~91）
@@ -103,6 +106,7 @@ list_recent_reports   → 最近報告
 | 2026-07-01 | **Supabase RLS 安全根治**（§4-6 鐵律：全 table ENABLE RLS + Worker 改 `supaKey` service_role/anon fallback + `rls-lockdown.sql`）+ Whisper 錄音**即時音量條**（offscreen Analyser→`MIC_VOLUME`）+ `/install` 安裝指南 & `/features` 功能總覽雙頁 + 截圖修復（`list_reports` 補 `user_id` + 報告頁點圖改頁內 lightbox）+ 工具列橘光脈衝特效（popup 開關）+ 錄製 UX（錄製中鎖設定 + mic OFF 提示 + 授權時機修復） |
 | 2026-07-02 | **綠界 ECPay 正式環境遷移**（key 從 wrangler.toml 明文→`wrangler secret`；FOX 手動 secret put 4 值）+ **日票 NT$20/24hr 三部曲**（一次性付款 `/api/day-pass/create·callback` + `day_pass_expires_at` + `isActiveUser()` + 首頁三欄 + popup 雙鈕/倒數 + `day-pass-checkout` 跳板頁）+ 首頁/`install`「🤖 讓 AI 幫你安裝」複製區 + 支援工具列統一 7 項（+Antigravity/Gemini CLI）+ **AI 指令輪盤**（popup 底部，可編輯/顏色/一鍵複製，`bugezy:ai-prompts`）+ 進階設定 accordion + 即時監控**文字狀態條 + 上傳報告**（inject→content→background 打包 `/api/reports`）+ Token 金額標 `USD $` + **新版通知亮燈 + `/api/version` + `/changelog`** + popup 版號顯示 |
 | 2026-07-03 | **Fable 5 安全稽核 + 認證信任鏈重構**（PM-128~135）。**登入信任鏈**：`POST /api/auth/session` 收 Google access token → server `verifyGoogleToken` 驗 `aud/azp === GOOGLE_CLIENT_ID`（防其他 App token 重放）→ 用 Google sub 當 user_id 發 DB session token（存 `sessions` 表，90 天）；刪假 base64 token + `getUserIdFromHeader` + `googleAuth`/`/api/auth/google` + 過渡 `GET /checkout`。**存取控制**：`GET /api/reports` 加認證 + `.eq(user_id)` 只回自己的；transcribe/summarize/correct 加 `getAuthUserId`（transcribe 另 `isActiveUser` 403 付費限定）。**打磨**：CORS 收緊（動態 origin 白名單，統一出口注入）、500 錯誤脫敏（`GENERIC_500`）、POST body 上限（全域 10MB / 報告 5MB / transcribe 25MB）、私有端點 `jsonNoStore`（防邊緣快取跨用戶外洩）。extension 全面改用 DB session token（`auth.ts getAuthHeaders`/`getAuthHeaderOnly`）。 |
+| 2026-07-05 | **Bug 捕捉升級（6→10 分）+ MCP 時序/摘要**（PM-153~159）。**漏網錯誤全兜住**：`inject.ts` console.warn 稽核 + `unhandledrejection` + `window.onerror`（JS 錯誤）+ 資源載入失敗（capture phase）+ Web Vitals（LCP/CLS/FID，超標 warn/良好 info），統一走去重入口 `collectConsoleLog`（`ConsoleLog.level` 加 `info`、`source` 標來源）。**兩維環境快照**：`net.ts` 網路快照（online/effectiveType/rtt/downlink，錄製 atStart+atEnd）+ `storage.ts` 儲存快照（localStorage/sessionStorage/cookieNames，**PII 本機 `maskPII` 遮罩**——敏感 key/JWT/email/卡號/>500 字元，server 零外洩）；server 存 `network_snapshot`/`storage_snapshot` JSONB（graceful fallback）、報告頁「📡 網路環境」/「💾 儲存狀態」區塊。**MCP 12→13 tool**：`get_timeline`（console/network/語音/標記按相對時間 `[0.0s]` 排序成一條故事線 + 網路/儲存摘要）+ `generateBugSummary()` 規則引擎（rejection/CORS/network fail 依碼建議/resource/離線/token 丟失/Web Vitals → AI Bug 導航摘要，貼 get_timeline 及 get_report_overview 最前面，**零 API 成本**）。全程線上 `/mcp` JSON-RPC 實測 round-trip。 |
 | 2026-07-04 | **SEO + 全站國際化 + 安全 P1-P2 收尾**（PM-136~152）。**SEO**：`/sitemap.xml`+`/robots.txt`+ 各頁 meta/canonical + GSC 驗證標籤（已收錄）。**多語系語音**：popup 語言下拉（zh/yue/日韓英越，日韓越暫鎖待金流）→ server Whisper `language` 白名單、Web Speech `lang` 經 `data-bugezy-lang` 傳入 MAIN world inject。**擴充 i18n**：`i18n.ts`（`t()`/`getUILang`）+ popup/monitor/toolbar/annotate 全 `data-i18n`/`it()`/`t()`；AI 輪盤多語預設。**對外頁英文版**：`getLang()`（Accept-Language + `?lang=` 覆蓋）+ 七頁 `t(zh,en)` 函式（首頁/install/features/changelog/guide/faq/privacy）+ 語言切換鈕 + `no-store`。**安全**：MCP `list_reports`/`get_live_errors`/`get_terminal_logs` 綁 email/session、live-errors/terminal-logs 改 per-user R2 key + 認證（terminal-logs 付費限定）、登出撤銷 server session（`/api/auth/logout`）、PATCH settings owner 驗證、**ECPay callback 冪等 + `payments` 表 + 金額比對**（續扣用 `MerchantTradeNo-Gwsr`）、`formatEcpayDate` 改 UTC+8、清 `debug/` 敏感檔。**其他**：截圖標注付費版走 Whisper、manifest 1.1.0 + 描述英文化、CLI `bugezy-watch` 加 `BUGEZY_TOKEN`。 |
 
 > 部署：Cloudflare Workers `bugezy-api`（**bugezy.dev** + `bugezy-api.bugezy-api.workers.dev` 雙域名）；每日 03:00 UTC cron 保活 Supabase。

@@ -1,6 +1,6 @@
 # BugEzy 專案全貌與接手指南
 
-> 最後更新：2026-07-04（Day 19：SEO + 全站國際化 + 安全 P1-P2 收尾 PM-136~152）
+> 最後更新：2026-07-05（Day 20：Bug 捕捉升級 6→10 分 + MCP 時序/AI 導航摘要 PM-153~159）
 > 維護者：FOX（Claude Chat PM 角色）
 > 用途：新 Chat 對話開始時讀此檔，快速掌握全貌並接手開發
 
@@ -21,7 +21,7 @@
 | **① 能錄能存** | Chrome 擴充骨架 | rrweb DOM + Console + Network 攔截 → 打包 JSON | ✅ 完成 |
 | **② 能聽能說** | 語音辨識 | Web Speech API 中文即時轉文字，收進 payload；**Day 15 升級為雙引擎**（免費 Web Speech / 付費 offscreen + Groq Whisper 精準轉錄，一次授權全站通用）⑥ 提前完成「語音降級/精準化」 | ✅ 完成（+ Groq Whisper） |
 | **③ 能存能看** | 後端 + 報告頁 | Cloudflare Workers + Supabase + R2 + React 報告頁 | ✅ 完成 |
-| **④ AI 能讀** | MCP Server | Pull 模式 12 Tool（+ get_live_errors / get_terminal_logs / get_screenshots / get_usage_stats），每次回應附 token 省錢對比 = **MVP 封測** | ✅ 完成 |
+| **④ AI 能讀** | MCP Server | Pull 模式 13 Tool（+ get_live_errors / get_terminal_logs / get_screenshots / get_usage_stats / **Day 20 get_timeline 時序麵包屑 + AI Bug 導航摘要**），每次回應附 token 省錢對比 = **MVP 封測** | ✅ 完成 |
 | **⑤ 能收錢** | 付費上線 | Google 登入 + 產品首頁（含聯絡資訊）+ 隱私政策 + 用量限制 + 兩層定價 + 使用指南/FAQ 頁 + Web Store 上架文案/zip + **綠界 ECPay 金流（測試環境跑通：單次付款 + 定期定額月訂閱 + 取消訂閱，CheckMacValue 對官方測試向量驗證）**；**Chrome Web Store 已送審 + 綠界補件已重送（2026-06-29）**；換正式 key + 等兩邊審核通過仍待做 | 🔨 進行中（PM-75，待審） |
 | **⑥ 更好用** | UX 優化 + 多模式 | 六種模式 + 截圖三模式 + 即時字幕雙區 + 跨頁錄製 + 編輯頁時間軸標記 + AI精簡/校正 + 乾淨toggle；上架前打磨（跨頁游標/CSP/語音穩定）；**Day 15 提前完成：Groq Whisper 精準語音 + 報告頁「高畫質 AI 分析」截圖勾選（使用者控制 AI 是否讀圖）**| ✅ 完成（PM-27~61, 68~70, 82~91） |
 | **⑦ 規模化** | 多語 + 企業 | 日韓越語音、跨境除錯鏈、企業自託管 | 待做 |
@@ -532,6 +532,25 @@ FOX = 創辦人 + 決策者 + 手動驗收
 
 ---
 
+## §6o Day 20（2026-07-05，PM-153~159）— Bug 捕捉升級 6→10 分 + MCP 時序麵包屑 + AI 導航摘要
+
+**目標**：把 Bug 捕捉從「console warn/error + network 4xx/5xx」升級到「五類漏網錯誤 + 網路/儲存兩維環境」，並讓 AI 一次呼叫就能定位根因。**server 部分皆已部署；extension 部分 build 過、未重上架。**
+
+**漏網錯誤全兜住（PM-153~155，純 extension）**：`inject.ts` 抽統一去重入口 `collectConsoleLog`（key=`level+訊息前100字`，5 秒窗）。①PM-153 稽核 console.warn 已攔（澄清：瀏覽器引擎自印的 CORS/Mixed-Content 警告不經 JS console API，monkey-patch 抓不到）；②PM-154 `unhandledrejection`（async 忘 catch）+ `window.addEventListener('error',…,false)`（框架吞掉的 JS 錯誤，`target===window/document`）；③PM-155 `addEventListener('error',…,true)` capture phase 抓資源載入失敗 + `PerformanceObserver` 抓 Web Vitals（LCP/CLS/FID，頁面隱藏或 5 秒定案回報一次防刷屏，超標 warn/良好 info）。`ConsoleLog.level` 加 `info`（不計入監控錯誤數）、`source` 標來源；error panel 依 source 給圖示。
+
+**兩維環境快照（PM-156~157）**：①PM-156 `net.ts` `getNetworkSnapshot()`（`navigator.onLine`+`navigator.connection`：online/effectiveType/rtt/downlink/saveData/type），錄製 atStart+atEnd、監控/回溯/截圖各單次；②PM-157 `storage.ts` `getStorageSnapshot()`（localStorage/sessionStorage `{key,size,value}[]` + cookie 只留名稱）+ **`maskPII()` 三層本機遮罩**（敏感 key→`***MASKED***`、>500 字元截斷、值含 email/卡號/JWT→局部 `***`），**遮罩全在 extension 端、server 零外洩**。server `createReport` 存 `network_snapshot`/`storage_snapshot` JSONB（graceful fallback，欄位未建不 500）、`getReport` 回傳、報告頁「📡 網路環境」/「💾 儲存狀態」區塊。**判斷**：截圖標注頁（`chrome-extension://`）讀不到被測站 storage，故不帶 storageSnapshot（網路快照無此問題保留）。
+
+**MCP 12→13 tool + AI 導航（PM-158~159，純 server，已部署）**：①PM-158 `get_timeline`——console/network/語音/標記按**相對時間 `[0.0s][1.2s]`** 排序成一條故事線 + 網路/儲存摘要，AI 一次呼叫掌握全貌（`chromeMultiplier` 加 25、/install 工具數 12→13）；②PM-159 `generateBugSummary()` 規則引擎（**零 API 成本，不呼叫 Workers AI**）分析 rejection/CORS/network fail（依 404·500·401·403 給建議）/resource/離線·慢網/token 丟失/語音/Web Vitals → 「🔍 AI Bug 導航摘要」貼在 get_timeline 及 get_report_overview 最前面（overview 改 `select('*')` 分析但只回 metadata+`ai_bug_summary`，維持省 token）。
+
+### 增量（Day 20）
+- Server（全部已部署，最新 Version `b38d6757`）：`network_snapshot`/`storage_snapshot` insert+回傳+報告頁區塊、`get_timeline`、`generateBugSummary` 貼 get_timeline/get_report_overview、`chromeMultiplier` get_timeline、/install 13 工具。
+- Extension（皆 build 過、**未重上架**）：`net.ts`/`storage.ts` 新檔、inject 五類漏網錯誤 + 兩維快照、`types.ts` 型別、annotate 帶 networkSnapshot。
+- 修正規格與實作不符（動手前先驗型別）：marker 是 `time_sec`/`note` 非 timestamp/label（換算絕對時間排序）、欄位 `browser` 非 user_agent、token 用 `chromeMultiplier` 非 `TOOL_TOKEN_ESTIMATES`、修 `generateBugSummary` 無異常判斷位置 bug。
+- 全程線上 `/mcp` JSON-RPC + `/api/reports` round-trip 實測（非只 build）。
+- ⚠ 技術債 / FOX 待辦（Day 20）：① **`ALTER TABLE reports ADD network_snapshot / storage_snapshot JSONB`**（線上實測欄位已存在，新環境需跑 `schema.sql`；graceful fallback 已保未跑不掛）；② **extension 未重上架**（Day 19+20 整套漏網錯誤/快照，需重打包上架）；③ 沿用 Day 19：payments/sessions SQL、CLI npm publish、日韓越解鎖、user_id 遷移、Rate Limiting、rls-lockdown。
+
+---
+
 ## §7 已知問題與技術債
 
 | # | 問題 | 嚴重度 | 說明 |
@@ -539,7 +558,7 @@ FOX = 創辦人 + 決策者 + 手動驗收
 | 1 | ruten.com.tw 麥克風被鎖 | 低 | 之前失敗嘗試導致 Chrome 記住 Block，手動清除即可。正式用戶不會遇到 |
 | 2 | rrweb stop 時 SecurityError | 低 | ruten 有跨域 iframe，rrweb 嘗試存取時拋 SecurityError，已被 catch 不影響功能 |
 | 3 | 麥克風權限歸屬網站 | 可接受 | MAIN world 的設計決策，每站第一次要授權。開發者工具的使用者理解這件事 |
-| 4 | consoleLogs 只抓 warn/error | 設計決策 | 故意不抓 log/info（太多雜訊），未來可在設定中開放 |
+| 4 | consoleLogs 只抓 warn/error/info | 設計決策 | 不抓一般 log（太多雜訊）；**Day 20 已擴充**：warn/error + unhandledrejection + window.onerror + 資源載入失敗 + Web Vitals（info 級良好、warn 級超標），皆走去重入口 |
 | 5 | networkErrors 只抓 4xx/5xx | 設計決策 | 不存 200 OK（太多），未來可加「全部請求」模式 |
 | 6 | Groq Whisper 降級未實作 | 待做 | Web Speech API 需要網路（Google 雲端辨識），離線時無法用。Groq 降級留第 6 代 |
 
