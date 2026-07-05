@@ -51,6 +51,21 @@ export interface TimeMarker {
 }
 
 /** 一次完整錄製的打包結果（PM-18：錄製不再含截圖，截圖獨立上傳） */
+/** PM-156：網路環境快照（navigator.connection Network Information API + navigator.onLine）。 */
+export interface NetworkSnapshot {
+  online: boolean;
+  effectiveType: string; // '4g' | '3g' | '2g' | 'slow-2g' | 'unknown'
+  rtt: number | null; // 延遲 ms
+  downlink: number | null; // 頻寬 Mbps
+  saveData: boolean; // 省流量模式
+  type: string; // 'wifi' | 'cellular' | 'ethernet' | 'unknown'
+}
+/** PM-156：錄製取開始/結束兩點；監控/截圖只取一點（atEnd 省略）。 */
+export interface NetworkSnapshotBundle {
+  atStart: NetworkSnapshot;
+  atEnd?: NetworkSnapshot;
+}
+
 export interface RecordingPayload {
   rrwebEvents: unknown[];
   consoleLogs: ConsoleLog[];
@@ -58,6 +73,7 @@ export interface RecordingPayload {
   pageInfo: PageInfo;
   voiceTranscript: VoiceSegment[]; // 語音轉文字（content.ts 合併）
   markers?: TimeMarker[]; // PM-28：時間軸標記（選填，向後相容）
+  networkSnapshot?: NetworkSnapshotBundle; // PM-156：網路環境快照（選填，向後相容）
 }
 
 /** 上傳狀態 */

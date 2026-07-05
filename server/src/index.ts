@@ -75,6 +75,7 @@ interface RecordingPayload {
   description?: string;
   markers?: TimeMarker[]; // PM-28：時間軸標記
   user_id?: string; // PM-61：已登入時綁定的使用者
+  networkSnapshot?: unknown; // PM-156：網路環境快照（atStart/atEnd），存 JSONB
 }
 
 // ── CORS（PM-130：收緊，只允許自家域名 + chrome-extension）────────
@@ -1829,6 +1830,26 @@ const REPORT_PAGE_HTML = `<!DOCTYPE html>
         });
         html += '</div>';
       }
+      if (r.networkSnapshot) {
+        var ns = r.networkSnapshot;
+        var nsStart = ns.atStart || ns; // 相容單一/雙時間點
+        var nsEnd = ns.atEnd;
+        var fmtNet = function (x) {
+          if (!x) return '';
+          var online = x.online ? '🟢 在線' : '🔴 離線';
+          var typ = (x.type && x.type !== 'unknown') ? x.type
+            : (x.effectiveType && x.effectiveType !== 'unknown' ? String(x.effectiveType).toUpperCase() : '未知');
+          var rtt = (x.rtt != null) ? x.rtt + 'ms' : '—';
+          var dl = (x.downlink != null) ? x.downlink + ' Mbps' : '—';
+          var save = x.saveData ? ' · 省流量模式' : '';
+          return '狀態：' + online + ' · 類型：' + typ + ' · 延遲：' + rtt + ' · 頻寬：' + dl + save;
+        };
+        html += '<div class="info-section"><h3>📡 網路環境</h3><p>' + esc(fmtNet(nsStart));
+        if (nsEnd && (nsEnd.online !== nsStart.online || nsEnd.effectiveType !== nsStart.effectiveType)) {
+          html += '<br>結束時：' + esc(fmtNet(nsEnd));
+        }
+        html += '</p></div>';
+      }
       html += '<div class="info-section"><h3>📊 摘要</h3><div class="info-grid">';
       html += '<div>DOM 事件：'+(r.rrwebEvents?.length||0)+'</div>';
       html += '<div>Console：'+consoleCount+'</div>';
@@ -2594,13 +2615,17 @@ async function createReport(request: Request, env: Env, origin: string): Promise
 
   // PM-61：只在有登入（payload.user_id）時才帶 user_id 欄，避免未跑 ALTER 時整批 insert 失敗
   const baseRow = payload.user_id ? { ...row, user_id: payload.user_id } : row;
-  // PM-83：截圖上傳帶入 allow_screenshot_images（預設 false）。欄位若尚未建（PM-82 ALTER 未跑）
-  // 會讓 insert 失敗 → 退回不含該欄位重試，確保上傳永不因此中斷。
+  // PM-83/156：可選欄位（allow_screenshot_images / network_snapshot）欄位若尚未建（ALTER 未跑）
+  // 會讓 insert 失敗 → 退回不含這些欄位重試，確保上傳永不因此中斷。
   const allowImages = (payload as { allow_screenshot_images?: boolean }).allow_screenshot_images === true;
-  const insertRow = allowImages ? { ...baseRow, allow_screenshot_images: true } : baseRow;
+  const insertRow = {
+    ...baseRow,
+    ...(allowImages ? { allow_screenshot_images: true } : {}),
+    ...(payload.networkSnapshot ? { network_snapshot: payload.networkSnapshot } : {}), // PM-156
+  };
   let { error } = await supa(env).from('reports').insert(insertRow);
-  if (error && allowImages && error.message.includes('allow_screenshot_images')) {
-    ({ error } = await supa(env).from('reports').insert(baseRow));
+  if (error && /allow_screenshot_images|network_snapshot/.test(error.message)) {
+    ({ error } = await supa(env).from('reports').insert(baseRow)); // 退回僅必要欄位
   }
   if (error) {
     console.error('supabase insert failed:', error.message);
@@ -2651,6 +2676,7 @@ async function getReport(reportId: string, env: Env): Promise<Response> {
     description: data.description ?? '',
     markers: data.markers ?? [], // PM-28：時間軸標記
     allowScreenshotImages: data.allow_screenshot_images ?? false, // PM-82（select('*') → 欄位未建時為 undefined→false）
+    networkSnapshot: data.network_snapshot ?? null, // PM-156：網路環境快照（欄位未建時 undefined→null）
     rrwebEvents,
     screenshots,
     created_at: data.created_at,

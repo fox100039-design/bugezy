@@ -2,7 +2,9 @@
 
 ## 2026-07-05
 
-Day 20（PM-153~155）。Bug 捕捉升級（漏網錯誤 + 效能兜底）。
+Day 20（PM-153~156）。Bug 捕捉升級（漏網錯誤 + 效能兜底 + 網路環境）。
+
+- PM-156：**網路環境快照**（`extension/net.ts`(新) + `inject.ts` + `annotate.ts` + `types.ts` + `server/index.ts` + `schema.sql`）— 診斷小白最常見的「我這好好的、客戶那壞」（3G/高延遲/離線）。①抽共用 `getNetworkSnapshot()`（`navigator.onLine` + `navigator.connection`：online/effectiveType/rtt/downlink/saveData/type，不支援回 unknown/null）；②錄製 `startRecording` 抓 atStart、`stopRecording` 抓 atEnd → payload `networkSnapshot:{atStart,atEnd}` 一頭一尾留痕；③即時監控上傳 / 回溯 / 截圖標注各帶單次 `{atStart}`；④server `createReport` 存 `network_snapshot` JSONB（沿用 PM-82 graceful fallback，欄位不存在自動退回不 500），`getReport` 回 `networkSnapshot`；⑤報告頁「📡 網路環境」區塊 `fmtNet` 顯示 狀態🟢/🔴 + 類型 + 延遲 + 頻寬，atEnd 異動另列。線上實測 round-trip ✅（atStart 4g/wifi/online + atEnd offline/unknown 完整寫入取回）。`wrangler deploy`（`13aea42e`）+ `npm run build` ✅。至此 PM-153~156 四卡完成：五類漏網錯誤 + 網路環境上下文。
 
 - PM-155：**資源載入失敗 + Web Vitals 效能捕捉**（`extension/inject.ts` + `types.ts`）— 補捉 #9 資源 404/CORS 破版（console 無明顯 error）+ #10 頁面太慢（LCP/CLS/FID 無數據）。①`addEventListener('error', ..., true)` capture phase 抓資源載入失敗（`instanceof HTMLElement` 排除 JS 錯誤）→ warn + `source:'resource-error'`；②`PerformanceObserver` 觀測 LCP/CLS/FID，LCP/CLS 於頁面隱藏或載入 5 秒定案回報一次（防 CLS 每次位移刷屏），FID 首次輸入即報；③超標→warn、良好→**info**（`ConsoleLog.level` 加 'info'）；④皆走 `collectConsoleLog`（PM-154 去重入口）；⑤error panel 加 🖼️ 資源 / ⚡ web-vitals 圖示（info 綠）；⑥`updateMonitorBadge` 排除 info（良好 vitals 不算錯誤）。tsc + build ✅。未 deploy。至此 console/JS/Promise/資源/效能五類漏網錯誤全兜住。
 

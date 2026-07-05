@@ -28,6 +28,9 @@ CREATE INDEX IF NOT EXISTS idx_reports_created_at ON reports (created_at DESC);
 ALTER TABLE reports ADD COLUMN IF NOT EXISTS screenshot_count INTEGER DEFAULT 0;
 ALTER TABLE reports ADD COLUMN IF NOT EXISTS screenshots_r2_key TEXT;
 
+-- ── PM-156：網路環境快照（online/effectiveType/rtt/downlink/saveData，錄製 atStart+atEnd）──
+ALTER TABLE reports ADD COLUMN IF NOT EXISTS network_snapshot JSONB DEFAULT NULL;
+
 -- ── PM-20：開發者文字描述 ──
 ALTER TABLE reports ADD COLUMN IF NOT EXISTS description TEXT DEFAULT '';
 

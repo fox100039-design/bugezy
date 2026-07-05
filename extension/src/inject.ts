@@ -14,11 +14,13 @@ import {
   type InjectCommand,
   type InjectMessage,
   type NetworkError,
+  type NetworkSnapshot,
   type PageInfo,
   type RecordingPayload,
   type VoiceSegment,
 } from './types';
 import { t, getUILang } from './i18n';
+import { getNetworkSnapshot } from './net'; // PM-156：網路環境快照
 
 // PM-139：inject 在 MAIN world 無 chrome.storage，語言由 content.ts 注入 DOM（data-bugezy-lang）。
 // it() = 讀 DOM 語言後翻譯（每次讀，支援使用者中途切語言）。
@@ -84,6 +86,7 @@ function main() {
   blog('inject loaded（MAIN world）', location.href);
 
   let recording = false;
+  let networkAtStart: NetworkSnapshot | null = null; // PM-156：錄製開始時的網路快照
   let stopRrweb: (() => void) | null = null;
   let events: unknown[] = [];
   let consoleLogs: ConsoleLog[] = [];
@@ -312,6 +315,7 @@ function main() {
           pageInfo: buildPageInfo(),
           description: it('monitor-desc', { n: total }),
           markers: [],
+          networkSnapshot: { atStart: getNetworkSnapshot() }, // PM-156：即時監控上傳也帶網路快照
         };
         // inject 在 MAIN world 無 chrome.runtime → 走 window.postMessage → content → background 通訊鏈
         post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'UPLOAD_MONITOR', payload });
@@ -897,6 +901,7 @@ function main() {
     }
 
     recording = true;
+    networkAtStart = getNetworkSnapshot(); // PM-156：錄製開始時的網路環境
     events = [];
     consoleLogs = [];
     networkErrors = [];
@@ -1163,6 +1168,8 @@ function main() {
       networkErrors,
       pageInfo: buildPageInfo(),
       voiceTranscript: voiceSegments, // 直接用 MAIN world 收到的語音
+      // PM-156：錄製開始/結束各一份網路快照（AI 可看到「開始 4G、結束離線」）
+      networkSnapshot: { atStart: networkAtStart ?? getNetworkSnapshot(), atEnd: getNetworkSnapshot() },
     };
     blog('STOP：打包', {
       dom: payload.rrwebEvents.length,
@@ -1212,6 +1219,7 @@ function main() {
         networkErrors: bgNetworkErrors.map((e) => e.data),
         pageInfo: buildPageInfo(),
         voiceTranscript: [], // 回溯沒有語音
+        networkSnapshot: { atStart: getNetworkSnapshot() }, // PM-156：回溯只有一個時間點
       };
       blog('REWIND 打包', {
         dom: payload.rrwebEvents.length,

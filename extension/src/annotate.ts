@@ -19,6 +19,7 @@ import {
 } from './types';
 import { getAuthHeaders, getAuthHeaderOnly } from './auth';
 import { t, getUILang, type UILang } from './i18n';
+import { getNetworkSnapshot } from './net'; // PM-156：網路環境快照
 
 // PM-139：截圖標注頁 i18n（annotate 是擴充頁，有 chrome.storage，直接讀 LANG_KEY）。
 let annotateUILang: UILang = 'zh';
@@ -546,6 +547,8 @@ saveBtn.addEventListener('click', async () => {
     description: descInput.value.trim(),
     allow_screenshot_images: allowScreenshotImages,
     ...(session?.user_id ? { user_id: session.user_id } : {}),
+    // PM-156：截圖標注也帶網路快照（annotate 是擴充頁，可直接用 navigator API）
+    networkSnapshot: { atStart: getNetworkSnapshot() },
     pageInfo: {
       url: params.get('pageUrl') ?? '',
       title: params.get('pageTitle') ?? '',
