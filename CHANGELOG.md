@@ -2,7 +2,9 @@
 
 ## 2026-07-05
 
-Day 20（PM-153~165）。Bug 捕捉升級（漏網錯誤 + 效能兜底 + 網路環境 + 儲存狀態）+ MCP 時序麵包屑 + AI 導航摘要 + Stored XSS 縱深防禦 + 存取模型文案釐清 + MCP live/terminal 授權補強 + ECPay 原子性 + PII 規則擴充 + 首頁行銷更新 + MCP 必填 session + 上傳額度縱深。
+Day 20（PM-153~166）。Bug 捕捉升級（漏網錯誤 + 效能兜底 + 網路環境 + 儲存狀態）+ MCP 時序麵包屑 + AI 導航摘要 + Stored XSS 縱深防禦 + 存取模型文案釐清 + MCP live/terminal 授權補強 + ECPay 原子性 + PII 規則擴充 + 首頁行銷更新 + MCP 必填 session + 上傳額度縱深。
+
+- PM-166：**報告頁 CSP script-src 'self'（移除 unsafe-inline）+ session rotation**（`server/index.ts` + `extension/auth.ts` + `popup.ts`）。①報告頁兩段 inline `<script>`（render + lightbox）抽成 `/report-page.js` 外部端點，inline `onclick` 改事件委派/addEventListener；②報告頁改嚴格 CSP `script-src 'self'`（`html(body, strictScript)`；**行銷頁沿用 unsafe-inline**——各有 inline script 且無使用者資料注入點，只對渲染 user data 的報告頁套嚴格版）；③新增 `rotateSession`/`extractBearer` helper；④取消訂閱後 rotate token 回 `new_session_token`（**付款 callback 為 server-to-server 無 token/無回傳通道，無法 rotate，如實說明**）；⑤extension `applyRotatedToken` 收到就存入 storage。線上實測 ✅（report-page.js node --check 過、報告頁 script-src 'self' 且 inline onclick=0、行銷頁保留 unsafe-inline）。`wrangler deploy`（`da0588c2`）+ extension build。
 
 - PM-165：**MCP session_token 改必填 + createReport server 端用量檢查**（`server/index.ts`）。①`list_reports`/`get_live_errors`/`get_terminal_logs` 的 `session_token` 由 optional 改 **required**（schema 拿掉 `.optional()`，不帶就 MCP 協議層擋下不回資料）——杜絕「知 email 即讀」殘留；②createReport 以認證身分（非 client 傳的 user_id）查 users，免費用戶上傳含 rrweb 報告且本月錄製+回溯額度皆用盡 → 403（server 端縱深）。**修正規格**：欄位 `recording_count`（非 record_count）；因回溯報告也有 rrweb 且 payload 無型別旗標，改以「錄製10+回溯5 皆用盡」為界避免誤擋合法回溯；跨月唯讀重置。線上實測 ✅（三 tool required、匿名上傳無回歸）。**限制**：count-based 檢查對「完全跳過 bumpUsage」無效（計數停 0），徹底堵需 createReport 改為權威計數點（列後續）。`wrangler deploy`（`570d70ab`）。
 

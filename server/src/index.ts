@@ -246,6 +246,31 @@ async function createSession(request: Request, env: Env): Promise<Response> {
   return json({ session_token: sessionToken, user_id: userId, email });
 }
 
+/** PM-166（Fable5）：從 Authorization: Bearer 取原始 token 字串（供 rotate 刪舊用；長度<10 視為無效回 null）。 */
+function extractBearer(request: Request): string | null {
+  const auth = request.headers.get('Authorization');
+  if (!auth) return null;
+  const token = auth.replace('Bearer ', '').trim();
+  return token.length >= 10 ? token : null;
+}
+
+/** PM-166（Fable5）：敏感操作（取消訂閱等）後換發新 session token，限縮舊 token 生命週期（90 天不變的風險）。
+ *  發新 token（雙 UUID，同 createSession）+ 刪舊 token。回新 token 供回傳給 extension 更新 storage。 */
+async function rotateSession(userId: string, oldToken: string | null, env: Env): Promise<string> {
+  const newToken = `${crypto.randomUUID()}-${crypto.randomUUID()}`;
+  await supa(env)
+    .from('sessions')
+    .insert({
+      session_token: newToken,
+      user_id: userId,
+      expires_at: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+  if (oldToken) {
+    await supa(env).from('sessions').delete().eq('session_token', oldToken);
+  }
+  return newToken;
+}
+
 /** PM-146：POST /api/auth/logout — 從 sessions 表刪除 token（登出即撤銷，舊 token 立即失效）。
  *  無 token 也回 ok（登出本就冪等）。 */
 async function handleLogout(request: Request, env: Env): Promise<Response> {
@@ -274,11 +299,29 @@ const CSP_VALUE =
   "base-uri 'self'; " +
   "object-src 'none';";
 
-function html(body: string): Response {
+// PM-166（Fable5）：報告頁渲染使用者資料（XSS 主要標的），改嚴格 CSP——script-src 拿掉 'unsafe-inline' 改 'self'
+// （client 邏輯已抽到 /report-page.js）。行銷頁為靜態文案（無注入點）故沿用 CSP_VALUE 保留其 inline script，不破壞。
+const CSP_VALUE_STRICT_SCRIPT = CSP_VALUE.replace(
+  "script-src 'self' 'unsafe-inline'; ",
+  "script-src 'self'; ",
+);
+
+function html(body: string, strictScript = false): Response {
   return new Response(body, {
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      'Content-Security-Policy': CSP_VALUE, // PM-160
+      'Content-Security-Policy': strictScript ? CSP_VALUE_STRICT_SCRIPT : CSP_VALUE, // PM-160/166
+    },
+  });
+}
+
+// PM-166：serve 外部 JS（report-page.js）。同源 'self' 允許，快取 1 天。
+function javascript(body: string): Response {
+  return new Response(body, {
+    headers: {
+      'Content-Type': 'application/javascript; charset=utf-8',
+      'Cache-Control': 'public, max-age=86400',
+      'Content-Security-Policy': CSP_VALUE,
     },
   });
 }
@@ -1842,7 +1885,19 @@ const REPORT_PAGE_HTML = `<!DOCTYPE html>
   <div class="report" id="app">
     <div class="loading" id="loading">載入中…</div>
   </div>
-  <script>
+  <!-- PM-99：截圖點擊頁內 lightbox（base64 data URL 無法 window.open，會開空白頁；改頁內放大）。PM-166：onclick 改由 report-page.js addEventListener -->
+  <div id="bugezy-lightbox" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;background:rgba(0,0,0,0.85);cursor:zoom-out;align-items:center;justify-content:center;">
+    <img id="bugezy-lightbox-img" style="max-width:95vw;max-height:95vh;border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,0.5);" />
+  </div>
+  <!-- PM-166：全部 client 邏輯（render + lightbox）抽到外部檔，CSP script-src 'self' 才能拿掉 unsafe-inline -->
+  <script src="/report-page.js"></script>
+</body>
+</html>`;
+
+// ── PM-166（Fable5）：報告頁 client 邏輯抽成外部檔（/report-page.js），CSP script-src 改 'self'（拿掉 unsafe-inline）。
+//    原 inline onclick（截圖 openLightbox / lightbox 背景 closeLightbox）改事件委派/addEventListener——
+//    CSP script-src 'self' 不允許 inline event handler，故一併轉出。
+const REPORT_PAGE_JS = `
     const reportId = location.pathname.split('/report/')[1];
     const API = location.origin;
 
@@ -2022,7 +2077,7 @@ const REPORT_PAGE_HTML = `<!DOCTYPE html>
         html += '<div class="ss-grid">';
         (r.screenshots||[]).forEach(ss => {
           const src = typeof ss === 'string' ? ss : ss.dataUrl || ss.url || '';
-          if (src) html += '<img class="ss-img" src="'+esc(src)+'" onclick="openLightbox(this.src)" style="cursor:zoom-in;">'; // PM-160：esc 止血 Stored XSS
+          if (src) html += '<img class="ss-img" src="'+esc(src)+'" style="cursor:zoom-in;">'; // PM-160 esc 止血；PM-166 onclick 改事件委派
         });
         html += '</div></div>';
       }
@@ -2087,12 +2142,8 @@ const REPORT_PAGE_HTML = `<!DOCTYPE html>
         });
       }
     }
-  </script>
-  <!-- PM-99：截圖點擊頁內 lightbox（base64 data URL 無法 window.open，會開空白頁；改頁內放大）-->
-  <div id="bugezy-lightbox" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;background:rgba(0,0,0,0.85);cursor:zoom-out;align-items:center;justify-content:center;" onclick="closeLightbox()">
-    <img id="bugezy-lightbox-img" style="max-width:95vw;max-height:95vh;border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,0.5);" />
-  </div>
-  <script>
+
+    // ── lightbox（PM-99）──
     function openLightbox(src) {
       var lb = document.getElementById('bugezy-lightbox');
       document.getElementById('bugezy-lightbox-img').src = src;
@@ -2104,9 +2155,15 @@ const REPORT_PAGE_HTML = `<!DOCTYPE html>
     document.addEventListener('keydown', function(e) {
       if (e.key === 'Escape') closeLightbox();
     });
-  </script>
-</body>
-</html>`;
+    // PM-166：原 inline onclick 改事件委派 / addEventListener（CSP script-src 'self' 不允許 inline handler）
+    document.addEventListener('click', function (e) {
+      if (e.target && e.target.classList && e.target.classList.contains('ss-img')) openLightbox(e.target.src);
+    });
+    (function () {
+      var _lb = document.getElementById('bugezy-lightbox');
+      if (_lb) _lb.addEventListener('click', closeLightbox);
+    })();
+`;
 
 // ── PM-51：即時監控 live errors 暫存 ────────────────────────
 // 改用 R2 單一物件（非全域 Map）：擴充 POST 與雲端 MCP GET 通常落在不同 Worker isolate，
@@ -2504,11 +2561,14 @@ export default {
     if (request.method === 'GET' && path === '/sitemap.xml') return sitemapXml();
     if (request.method === 'GET' && path === '/robots.txt') return robotsTxt();
 
+    // PM-166：報告頁 client 邏輯外部檔（CSP script-src 'self' 才能載入）。快取 1 天。
+    if (request.method === 'GET' && path === '/report-page.js') return javascript(REPORT_PAGE_JS);
+
     // PM-59：報告頁——Server 直接回完整 HTML（vanilla JS 讀 /api/reports/:id 渲染），
-    // 放在 /api/reports/:id 之前匹配。
+    // 放在 /api/reports/:id 之前匹配。PM-166：改嚴格 CSP（script-src 'self'，拿掉 unsafe-inline）。
     if (request.method === 'GET' && path.startsWith('/report/')) {
       const reportId = path.split('/report/')[1];
-      if (reportId && reportId.length > 10) return html(REPORT_PAGE_HTML);
+      if (reportId && reportId.length > 10) return html(REPORT_PAGE_HTML, true);
     }
 
     // PM-48：測試專頁（Test Harness）— 可預測的 Bug 場景，供 BugEzy 測試用
@@ -3661,12 +3721,16 @@ async function ecpayCancel(request: Request, env: Env): Promise<Response> {
     // 標記 cancelled（已取消但未到期；用量檢查仍視同 paid，到期後由 /api/user/plan 自動降級 free）
     await supa(env).from('users').update({ plan: 'cancelled' }).eq('user_id', userId);
 
+    // PM-166（Fable5）：取消訂閱屬敏感操作 → 換發新 session token（限縮舊 token 生命週期），回 new_session_token 供 extension 更新
+    const newToken = await rotateSession(userId, extractBearer(request), env);
+
     const expires = u.plan_expires_at ?? null;
     const expiresText = expires ? expires.slice(0, 10).replace(/-/g, '/') : '本期結束';
     return json({
       ok: true,
       message: `已取消訂閱。付費功能可使用到 ${expiresText}`,
       expires_at: expires,
+      new_session_token: newToken, // PM-166：extension 收到後存入 storage，舊 token 已失效
     });
   } catch (err) {
     console.error('cancel error:', err);

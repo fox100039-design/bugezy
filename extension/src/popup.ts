@@ -20,7 +20,7 @@ import {
   type Session,
   type StateResponse,
 } from './types';
-import { getAuthHeaders } from './auth';
+import { getAuthHeaders, applyRotatedToken } from './auth';
 import { t, getUILang, DEFAULT_PROMPTS, type UILang, type PromptItem } from './i18n';
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -801,7 +801,14 @@ cancelSubBtn.addEventListener('click', async () => {
       method: 'POST',
       headers: await getAuthHeaders(),
     });
-    const data = (await res.json()) as { ok?: boolean; message?: string; error?: string };
+    const data = (await res.json()) as {
+      ok?: boolean;
+      message?: string;
+      error?: string;
+      new_session_token?: string;
+    };
+    // PM-166：取消訂閱後 server rotate token，先存新 token 再繼續（舊 token 已失效）
+    await applyRotatedToken(data);
     if (data.ok) {
       alert(data.message ?? t('alert-cancelled', currentUILang));
       void loadPlan(); // 重新整理方案狀態（改顯示「已取消，可用到…」）

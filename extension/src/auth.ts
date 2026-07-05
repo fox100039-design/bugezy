@@ -26,3 +26,12 @@ export async function getAuthHeaderOnly(): Promise<Record<string, string>> {
   const token = await getAuthToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
+
+/** PM-166（Fable5）：敏感操作（如取消訂閱）後 server 會 rotate token 並回 new_session_token。
+ *  收到就存入 storage 更新——舊 token 已在 server 端失效，之後 API 一律用新 token。 */
+export async function applyRotatedToken(data: unknown): Promise<void> {
+  const newToken = (data as { new_session_token?: string } | null)?.new_session_token;
+  if (newToken && typeof newToken === 'string') {
+    await chrome.storage.local.set({ [SESSION_TOKEN_KEY]: newToken });
+  }
+}
