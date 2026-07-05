@@ -2192,6 +2192,61 @@ async function readLiveErrors(env: Env, userId: string): Promise<Record<string, 
 // ── PM-53：終端機 CLI agent 日誌暫存（R2；PM-143 改 per-user key）──
 const terminalLogsKey = (userId: string) => `terminal-logs/${userId}/latest.json`;
 
+// ── PM-167：server 端 stderr 遮罩（雙重防護，防舊版 CLI 未更新就上傳明文密碼/金鑰）──
+//    規則與 CLI cli/src/pii-mask.ts 一致：DB URI 保 scheme+host、env 保 KEY 名、token/PII 整遮。
+const SRV_DB_URI = /\b(mysql|postgres|postgresql|mongodb|redis|amqp|mssql):\/\/[^\s"']+/gi;
+const SRV_ENV_KEYS =
+  /\b(DATABASE_URL|DB_URL|DB_PASSWORD|DB_PASS|REDIS_URL|MONGO_URI|SQLALCHEMY_DATABASE_URI|SECRET_KEY|JWT_SECRET|API_KEY|API_SECRET|AWS_SECRET_ACCESS_KEY|AWS_ACCESS_KEY_ID|STRIPE_SECRET|OPENAI_API_KEY|GROQ_API_KEY|SUPABASE_SERVICE_ROLE_KEY|PRIVATE_KEY|CLIENT_SECRET)\s*[=:]\s*["']?[^\s"']+["']?/gi;
+const SRV_TOKENS: RegExp[] = [
+  /\bsk-[A-Za-z0-9]{20,}\b/g,
+  /\bAIza[A-Za-z0-9_-]{30,}\b/g,
+  /\bghp_[A-Za-z0-9]{36,}\b/g,
+  /\bgho_[A-Za-z0-9]{36,}\b/g,
+  /\bAKIA[A-Z0-9]{16}\b/g,
+  /\bxox[baprs]-[A-Za-z0-9-]+/g,
+  /eyJ[\w-]+\.eyJ[\w-]+\.[\w-]+/g,
+];
+const SRV_GENERAL_PII: RegExp[] = [
+  /\b[\w.-]+@[\w.-]+\.\w{2,}\b/g,
+  /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g,
+  /\b09\d{2}[\s-]?\d{3}[\s-]?\d{3}\b/g,
+  /\b[A-Z][12]\d{8}\b/g,
+];
+function serverMaskStderr(text: unknown): string {
+  if (typeof text !== 'string' || !text) return typeof text === 'string' ? text : '';
+  let m = text;
+  m = m.replace(SRV_DB_URI, (match) => {
+    try {
+      const url = new URL(match);
+      if (url.password) url.password = '***';
+      if (url.username) url.username = '***';
+      return url.toString();
+    } catch {
+      return match.replace(/:\/\/[^@]+@/, '://***:***@');
+    }
+  });
+  m = m.replace(SRV_ENV_KEYS, (match) => {
+    const eqIndex = match.search(/[=:]/);
+    return eqIndex > 0 ? match.slice(0, eqIndex + 1) + ' ***MASKED***' : '***MASKED***';
+  });
+  for (const p of SRV_TOKENS) m = m.replace(p, '***MASKED***');
+  for (const p of SRV_GENERAL_PII) m = m.replace(p, '***');
+  return m;
+}
+/** PM-167：對整包 terminal-logs payload 做 server 端遮罩（logs[].message + command）。 */
+function maskTerminalPayload(data: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...data };
+  if (Array.isArray(out.logs)) {
+    out.logs = (out.logs as Array<Record<string, unknown>>).map((log) =>
+      log && typeof log === 'object' && typeof log.message === 'string'
+        ? { ...log, message: serverMaskStderr(log.message) }
+        : log,
+    );
+  }
+  if (typeof out.command === 'string') out.command = serverMaskStderr(out.command);
+  return out;
+}
+
 async function readTerminalLogs(env: Env, userId: string): Promise<Record<string, unknown>> {
   const obj = await env.R2.get(terminalLogsKey(userId));
   const data = obj ? ((await obj.json()) as { updatedAt?: number }) : null;
@@ -2619,7 +2674,9 @@ export default {
           return json({ error: '終端機 CLI 為付費功能，請升級' }, 403);
         }
         const data = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-        await env.R2.put(terminalLogsKey(userId), JSON.stringify({ ...data, updatedAt: Date.now() }), {
+        // PM-167：server 端雙重遮罩（防舊版 CLI 未更新就上傳明文密碼/金鑰）
+        const masked = maskTerminalPayload(data);
+        await env.R2.put(terminalLogsKey(userId), JSON.stringify({ ...masked, updatedAt: Date.now() }), {
           httpMetadata: { contentType: 'application/json' },
         });
         return json({ ok: true });

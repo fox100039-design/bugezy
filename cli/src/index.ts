@@ -5,6 +5,7 @@
 // AI 透過 MCP get_terminal_logs 可讀。正常輸出完全不受影響。
 
 import { spawn } from 'node:child_process';
+import { maskStderr } from './pii-mask'; // PM-167：上傳前遮罩敏感資料（DB 密碼/金鑰/token/PII）
 
 const API_BASE = process.env.BUGEZY_API_URL || 'https://bugezy-api.bugezy-api.workers.dev';
 // PM-143：/api/terminal-logs 已加認證 + per-user key。CLI 需帶 session token（從 BugEzy 擴充複製）。
@@ -148,7 +149,8 @@ child.stdout?.on('data', (data: Buffer) => {
   process.stdout.write(text);
   for (const line of text.split('\n').filter(Boolean)) {
     if (isErrorLine(line) && !isExcluded(line)) {
-      addToBuffer({ level: 'error', message: line.trim(), timestamp: Date.now(), source: 'stderr' });
+      // PM-167：終端機透傳原樣（不動使用者輸出），但存入 buffer/上傳前遮罩敏感資料
+      addToBuffer({ level: 'error', message: maskStderr(line.trim()), timestamp: Date.now(), source: 'stderr' });
     }
   }
 });
@@ -160,7 +162,8 @@ child.stderr?.on('data', (data: Buffer) => {
   for (const line of text.split('\n').filter(Boolean)) {
     if (!isExcluded(line)) {
       const level: TerminalLog['level'] = isErrorLine(line) ? 'error' : 'warn';
-      addToBuffer({ level, message: line.trim(), timestamp: Date.now(), source: 'stderr' });
+      // PM-167：遮罩後才存 buffer（server 只收到遮罩後結果）
+      addToBuffer({ level, message: maskStderr(line.trim()), timestamp: Date.now(), source: 'stderr' });
     }
   }
 });

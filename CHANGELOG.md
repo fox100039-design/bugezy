@@ -2,7 +2,9 @@
 
 ## 2026-07-05
 
-Day 20（PM-153~166）。Bug 捕捉升級（漏網錯誤 + 效能兜底 + 網路環境 + 儲存狀態）+ MCP 時序麵包屑 + AI 導航摘要 + Stored XSS 縱深防禦 + 存取模型文案釐清 + MCP live/terminal 授權補強 + ECPay 原子性 + PII 規則擴充 + 首頁行銷更新 + MCP 必填 session + 上傳額度縱深。
+Day 20（PM-153~167）。Bug 捕捉升級（漏網錯誤 + 效能兜底 + 網路環境 + 儲存狀態）+ MCP 時序麵包屑 + AI 導航摘要 + Stored XSS 縱深防禦 + 存取模型文案釐清 + MCP live/terminal 授權補強 + ECPay 原子性 + PII 規則擴充 + 首頁行銷更新 + MCP 必填 session + 上傳額度縱深。
+
+- PM-167：**CLI Terminal PII 遮罩（後端 stderr 敏感資料過濾，雙重防護）**（`cli/src/pii-mask.ts`(新) + `cli/src/index.ts` + `server/index.ts`）。後端 traceback 常夾帶 DB 密碼/雲端金鑰/API token，CLI 端原本明文上傳。①新 `maskStderr()`：DB 連線字串保 scheme+host 遮密碼、20 個敏感 env 保 KEY 遮值、token 格式（sk-/AIza/ghp_/AKIA/xox*/JWT）整遮、一般 PII（email/卡號/台灣手機身分證）局部遮；②CLI 捕捉後上傳前遮罩（終端機仍原樣透傳，只遮上傳副本）；③server `POST /api/terminal-logs` 入庫前同規則再遮一次（防舊版 CLI 明文）。node 實測 10 案全過（含正常 traceback 不誤遮）。`wrangler deploy`（`5757ada8`）+ CLI build。
 
 - PM-166：**報告頁 CSP script-src 'self'（移除 unsafe-inline）+ session rotation**（`server/index.ts` + `extension/auth.ts` + `popup.ts`）。①報告頁兩段 inline `<script>`（render + lightbox）抽成 `/report-page.js` 外部端點，inline `onclick` 改事件委派/addEventListener；②報告頁改嚴格 CSP `script-src 'self'`（`html(body, strictScript)`；**行銷頁沿用 unsafe-inline**——各有 inline script 且無使用者資料注入點，只對渲染 user data 的報告頁套嚴格版）；③新增 `rotateSession`/`extractBearer` helper；④取消訂閱後 rotate token 回 `new_session_token`（**付款 callback 為 server-to-server 無 token/無回傳通道，無法 rotate，如實說明**）；⑤extension `applyRotatedToken` 收到就存入 storage。線上實測 ✅（report-page.js node --check 過、報告頁 script-src 'self' 且 inline onclick=0、行銷頁保留 unsafe-inline）。`wrangler deploy`（`da0588c2`）+ extension build。
 
