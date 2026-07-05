@@ -2,7 +2,9 @@
 
 ## 2026-07-05
 
-Day 20（PM-153~154）。Bug 捕捉升級（漏網錯誤兜底）。
+Day 20（PM-153~155）。Bug 捕捉升級（漏網錯誤 + 效能兜底）。
+
+- PM-155：**資源載入失敗 + Web Vitals 效能捕捉**（`extension/inject.ts` + `types.ts`）— 補捉 #9 資源 404/CORS 破版（console 無明顯 error）+ #10 頁面太慢（LCP/CLS/FID 無數據）。①`addEventListener('error', ..., true)` capture phase 抓資源載入失敗（`instanceof HTMLElement` 排除 JS 錯誤）→ warn + `source:'resource-error'`；②`PerformanceObserver` 觀測 LCP/CLS/FID，LCP/CLS 於頁面隱藏或載入 5 秒定案回報一次（防 CLS 每次位移刷屏），FID 首次輸入即報；③超標→warn、良好→**info**（`ConsoleLog.level` 加 'info'）；④皆走 `collectConsoleLog`（PM-154 去重入口）；⑤error panel 加 🖼️ 資源 / ⚡ web-vitals 圖示（info 綠）；⑥`updateMonitorBadge` 排除 info（良好 vitals 不算錯誤）。tsc + build ✅。未 deploy。至此 console/JS/Promise/資源/效能五類漏網錯誤全兜住。
 
 - PM-154：**unhandledrejection + window.onerror 全域錯誤兜底**（`extension/inject.ts` + `types.ts`）— 補捉小白最常漏的兩類：async 忘 catch 的 Promise 靜默失敗（#8）+ 框架 Error Boundary/errorHandler 吞掉的 JS 錯誤（#6）。①抽 `collectConsoleLog(entry)` 統一入口 + 去重（`level+訊息前100字` key，5 秒窗，`recentErrors` Set）；②`unhandledrejection` 監聽 → error + stack + `source:'unhandledrejection'`；③`window.addEventListener('error', ..., false)` 只抓 `target===window/document`（JS 錯誤）→ `source:'window.onerror'`（資源載入失敗留 PM-155）；④`ConsoleLog` 加 `source?`。兩監聽走同 collectConsoleLog → 自動享錄製/背景 buffer + 即時監控計數 + 去重。tsc + build ✅（dist 確認含 unhandledrejection/window.onerror/recentErrors）。未 deploy（純 extension）。
 

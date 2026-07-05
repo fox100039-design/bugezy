@@ -2,10 +2,11 @@
 
 /** Console 攔截紀錄（只抓 warn / error） */
 export interface ConsoleLog {
-  level: 'warn' | 'error';
+  /** PM-155：加 'info'（良好 Web Vitals 等中性訊息，不計入即時監控錯誤數）。 */
+  level: 'warn' | 'error' | 'info';
   message: string;
   timestamp: number;
-  /** PM-154：來源標記（'console' 省略；'unhandledrejection' / 'window.onerror' 兜漏網錯誤）。 */
+  /** PM-154/155：來源標記（'console' 省略；unhandledrejection / window.onerror / resource-error / web-vitals）。 */
   source?: string;
 }
 

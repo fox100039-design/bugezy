@@ -170,7 +170,9 @@ function main() {
 
   function updateMonitorBadge() {
     if (!monitorBadge) return; // 未開監控就是 no-op（攔截時每次呼叫也便宜）
-    const total = bgConsoleLogs.length + bgNetworkErrors.length;
+    // PM-155：良好 Web Vitals 等 info 級不算「錯誤」，不計入 badge 數字（error/warn 才算問題）
+    const consoleProblems = bgConsoleLogs.filter((e) => e.data.level !== 'info').length;
+    const total = consoleProblems + bgNetworkErrors.length;
     if (total === 0) {
       monitorBadge.style.background = 'rgba(22,163,74,0.9)';
       monitorBadge.style.color = '#fff';
@@ -259,8 +261,19 @@ function main() {
 
     const cLogs = bgConsoleLogs.map((e) => e.data);
     cLogs.forEach((log) => {
-      const isErr = log.level === 'error';
-      appendRow(isErr ? '❌' : '⚠', isErr ? '#ef4444' : '#f59e0b', log.message.slice(0, 120));
+      // PM-155：依 source 分圖示——resource 🖼️、web-vitals ⚡；否則依 level（error ❌ / warn ⚠）
+      let mark = '⚠';
+      let color = '#f59e0b'; // warn 橘
+      if (log.source === 'resource-error') {
+        mark = '🖼️';
+      } else if (log.source === 'web-vitals') {
+        mark = '⚡';
+        if (log.level === 'info') color = '#3fb950'; // 良好 → 綠
+      } else if (log.level === 'error') {
+        mark = '❌';
+        color = '#ef4444'; // error 紅
+      }
+      appendRow(mark, color, log.message.slice(0, 120));
     });
     const nErrs = bgNetworkErrors.map((e) => e.data);
     nErrs.forEach((err) => {
@@ -654,6 +667,66 @@ function main() {
     }
   }
 
+  // PM-155：核心 Web Vitals（LCP/CLS/FID）收集。超標→warn，良好→info；皆走 collectConsoleLog（去重）。
+  function collectWebVitals(): void {
+    if (typeof PerformanceObserver === 'undefined') return;
+    const THRESHOLDS: Record<string, [number, string]> = {
+      LCP: [2500, '慢（超過 2.5 秒）'],
+      CLS: [0.1, '版面位移過大'],
+      FID: [100, '互動延遲過高'],
+    };
+    const reportVital = (name: string, value: number, unit: string) => {
+      const [threshold, desc] = THRESHOLDS[name] || [Infinity, ''];
+      const bad = value > threshold;
+      collectConsoleLog({
+        level: bad ? 'warn' : 'info',
+        message: `Web Vital ${name}: ${value}${unit} ${bad ? '⚠️ ' + desc : '✅ 良好'}`,
+        timestamp: Date.now(),
+        source: 'web-vitals',
+      });
+    };
+    let lcp = 0;
+    let cls = 0;
+    const observe = (type: string, cb: (list: PerformanceObserverEntryList) => void) => {
+      try {
+        new PerformanceObserver(cb).observe({ type, buffered: true } as PerformanceObserverInit);
+      } catch {
+        /* 該瀏覽器不支援此 entry type → 靜默略過 */
+      }
+    };
+    observe('largest-contentful-paint', (list) => {
+      const es = list.getEntries();
+      const last = es[es.length - 1] as (PerformanceEntry & { startTime: number }) | undefined;
+      if (last) lcp = Math.round(last.startTime);
+    });
+    observe('layout-shift', (list) => {
+      for (const e of list.getEntries() as (PerformanceEntry & {
+        value: number;
+        hadRecentInput?: boolean;
+      })[]) {
+        if (!e.hadRecentInput) cls += e.value;
+      }
+    });
+    observe('first-input', (list) => {
+      const e = list.getEntries()[0] as
+        | (PerformanceEntry & { processingStart: number; startTime: number })
+        | undefined;
+      if (e) reportVital('FID', Math.round(e.processingStart - e.startTime), 'ms'); // 首次輸入即定案
+    });
+    // LCP/CLS 值會持續變動 → 頁面隱藏或載入 5 秒後「定案」回報一次（先到先報，只報一次）
+    let finalized = false;
+    const finalizeVitals = () => {
+      if (finalized) return;
+      finalized = true;
+      if (lcp) reportVital('LCP', lcp, 'ms');
+      reportVital('CLS', Math.round(cls * 1000) / 1000, '');
+    };
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') finalizeVitals();
+    });
+    setTimeout(finalizeVitals, 5000);
+  }
+
   console.warn = (...args: unknown[]) => {
     collectConsoleLog({ level: 'warn', message: stringifyArgs(args), timestamp: Date.now() });
     return originalWarn(...args);
@@ -685,6 +758,31 @@ function main() {
     },
     false, // bubbling phase：只收 JS 執行錯誤，不收不冒泡的資源載入錯誤
   );
+
+  // PM-155 #9：資源載入失敗（img/script/link/video 的 404 / CORS 被擋 → 頁面破版但 console 無明顯 error）。
+  // 資源錯誤事件不冒泡 → 必須 capture phase（true）才收得到；target 是元素（非 window/document）。
+  window.addEventListener(
+    'error',
+    (event: Event) => {
+      const target = event.target as (HTMLElement & { src?: string; href?: string }) | null;
+      // 非元素（window/document 的 JS 執行錯誤）→ PM-154 bubbling 已處理，這裡只收資源元素
+      if (!target || !(target instanceof HTMLElement)) return;
+      const src = target.src || target.href || '';
+      if (!src) return; // 非資源元素（無 src/href）→ 略過
+      const tag = target.tagName ? target.tagName.toLowerCase() : 'unknown';
+      collectConsoleLog({
+        level: 'warn',
+        message: `Resource load failed: <${tag}> ${src}`,
+        timestamp: Date.now(),
+        source: 'resource-error',
+      });
+    },
+    true, // capture phase：資源載入錯誤不冒泡，必須 capture
+  );
+
+  // PM-155 #10：核心 Web Vitals（LCP/CLS/FID）——超標 warn、良好 info，皆透過 collectConsoleLog（去重）。
+  // LCP/CLS 值會隨頁面變動 → 在頁面隱藏或載入 5 秒後「定案」回報一次（避免每次 observer 觸發都塞一列）。
+  collectWebVitals();
 
   // ── B. Network 攔截 — fetch（只抓 4xx / 5xx）─────────────
   // PM-50：永遠存背景 buffer；recording 時也存錄製 buffer + flush。
