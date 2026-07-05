@@ -2,7 +2,7 @@
 
 ## 2026-07-05
 
-Day 20（PM-153~168）。Bug 捕捉升級（漏網錯誤 + 效能兜底 + 網路環境 + 儲存狀態）+ MCP 時序麵包屑 + AI 導航摘要 + Stored XSS 縱深防禦 + 存取模型文案釐清 + MCP live/terminal 授權補強 + ECPay 原子性 + PII 規則擴充 + 首頁行銷更新 + MCP 必填 session + 上傳額度縱深。
+Day 20（PM-153~169）。**Bug 捕捉 10/10 + 安全 9.5/10（Fable5 第三輪全清）**。前半（PM-153~159）Bug 捕捉升級（漏網錯誤 + 效能兜底 + 網路/儲存快照 + MCP 時序麵包屑 + AI 導航摘要）；後半（PM-160~168）Fable5 R3 安全與體驗收尾——Stored XSS 三層防禦 + CSP（script-src 'self'）+ 存取模型文案釐清 + MCP live/terminal 授權補強與必填 session + createReport 額度縱深 + ECPay callback 原子性 + PII 規則擴充 + CLI stderr PII 遮罩 + session rotation + 報告頁 i18n（全站 8 頁完成）；PM-169 extension 改用正式域名 bugezy.dev。
 
 - PM-169：**extension API_BASE 改用正式域名 `bugezy.dev`**（`extension/types.ts`）— 由 `bugezy-api.bugezy-api.workers.dev` 改為 `https://bugezy.dev`（同一 Worker 雙域名）。全 extension 僅此一處寫死（已搜尋確認，manifest 無 host_permissions 依賴、走 server 動態 CORS）。`npm run build` ✅（dist 6 檔改用新域名、0 殘留舊 URL）。未 deploy（純 extension，待重上架）。
 

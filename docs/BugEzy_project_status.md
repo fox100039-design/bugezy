@@ -1,6 +1,6 @@
 # BugEzy 專案全貌與接手指南
 
-> 最後更新：2026-07-05（Day 20：Bug 捕捉升級 6→10 分 + MCP 時序/AI 導航摘要 PM-153~159）
+> 最後更新：2026-07-05（Day 20：Bug 捕捉 10/10 + 安全 9.5/10（Fable5 R3 全清）+ 報告頁 i18n + CLI PII + 域名遷移 PM-153~169）
 > 維護者：FOX（Claude Chat PM 角色）
 > 用途：新 Chat 對話開始時讀此檔，快速掌握全貌並接手開發
 
@@ -532,7 +532,11 @@ FOX = 創辦人 + 決策者 + 手動驗收
 
 ---
 
-## §6o Day 20（2026-07-05，PM-153~159）— Bug 捕捉升級 6→10 分 + MCP 時序麵包屑 + AI 導航摘要
+## §6o Day 20（2026-07-05，PM-153~169）— Bug 捕捉 10/10 + 安全 9.5/10（Fable5 R3 全清）+ 報告頁 i18n + CLI PII + 域名遷移
+
+> 前半 PM-153~159（Bug 捕捉升級 6→10 + MCP 時序/AI 導航），後半 PM-160~169（Fable5 第三輪安全 + i18n + CLI PII + 域名）。以下先記前半，§6o-2 記後半。
+
+### §6o-1 前半（PM-153~159）— Bug 捕捉升級 6→10 分 + MCP 時序麵包屑 + AI 導航摘要
 
 **目標**：把 Bug 捕捉從「console warn/error + network 4xx/5xx」升級到「五類漏網錯誤 + 網路/儲存兩維環境」，並讓 AI 一次呼叫就能定位根因。**server 部分皆已部署；extension 部分 build 過、未重上架。**
 
@@ -547,7 +551,30 @@ FOX = 創辦人 + 決策者 + 手動驗收
 - Extension（皆 build 過、**未重上架**）：`net.ts`/`storage.ts` 新檔、inject 五類漏網錯誤 + 兩維快照、`types.ts` 型別、annotate 帶 networkSnapshot。
 - 修正規格與實作不符（動手前先驗型別）：marker 是 `time_sec`/`note` 非 timestamp/label（換算絕對時間排序）、欄位 `browser` 非 user_agent、token 用 `chromeMultiplier` 非 `TOOL_TOKEN_ESTIMATES`、修 `generateBugSummary` 無異常判斷位置 bug。
 - 全程線上 `/mcp` JSON-RPC + `/api/reports` round-trip 實測（非只 build）。
-- ⚠ 技術債 / FOX 待辦（Day 20）：① **`ALTER TABLE reports ADD network_snapshot / storage_snapshot JSONB`**（線上實測欄位已存在，新環境需跑 `schema.sql`；graceful fallback 已保未跑不掛）；② **extension 未重上架**（Day 19+20 整套漏網錯誤/快照，需重打包上架）；③ 沿用 Day 19：payments/sessions SQL、CLI npm publish、日韓越解鎖、user_id 遷移、Rate Limiting、rls-lockdown。
+- ⚠ 技術債 / FOX 待辦（Day 20 前半）：① **`ALTER TABLE reports ADD network_snapshot / storage_snapshot JSONB`**（線上實測欄位已存在，新環境需跑 `schema.sql`；graceful fallback 已保未跑不掛）；② **extension 未重上架**（Day 19+20 整套漏網錯誤/快照，需重打包上架）；③ 沿用 Day 19：payments/sessions SQL、CLI npm publish、日韓越解鎖、user_id 遷移、Rate Limiting、rls-lockdown。
+
+### §6o-2 後半（PM-160~169）— Fable5 第三輪安全全清 + 報告頁 i18n + CLI PII + 域名
+
+**目標**：把 Fable 5 第三輪稽核的缺失（#1/#2/#5/#7/#8 + 兩個 +0.5）全部收完，Bug 捕捉評分 10/10、安全評分 9.5/10。**server 皆已部署；extension/CLI 有改需重上架/發佈。**
+
+- **PM-160（#7 Stored XSS 三層）**：報告頁截圖 `src` 加 `esc()` + **硬化 client `esc()` 轉引號**（原只轉 `<>&` 擋不住 `x" onerror=`）；`createReport` 用 `VALID_SCREENSHOT_SRC` 驗證 dataUrl 拒注入；全站 HTML 單一出口 `html()` 注入 **CSP**（含 `form-action` 放行 ECPay 付款域名，否則 default-src 擋掉付款跳轉）。
+- **PM-161（#1 存取模型文案）**：`GET /api/reports/:id` 是「持有連結即可看」的分享設計，但 FAQ/隱私宣稱「私人」→ **改文案對齊實作**（中英「持有連結者即可存取，類似 Google Docs」）；`getReport` 改 `jsonNoStore`；PATCH settings 註解更正為「需登入+owner」。
+- **PM-162（#2 MCP live/terminal 授權）**：`get_live_errors`/`get_terminal_logs` 加 `session_token` 驗證（比照 `list_reports`，抽 `sessionMatchesUser`）+ terminal 補 `isActiveUserId` 付費檢查。
+- **PM-163（#5+#8）**：三個 ECPay callback 改「**先寫 payments 成功才升級 users，失敗回 500 讓綠界重送**」（`recordPayment` 回 boolean，杜絕重複展延）；`extension/storage.ts` PII 規則加 jwt/bearer/refresh/access + 台灣手機/身分證/Amex/OpenAI/Google key。
+- **PM-164（首頁行銷）**：首頁「🔍 能捕捉什麼」（前端11+後端3+AI3）+ 框架補 Nest.js/Go/Rust + Hero「95% Web Bug」+ /features 全方位捕捉卡 + /install Terminal CLI 範例（全中英）。
+- **PM-165（安全 +0.5）**：`list_reports`/`get_live_errors`/`get_terminal_logs` 的 `session_token` **由選填改必填**（不帶協議層擋下）；`createReport` 以認證身分擋免費用戶超額 rrweb 上傳（錄製+回溯額度皆用盡才 403，避免誤擋回溯）。
+- **PM-166（安全 +0.5 CSP + rotation）**：報告頁 client 邏輯抽 `/report-page.js` 外部檔、inline onclick 改事件委派 → 報告頁 CSP **`script-src 'self'`**（拿掉 unsafe-inline；行銷頁保留因有 inline script 且無注入點）；`rotateSession` helper，取消訂閱後 rotate token 回 `new_session_token`（付款 callback 是 server-to-server 無法 rotate 已說明）；extension `applyRotatedToken`。
+- **PM-167（CLI PII）**：`cli/pii-mask.ts` `maskStderr()`（DB URI 保 scheme+host 遮密碼 / 20 個敏感 env 保 KEY 遮值 / token 整遮 / 一般 PII 局部）；CLI 上傳前遮罩 + server `POST /api/terminal-logs` 入庫前雙重遮罩。
+- **PM-168（報告頁 i18n）**：`REPORT_PAGE_HTML` 改 `reportPageHtml(lang)`（getLang + `data-bugezy-lang` 注入，CSP script-src 'self' 下用 DOM 屬性傳語言給外部 JS）；`report-page.js` 加 `t(zh,en)` 翻所有 UI 標籤，**內容不翻**；語言切換鈕；script `?v=168` 防快取錯配。**全站 8 頁 i18n 完成**。
+- **PM-169（域名）**：extension `API_BASE` 由 `bugezy-api.bugezy-api.workers.dev` 改 `bugezy.dev`（唯一寫死處，同 Worker 雙域名）。
+
+**增量（Day 20 後半）**
+- Server（全部已部署，最新 Version `d42e451c`）：CSP + 截圖 dataUrl 驗證、FAQ/隱私文案 + jsonNoStore、MCP 授權（session 必填 + terminal 付費）、createReport 額度縱深、ECPay 三 callback 原子性、`/report-page.js` 端點 + 報告頁嚴格 CSP + i18n、`rotateSession` + cancel rotation、terminal-logs server 端遮罩、首頁/features/install 行銷更新。
+- Extension（build 過、**未重上架**）：`storage.ts` PII 擴充、`auth.ts applyRotatedToken`、`popup.ts` cancel 存新 token、`types.ts` API_BASE=bugezy.dev。
+- CLI（**改檔未發佈**）：`pii-mask.ts` 新 + `index.ts` 上傳前遮罩。
+- 判斷/修正（動手前先驗）：CSP 只對報告頁套嚴格版（行銷頁 inline script 不破壞）；付款 callback server-to-server 無法 rotation；createReport 用「雙額度用盡」避免誤擋回溯；額度 count-based 檢查對「完全跳過 bumpUsage」無效（列後續）；`recording_count`（非 record_count）；報告頁 i18n 修 `t` 變數遮蔽。
+
+- ⚠ 技術債 / FOX 待辦（Day 20 後半）：① **extension 重上架**（Day 19+20 整套，含 PII 擴充/token rotation/域名）；② **CLI `npm publish`**（PII 遮罩；在此之前 server 端雙重遮罩已擋舊版明文）；③ payments 表須存在（PM-163 callback 依賴，研判 schema.sql 已套用）；④ 建議後續：createReport 改為權威計數點（徹底堵 bumpUsage 繞過）、付款後 token rotation、CSP 全站移 unsafe-inline（行銷頁抽 inline script）；⑤ 沿用：sessions/payments SQL、日韓越解鎖、user_id 遷移、Rate Limiting、rls-lockdown。
 
 ---
 
