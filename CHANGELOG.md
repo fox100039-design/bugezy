@@ -2,7 +2,9 @@
 
 ## 2026-07-05
 
-Day 20（PM-153~157）。Bug 捕捉升級（漏網錯誤 + 效能兜底 + 網路環境 + 儲存狀態）。
+Day 20（PM-153~158）。Bug 捕捉升級（漏網錯誤 + 效能兜底 + 網路環境 + 儲存狀態）+ MCP 時序麵包屑。
+
+- PM-158：**MCP 新增第 13 個 tool `get_timeline`（時序麵包屑）**（`server/index.ts`）— 把一份報告的 Console/Network/語音/標記 按時間排序 + 網路環境 + 儲存摘要合成**一條人類可讀故事線**，AI 呼叫一次即掌握完整 Bug 脈絡（省去逐一呼叫 5+ tool）。①事件用相對時間 `[0.0s][0.5s][1.5s]`（startTime=最早正時間戳）；②表頭含網路（在線/類型/RTT/頻寬）+ 儲存（項數/Cookie 數/敏感值已遮罩）；③`chromeMultiplier` 加 `get_timeline:25`；④/install 工具數 12→13 + 清單加 get_timeline（中英）。**修正規格 3 處**：標記實為 `time_sec`(相對秒)+`note`（非 timestamp/label）→換算絕對時間再排序；欄位 `browser`（非 user_agent）；token 用 `chromeMultiplier`（`TOOL_TOKEN_ESTIMATES` 不存在）。線上 `/mcp` JSON-RPC 實測 round-trip ✅（5 事件正確排序 + 標記精準落點 + Token 省 96%）。`wrangler deploy`（`0a6b9318`）。
 
 - PM-157：**儲存空間快照 + PII 遮罩**（`extension/storage.ts`(新) + `inject.ts` + `types.ts` + `server/index.ts` + `schema.sql`）— 診斷「登入狀態突然消失／資料不見」（localStorage/sessionStorage/cookie 問題）。①共用 `getStorageSnapshot()` → localStorage/sessionStorage（`{key,size,value}[]`）+ cookie **只留名稱不留值**（try/catch 兜 SecurityError）；②`maskPII()` **三層本機遮罩**：敏感 key（password/token/secret/auth/card/cvv/ssn/session…）→整值 `***MASKED***`、>500 字元→截斷、值含 email/卡號/JWT→局部 `***`；③**遮罩全在 extension 端執行，server 只收遮罩後結果，敏感原值零外洩**；④錄製/回溯/監控三處 payload 帶 `storageSnapshot`；⑤server `createReport` 存 `storage_snapshot` JSONB（graceful fallback 不 500），`getReport` 回傳；⑥報告頁「💾 儲存狀態」區塊 `fmtItems` 列各項 + Cookies 名稱 + 遮罩提示。**判斷**：截圖標注頁（`chrome-extension://` 情境）讀不到被測站 storage，故不帶（免上傳誤導資料）。線上實測 round-trip ✅（`user_token:***MASKED***`、cookieNames 正確）。`wrangler deploy`（`cb910db5`）+ `npm run build` ✅。至此 PM-153~157 五卡完成：五類漏網錯誤 + 網路 + 儲存三維上下文。
 

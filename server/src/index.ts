@@ -1398,10 +1398,11 @@ Full guide: https://bugezy.dev/install`,
 
       <div style="margin-top:14px;color:#ccc;font-size:13px;">${t('連接成功後直接問：', 'Once connected, just ask:')}<b style="color:#a78bfa;">${t('「讀我最新的 BugEzy 報告，告訴我怎麼修」', '"Read my latest BugEzy report and tell me how to fix it"')}</b></div>
 
-      <div style="margin-top:14px;"><b style="color:#c4b5fd;font-size:13px;">${t('12 個 MCP 工具（AI 按需查詢，省 Token）：', '12 MCP tools (AI queries on demand to save tokens):')}</b>
+      <div style="margin-top:14px;"><b style="color:#c4b5fd;font-size:13px;">${t('13 個 MCP 工具（AI 按需查詢，省 Token）：', '13 MCP tools (AI queries on demand to save tokens):')}</b>
         <div class="toolgrid">
           <div><b>list_reports</b> ${t('最近報告清單', 'recent reports')}</div>
           <div><b>get_report_overview</b> ${t('報告摘要', 'report summary')}</div>
+          <div><b>get_timeline</b> ${t('完整時序麵包屑', 'full timeline')}</div>
           <div><b>get_console_logs</b> ${t('Console 錯誤', 'console errors')}</div>
           <div><b>get_network_errors</b> ${t('網路錯誤', 'network errors')}</div>
           <div><b>get_voice_transcript</b> ${t('語音全文', 'voice transcript')}</div>
@@ -3548,6 +3549,7 @@ function estimateTokens(responseText: string, toolName: string): TokenEstimate {
     get_rrweb_events: 2, // 都是大量資料
     get_live_errors: 30, // Chrome 要開 DevTools 掃全頁
     get_terminal_logs: 40, // Chrome 完全做不到
+    get_timeline: 25, // PM-158：一次拿完整時序，Chrome 要讀整頁 DOM + DevTools + 人工對照時間軸
   };
 
   const multiplier = chromeMultiplier[toolName] || 10;
@@ -4038,6 +4040,115 @@ function createMcpServer(env: Env): McpServer {
       );
 
       return { content };
+    },
+  );
+
+  // Tool 13: get_timeline（PM-158）— 時序麵包屑：一份報告的所有資料合成一條故事線，AI 呼叫一次掌握全貌
+  server.tool(
+    'get_timeline',
+    '取得一份報告的完整時間軸（時序麵包屑）。把 Console、Network、語音、標記、網路環境、儲存狀態全部按時間排序成一條故事線，AI 只需呼叫這一個 tool 就能掌握完整 Bug 脈絡（省去逐一呼叫 console/network/voice 各 tool）。Full report timeline.',
+    { report_id: z.string().describe('報告 ID') },
+    async (args) => {
+      const { data: report, error } = await supabase()
+        .from('reports')
+        .select('*')
+        .eq('report_id', args.report_id)
+        .maybeSingle();
+      if (error || !report) {
+        if (error) console.error('get_timeline failed:', error.message); // 原始錯誤只記 log
+        return txt('報告不存在或查詢失敗');
+      }
+
+      // 收集所有事件到統一陣列（console/network/voice 用絕對 Date.now() ms；marker 是相對秒數，稍後換算）
+      const events: Array<{ time: number; icon: string; text: string }> = [];
+
+      const consoleLogs: Array<{ level?: string; message?: string; timestamp?: number; source?: string }> =
+        report.console_logs || [];
+      consoleLogs.forEach((log) => {
+        const icon = log.level === 'error' ? '❌' : log.level === 'warn' ? '⚠️' : 'ℹ️';
+        const src = log.source && log.source !== 'console' ? ` <${log.source}>` : '';
+        events.push({
+          time: log.timestamp || 0,
+          icon,
+          text: `[Console ${log.level || 'log'}${src}] ${log.message ?? ''}`,
+        });
+      });
+
+      const networkErrors: Array<{ method?: string; url?: string; status?: number; duration?: number; timestamp?: number }> =
+        report.network_errors || [];
+      networkErrors.forEach((net) => {
+        events.push({
+          time: net.timestamp || 0,
+          icon: '🌐',
+          text: `[Network] ${net.method || '?'} ${net.url || ''} → ${net.status ?? '?'} (${net.duration ?? '?'}ms)`,
+        });
+      });
+
+      const voiceTranscript: Array<{ text?: string; timestamp?: number }> = report.voice_transcript || [];
+      voiceTranscript.forEach((v) => {
+        events.push({ time: v.timestamp || 0, icon: '🎙️', text: `[語音] ${v.text ?? ''}` });
+      });
+
+      // 絕對時間基準：取 console/network/voice 中最早的正時間戳（marker 相對此基準換算）
+      const absTimes = events.map((e) => e.time).filter((t) => t > 0);
+      const startTime = absTimes.length ? Math.min(...absTimes) : 0;
+
+      // 標記（TimeMarker：time_sec 相對錄製起點的秒數、note 說明——非 timestamp/label）
+      const markers: Array<{ time_sec?: number; note?: string }> = report.markers || [];
+      markers.forEach((m) => {
+        const relMs = (m.time_sec ?? 0) * 1000;
+        events.push({ time: startTime + relMs, icon: '📌', text: `[標記] ${m.note || 'user marker'}` });
+      });
+
+      events.sort((a, b) => a.time - b.time);
+
+      // 組裝時間軸文字
+      let timeline = `📋 報告時間軸 — ${report.title || report.url || report.report_id}\n`;
+      timeline += `頁面：${report.url || '（無）'}\n`;
+      timeline += `瀏覽器：${report.browser || 'unknown'}\n`;
+      timeline += `螢幕：${report.screen_size || 'unknown'}\n`;
+
+      if (report.network_snapshot) {
+        const ns = report.network_snapshot as {
+          atStart?: Record<string, unknown>;
+          atEnd?: Record<string, unknown>;
+          online?: boolean;
+        };
+        const s = (ns.atStart || ns) as { online?: boolean; effectiveType?: string; rtt?: number | null; downlink?: number | null };
+        timeline += `網路：${s.online ? '在線' : '離線'} / ${s.effectiveType || '?'} / RTT ${s.rtt ?? '?'}ms / ${s.downlink ?? '?'} Mbps\n`;
+        const e = ns.atEnd as { online?: boolean; effectiveType?: string } | undefined;
+        if (e && (e.online !== s.online || e.effectiveType !== s.effectiveType)) {
+          timeline += `　（結束時：${e.online ? '在線' : '離線'} / ${e.effectiveType || '?'}）\n`;
+        }
+      }
+
+      if (report.storage_snapshot) {
+        const ss = report.storage_snapshot as {
+          localStorage?: unknown[];
+          sessionStorage?: unknown[];
+          cookieCount?: number;
+        };
+        const lsCount = ss.localStorage?.length || 0;
+        const ssCount = ss.sessionStorage?.length || 0;
+        timeline += `儲存：localStorage ${lsCount} 項 / sessionStorage ${ssCount} 項 / Cookie ${ss.cookieCount || 0} 個（敏感值已遮罩）\n`;
+      }
+
+      timeline += `描述：${report.description || '（無）'}\n`;
+      timeline += `─────────────────────────\n`;
+
+      if (events.length === 0) {
+        timeline += '（無事件記錄）\n';
+      } else {
+        events.forEach((e) => {
+          const relSec = ((e.time - startTime) / 1000).toFixed(1);
+          timeline += `[${relSec}s] ${e.icon} ${e.text}\n`;
+        });
+      }
+
+      timeline += `─────────────────────────\n`;
+      timeline += `共 ${events.length} 個事件（Console ${consoleLogs.length} / Network ${networkErrors.length} / 語音 ${voiceTranscript.length} / 標記 ${markers.length}）`;
+
+      return txtWithTokens(timeline, 'get_timeline', args.report_id);
     },
   );
 
