@@ -2,7 +2,9 @@
 
 ## 2026-07-05
 
-Day 20（PM-153~167）。Bug 捕捉升級（漏網錯誤 + 效能兜底 + 網路環境 + 儲存狀態）+ MCP 時序麵包屑 + AI 導航摘要 + Stored XSS 縱深防禦 + 存取模型文案釐清 + MCP live/terminal 授權補強 + ECPay 原子性 + PII 規則擴充 + 首頁行銷更新 + MCP 必填 session + 上傳額度縱深。
+Day 20（PM-153~168）。Bug 捕捉升級（漏網錯誤 + 效能兜底 + 網路環境 + 儲存狀態）+ MCP 時序麵包屑 + AI 導航摘要 + Stored XSS 縱深防禦 + 存取模型文案釐清 + MCP live/terminal 授權補強 + ECPay 原子性 + PII 規則擴充 + 首頁行銷更新 + MCP 必填 session + 上傳額度縱深。
+
+- PM-168：**報告頁英文版（/report/:id 多語系）**（`server/index.ts`）— 全站最後一頁 i18n。因 PM-166 把報告頁 client 邏輯抽成外部 `report-page.js`（CSP `script-src 'self'` 不能 inline 傳語言），改用 server `getLang()` 注入 `<html data-bugezy-lang>` → `report-page.js` 讀屬性決定語言。①`REPORT_PAGE_HTML` 改函式 `reportPageHtml(lang)` + no-store 防跨語言快取；②`report-page.js` 加 `t(zh,en)`（讀 data-bugezy-lang），翻譯所有 UI 標籤（網路環境/儲存狀態/摘要/Token 估算/toggle 提示/空狀態/找不到報告/點擊放大）；③topbar 語言切換鈕 EN/中文；④**報告內容（title/description/console/network/voice）不翻**（使用者原始資料）；修正 Token 迴圈變數 `t` 遮蔽 `t()` 函式→改 `tk`；script src 加 `?v=168` 防新 HTML 配舊快取 JS。線上實測 ✅（EN/ZH 雙語 HTML + report-page.js 翻譯 + no-store + node --check）。`wrangler deploy`（`d42e451c`）。全站 8 頁 i18n 完成。
 
 - PM-167：**CLI Terminal PII 遮罩（後端 stderr 敏感資料過濾，雙重防護）**（`cli/src/pii-mask.ts`(新) + `cli/src/index.ts` + `server/index.ts`）。後端 traceback 常夾帶 DB 密碼/雲端金鑰/API token，CLI 端原本明文上傳。①新 `maskStderr()`：DB 連線字串保 scheme+host 遮密碼、20 個敏感 env 保 KEY 遮值、token 格式（sk-/AIza/ghp_/AKIA/xox*/JWT）整遮、一般 PII（email/卡號/台灣手機身分證）局部遮；②CLI 捕捉後上傳前遮罩（終端機仍原樣透傳，只遮上傳副本）；③server `POST /api/terminal-logs` 入庫前同規則再遮一次（防舊版 CLI 明文）。node 實測 10 案全過（含正常 traceback 不誤遮）。`wrangler deploy`（`5757ada8`）+ CLI build。
 

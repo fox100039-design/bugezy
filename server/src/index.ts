@@ -1812,12 +1812,16 @@ function changelogPage(lang: PageLang): string {
 // ⚠ 規格 HTML 讀 snake_case（console_logs / rrweb_count），但 GET /api/reports/:id 實際回
 // camelCase（consoleLogs / networkErrors / voiceTranscript / rrwebEvents）——已實測確認。
 // 直接照規格部署會整頁空白，故此處欄位名改為 camelCase 以正確渲染資料。
-const REPORT_PAGE_HTML = `<!DOCTYPE html>
-<html lang="zh-TW">
+// PM-168：報告頁多語系（getLang 偵測 + data-bugezy-lang 傳給 report-page.js）。
+// UI 標籤翻譯；報告內容（console/network/voice 等使用者原始資料）不翻。
+function reportPageHtml(lang: PageLang): string {
+  const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
+  return `<!DOCTYPE html>
+<html lang="${lang === 'zh' ? 'zh-Hant' : 'en'}" data-bugezy-lang="${lang}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>BugEzy — Bug 報告</title>
+  <title>${t('BugEzy — Bug 報告', 'BugEzy — Bug Report')}</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     body { background:#0f0f1a; color:#e0e0e0; font-family:system-ui,"Microsoft JhengHei",sans-serif; }
@@ -1875,24 +1879,29 @@ const REPORT_PAGE_HTML = `<!DOCTYPE html>
     .loading { text-align:center; padding:60px; color:#888; }
     .error-msg { text-align:center; padding:60px; color:#ef4444; }
     .empty { text-align:center; padding:24px; color:#555; font-size:13px; }
+    .lang-switch { margin-left:auto; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:4px 12px; font-size:13px; color:#c4b5fd; text-decoration:none; }
+    .lang-switch:hover { background:#2a2a3e; }
   </style>
 </head>
 <body>
   <div class="topbar">
     <span class="topbar-brand">🐛 BugEzy</span>
-    <span class="topbar-title">Bug 報告</span>
+    <span class="topbar-title">${t('Bug 報告', 'Bug Report')}</span>
+    <a class="lang-switch" href="?lang=${lang === 'zh' ? 'en' : 'zh'}">${t('EN', '中文')}</a>
   </div>
   <div class="report" id="app">
-    <div class="loading" id="loading">載入中…</div>
+    <div class="loading" id="loading">${t('載入中…', 'Loading…')}</div>
   </div>
   <!-- PM-99：截圖點擊頁內 lightbox（base64 data URL 無法 window.open，會開空白頁；改頁內放大）。PM-166：onclick 改由 report-page.js addEventListener -->
   <div id="bugezy-lightbox" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;background:rgba(0,0,0,0.85);cursor:zoom-out;align-items:center;justify-content:center;">
     <img id="bugezy-lightbox-img" style="max-width:95vw;max-height:95vh;border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,0.5);" />
   </div>
-  <!-- PM-166：全部 client 邏輯（render + lightbox）抽到外部檔，CSP script-src 'self' 才能拿掉 unsafe-inline -->
-  <script src="/report-page.js"></script>
+  <!-- PM-166：全部 client 邏輯（render + lightbox）抽到外部檔，CSP script-src 'self' 才能拿掉 unsafe-inline。
+       PM-168：加 ?v 版本號——report-page.js 快取 1 天，改版時 bump 版本強制邊緣快取失效（否則新 HTML 配舊 JS）。 -->
+  <script src="/report-page.js?v=168"></script>
 </body>
 </html>`;
+}
 
 // ── PM-166（Fable5）：報告頁 client 邏輯抽成外部檔（/report-page.js），CSP script-src 改 'self'（拿掉 unsafe-inline）。
 //    原 inline onclick（截圖 openLightbox / lightbox 背景 closeLightbox）改事件委派/addEventListener——
@@ -1901,11 +1910,16 @@ const REPORT_PAGE_JS = `
     const reportId = location.pathname.split('/report/')[1];
     const API = location.origin;
 
+    // PM-168：語言由 server 注入 <html data-bugezy-lang>（CSP script-src 'self' 不能 inline script 傳值）。
+    // 只翻 UI 標籤；報告內容（console/network/voice/title/description）為使用者原始資料，不翻。
+    const LANG = document.documentElement.getAttribute('data-bugezy-lang') === 'en' ? 'en' : 'zh';
+    function t(zh, en) { return LANG === 'en' ? en : zh; }
+
     fetch(API + '/api/reports/' + reportId)
       .then(r => { if (!r.ok) throw new Error('not found'); return r.json(); })
       .then(render)
       .catch(() => {
-        document.getElementById('app').innerHTML = '<div class="error-msg">找不到報告</div>';
+        document.getElementById('app').innerHTML = '<div class="error-msg">' + t('找不到報告', 'Report not found') + '</div>';
       });
 
     function fmtTime(ts) {
@@ -1931,9 +1945,9 @@ const REPORT_PAGE_JS = `
       const markers = r.markers || [];
 
       let html = '<div class="header">';
-      html += '<h1>' + esc(r.title || '（無標題）') + '</h1>';
+      html += '<h1>' + esc(r.title || t('（無標題）', '(untitled)')) + '</h1>';
       html += '<div class="meta">';
-      html += '<div>URL：<a href="'+esc(r.url)+'" target="_blank">'+esc(r.url)+'</a></div>';
+      html += '<div>' + t('URL：', 'URL: ') + '<a href="'+esc(r.url)+'" target="_blank">'+esc(r.url)+'</a></div>';
       html += '<div>'+esc(r.browser||'')+(r.screen_size ? ' ｜ '+r.screen_size : '')+'</div>';
       html += '<div>'+fmtDate(r.created_at)+'</div>';
       html += '</div></div>';
@@ -1963,14 +1977,14 @@ const REPORT_PAGE_JS = `
 
       html += '<div class="tab-panel'+(defaultTab==='info'?' active':'')+'" id="tab-info">';
       if (r.description) {
-        html += '<div class="info-section"><h3>💬 描述</h3><p>'+esc(r.description)+'</p></div>';
+        html += '<div class="info-section"><h3>' + t('💬 描述', '💬 Description') + '</h3><p>'+esc(r.description)+'</p></div>';
       }
       if (markers.length > 0) {
-        html += '<div class="info-section"><h3>📌 時間軸標記</h3>';
+        html += '<div class="info-section"><h3>' + t('📌 時間軸標記', '📌 Timeline Markers') + '</h3>';
         markers.forEach(m => {
           const min = Math.floor(m.time_sec/60);
           const sec = String(m.time_sec%60).padStart(2,'0');
-          html += '<div class="marker-item"><span class="marker-time">'+min+':'+sec+'</span><span>'+esc(m.note||'（無描述）')+'</span></div>';
+          html += '<div class="marker-item"><span class="marker-time">'+min+':'+sec+'</span><span>'+esc(m.note||t('（無描述）','(no note)'))+'</span></div>';
         });
         html += '</div>';
       }
@@ -1980,17 +1994,17 @@ const REPORT_PAGE_JS = `
         var nsEnd = ns.atEnd;
         var fmtNet = function (x) {
           if (!x) return '';
-          var online = x.online ? '🟢 在線' : '🔴 離線';
+          var online = x.online ? t('🟢 在線', '🟢 Online') : t('🔴 離線', '🔴 Offline');
           var typ = (x.type && x.type !== 'unknown') ? x.type
-            : (x.effectiveType && x.effectiveType !== 'unknown' ? String(x.effectiveType).toUpperCase() : '未知');
+            : (x.effectiveType && x.effectiveType !== 'unknown' ? String(x.effectiveType).toUpperCase() : t('未知','Unknown'));
           var rtt = (x.rtt != null) ? x.rtt + 'ms' : '—';
           var dl = (x.downlink != null) ? x.downlink + ' Mbps' : '—';
-          var save = x.saveData ? ' · 省流量模式' : '';
-          return '狀態：' + online + ' · 類型：' + typ + ' · 延遲：' + rtt + ' · 頻寬：' + dl + save;
+          var save = x.saveData ? t(' · 省流量模式', ' · Data Saver') : '';
+          return t('狀態：','Status: ') + online + t(' · 類型：',' · Type: ') + typ + t(' · 延遲：',' · Latency: ') + rtt + t(' · 頻寬：',' · Bandwidth: ') + dl + save;
         };
-        html += '<div class="info-section"><h3>📡 網路環境</h3><p>' + esc(fmtNet(nsStart));
+        html += '<div class="info-section"><h3>' + t('📡 網路環境', '📡 Network Environment') + '</h3><p>' + esc(fmtNet(nsStart));
         if (nsEnd && (nsEnd.online !== nsStart.online || nsEnd.effectiveType !== nsStart.effectiveType)) {
-          html += '<br>結束時：' + esc(fmtNet(nsEnd));
+          html += '<br>' + t('結束時：','At end: ') + esc(fmtNet(nsEnd));
         }
         html += '</p></div>';
       }
@@ -2010,26 +2024,26 @@ const REPORT_PAGE_JS = `
           }
           return h + '</div>';
         };
-        html += '<div class="info-section"><h3>💾 儲存狀態</h3>';
+        html += '<div class="info-section"><h3>' + t('💾 儲存狀態', '💾 Storage State') + '</h3>';
         html += fmtItems('localStorage', ss.localStorage);
         html += fmtItems('sessionStorage', ss.sessionStorage);
         var cookieNames = Array.isArray(ss.cookieNames) ? ss.cookieNames : [];
         html += '<div><strong>Cookies: ' + (ss.cookieCount != null ? ss.cookieCount : cookieNames.length) + '</strong>' +
           (cookieNames.length ? ' <span style="color:#8b949e">(' + esc(cookieNames.join(', ')) + ')</span>' : '') + '</div>';
-        html += '<p style="color:#8b949e;font-size:12px;margin-top:8px">🔒 敏感值（密碼/token/email/卡號）已於使用者端自動遮罩</p>';
+        html += '<p style="color:#8b949e;font-size:12px;margin-top:8px">' + t('🔒 敏感值（密碼/token/email/卡號）已於使用者端自動遮罩', '🔒 Sensitive values (passwords/tokens/email/card numbers) auto-masked on the client') + '</p>';
         html += '</div>';
       }
-      html += '<div class="info-section"><h3>📊 摘要</h3><div class="info-grid">';
-      html += '<div>DOM 事件：'+(r.rrwebEvents?.length||0)+'</div>';
-      html += '<div>Console：'+consoleCount+'</div>';
-      html += '<div>Network：'+networkCount+'</div>';
-      html += '<div>語音：'+voiceCount+' 段</div>';
-      html += '<div>截圖：'+ssCount+'</div>';
+      html += '<div class="info-section"><h3>' + t('📊 摘要', '📊 Summary') + '</h3><div class="info-grid">';
+      html += '<div>' + t('DOM 事件：','DOM events: ') + (r.rrwebEvents?.length||0)+'</div>';
+      html += '<div>' + t('Console：','Console: ') + consoleCount+'</div>';
+      html += '<div>' + t('Network：','Network: ') + networkCount+'</div>';
+      html += '<div>' + t('語音：','Voice: ') + voiceCount + t(' 段',' segs') + '</div>';
+      html += '<div>' + t('截圖：','Screenshots: ') + ssCount+'</div>';
       html += '</div></div></div>';
 
       html += '<div class="tab-panel'+(defaultTab==='console'?' active':'')+'" id="tab-console">';
       if (consoleCount === 0) {
-        html += '<div class="empty">沒有 Console 錯誤 ✓</div>';
+        html += '<div class="empty">' + t('沒有 Console 錯誤 ✓', 'No console errors ✓') + '</div>';
       } else {
         (r.consoleLogs||[]).forEach(log => {
           const cls = log.level === 'error' ? 'error' : 'warn';
@@ -2041,7 +2055,7 @@ const REPORT_PAGE_JS = `
 
       html += '<div class="tab-panel'+(defaultTab==='network'?' active':'')+'" id="tab-network">';
       if (networkCount === 0) {
-        html += '<div class="empty">沒有 Network 錯誤 ✓</div>';
+        html += '<div class="empty">' + t('沒有 Network 錯誤 ✓', 'No network errors ✓') + '</div>';
       } else {
         (r.networkErrors||[]).forEach(err => {
           const cls = err.status >= 500 ? 's5xx' : 's4xx';
@@ -2052,7 +2066,7 @@ const REPORT_PAGE_JS = `
 
       html += '<div class="tab-panel'+(defaultTab==='voice'?' active':'')+'" id="tab-voice">';
       if (voiceCount === 0) {
-        html += '<div class="empty">沒有語音記錄</div>';
+        html += '<div class="empty">' + t('沒有語音記錄', 'No voice transcript') + '</div>';
       } else {
         (r.voiceTranscript||[]).forEach(v => {
           html += '<div class="voice-item"><span class="voice-time">'+fmtTime(v.timestamp)+'</span>'+esc(v.text)+'</div>';
@@ -2066,18 +2080,18 @@ const REPORT_PAGE_JS = `
         html += '<div class="tab-panel" id="tab-screenshots">';
         html += '<div class="screenshot-toggle">'
           + '<label><input type="checkbox" id="allow-images-toggle"'+(allowImg?' checked':'')+' />'
-          + '<span class="toggle-label">📸 高畫質 AI 分析（高 Token）</span></label>'
+          + '<span class="toggle-label">' + t('📸 高畫質 AI 分析（高 Token）', '📸 HQ AI Analysis (high token)') + '</span></label>'
           + '<p class="toggle-hint" id="toggle-hint">'+(allowImg
-              ? '✅ 已開啟 — AI 可看到截圖畫面，視覺 Bug 更精準（顏色、排版、CSS）'
-              : '🔒 未開啟 — AI 只讀文字，省 Token。遇到視覺 Bug 再開啟')+'</p>'
+              ? t('✅ 已開啟 — AI 可看到截圖畫面，視覺 Bug 更精準（顏色、排版、CSS）', '✅ On — AI can see the screenshots, better for visual bugs (colors, layout, CSS)')
+              : t('🔒 未開啟 — AI 只讀文字，省 Token。遇到視覺 Bug 再開啟', '🔒 Off — AI reads text only to save tokens. Enable for visual bugs'))+'</p>'
           + '<p class="toggle-token" id="toggle-token">'+(allowImg
-              ? '⚠️ 每張截圖約 3,000~8,000 tokens（'+ssCount+' 張 ≈ '+approxTok+' tokens）'
-              : '💰 目前 AI 讀取此報告約 200~1,500 tokens')+'</p>'
+              ? t('⚠️ 每張截圖約 3,000~8,000 tokens（'+ssCount+' 張 ≈ '+approxTok+' tokens）', '⚠️ ~3,000–8,000 tokens per screenshot ('+ssCount+' imgs ≈ '+approxTok+' tokens)')
+              : t('💰 目前 AI 讀取此報告約 200~1,500 tokens', '💰 AI currently reads this report at ~200–1,500 tokens'))+'</p>'
           + '</div>';
         html += '<div class="ss-grid">';
         (r.screenshots||[]).forEach(ss => {
           const src = typeof ss === 'string' ? ss : ss.dataUrl || ss.url || '';
-          if (src) html += '<img class="ss-img" src="'+esc(src)+'" style="cursor:zoom-in;">'; // PM-160 esc 止血；PM-166 onclick 改事件委派
+          if (src) html += '<img class="ss-img" title="'+t('點擊放大','Click to enlarge')+'" src="'+esc(src)+'" style="cursor:zoom-in;">'; // PM-160 esc 止血；PM-166 onclick 改事件委派；PM-168 title
         });
         html += '</div></div>';
       }
@@ -2089,23 +2103,23 @@ const REPORT_PAGE_JS = `
       const networkText = JSON.stringify(r.networkErrors||[]);
       const descText = r.description || '';
       const items = [
-        { label:'🎤 語音記錄', len:voiceText.length },
+        { label:t('🎤 語音記錄','🎤 Voice'), len:voiceText.length },
         { label:'🖥 Console', len:consoleText.length },
         { label:'🌐 Network', len:networkText.length },
-        { label:'📝 描述', len:descText.length },
-        { label:'📹 DOM 摘要', len:105 },
+        { label:t('📝 描述','📝 Description'), len:descText.length },
+        { label:t('📹 DOM 摘要','📹 DOM Summary'), len:105 },
       ];
       let totalT = 0;
       let tokenHtml = '';
       items.forEach(it => {
-        const t = Math.ceil(it.len / 3.5);
-        if (t > 0) { totalT += t; tokenHtml += '<div class="token-row"><span>'+it.label+'</span><span>~'+t.toLocaleString()+' tokens</span></div>'; }
+        const tk = Math.ceil(it.len / 3.5);
+        if (tk > 0) { totalT += tk; tokenHtml += '<div class="token-row"><span>'+it.label+'</span><span>~'+tk.toLocaleString()+' tokens</span></div>'; }
       });
       const chromeT = totalT * 15;
       const pct = chromeT > 0 ? Math.round((1-totalT/chromeT)*100) : 0;
-      tokenHtml += '<div class="token-row total"><span>AI 讀取總計</span><span>~'+totalT.toLocaleString()+' tokens ≈ USD $'+((totalT*8/1e6).toFixed(4))+'</span></div>';
-      html += '<div class="token-panel"><div style="font-weight:600;margin-bottom:8px;color:#a78bfa;">📊 Token 估算</div>' + tokenHtml;
-      html += '<div class="token-save">💡 同場景 Claude in Chrome：~'+chromeT.toLocaleString()+' tokens ≈ USD $'+((chromeT*8/1e6).toFixed(4))+'<br>✅ BugEzy 為你省了 '+pct+'%</div></div>';
+      tokenHtml += '<div class="token-row total"><span>' + t('AI 讀取總計','AI Read Total') + '</span><span>~'+totalT.toLocaleString()+' tokens ≈ USD $'+((totalT*8/1e6).toFixed(4))+'</span></div>';
+      html += '<div class="token-panel"><div style="font-weight:600;margin-bottom:8px;color:#a78bfa;">' + t('📊 Token 估算','📊 Token Estimate') + '</div>' + tokenHtml;
+      html += '<div class="token-save">' + t('💡 同場景 Claude in Chrome：','💡 Same scenario, Claude in Chrome: ') + '~'+chromeT.toLocaleString()+' tokens ≈ USD $'+((chromeT*8/1e6).toFixed(4))+'<br>' + t('✅ BugEzy 為你省了 ','✅ BugEzy saved you ') + pct+'%</div></div>';
 
       document.getElementById('app').innerHTML = html;
 
@@ -2127,11 +2141,11 @@ const REPORT_PAGE_JS = `
           const ht = document.getElementById('toggle-hint');
           const tk = document.getElementById('toggle-token');
           if (ht) ht.textContent = allow
-            ? '✅ 已開啟 — AI 可看到截圖畫面，視覺 Bug 更精準（顏色、排版、CSS）'
-            : '🔒 未開啟 — AI 只讀文字，省 Token。遇到視覺 Bug 再開啟';
+            ? t('✅ 已開啟 — AI 可看到截圖畫面，視覺 Bug 更精準（顏色、排版、CSS）', '✅ On — AI can see the screenshots, better for visual bugs (colors, layout, CSS)')
+            : t('🔒 未開啟 — AI 只讀文字，省 Token。遇到視覺 Bug 再開啟', '🔒 Off — AI reads text only to save tokens. Enable for visual bugs');
           if (tk) tk.textContent = allow
-            ? '⚠️ 每張截圖約 3,000~8,000 tokens（'+cnt+' 張 ≈ '+(cnt*5000).toLocaleString()+' tokens）'
-            : '💰 目前 AI 讀取此報告約 200~1,500 tokens';
+            ? t('⚠️ 每張截圖約 3,000~8,000 tokens（'+cnt+' 張 ≈ '+(cnt*5000).toLocaleString()+' tokens）', '⚠️ ~3,000–8,000 tokens per screenshot ('+cnt+' imgs ≈ '+(cnt*5000).toLocaleString()+' tokens)')
+            : t('💰 目前 AI 讀取此報告約 200~1,500 tokens', '💰 AI currently reads this report at ~200–1,500 tokens');
           try {
             await fetch('/api/reports/' + reportId + '/settings', {
               method: 'PATCH',
@@ -2620,10 +2634,14 @@ export default {
     if (request.method === 'GET' && path === '/report-page.js') return javascript(REPORT_PAGE_JS);
 
     // PM-59：報告頁——Server 直接回完整 HTML（vanilla JS 讀 /api/reports/:id 渲染），
-    // 放在 /api/reports/:id 之前匹配。PM-166：改嚴格 CSP（script-src 'self'，拿掉 unsafe-inline）。
+    // 放在 /api/reports/:id 之前匹配。PM-166：改嚴格 CSP（script-src 'self'）。PM-168：多語系 + no-store 防跨語言快取。
     if (request.method === 'GET' && path.startsWith('/report/')) {
       const reportId = path.split('/report/')[1];
-      if (reportId && reportId.length > 10) return html(REPORT_PAGE_HTML, true);
+      if (reportId && reportId.length > 10) {
+        const res = html(reportPageHtml(getLang(request)), true);
+        res.headers.set('Cache-Control', 'no-store');
+        return res;
+      }
     }
 
     // PM-48：測試專頁（Test Harness）— 可預測的 Bug 場景，供 BugEzy 測試用
