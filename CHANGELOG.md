@@ -2,7 +2,9 @@
 
 ## 2026-07-05
 
-Day 20（PM-153~159）。Bug 捕捉升級（漏網錯誤 + 效能兜底 + 網路環境 + 儲存狀態）+ MCP 時序麵包屑 + AI 導航摘要。
+Day 20（PM-153~160）。Bug 捕捉升級（漏網錯誤 + 效能兜底 + 網路環境 + 儲存狀態）+ MCP 時序麵包屑 + AI 導航摘要 + Stored XSS 縱深防禦。
+
+- PM-160：**Fable5-#7 Stored XSS 三層修復**（`server/index.ts`）— 報告頁截圖 `src` 原未轉義，攻擊者可經 `screenshots[].dataUrl` 注入 `x" onerror="alert(1)"` 在 bugezy.dev 執行 JS。①報告頁 render 截圖 `src` 加 `esc()`——**並硬化 client 端 `esc()` 加轉 `"`/`'`**（原只轉 `<>&`，對屬性引號突破無效，同時保護 href 等所有屬性插值）；②`createReport` 入庫前用 `VALID_SCREENSHOT_SRC` 驗證 dataUrl（只留 `data:image base64` / `https` URL，非法值丟棄）；③全站 HTML 單一出口 `html()` 注入 **CSP**（`default-src 'self'` + `img-src data: https:` + `script/style 'unsafe-inline'` + `base-uri`/`object-src 'none'`），**並加 `form-action` 放行 ECPay 付款域名**（否則 default-src 會擋掉 checkout 自動跳轉綠界）；④排查其餘 src/href 插值皆已 esc 或為靜態。線上實測 ✅（惡意 dataUrl 被拒只留合法 1 張、CSP header 三頁皆present、esc 硬化）。`wrangler deploy`（`6bfc1e48`）。
 
 - PM-159：**MCP 報告摘要 — AI 導航提示（規則引擎，零成本）**（`server/index.ts`）— 在 `get_timeline` / `get_report_overview` 最前面自動附「🔍 AI Bug 導航摘要」，AI 直接看結論定位根因不用盲讀時間軸。①`generateBugSummary()` 分析 Promise Rejection / CORS / network fail（依 404·500·401/403 給建議）/ 資源載入失敗 / 純 JS 錯誤 / 離線·慢網 / token 丟失 / 語音描述 / Web Vitals，無線索則「未偵測到明顯異常」+ 統計；②不呼叫 Workers AI（純規則零 API 費）；③get_report_overview 改 `select('*')` 供分析但只回 metadata + `ai_bug_summary`（不含原始陣列，維持省 token）。**修正規格 bug**：原 `lines.length<=3` 判斷放在 stats 之後恆不成立→「未偵測到明顯異常」永不顯示，改到 stats 前判斷 `<=2`。線上 `/mcp` 實測 5 情境 round-trip ✅（rejection/500/CORS/離線+token/空報告 摘要皆正確）。`wrangler deploy`（`b38d6757`）。
 

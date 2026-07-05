@@ -257,8 +257,30 @@ async function handleLogout(request: Request, env: Env): Promise<Response> {
   return json({ ok: true });
 }
 
+// PM-160：合法截圖來源——data:image base64（png/jpeg/webp/gif）或 https URL（不含引號/角括號防屬性突破）
+const VALID_SCREENSHOT_SRC =
+  /^(data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+|https:\/\/[^\s"'<>]+)$/;
+
+// PM-160：全站 HTML 回應統一注入 CSP（Stored XSS 縱深防禦）。
+//   form-action 放行 ECPay 付款域名（checkout 頁自動 submit 到綠界，否則 default-src 'self' 會擋掉付款跳轉）。
+const CSP_VALUE =
+  "default-src 'self'; " +
+  "img-src 'self' data: https:; " +
+  "script-src 'self' 'unsafe-inline'; " +
+  "style-src 'self' 'unsafe-inline'; " +
+  "connect-src 'self' https://bugezy.dev https://bugezy-api.bugezy-api.workers.dev; " +
+  'form-action ' +
+  "'self' https://payment.ecpay.com.tw https://payment-stage.ecpay.com.tw; " +
+  "base-uri 'self'; " +
+  "object-src 'none';";
+
 function html(body: string): Response {
-  return new Response(body, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+  return new Response(body, {
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Content-Security-Policy': CSP_VALUE, // PM-160
+    },
+  });
 }
 
 // ── PM-150：對外頁面語言（首頁 + /install）——Accept-Language 自動偵測 + ?lang= 手動覆蓋 ──
@@ -1779,7 +1801,8 @@ const REPORT_PAGE_HTML = `<!DOCTYPE html>
       const p = n => String(n).padStart(2,'0');
       return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());
     }
-    function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    // PM-160：加 " ' 轉義——esc 也用於屬性值（src/href），只轉 < > & 無法擋 x" onerror=（Stored XSS 縱深防禦）
+    function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
     function render(r) {
       const consoleCount = r.consoleLogs?.length || 0;
@@ -1935,7 +1958,7 @@ const REPORT_PAGE_HTML = `<!DOCTYPE html>
         html += '<div class="ss-grid">';
         (r.screenshots||[]).forEach(ss => {
           const src = typeof ss === 'string' ? ss : ss.dataUrl || ss.url || '';
-          if (src) html += '<img class="ss-img" src="'+src+'" onclick="openLightbox(this.src)" style="cursor:zoom-in;">';
+          if (src) html += '<img class="ss-img" src="'+esc(src)+'" onclick="openLightbox(this.src)" style="cursor:zoom-in;">'; // PM-160：esc 止血 Stored XSS
         });
         html += '</div></div>';
       }
@@ -2604,7 +2627,16 @@ async function createReport(request: Request, env: Env, origin: string): Promise
 
   const report_id = crypto.randomUUID();
   const rrweb_r2_key = `reports/${report_id}/rrweb.json`;
-  const screenshots = payload.screenshots ?? [];
+  // PM-160：驗證截圖 dataUrl 格式，丟棄注入值（Stored XSS 縱深防禦——只存合法 data:image base64 或 https URL，
+  // 拒絕 `x" onerror=alert(1)` 之類；render 端 esc() 是第二層，此處是入庫第一層）
+  const screenshots = (payload.screenshots ?? []).filter((ss) => {
+    const src = ss?.dataUrl;
+    if (!src || !VALID_SCREENSHOT_SRC.test(src)) {
+      console.error('PM-160: rejected invalid screenshot dataUrl:', String(src).slice(0, 50));
+      return false;
+    }
+    return true;
+  });
   const screenshots_r2_key = screenshots.length ? `reports/${report_id}/screenshots.json` : null;
 
   // 大檔 rrweb 軌跡存 R2（可能數 MB）
