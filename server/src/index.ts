@@ -3171,7 +3171,10 @@ async function paymentAlreadyPaid(env: Env, key: string): Promise<boolean> {
   return (data as { status?: string } | null)?.status === 'paid';
 }
 
-/** upsert 一筆 payments 記錄（PK=merchant_trade_no）。失敗只記 log 不阻斷 callback（表未建也不掛）。 */
+/** upsert 一筆 payments 記錄（PK=merchant_trade_no）。回 true=成功。
+ *  PM-163（Fable5 #5）：改回傳成功與否——callback 需「先寫 payments 成功才升級 users」，
+ *  寫入失敗時回 500 讓綠界重送，避免 users 已升級卻無冪等記錄→重送時重複展延。
+ *  ⚠ 前置：production 必須已建 payments 表（PM-145 CREATE TABLE），否則 upsert 恆失敗→callback 恆 500→無人能升級。 */
 async function recordPayment(
   env: Env,
   row: {
@@ -3184,9 +3187,13 @@ async function recordPayment(
     raw_callback: unknown;
     paid_at?: string;
   },
-): Promise<void> {
+): Promise<boolean> {
   const { error } = await supa(env).from('payments').upsert(row);
-  if (error) console.error('recordPayment failed:', error.message);
+  if (error) {
+    console.error('recordPayment failed:', error.message);
+    return false;
+  }
+  return true;
 }
 
 async function ecpayCallback(request: Request, env: Env): Promise<Response> {
@@ -3223,6 +3230,21 @@ async function ecpayCallback(request: Request, env: Env): Promise<Response> {
   // PM-73：同時記錄 ecpay_trade_no（取消訂閱要用）+ plan_expires_at（到期日）
   const userId = params.CustomField1 ?? '';
   if (params.RtnCode === '1') {
+    // PM-163（Fable5 #5）：先寫 payments（冪等記錄）成功，才升級 users。順序反了會在 payments 寫入失敗時
+    // 留下「users 已升級但無冪等記錄」→ 下次重送重複展延到期日。payments 失敗→回 500（非 1|OK）讓綠界重送重試。
+    const recorded = await recordPayment(env, {
+      merchant_trade_no: tradeNo,
+      user_id: userId,
+      payment_type: 'monthly',
+      amount,
+      rtn_code: params.RtnCode,
+      status: 'paid',
+      raw_callback: params,
+      paid_at: new Date().toISOString(),
+    });
+    if (!recorded) {
+      return new Response('0|ErrorMessage=Payment record failed', { status: 500 });
+    }
     if (userId) {
       await supa(env)
         .from('users')
@@ -3233,17 +3255,8 @@ async function ecpayCallback(request: Request, env: Env): Promise<Response> {
         })
         .eq('user_id', userId);
     }
-    await recordPayment(env, {
-      merchant_trade_no: tradeNo,
-      user_id: userId,
-      payment_type: 'monthly',
-      amount,
-      rtn_code: params.RtnCode,
-      status: 'paid',
-      raw_callback: params,
-      paid_at: new Date().toISOString(),
-    });
   } else {
+    // 付款失敗：不升級，僅記錄（best-effort；失敗未升級無冪等風險，寫入失敗不阻斷）
     await recordPayment(env, {
       merchant_trade_no: tradeNo,
       user_id: userId,
@@ -3371,13 +3384,8 @@ async function handleDayPassCallback(request: Request, env: Env): Promise<Respon
   // 付款成功（RtnCode=1）→ 用 CustomField1 帶回的 user_id 開通 24 小時日票
   const userId = params.CustomField1 ?? '';
   if (params.RtnCode === '1') {
-    if (userId) {
-      await supa(env)
-        .from('users')
-        .update({ plan: 'day_pass', day_pass_expires_at: dayPassExpiryISO() })
-        .eq('user_id', userId);
-    }
-    await recordPayment(env, {
+    // PM-163（Fable5 #5）：先寫 payments 成功才開通日票，payments 失敗→500 讓綠界重送
+    const recorded = await recordPayment(env, {
       merchant_trade_no: tradeNo,
       user_id: userId,
       payment_type: 'day_pass',
@@ -3387,6 +3395,15 @@ async function handleDayPassCallback(request: Request, env: Env): Promise<Respon
       raw_callback: params,
       paid_at: new Date().toISOString(),
     });
+    if (!recorded) {
+      return new Response('0|ErrorMessage=Payment record failed', { status: 500 });
+    }
+    if (userId) {
+      await supa(env)
+        .from('users')
+        .update({ plan: 'day_pass', day_pass_expires_at: dayPassExpiryISO() })
+        .eq('user_id', userId);
+    }
   } else {
     await recordPayment(env, {
       merchant_trade_no: tradeNo,
@@ -3451,8 +3468,24 @@ async function ecpayPeriodCallback(request: Request, env: Env): Promise<Response
   }
 
   const userId = params.CustomField1 ?? '';
+  const isSuccess = params.RtnCode === '1';
+  // PM-163（Fable5 #5）：先記錄本期扣款（冪等 key=periodKey）成功，才更新 users。
+  // 順序反了會在 payments 寫入失敗時留下「已展延但無冪等記錄」→ 重送重複展延。payments 失敗→回 500 讓綠界重送。
+  const recorded = await recordPayment(env, {
+    merchant_trade_no: periodKey,
+    user_id: userId,
+    payment_type: 'monthly_renewal',
+    amount: amount || 80,
+    rtn_code: params.RtnCode,
+    status: isSuccess ? 'paid' : 'failed',
+    raw_callback: params,
+    paid_at: isSuccess ? new Date().toISOString() : undefined,
+  });
+  if (!recorded) {
+    return new Response('0|ErrorMessage=Payment record failed', { status: 500 });
+  }
   if (userId) {
-    if (params.RtnCode === '1') {
+    if (isSuccess) {
       // 本期扣款成功 → 維持 paid + 展延到期日（PM-73），順手更新最近活躍時間
       await supa(env)
         .from('users')
@@ -3467,17 +3500,6 @@ async function ecpayPeriodCallback(request: Request, env: Env): Promise<Response
       await supa(env).from('users').update({ plan: 'free' }).eq('user_id', userId);
     }
   }
-  // PM-145：記錄本期扣款（冪等 key 用 periodKey）
-  await recordPayment(env, {
-    merchant_trade_no: periodKey,
-    user_id: userId,
-    payment_type: 'monthly_renewal',
-    amount: amount || 80,
-    rtn_code: params.RtnCode,
-    status: params.RtnCode === '1' ? 'paid' : 'failed',
-    raw_callback: params,
-    paid_at: params.RtnCode === '1' ? new Date().toISOString() : undefined,
-  });
 
   // 綠界要求每期通知後回 1|OK（否則視為未收到）
   return new Response('1|OK', { status: 200 });

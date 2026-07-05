@@ -4,15 +4,22 @@
 
 import type { StorageItem, StorageSnapshot } from './types';
 
-// key 名稱敏感 → 整個值遮罩（密碼 / token / 金鑰 / 憑證 / 卡號 / session）
+// key 名稱敏感 → 整個值遮罩（密碼 / token / 金鑰 / 憑證 / 卡號 / session / jwt / bearer / refresh / access）
+// PM-163（Fable5 #8）：補 jwt/bearer/refresh/access（OAuth token 常用命名）
 const SENSITIVE_KEYS =
-  /password|passwd|pwd|token|secret|key|api.?key|auth|credential|credit.?card|card.?num|cvv|ssn|session/i;
+  /password|passwd|pwd|token|secret|key|api.?key|auth|credential|credit.?card|card.?num|cvv|ssn|session|jwt|bearer|refresh|access/i;
 
-// 值裡的敏感模式 → 局部遮罩（email / 信用卡號 / JWT）
+// 值裡的敏感模式 → 局部遮罩（email / 卡號 / JWT / 台灣手機 / 身分證 / API key）
+// PM-163（Fable5 #8）：補 Amex 15 位 / 台灣手機 / 台灣身分證 / OpenAI sk- / Google AIza key
 const SENSITIVE_VALUES: RegExp[] = [
   /\b[\w.-]+@[\w.-]+\.\w{2,}\b/g, // email
   /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g, // 信用卡號（4-4-4-4）
+  /\b\d{15}\b/g, // Amex 15 位卡號
   /eyJ[\w-]+\.eyJ[\w-]+\.[\w-]+/g, // JWT token（header.payload.sig）
+  /\b09\d{2}[\s-]?\d{3}[\s-]?\d{3}\b/g, // 台灣手機（09xx-xxx-xxx）
+  /\b[A-Z][12]\d{8}\b/g, // 台灣身分證（1 英文 + 1/2 + 8 數字）
+  /\bsk-[A-Za-z0-9]{20,}\b/g, // OpenAI API key
+  /\bAIza[A-Za-z0-9_-]{30,}\b/g, // Google API key
 ];
 
 /** PII 遮罩：①敏感 key→整值遮罩 ②>500 字元→截斷 ③值含敏感模式→局部遮罩。 */

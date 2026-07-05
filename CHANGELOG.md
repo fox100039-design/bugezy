@@ -2,7 +2,9 @@
 
 ## 2026-07-05
 
-Day 20（PM-153~162）。Bug 捕捉升級（漏網錯誤 + 效能兜底 + 網路環境 + 儲存狀態）+ MCP 時序麵包屑 + AI 導航摘要 + Stored XSS 縱深防禦 + 存取模型文案釐清 + MCP live/terminal 授權補強。
+Day 20（PM-153~163）。Bug 捕捉升級（漏網錯誤 + 效能兜底 + 網路環境 + 儲存狀態）+ MCP 時序麵包屑 + AI 導航摘要 + Stored XSS 縱深防禦 + 存取模型文案釐清 + MCP live/terminal 授權補強 + ECPay 原子性 + PII 規則擴充。
+
+- PM-163：**Fable5-#5+#8 ECPay 原子性 + PII 遮罩擴充**（`server/index.ts` + `extension/storage.ts`）。**#5 原子性**：三個 ECPay callback（月費/日票/定期定額）原「先 `update users` 再 `recordPayment`」→ payments 寫入失敗時 users 已升級卻無冪等記錄，重送時重複展延。改 `recordPayment` 回 `boolean`，callback **先寫 payments（status paid）成功才升級 users，失敗回 `0|ErrorMessage=Payment record failed`(HTTP 500) 讓綠界重送**（前置：payments 表須存在，研判 schema.sql 已套用）。**#8 PII**：`SENSITIVE_KEYS` 加 `jwt/bearer/refresh/access`；`SENSITIVE_VALUES` 加 Amex 15 位/台灣手機/台灣身分證/OpenAI sk-/Google AIza key。`wrangler deploy`（`1acc4cec`）+ `npm run build` ✅（node 實測 maskPII 新規則全中；三 callback CheckMacValue guard 未動）。
 
 - PM-162：**Fable5-#2 MCP live/terminal session 驗證 + 付費檢查**（`server/index.ts`）— `get_live_errors`/`get_terminal_logs` 原只憑 `user_email` 就能讀他人即時 console/終端機 stderr（可能含密鑰），且 terminal MCP 端漏付費檢查。①兩 tool 加 `session_token`（optional）驗證——有帶就查 `sessions` 表比對 user_id（比照 PM-142 `list_reports`），抽共用 `sessionMatchesUser` helper；②`get_terminal_logs` 補 `isActiveUserId` 付費檢查（與 HTTP 端 PM-144 同函式，非付費回「付費功能」）；③錯誤全通用訊息不洩 Supabase error。線上 `/mcp` 實測 ✅（錯 token→驗證失敗、付費 gate 放行付費用戶、tools/list 皆含 session_token）。`wrangler deploy`（`855487e0`）。
 
