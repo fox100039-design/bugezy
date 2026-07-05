@@ -2,7 +2,9 @@
 
 ## 2026-07-05
 
-Day 20（PM-153~161）。Bug 捕捉升級（漏網錯誤 + 效能兜底 + 網路環境 + 儲存狀態）+ MCP 時序麵包屑 + AI 導航摘要 + Stored XSS 縱深防禦 + 存取模型文案釐清。
+Day 20（PM-153~162）。Bug 捕捉升級（漏網錯誤 + 效能兜底 + 網路環境 + 儲存狀態）+ MCP 時序麵包屑 + AI 導航摘要 + Stored XSS 縱深防禦 + 存取模型文案釐清 + MCP live/terminal 授權補強。
+
+- PM-162：**Fable5-#2 MCP live/terminal session 驗證 + 付費檢查**（`server/index.ts`）— `get_live_errors`/`get_terminal_logs` 原只憑 `user_email` 就能讀他人即時 console/終端機 stderr（可能含密鑰），且 terminal MCP 端漏付費檢查。①兩 tool 加 `session_token`（optional）驗證——有帶就查 `sessions` 表比對 user_id（比照 PM-142 `list_reports`），抽共用 `sessionMatchesUser` helper；②`get_terminal_logs` 補 `isActiveUserId` 付費檢查（與 HTTP 端 PM-144 同函式，非付費回「付費功能」）；③錯誤全通用訊息不洩 Supabase error。線上 `/mcp` 實測 ✅（錯 token→驗證失敗、付費 gate 放行付費用戶、tools/list 皆含 session_token）。`wrangler deploy`（`855487e0`）。
 
 - PM-161：**Fable5-#1 報告存取模型文案修正**（`server/index.ts`）— `GET /api/reports/:id` 是「持有連結即可看」的分享設計，但 FAQ/隱私政策卻宣稱「報告私人、只有你自己能看」，**實作與承諾不符**。保留分享設計、修正對外文案：①FAQ「誰能看到」中英改為「隨機加密 UUID 無法猜測，只有擁有連結的人才能查看，勿貼公開場合」；②隱私政策「資料分享」中英改為「報告列表僅本人可見（需登入）；單份報告持有連結者即可存取，類似 Google Docs『知道連結即可檢視』」；③getReport 內容回傳改 `jsonNoStore`（防邊緣快取跨用戶外洩，Fable5 #3）；④PATCH `/settings` 路由註解由過時的「有 share link 就能改不需登入」改為「需登入+owner」（核對 `updateReportSettings` 確實 401+403，Fable5 #6）。線上實測 ✅（FAQ/隱私中英文案、getReport no-store）。`wrangler deploy`（`ff5c609e`）。
 

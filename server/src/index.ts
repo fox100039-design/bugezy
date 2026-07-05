@@ -4030,17 +4030,37 @@ function createMcpServer(env: Env): McpServer {
     return user ? (user as { user_id: string }).user_id : null;
   };
 
+  // PM-162（Fable5 #2）：有帶 session_token 就嚴格驗證它屬於該 user（比對 sessions 表）。
+  // 回 true = 通過驗證 或 未帶 token（optional，向下相容，比照 PM-142 list_reports）。
+  const sessionMatchesUser = async (sessionToken: string | undefined, userId: string): Promise<boolean> => {
+    if (!sessionToken) return true;
+    const { data: session } = await supabase()
+      .from('sessions')
+      .select('user_id')
+      .eq('session_token', sessionToken)
+      .maybeSingle();
+    return !!session && (session as { user_id: string }).user_id === userId;
+  };
+
   // Tool 9（PM-51）: get_live_errors — 不需錄製，讀當前頁面即時 console/network errors
   server.tool(
     'get_live_errors',
-    '取得某使用者當前頁面的即時 Console/Network 錯誤（需 user_email）。Live console/network errors — requires user_email.',
+    '取得某使用者當前頁面的即時 Console/Network 錯誤（需 user_email；可選 session_token 驗證身分）。Live console/network errors — requires user_email.',
     {
       user_email: z.string().describe('你的 BugEzy email（只讀你自己的即時錯誤）'),
+      session_token: z
+        .string()
+        .optional()
+        .describe('你的 BugEzy session token（從 Chrome 擴充複製）。有帶就嚴格驗證身分。'),
     },
     async (args) => {
       if (!args.user_email) return txt('請提供 user_email 參數。');
       const userId = await lookupUserId(args.user_email);
       if (!userId) return txt('查無此使用者。');
+      // PM-162：有帶 session_token 就驗證屬於此 user，防「知道 email 就能讀他即時錯誤」
+      if (!(await sessionMatchesUser(args.session_token, userId))) {
+        return txt('session_token 驗證失敗，請確認 token 正確。');
+      }
       const data = await readLiveErrors(env, userId);
       if (data.stale) {
         return txt('即時監控未啟用或資料已過期（>30 秒）。請在 BugEzy popup 開啟「🔍 即時監控」後再查。');
@@ -4052,14 +4072,26 @@ function createMcpServer(env: Env): McpServer {
   // Tool 10（PM-53）: get_terminal_logs — 終端機 stderr/throw/crash（需跑 npx bugezy-watch）
   server.tool(
     'get_terminal_logs',
-    '取得某使用者終端機的即時錯誤日誌（stderr/throw/crash，需 user_email）。開發者需執行 npx bugezy-watch -- <command>。Terminal error logs — requires user_email.',
+    '取得某使用者終端機的即時錯誤日誌（stderr/throw/crash，需 user_email；可選 session_token 驗證；付費功能）。開發者需執行 npx bugezy-watch -- <command>。Terminal error logs — requires user_email, paid feature.',
     {
       user_email: z.string().describe('你的 BugEzy email（只讀你自己的終端機日誌）'),
+      session_token: z
+        .string()
+        .optional()
+        .describe('你的 BugEzy session token（從 Chrome 擴充複製）。有帶就嚴格驗證身分。'),
     },
     async (args) => {
       if (!args.user_email) return txt('請提供 user_email 參數。');
       const userId = await lookupUserId(args.user_email);
       if (!userId) return txt('查無此使用者。');
+      // PM-162：有帶 session_token 就驗證屬於此 user，防「知道 email 就能讀他終端機 stderr（可能含密鑰）」
+      if (!(await sessionMatchesUser(args.session_token, userId))) {
+        return txt('session_token 驗證失敗，請確認 token 正確。');
+      }
+      // PM-162：終端機 CLI 為付費功能——比照 HTTP 端（PM-144）加付費檢查，MCP 端原本漏了
+      if (!(await isActiveUserId(userId, env))) {
+        return txt('終端機 CLI 為付費功能，請至 bugezy.dev 升級後使用。');
+      }
       const data = await readTerminalLogs(env, userId);
       if (data.stale) {
         return txt('終端機 Agent 未啟動或資料已過期（>30 秒）。請在終端機執行：npx bugezy-watch -- npm run dev');
