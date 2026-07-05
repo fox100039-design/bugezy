@@ -169,8 +169,8 @@ export interface StateResponse {
   limitReached?: string;
 }
 
-/** API base URL — 開發期 localhost，部署後改正式 URL */
-export const API_BASE = 'https://bugezy-api.bugezy-api.workers.dev';
+/** API base URL — 正式域名（PM-169：改用 bugezy.dev，與 workers.dev 為同一 Worker 雙域名） */
+export const API_BASE = 'https://bugezy.dev';
 
 /** 開發診斷 log 開關（PM-04 除錯用，全程印 [BugEzy] log） */
 export const BUGEZY_DEBUG = true;
