@@ -4,6 +4,8 @@
 
 Day 21（PM-170~）。
 
+- PM-175：**修復 AI 輪盤語言切回中文不重置 bug**（`extension/popup.ts`）。根因：原 `JSON.stringify` 比對預設值因序列化微差異誤判「已自訂」→ 英→中切不回來。改用明確 flag `bugezy:prompts-customized`：未自訂（flag≠true，含舊使用者）→ 切語言重置為新語言預設；已自訂（儲存/編輯切換時設 true）→ 不重置。移除 JSON 比對。`npm run build` ✅（dist 含 flag、舊 JSON 比對已移除）。未 deploy（純 extension，待重上架）。
+
 - PM-174：**官網問題回報頁 /feedback**（`server/index.ts` + `schema.sql`）。使用者遇問題無回報入口 → 新增 `feedbackPage(lang)`（中英表單：Email 選填/類型/描述 5000 字上限+字數計數，inline JS fetch 不跳頁、成功顯示感謝）+ `POST /api/feedback`（**不需登入**，驗證非空/≤5000、存 Supabase `feedback` 表含 `country` IP 偵測、錯誤脫敏）+ 全站 7 處 footer 加「📬 問題回報」+ sitemap 加 /feedback + SEO meta。`feedback` 表加入 schema.sql（RLS，service_role 寫入）。線上實測：GET 中英、POST 空白/過長→400、正常→200 實寫入、sitemap+footer ✅。`wrangler deploy`（`fa0ba8e2`）。
 
 - PM-173：**全站文案「MCP」→「MCP AI 讀取」並列 + 免費額度數字核對**（`server/index.ts` + `extension/i18n.ts`/`popup.html`）。小白不懂「MCP」→ 保留 MCP 並列「AI 讀取」（行家認得出）：①面向使用者的配額/用量文案改「MCP AI 讀取」——首頁定價 `MCP 月 20 次→MCP AI 讀取 月 20 次`、FAQ 免費額度/Token 說明、bumpUsage 403 label、隱私、日票成功頁、extension `usage-desc-mcp`/`intl-free-hint`（中英皆改）；②**技術設定不動**——/install MCP config/端點、「MCP 是什麼？」教育條、meta 品牌詞、工具清單、tool name；③免費額度數字全站核對**本就一致**（10 錄製/5 回溯/20 MCP AI 讀取/截圖無限/7 天）。`wrangler deploy`（`5f8bda9b`）+ extension build。

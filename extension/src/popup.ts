@@ -155,12 +155,12 @@ langSelect.addEventListener('change', () => {
   const newUILang = getUILang(speechLang);
   // PM-172：付費資格改用 IP 國家（與語言無關）→ UI 語言沒變（zh↔yue）就不需重繪
   if (newUILang === currentUILang) return;
-  const oldUILang = currentUILang; // 先存舊語言（closure 內判斷「是否還是舊語言預設」）
-  // PM-139：AI 輪盤——只有使用者「沒自訂過」（仍是舊語言的預設值）時，才換成新語言的預設
-  void chrome.storage.local.get(PROMPTS_KEY).then((store) => {
-    const cur = store[PROMPTS_KEY];
-    const isDefault = !cur || JSON.stringify(cur) === JSON.stringify(DEFAULT_PROMPTS[oldUILang]);
-    if (isDefault) {
+  // PM-139/175：AI 輪盤——只有使用者「沒自訂過」時，切語言才換成新語言預設。
+  // PM-175：改用明確 flag（PROMPTS_CUSTOMIZED_KEY）取代 JSON.stringify 比對——後者因序列化微差異
+  //         會誤判「已自訂」而不重置（英→中切不回來的 bug）。flag 不存在（舊使用者）預設 false → 允許重置。
+  void chrome.storage.local.get(PROMPTS_CUSTOMIZED_KEY).then((store) => {
+    const isCustomized = store[PROMPTS_CUSTOMIZED_KEY] === true;
+    if (!isCustomized) {
       prompts = [...DEFAULT_PROMPTS[newUILang]];
       void chrome.storage.local.set({ [PROMPTS_KEY]: prompts });
       promptCurrent = 0;
@@ -953,6 +953,9 @@ async function checkVersionNotice() {
 
 // ── PM-114/115：AI 慣用語輪盤（4 則可編輯 + 顏色標記 + ◀▶ 切換 + 複製全文，存 chrome.storage）──
 const PROMPTS_KEY = 'bugezy:ai-prompts';
+// PM-175：使用者是否手動編輯過 AI 輪盤。true=有自訂（切語言不重置）；false/缺=未自訂（切語言自動重置為新語言預設）。
+// 取代原本 JSON.stringify 比對預設值（序列化微差異會誤判，導致英→中切不回來）。
+const PROMPTS_CUSTOMIZED_KEY = 'bugezy:prompts-customized';
 // PM-115：資料結構 { text, color }（PromptItem/DEFAULT_PROMPTS 移到 i18n.ts，PM-139 多語）。
 const DEFAULT_COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b'];
 
@@ -1024,7 +1027,8 @@ function switchPrompt(direction: number) {
     const newText = promptTextarea.value.trim();
     if (newText && newText !== prompts[promptCurrent]?.text) {
       prompts[promptCurrent] = { text: newText, color: editingColor };
-      void chrome.storage.local.set({ [PROMPTS_KEY]: prompts });
+      // PM-175：切換時自動存回的編輯也算自訂 → 標記已自訂
+      void chrome.storage.local.set({ [PROMPTS_KEY]: prompts, [PROMPTS_CUSTOMIZED_KEY]: true });
     }
   }
   promptCurrent = (promptCurrent + direction + prompts.length) % prompts.length;
@@ -1057,7 +1061,8 @@ colorOptions.forEach((el) => {
 });
 promptSave.addEventListener('click', async () => {
   prompts[promptCurrent] = { text: promptTextarea.value.trim(), color: editingColor };
-  await chrome.storage.local.set({ [PROMPTS_KEY]: prompts });
+  // PM-175：使用者手動儲存 → 標記已自訂，之後切語言不再重置
+  await chrome.storage.local.set({ [PROMPTS_KEY]: prompts, [PROMPTS_CUSTOMIZED_KEY]: true });
   promptEditor.style.display = 'none';
   renderPrompt();
 });
