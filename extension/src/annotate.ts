@@ -538,10 +538,15 @@ saveBtn.addEventListener('click', async () => {
   const ssStore = await chrome.storage.local.get([ALLOW_SCREENSHOT_KEY, SESSION_KEY]);
   const allowScreenshotImages = ssStore[ALLOW_SCREENSHOT_KEY] === true;
   const session = ssStore[SESSION_KEY] as Session | undefined;
+  // PM-181：向 background 取截圖當下收集的 console/network（截圖流程於 SCREENSHOT_READY 快取）——
+  // 讓截圖報告也有錯誤上下文（AI 精準定位），不再只有畫面+語音。
+  const collected = (await chrome.runtime
+    .sendMessage({ type: 'GET_COLLECTED_ERRORS' })
+    .catch(() => null)) as { consoleLogs?: unknown[]; networkErrors?: unknown[] } | null;
   const payload = {
     rrwebEvents: [],
-    consoleLogs: [],
-    networkErrors: [],
+    consoleLogs: collected?.consoleLogs ?? [],
+    networkErrors: collected?.networkErrors ?? [],
     voiceTranscript: [],
     screenshots: [{ dataUrl: annotatedDataUrl, timestamp: Date.now() }],
     description: descInput.value.trim(),

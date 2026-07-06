@@ -168,6 +168,9 @@ const checkRewindUsage = (): Promise<string | null> => checkUsage('rewind');
 
 // PM-97：本次錄製的 tab id 快取，供 MIC_VOLUME（每 200ms）轉發音量到頁面，免每次讀 storage。
 let recordingTabId: number | null = null;
+// PM-181：截圖時 content 帶來的當前頁 console/network 快照，供 annotate 頁上傳前取用（GET_COLLECTED_ERRORS）
+let lastCollectedConsoleLogs: ConsoleLog[] = [];
+let lastCollectedNetworkErrors: NetworkError[] = [];
 
 async function startRecording(): Promise<StateResponse> {
   // PM-63：先檢查並遞增用量；達上限則不進入錄製，回傳升級提示
@@ -535,9 +538,26 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summ
           sendResponse(await captureSegment());
           break;
         case 'SCREENSHOT_READY': {
-          const m = msg as { dataUrl: string; pageUrl: string; pageTitle: string };
+          const m = msg as {
+            dataUrl: string;
+            pageUrl: string;
+            pageTitle: string;
+            consoleLogs?: ConsoleLog[];
+            networkErrors?: NetworkError[];
+          };
+          // PM-181：快取截圖當下的 console/network，annotate 頁上傳前經 GET_COLLECTED_ERRORS 取回
+          lastCollectedConsoleLogs = m.consoleLogs ?? [];
+          lastCollectedNetworkErrors = m.networkErrors ?? [];
           await openAnnotate(m.dataUrl, m.pageUrl, m.pageTitle);
           sendResponse({ ok: true });
+          break;
+        }
+        case 'GET_COLLECTED_ERRORS': {
+          // PM-181：annotate 頁上傳前取當前頁面收集的 console/network（截圖流程快取）
+          sendResponse({
+            consoleLogs: lastCollectedConsoleLogs,
+            networkErrors: lastCollectedNetworkErrors,
+          });
           break;
         }
         case 'SCREENSHOT_UPLOADED': {

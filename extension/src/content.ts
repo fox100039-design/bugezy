@@ -15,9 +15,11 @@ import {
   TOOLBAR_EFFECT_KEY,
   USER_PLAN_KEY,
   blog,
+  type ConsoleLog,
   type ControlMessage,
   type InjectCommand,
   type InjectMessage,
+  type NetworkError,
   type RecordingPayload,
   type RecordingSummary,
   type StateResponse,
@@ -238,23 +240,8 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
     sendToInject('REWIND'); // PM-50：請 inject 打包背景緩存
     sendResponse({ ok: true });
   } else if (msg.type === 'GET_LIVE_ERRORS') {
-    // PM-51：向 inject 要背景 buffer 的即時 errors（Promise + 一次性 listener + 2 秒超時）
-    let done = false;
-    const finish = (result: { consoleLogs: unknown[]; networkErrors: unknown[] }) => {
-      if (done) return;
-      done = true;
-      window.removeEventListener('message', handler);
-      sendResponse(result);
-    };
-    const handler = (e: MessageEvent) => {
-      const d = e.data as InjectMessage & { consoleLogs?: unknown[]; networkErrors?: unknown[] };
-      if (e.source === window && d?.source === BUGEZY_SOURCE && d?.kind === 'LIVE_ERRORS_RESULT') {
-        finish({ consoleLogs: d.consoleLogs ?? [], networkErrors: d.networkErrors ?? [] });
-      }
-    };
-    window.addEventListener('message', handler);
-    sendToInject('GET_LIVE_ERRORS');
-    setTimeout(() => finish({ consoleLogs: [], networkErrors: [] }), 2000);
+    // PM-51：向 inject 要背景 buffer 的即時 errors（PM-181：抽成共用 queryInjectLiveErrors）
+    void queryInjectLiveErrors().then(sendResponse);
   } else if (msg.type === 'SET_MONITOR_BADGE') {
     // PM-52：轉發給 inject 顯示/隱藏頁面浮動 badge
     sendToInject(msg.show ? 'SHOW_MONITOR' : 'HIDE_MONITOR');
@@ -342,12 +329,39 @@ function loadImage(dataUrl: string): Promise<HTMLImageElement> {
   });
 }
 
-function sendReady(dataUrl: string) {
+/** PM-51/181：向 inject（MAIN world）要背景 buffer 的即時 console/network errors。
+ *  一次性 listener + 2 秒超時（inject 通常立即回 LIVE_ERRORS_RESULT）。 */
+function queryInjectLiveErrors(): Promise<{ consoleLogs: ConsoleLog[]; networkErrors: NetworkError[] }> {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (result: { consoleLogs: ConsoleLog[]; networkErrors: NetworkError[] }) => {
+      if (done) return;
+      done = true;
+      window.removeEventListener('message', handler);
+      resolve(result);
+    };
+    const handler = (e: MessageEvent) => {
+      const d = e.data as InjectMessage & { consoleLogs?: ConsoleLog[]; networkErrors?: NetworkError[] };
+      if (e.source === window && d?.source === BUGEZY_SOURCE && d?.kind === 'LIVE_ERRORS_RESULT') {
+        finish({ consoleLogs: d.consoleLogs ?? [], networkErrors: d.networkErrors ?? [] });
+      }
+    };
+    window.addEventListener('message', handler);
+    sendToInject('GET_LIVE_ERRORS');
+    setTimeout(() => finish({ consoleLogs: [], networkErrors: [] }), 2000);
+  });
+}
+
+async function sendReady(dataUrl: string) {
+  // PM-181：截圖時一併帶上 inject 已收集的 console/network（讓截圖報告也有錯誤上下文，不再只有畫面+語音）
+  const { consoleLogs, networkErrors } = await queryInjectLiveErrors();
   chrome.runtime.sendMessage({
     type: 'SCREENSHOT_READY',
     dataUrl,
     pageUrl: location.href,
     pageTitle: document.title,
+    consoleLogs,
+    networkErrors,
   } satisfies ControlMessage);
 }
 
@@ -456,7 +470,7 @@ async function startFullCapture() {
   ssCleanup(); // 擷取前移除工具列，避免入鏡
   await settle();
   try {
-    sendReady(await captureSegment());
+    await sendReady(await captureSegment());
   } catch (err) {
     blog('整頁截圖失敗', err);
   }
@@ -536,7 +550,7 @@ async function stitchArea(start: { x: number; y: number }, end: { x: number; y: 
     const octx = out.getContext('2d');
     if (!octx) throw new Error('canvas 2d 不可用');
     octx.drawImage(big, Math.round(left * dpr), 0, out.width, out.height, 0, 0, out.width, out.height);
-    sendReady(out.toDataURL('image/png'));
+    await sendReady(out.toDataURL('image/png'));
   } catch (err) {
     blog('區域截圖拼接失敗', err);
     window.scrollTo(orig.x, orig.y);
@@ -606,7 +620,7 @@ function startFreeCapture() {
       octx.closePath();
       octx.clip();
       octx.drawImage(img, 0, 0, out.width, out.height);
-      sendReady(out.toDataURL('image/png'));
+      await sendReady(out.toDataURL('image/png'));
     } catch (err) {
       blog('自由形狀截圖失敗', err);
     }

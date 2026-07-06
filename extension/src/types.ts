@@ -123,7 +123,17 @@ export type ControlMessage =
   // PM-19：截圖模式 overlay（background ↔ content）
   | { type: 'START_SCREENSHOT' }
   | { type: 'CAPTURE_SEGMENT' }
-  | { type: 'SCREENSHOT_READY'; dataUrl: string; pageUrl: string; pageTitle: string }
+  | {
+      type: 'SCREENSHOT_READY';
+      dataUrl: string;
+      pageUrl: string;
+      pageTitle: string;
+      // PM-181：截圖時附帶 inject 已收集的 console/network，讓截圖報告也有錯誤上下文
+      consoleLogs?: ConsoleLog[];
+      networkErrors?: NetworkError[];
+    }
+  // PM-181：annotate 頁上傳前向 background 取當前頁面收集的 console/network
+  | { type: 'GET_COLLECTED_ERRORS' }
   // PM-24：編輯頁確認上傳錄製報告（PM-28：帶上時間軸標記）
   | { type: 'UPLOAD_REPORT'; description: string; markers?: TimeMarker[] }
   // PM-34：即時 flush（content → background 暫存，頁面跳轉不丟資料）
