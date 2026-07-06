@@ -141,27 +141,29 @@ const FREE_LIMITS = {
 } as const;
 type UsageType = keyof typeof FREE_LIMITS;
 
-/** PM-128：驗證 session token（查 sessions 表，不可猜測）。過期自動刪除並回 null。 */
-async function verifySession(request: Request, env: Env): Promise<string | null> {
-  const auth = request.headers.get('Authorization');
-  if (!auth) return null;
-  const token = auth.replace('Bearer ', '').trim();
+/** PM-128：驗證原始 session token 字串（查 sessions 表，不可猜測）。過期自動刪除並回 null。
+ *  PM-184：抽出供 /reports 頁面（token 在 query）與 verifySession（token 在 header）共用。 */
+async function verifySessionByToken(token: string, env: Env): Promise<string | null> {
   if (!token || token.length < 10) return null;
-
   const { data } = await supa(env)
     .from('sessions')
     .select('user_id, expires_at')
     .eq('session_token', token)
     .maybeSingle();
   if (!data) return null;
-
   const row = data as { user_id: string; expires_at: string };
   if (new Date(row.expires_at) <= new Date()) {
-    // 過期：刪除 session
-    await supa(env).from('sessions').delete().eq('session_token', token);
+    await supa(env).from('sessions').delete().eq('session_token', token); // 過期即刪
     return null;
   }
   return row.user_id;
+}
+
+/** PM-128：從 Authorization: Bearer 驗證 session token。 */
+async function verifySession(request: Request, env: Env): Promise<string | null> {
+  const auth = request.headers.get('Authorization');
+  if (!auth) return null;
+  return verifySessionByToken(auth.replace('Bearer ', '').trim(), env);
 }
 
 /** PM-133：統一取 user_id — 只認 DB session token（PM-128）。base64 fallback 已移除（P0-3）。 */
@@ -380,7 +382,8 @@ function robotsTxt(): Response {
     `Allow: /\n` +
     `Disallow: /api/\n` +
     `Disallow: /mcp\n` +
-    `Disallow: /report/\n\n` +
+    `Disallow: /report/\n` +
+    `Disallow: /reports\n\n` + // PM-184：我的報告列表（含 token，私人頁）
     `Sitemap: https://bugezy.dev/sitemap.xml\n`;
   return new Response(body, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
 }
@@ -806,7 +809,7 @@ Full guide: https://bugezy.dev/install`,
       <p>📱 ${t('電話', 'Phone')}：<a href="tel:+886983101085">0983-101-085</a></p>
       <p>${t('服務時間：週一至週五 09:00-18:00', 'Hours: Mon–Fri 09:00–18:00 (UTC+8)')}</p>
     </div>
-    <div style="margin-top:8px;"><a href="/install">${t('安裝指南', 'Install')}</a> | <a href="/features">${t('功能說明', 'Features')}</a> | <a href="/guide">${t('使用指南', 'Guide')}</a> | <a href="/faq">${t('常見問題', 'FAQ')}</a> | <a href="/privacy">${t('隱私政策', 'Privacy')}</a> | <a href="/changelog">${t('更新日誌', 'Changelog')}</a> | <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a></div>
+    <div style="margin-top:8px;"><a href="/install">${t('安裝指南', 'Install')}</a> | <a href="/features">${t('功能說明', 'Features')}</a> | <a href="/guide">${t('使用指南', 'Guide')}</a> | <a href="/faq">${t('常見問題', 'FAQ')}</a> | <a href="/privacy">${t('隱私政策', 'Privacy')}</a> | <a href="/changelog">${t('更新日誌', 'Changelog')}</a> | <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a> | <a href="/reports">${t('📋 我的報告', '📋 My Reports')}</a></div>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy · ${t('亞洲平價 MCP 語音除錯工具', 'Affordable MCP voice debugging for Asia')}</div>
   </footer>
   <script>
@@ -985,6 +988,7 @@ ${t(
     <a href="/faq">FAQ</a>
     <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
     <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a>
+    <a href="/reports">${t('📋 我的報告', '📋 My Reports')}</a>
     <a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
   </footer>
@@ -1184,6 +1188,7 @@ function guidePage(lang: PageLang): string {
       <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
       <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
     <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a>
+    <a href="/reports">${t('📋 我的報告', '📋 My Reports')}</a>
     </div>
     <div style="margin-top:8px;">${t('聯絡', 'Contact')}：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
@@ -1303,6 +1308,7 @@ function faqPage(lang: PageLang): string {
       <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
       <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
     <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a>
+    <a href="/reports">${t('📋 我的報告', '📋 My Reports')}</a>
     </div>
     <div style="margin-top:8px;">${t('聯絡', 'Contact')}：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
@@ -1567,6 +1573,7 @@ $ BUGEZY_TOKEN=&lt;${t('你的 token', 'your token')}&gt; npx bugezy-watch -- go
       <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
       <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
     <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a>
+    <a href="/reports">${t('📋 我的報告', '📋 My Reports')}</a>
     </div>
     <div style="margin-top:8px;">${t('聯絡', 'Contact')}：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
@@ -1734,6 +1741,7 @@ function featuresPage(lang: PageLang): string {
       <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
       <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
     <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a>
+    <a href="/reports">${t('📋 我的報告', '📋 My Reports')}</a>
     </div>
     <div style="margin-top:8px;">${t('聯絡', 'Contact')}：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
@@ -1818,6 +1826,7 @@ function changelogPage(lang: PageLang): string {
       <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
       <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
     <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a>
+    <a href="/reports">${t('📋 我的報告', '📋 My Reports')}</a>
     </div>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
   </footer>
@@ -1957,6 +1966,138 @@ async function handleFeedback(request: Request, env: Env): Promise<Response> {
     return json({ error: GENERIC_500 }, 500);
   }
   return json({ ok: true });
+}
+
+// ── PM-184：「我的報告」列表頁（GET /reports?token=…）——需 session token 驗證，server 端渲染，私人頁（noindex + no-store）──
+function reportsShell(lang: PageLang, bodyHtml: string, langSwitchHref: string): Response {
+  const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
+  const page = `<!DOCTYPE html>
+<html lang="${lang === 'zh' ? 'zh-Hant' : 'en'}">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>${t('我的報告 · BugEzy', 'My Reports · BugEzy')}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; padding:0; background:#0f0f1a; color:#e8e8f0; font-family:system-ui,-apple-system,"Segoe UI","Microsoft JhengHei",sans-serif; line-height:1.6; font-size:15px; }
+  .wrap { max-width:920px; margin:0 auto; padding:40px 24px 80px; }
+  .lang-switch { position:fixed; top:14px; right:16px; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:5px 12px; font-size:13px; color:#c4b5fd; text-decoration:none; }
+  header { border-bottom:1px solid #2a2a3e; padding-bottom:16px; margin-bottom:20px; }
+  .brand { font-size:22px; font-weight:700; color:#a78bfa; text-decoration:none; }
+  h1 { font-size:24px; margin:14px 0 4px; }
+  .count { color:#8b8fa3; font-size:14px; margin:0; }
+  .empty, .notice { text-align:center; color:#8b8fa3; padding:40px 20px; }
+  .notice a { color:#a78bfa; }
+  .reports-table { width:100%; border-collapse:collapse; margin-top:16px; }
+  .reports-table th { background:#1a1a2e; color:#c4b5fd; padding:10px 12px; text-align:left; font-size:13px; }
+  .reports-table td { padding:10px 12px; border-bottom:1px solid #21262d; font-size:13px; color:#e6edf3; vertical-align:top; }
+  .reports-table tr:hover td { background:rgba(124,58,237,0.05); }
+  .reports-table a { color:#7c3aed; text-decoration:none; }
+  .reports-table a:hover { text-decoration:underline; }
+  .badges { white-space:nowrap; font-size:13px; }
+  @media (max-width:640px) { .col-desc, .col-time { display:none; } }
+</style>
+</head>
+<body>
+<a class="lang-switch" href="${escapeAttr(langSwitchHref)}">${t('EN', '中文')}</a>
+<div class="wrap">
+  <header><a class="brand" href="/">🐛 BugEzy</a></header>
+  ${bodyHtml}
+</div>
+</body>
+</html>`;
+  const res = html(page); // html() 已含 CSP
+  res.headers.set('Cache-Control', 'no-store'); // 私人頁不快取
+  return res;
+}
+
+async function reportsPage(request: Request, env: Env): Promise<Response> {
+  const lang = getLang(request);
+  const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
+  const url = new URL(request.url);
+  const token = url.searchParams.get('token') || '';
+  // 語言切換連結保留 token
+  const switchHref = `?token=${encodeURIComponent(token)}&lang=${lang === 'zh' ? 'en' : 'zh'}`;
+
+  if (!token) {
+    const body = `<h1>${t('📋 我的報告', '📋 My Reports')}</h1>
+      <div class="notice">${t('請從 BugEzy Chrome 擴充的「📋 我的報告」按鈕開啟此頁面。', 'Please open this page from the "📋 My Reports" button in the BugEzy Chrome extension.')}</div>`;
+    return reportsShell(lang, body, switchHref);
+  }
+
+  const userId = await verifySessionByToken(token, env);
+  if (!userId) {
+    const body = `<h1>${t('📋 我的報告', '📋 My Reports')}</h1>
+      <div class="notice">${t('登入已過期，請重新從擴充開啟。', 'Session expired — please reopen from the extension.')}</div>`;
+    return reportsShell(lang, body, switchHref);
+  }
+
+  const { data: reports } = await supa(env)
+    .from('reports')
+    .select(
+      'report_id, url, title, description, created_at, console_count, network_count, voice_count, screenshot_count, rrweb_count',
+    )
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  const list = (reports as Array<{
+    report_id: string;
+    url?: string;
+    title?: string;
+    description?: string;
+    created_at: string;
+    console_count?: number;
+    network_count?: number;
+    voice_count?: number;
+    screenshot_count?: number;
+    rrweb_count?: number;
+  }>) || [];
+
+  let rows = '';
+  if (list.length === 0) {
+    rows = `<tr><td colspan="5" class="empty">${t('還沒有報告，去錄製你的第一個 Bug 吧！', 'No reports yet. Record your first bug!')}</td></tr>`;
+  } else {
+    for (const r of list) {
+      const d = new Date(r.created_at);
+      const p = (n: number) => String(n).padStart(2, '0');
+      const date = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+      const title = r.title || r.url || t('未命名', 'Untitled');
+      const desc = r.description ? r.description.slice(0, 60) : '';
+      const badges = [
+        (r.console_count ?? 0) > 0 ? `❌${r.console_count}` : '',
+        (r.network_count ?? 0) > 0 ? `🌐${r.network_count}` : '',
+        (r.voice_count ?? 0) > 0 ? '🎙️' : '',
+        (r.screenshot_count ?? 0) > 0 ? '📸' : '',
+        (r.rrweb_count ?? 0) > 0 ? '🎬' : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
+      rows += `<tr>
+        <td class="col-time">${date}</td>
+        <td><a href="/report/${escapeAttr(r.report_id)}" target="_blank" rel="noopener">${escapeAttr(title)}</a></td>
+        <td class="col-desc">${escapeAttr(desc)}</td>
+        <td class="badges">${badges}</td>
+        <td><a href="/report/${escapeAttr(r.report_id)}" target="_blank" rel="noopener">${t('查看', 'View')}</a></td>
+      </tr>`;
+    }
+  }
+
+  const body = `<h1>${t('📋 我的報告', '📋 My Reports')}</h1>
+    <p class="count">${t(`共 ${list.length} 份報告`, `${list.length} report${list.length === 1 ? '' : 's'}`)}</p>
+    <table class="reports-table">
+      <thead><tr>
+        <th class="col-time">${t('時間', 'Time')}</th>
+        <th>${t('標題 / 頁面', 'Title / Page')}</th>
+        <th class="col-desc">${t('描述', 'Description')}</th>
+        <th>${t('內容', 'Content')}</th>
+        <th>${t('操作', 'Action')}</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+
+  return reportsShell(lang, body, switchHref);
 }
 
 // ── PM-59：Server 直接 serve 報告頁 HTML（vanilla JS 讀 /api/reports/:id 渲染）──
@@ -3080,6 +3221,10 @@ export default {
     }
     if (request.method === 'POST' && path === '/api/feedback') {
       return await handleFeedback(request, env);
+    }
+    // PM-184：我的報告列表（需 session token，私人頁 noindex + no-store）
+    if (request.method === 'GET' && path === '/reports') {
+      return await reportsPage(request, env);
     }
     // PM-136：SEO — sitemap + robots（讓 Google/Bing 收錄 bugezy.dev）
     if (request.method === 'GET' && path === '/sitemap.xml') return sitemapXml();

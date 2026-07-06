@@ -4,6 +4,8 @@
 
 Day 21（PM-170~）。
 
+- PM-184：**「我的報告」列表頁 + popup 入口**（`server/index.ts` + `extension/popup.html`/`popup.ts`/`i18n.ts`）。使用者沒地方回看歷史報告 → 新增 `GET /reports?token=`（抽 `verifySessionByToken` 驗證→查 reports→server 渲染表格：時間/標題/描述/badges ❌🌐🎙️📸🎬/查看連結，中英雙語 + 語言切換）；無/無效 token 顯示提示頁；popup 加「📋 我的報告」按鈕（帶 session token 開網頁）；robots.txt `Disallow: /reports` + `noindex` + `no-store`；全站 footer 加連結。線上實測無 token 提示(中英)/無效 token 過期/robots/no-store/footer 皆 ✅。`wrangler deploy`（`262e684e`）+ extension build。
+
 - PM-182/183：**Sessions cron 清理 + MCP 端點防護**（`server/index.ts`）。**PM-182**：`scheduled` cron（每日 03:00 UTC）追加清理過期 sessions（`delete().lt('expires_at', now)`，log Cleaned N；verifySession 即時清理保留為雙保險）。**PM-183**：①稽核 13 個 MCP tool 成功回傳皆走 `logMcpUsage`（mcp_usage 表計數），**get_timeline 確認有、無遺漏**；②`/mcp` 入口加 body 1MB 限制（Content-Length>1MB→413，補 Cloudflare rate-limit 只覆蓋 /api/ 的缺口）。線上實測 /mcp >1MB→413、正常→200。（釐清：users.mcp_count 配額對 report_id-based tool 無使用者身分故無法遞增，實際用量計數靠 mcp_usage 表，已完整。）`wrangler deploy`（`cf37486b`）。
 
 - PM-181：**截圖報告附帶 Console + Network 錯誤**（`extension/content.ts`/`background.ts`/`annotate.ts`/`types.ts`）。截圖報告原本只有畫面+語音+快照，不帶 console/network（annotate.ts 寫死空陣列）→ 補上讓 AI 精準定位。實作對齊真實架構（content 擷取→background 開 annotate→annotate 上傳）：content 截圖時經 `queryInjectLiveErrors`（GET_LIVE_ERRORS→LIVE_ERRORS_RESULT）取 inject 的 bgConsoleLogs/bgNetworkErrors，附到 `SCREENSHOT_READY`；background 快取 + 新增 `GET_COLLECTED_ERRORS` handler；annotate 上傳前取用填入 payload。`console_logs`/`network_errors` 存同欄位 → MCP get_console_logs/get_timeline + 報告頁自動受益（server/MCP 不改）。`npm run build` ✅（dist 4 檔 wiring 確認）。未 deploy（純 extension，待重上架）。

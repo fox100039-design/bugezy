@@ -305,6 +305,9 @@
       /* PM-171：非台灣付費 coming soon 藍色提示框 */
       .intl-notice { background: rgba(59,130,246,0.1); border: 1px solid #3b82f6; border-radius: 10px; padding: 12px; text-align: center; margin-top: 10px; }
       .intl-notice.hidden { display: none; }
+      /* PM-184：我的報告入口按鈕 */
+      .my-reports-btn { display: block; width: 100%; background: transparent; color: #c4b5fd; border: 1px solid #7c3aed; border-radius: 8px; padding: 8px; font-size: 13px; cursor: pointer; margin: 8px 0; font-weight: 600; }
+      .my-reports-btn:hover { background: rgba(124,58,237,0.1); }
       .intl-title { color: #3b82f6; font-size: 14px; font-weight: 700; margin: 0 0 4px; }
       .intl-desc { color: #9aa3b2; font-size: 12px; margin: 0 0 8px; }
       .intl-free { color: #22c55e; font-size: 11px; margin: 0; }
@@ -373,6 +376,8 @@
         </button>
       </div>
       <div id="lastScreenshot" class="meta" style="display:none;"></div>
+      <!-- PM-184：我的報告列表入口（帶 session token 開網頁）-->
+      <button id="myReportsBtn" class="my-reports-btn" data-i18n="my-reports">📋 我的報告</button>
       <div id="upgradeHint" class="upgrade-hint hidden">
         <span data-i18n="upgrade-unlock">升級解鎖無限次</span>
         <div class="upgrade-section">

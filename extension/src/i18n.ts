@@ -41,6 +41,7 @@ const dict: Record<string, Record<UILang, string>> = {
 
   // ── 日票 / 月費 ──
   'upgrade-unlock': { zh: '升級解鎖無限次', en: 'Upgrade for unlimited' },
+  'my-reports': { zh: '📋 我的報告', en: '📋 My Reports' }, // PM-184
   'day-pass-btn': { zh: '⚡ 日票 NT$20（24hr）', en: '⚡ Day Pass NT$20 (24hr)' },
   'monthly-btn': { zh: '✨ 月費 NT$80/月', en: '✨ Monthly NT$80/mo' },
   // PM-170：用完升級引導 overlay

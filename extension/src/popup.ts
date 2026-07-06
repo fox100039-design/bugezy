@@ -827,6 +827,14 @@ dayPassBtn.addEventListener('click', () => {
   void chrome.tabs.create({ url: 'day-pass-checkout.html' });
 });
 
+// PM-184：📋 我的報告 → 帶 session token 開 /reports 網頁（server 驗證 token 後渲染列表）
+const myReportsBtn = $<HTMLButtonElement>('myReportsBtn');
+myReportsBtn.addEventListener('click', async () => {
+  const store = await chrome.storage.local.get(SESSION_TOKEN_KEY);
+  const token = (store[SESSION_TOKEN_KEY] as string) || '';
+  void chrome.tabs.create({ url: `${API_BASE}/reports?token=${encodeURIComponent(token)}` });
+});
+
 // PM-170：升級引導 overlay 的按鈕（日票 / 月費 / 關閉）
 overlayDayPassBtn.addEventListener('click', () => {
   upgradeOverlay.classList.add('hidden');
