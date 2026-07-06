@@ -1,6 +1,6 @@
 # BugEzy 專案全貌與接手指南
 
-> 最後更新：2026-07-05（Day 20：Bug 捕捉 10/10 + 安全 9.5/10（Fable5 R3 全清）+ 報告頁 i18n + CLI PII + 域名遷移 PM-153~169）
+> 最後更新：2026-07-06（Day 21：免費版留存 + 全球化 IP 國家 + Python 9→10 + 我的報告 + 截圖 PII 自動遮罩 + 維運 PM-170~186）
 > 維護者：FOX（Claude Chat PM 角色）
 > 用途：新 Chat 對話開始時讀此檔，快速掌握全貌並接手開發
 
@@ -575,6 +575,31 @@ FOX = 創辦人 + 決策者 + 手動驗收
 - 判斷/修正（動手前先驗）：CSP 只對報告頁套嚴格版（行銷頁 inline script 不破壞）；付款 callback server-to-server 無法 rotation；createReport 用「雙額度用盡」避免誤擋回溯；額度 count-based 檢查對「完全跳過 bumpUsage」無效（列後續）；`recording_count`（非 record_count）；報告頁 i18n 修 `t` 變數遮蔽。
 
 - ⚠ 技術債 / FOX 待辦（Day 20 後半）：① **extension 重上架**（Day 19+20 整套，含 PII 擴充/token rotation/域名）；② **CLI `npm publish`**（PII 遮罩；在此之前 server 端雙重遮罩已擋舊版明文）；③ payments 表須存在（PM-163 callback 依賴，研判 schema.sql 已套用）；④ 建議後續：createReport 改為權威計數點（徹底堵 bumpUsage 繞過）、付款後 token rotation、CSP 全站移 unsafe-inline（行銷頁抽 inline script）；⑤ 沿用：sessions/payments SQL、日韓越解鎖、user_id 遷移、Rate Limiting、rls-lockdown。
+
+---
+
+## §6p Day 21（2026-07-06，PM-170~186）— 免費版留存 + 全球化 + Python 9→10 + 我的報告 + 截圖 PII 防護 + 維運
+
+**目標**：留存（免費用量每月重置 + 用完引導）、打開海外市場（付費資格改 IP 國家）、把 Python/後端體驗做到 9→10 分、給使用者回看報告的地方、截圖 PII 縱深防護、補維運缺口。**server 皆已部署；extension/CLI 有改需重上架/發佈。**
+
+- **PM-170 免費版每月用量重置 + 回溯檢查 + 用完引導**：`bumpUsage` 加「距上次重置 ≥30 天歸零 recording/rewind/mcp_count」（`usage_reset_at` PM-63 已存在）；`checkUsage(type)` 泛型 + 新 `checkRewindUsage`（`REWIND_30S` 前檢查）；popup 三卡片「剩 N 次」（≤2 紅色）/付費「✨ 無限」；用完彈 `#upgradeOverlay`（日票/月費/每月自動重置提示）；`getUserPlan` 回 `usage_reset_at`。
+- **PM-171→172 付費資格改 IP 國家**：PM-171 先用語言判斷（不嚴謹）→ PM-172 改 **`request.cf.country`**（`cfCountry`/`isPayCountry(['TW'])`）；`getUserPlan` 回 `country`、popup `isTaiwanUser()=country==='TW'`（語言不再影響付費）、`homePage(lang, request)` 定價依國家、`/checkout`+`day-pass/create` 加 `country!=='TW'` 403；非台灣顯示「International Payments Coming Soon」藍框 + overlay 隱付費鈕。未來 `PAY_COUNTRIES` 白名單擴充。
+- **PM-173 文案「MCP」→「MCP AI 讀取」並列**：配額/用量/錯誤/隱私/日票頁面文案改（保留 MCP 行家認得、加 AI 讀取白話）；技術設定（/install MCP config、教育條、工具清單、tool name）不動；免費額度數字全站核對本就一致（10/5/20/無限/7天）。
+- **PM-174 問題回報頁**：`GET /feedback`（中英表單，inline JS fetch 不跳頁）+ `POST /api/feedback`（不需登入、驗證≤5000、存 Supabase `feedback` 表 + country + 脫敏）+ 全站 footer + sitemap。
+- **PM-175 修輪盤語言切回中文 bug**：`JSON.stringify` 比對誤判 → 改明確 flag `bugezy:prompts-customized`（未自訂切語言重置、已自訂不重置）。
+- **PM-176~179 Python 9→10 分**（CLI + server）：PM-176 `cli/parse-traceback.ts`（Python traceback/Node Error → `{type,message,frames[file,line,func,code]}`，先 maskStderr 再解析）；PM-177 `cli/detect-env.ts`（語言/版本/OS/套件快照，跨平台失敗靜默）；上傳 payload 加 `parsed_errors`+`runtime`；PM-178 `formatTerminalLogs` 結構化回傳（🖥 環境 + 🔍 結構化錯誤 + 原始 stderr）；PM-179 `generateTerminalSummary` 規則引擎（Python 16 種 + Node 5 種錯誤白話+修復建議+📍位置）貼 `get_terminal_logs` 最前面。
+- **PM-180 官方測試頁大更新**：`TEST_PAGE_1` → `testPage1(lang)`，新增 Promise 靜默失敗/資源 404/Web Vitals/網路環境/儲存快照+PII/Python CLI 6 區塊（+既有 6），中英雙語。
+- **PM-181 截圖報告附帶 console/network**：content `queryInjectLiveErrors`（截圖時取 inject bgConsoleLogs/Errors）→ `SCREENSHOT_READY` → background 快取 → annotate 上傳前 `GET_COLLECTED_ERRORS` 填 payload（原寫死空陣列）。MCP/報告頁自動受益。
+- **PM-182/183 維運**：cron 清理過期 sessions（`delete().lt('expires_at', now)`）；`/mcp` body 1MB→413（補 CF rate-limit 只覆蓋 /api/）；確認 13 MCP tool 皆走 `logMcpUsage` 計數（含 get_timeline）。
+- **PM-184 我的報告列表頁**：`GET /reports?token=`（`verifySessionByToken` 驗證 → 查 reports → server 渲染表格：時間/標題/描述/badges ❌🌐🎙️📸🎬/查看，中英+語言切換，noindex+no-store，robots Disallow）+ popup「📋 我的報告」按鈕（帶 token 開網頁）。
+- **PM-185/186 截圖 PII 防護**：PM-185 content `detectSensitiveFields`（掃 7 類敏感 input）→ 偵測到才彈警告 overlay（繼續/取消）+ annotate 手動 🔒 馬賽克筆刷；PM-186 `getSensitiveRects`（收敏感欄位 viewport 座標 + 原頁尺寸）→ annotate 載入後 `applyMosaic` **自動遮罩**（原頁尺寸換算比例，只整頁截圖才遮避免區域裁切錯位假安全）+ 頂部「已自動遮罩 N 個」+「撤銷遮罩」還原原圖。
+
+### 增量（Day 21）
+- Server（全部已部署，最新 Version `262e684e` 之後續有部署）：bumpUsage 重置 + getUserPlan usage/country、cfCountry/isPayCountry + 付款 country 403、MCP AI 讀取文案、/feedback + POST、Python 結構化 `formatTerminalLogs`/`generateTerminalSummary`、testPage1、sessions cron 清理、/mcp 1MB、/reports 頁 + verifySessionByToken、schema.sql feedback 表。
+- Extension（build 過、**未重上架**）：checkRewindUsage + 用完 overlay + 三卡片剩餘、isTaiwanUser(country) + intlNotice、i18n（usage/intl/my-reports/sensitive/mosaic/auto-mask）、popup 我的報告按鈕、截圖附 console/network（content/background/annotate）、敏感偵測+手動+自動馬賽克（content/annotate）、輪盤 flag 修。
+- CLI（**改檔未發佈**）：`parse-traceback.ts` + `detect-env.ts` 新 + `index.ts` 上傳 parsed_errors/runtime。
+- 判斷/修正（動手前先驗）：付費改 IP 國家（PM-171 語言判斷改 PM-172 country，語言只控 UI/語音）；MCP body 1MB（rate-limit 缺口，users.mcp_count 對 report_id tool 無使用者身分故無法遞增，實際計數靠 mcp_usage 表已完整）；截圖敏感偵測放 content.ts（handle START_SCREENSHOT + DOM 存取，非 inject）；自動遮罩用原頁 viewport 尺寸換算 + scaleX≈scaleY gate 防區域截圖錯位；輪盤 JSON 比對改 flag。
+- ⚠ 技術債 / FOX 待辦（Day 21）：① **extension 重上架**（Day 19~21 整套：用量 UI/國家/我的報告/截圖 PII/輪盤修 等）；② **CLI `npm publish`**（PM-167 PII + PM-176/177 結構化解析/環境快照）；③ feedback 表須存在（線上實測已存在）；④ 建議後續：付款後 token rotation、CSP 全站移 unsafe-inline、region/free 截圖自動遮罩座標對映、MCP 每月配額對 report_id tool 的計數方案；⑤ 沿用：日韓越解鎖、user_id 遷移、Rate Limiting、rls-lockdown。
 
 ---
 

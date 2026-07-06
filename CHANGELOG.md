@@ -2,7 +2,8 @@
 
 ## 2026-07-06
 
-Day 21（PM-170~）。
+Day 21（PM-170~186）。**免費版留存 + 全球化 + Python 9→10 + 我的報告 + 截圖 PII 防護 + 維運**。
+用量：每月自動重置 + 回溯檢查 + 用完升級引導 overlay（PM-170）。全球化：付費資格改 IP 國家偵測（非台灣 coming soon，PM-171~172）、「MCP AI 讀取」白話並列（PM-173）。體驗：問題回報頁 /feedback（PM-174）、輪盤語言切換 bug 修（PM-175）、我的報告列表頁 /reports + popup 入口（PM-184）、官方測試頁大更新涵蓋所有捕捉能力（PM-180）。Python 9→10 分：CLI stderr 結構化解析（traceback→JSON，PM-176）+ 環境快照（版本/套件/OS，PM-177）+ MCP 結構化回傳（PM-178）+ Terminal AI 導航摘要（21 種錯誤白話，PM-179）。截圖強化：附帶 console/network 錯誤（PM-181）、敏感欄位偵測+馬賽克筆刷（PM-185）+ 自動遮罩可撤銷（PM-186）。維運：sessions cron 清理 + MCP 端點 1MB 限制（PM-182/183）。
 
 - PM-186：**截圖敏感欄位自動遮罩（預設安全 + 可撤銷）**（`extension/content.ts`/`annotate.ts`/`i18n.ts`）。PM-185 只提醒 → 進階為自動遮罩。content `getSensitiveRects()` 截圖時收集敏感欄位 viewport 座標（+原頁 viewport 尺寸）存 storage；annotate 載入截圖後按比例（用原頁尺寸換算）`applyMosaic` 自動在敏感座標畫馬賽克 + 頂部「🔒 已自動遮罩 N 個」+「撤銷遮罩」（還原原圖）。**安全 gate**：只在整頁截圖（scaleX≈scaleY）自動遮，區域/自由裁切座標會錯位故略過（避免假安全）。PM-185 手動馬賽克筆刷 + 警告保留（雙保險）。`npm run build` ✅。未 deploy（純 extension，待重上架）。
 
