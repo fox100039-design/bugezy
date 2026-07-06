@@ -51,6 +51,16 @@ const dict: Record<string, Record<UILang, string>> = {
   'usage-reset-hint': { zh: '💡 免費額度每月自動重置', en: '💡 Free quota resets monthly' },
   'day-pass-btn-full': { zh: '⚡ 日票 NT$20（24hr 無限）', en: '⚡ Day Pass NT$20 (24hr unlimited)' },
   'monthly-btn-full': { zh: '✨ 月費 NT$80/月（最划算）', en: '✨ Monthly NT$80/mo (best value)' },
+  // PM-171：非台灣付費 coming soon
+  'intl-coming-soon': { zh: '🌏 國際付款即將開放', en: '🌏 International Payments Coming Soon!' },
+  'intl-desc': {
+    zh: '我們正在開通國際信用卡付款，敬請期待！',
+    en: "We're working on enabling international credit card payments. Stay tuned!",
+  },
+  'intl-free-hint': {
+    zh: '💡 免費版現在就能用 — 每月 10 次錄製 + 20 次 AI 讀取',
+    en: '💡 Free plan available now — 10 recordings + 20 AI reads per month',
+  },
   'day-pass-badge': { zh: '⚡ 日票', en: '⚡ Day Pass' },
   'day-pass-remaining': { zh: '剩餘 {h}h {m}m {s}s', en: '{h}h {m}m {s}s left' },
   'day-pass-expire-hint': {

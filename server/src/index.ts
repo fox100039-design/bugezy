@@ -766,7 +766,7 @@ Full guide: https://bugezy.dev/install`,
           <li>${t('信用卡 / ATM / 超商', 'Credit card / ATM / store')}</li>
         </ul>
         <p class="pricing-hint">${t('24 小時內享所有付費功能', 'All premium features for 24 hours')}</p>
-        <a class="day-btn" href="/install">${t('安裝後購買 →', 'Buy after install →')}</a>
+        <a class="day-btn" href="/install">${t('安裝後購買 →', 'Install Free →')}</a>
       </div>
       <div class="plan featured">
         <div class="plan-badge">${t('✨ 最划算', '✨ Best value')}</div>
@@ -781,8 +781,8 @@ Full guide: https://bugezy.dev/install`,
           <li>${t('報告保留 90 天', 'Reports kept 90 days')}</li>
           <li>${t('團隊協作（即將推出）', 'Team collaboration (coming soon)')}</li>
         </ul>
-        <p class="pricing-hint">${t('安裝 Chrome 擴充後，在工具中一鍵升級付費', 'Install the Chrome extension, then upgrade in one click')}</p>
-        <a class="plan-cta" href="/install">${t('安裝後即可升級 →', 'Upgrade after install →')}</a>
+        <p class="pricing-hint">${t('安裝 Chrome 擴充後，在工具中一鍵升級付費', '🌏 International payments coming soon. Free plan available now!')}</p>
+        <a class="plan-cta" href="/install">${t('安裝後即可升級 →', 'Install Free →')}</a>
       </div>
     </div>
   </section>

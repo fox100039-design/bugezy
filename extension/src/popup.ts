@@ -83,6 +83,11 @@ const upgradeOverlayDesc = $('upgradeOverlayDesc');
 const overlayDayPassBtn = $<HTMLButtonElement>('overlayDayPassBtn');
 const overlayMonthlyBtn = $<HTMLButtonElement>('overlayMonthlyBtn');
 let freeLimits: PlanInfo['limits'] = null; // 最近一次 loadPlan 的免費額度（供 overlay 顯示 used/max）
+// PM-171：非台灣（語言≠繁中）→ 綠界收不了款，付費按鈕改 coming soon（用語言判斷，不需 IP）
+const intlNotice = $('intlNotice');
+const overlayIntlNotice = $('overlayIntlNotice');
+let currentSpeechLang = 'zh'; // 原始語言（zh/yue/en…）——付費地區判斷用 raw lang 非 UI lang
+const isTaiwanUser = () => currentSpeechLang === 'zh';
 
 // PM-49：鍵盤模式 toggle（關閉語音）— 狀態存 chrome.storage.local
 const keyboardMode = $<HTMLInputElement>('keyboardMode');
@@ -137,6 +142,7 @@ function applyTranslations() {
 chrome.storage.local.get(LANG_KEY, (r) => {
   const speechLang = (r[LANG_KEY] as string) || 'zh';
   langSelect.value = speechLang;
+  currentSpeechLang = speechLang; // PM-171：付費地區判斷用
   currentUILang = getUILang(speechLang);
   applyTranslations();
   void loadPlan(); // 依語言重繪動態文字（用量/倒數/paid 等）
@@ -145,8 +151,13 @@ chrome.storage.local.get(LANG_KEY, (r) => {
 langSelect.addEventListener('change', () => {
   const speechLang = langSelect.value;
   void chrome.storage.local.set({ [LANG_KEY]: speechLang });
+  currentSpeechLang = speechLang; // PM-171：raw lang 變了（含 zh↔yue）→ 付費地區可能改變
   const newUILang = getUILang(speechLang);
-  if (newUILang === currentUILang) return; // UI 語言沒變（如 zh↔yue）→ 不重繪 UI
+  // PM-171：即使 UI 語言沒變（zh↔yue），付費地區（台灣 vs coming soon）仍可能改變 → 一律重跑 loadPlan
+  if (newUILang === currentUILang) {
+    void loadPlan();
+    return;
+  }
   const oldUILang = currentUILang; // 先存舊語言（closure 內判斷「是否還是舊語言預設」）
   // PM-139：AI 輪盤——只有使用者「沒自訂過」（仍是舊語言的預設值）時，才換成新語言的預設
   void chrome.storage.local.get(PROMPTS_KEY).then((store) => {
@@ -717,6 +728,11 @@ function showUpgradeOverlay(type: 'recording' | 'rewind' | 'mcp') {
     type === 'recording' ? 'usage-desc-record' : type === 'rewind' ? 'usage-desc-rewind' : 'usage-desc-mcp';
   // 用完 → used 已達上限，顯示 max/max
   upgradeOverlayDesc.textContent = t(descKey, currentUILang, { used: max, max });
+  // PM-171：非台灣 → 隱藏日票/月費鈕（綠界收不了款），改顯示 coming soon
+  const taiwan = isTaiwanUser();
+  overlayDayPassBtn.classList.toggle('hidden', !taiwan);
+  overlayMonthlyBtn.classList.toggle('hidden', !taiwan);
+  overlayIntlNotice.classList.toggle('hidden', taiwan);
   upgradeOverlay.classList.remove('hidden');
 }
 
@@ -738,6 +754,7 @@ async function loadPlan() {
 
     // 狀態互斥：先全部收起，再依 plan 開對應的一個（PM-111：多日票兩態）
     upgradeHint.classList.add('hidden');
+    intlNotice.classList.add('hidden'); // PM-171
     paidBadge.classList.add('hidden');
     cancelledBadge.classList.add('hidden');
     dayPassStatus.classList.add('hidden');
@@ -778,7 +795,12 @@ async function loadPlan() {
       // 免費版（含未知狀態 fallback）→ PM-170：三張卡片剩餘次數（record/rewind 剩 N 次、screenshot 無限）
       if (plan.limits) renderFreeUsage(plan.limits);
       startBtn.disabled = (plan.limits?.recording.max ?? 1) - (plan.limits?.recording.used ?? 0) <= 0;
-      upgradeHint.classList.remove('hidden');
+      // PM-171：台灣 → 顯示付費按鈕；非台灣 → 綠界收不了款，改顯示 coming soon 藍框
+      if (isTaiwanUser()) {
+        upgradeHint.classList.remove('hidden');
+      } else {
+        intlNotice.classList.remove('hidden');
+      }
     }
   } catch {
     /* API 不通就維持預設按鈕 */

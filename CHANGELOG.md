@@ -4,6 +4,8 @@
 
 Day 21（PM-170~）。
 
+- PM-171：**非台灣用戶付費 coming soon（策略 B：全球下載 + payments coming soon）**（`server/index.ts` + `extension/popup.ts`/`popup.html`/`i18n.ts`）。綠界只收台灣卡 → 用**語言判斷**（非 IP）：`zh`=台灣正常付費，`yue`/`en`/其他=coming soon。①popup `isTaiwanUser()`（原始語言判斷）；免費版台灣→日票/月費鈕、非台灣→`#intlNotice`（🌏 國際付款即將開放藍框）；**修正** langSelect zh↔yue 早退不重繪 → 改一律 loadPlan（付費地區會變）；②PM-170 用完 overlay 非台灣隱藏付費鈕改 coming soon；③首頁 EN 定價 CTA/hint 改「Install Free →」+「International payments coming soon」（ZH 不變）；④i18n intl-* 中英。`wrangler deploy`（`6cb37ac5`）+ extension build。
+
 - PM-170：**免費版每月用量重置 + 回溯用量檢查 + 用完升級引導**（`server/index.ts` + `extension/background.ts`/`popup.ts`/`popup.html`/`i18n.ts`）。修三缺口：①用量不重置（一生累加永久鎖）→ `bumpUsage` 加「距上次重置 ≥30 天歸零三個 count」（`usage_reset_at` 欄位 PM-63 已存在）；②回溯無用量檢查 → `background.ts` 抽泛型 `checkUsage(type)` + 新 `checkRewindUsage`，`REWIND_30S` 前檢查達上限不進入；③用完沒引導 → popup 新增 `#upgradeOverlay`（📋 本月額度已用完 + 錄製/回溯 N/N + ⚡日票 + ✨月費 + 💡每月自動重置），錄製/回溯 403 即彈；popup 三卡片顯示「剩 N 次」（≤2 紅色）/付費「✨ 無限次」；`getUserPlan` 回 `usage_reset_at`；i18n 中英 7 鍵。`wrangler deploy`（`a4c29ca8`）+ extension build。
 
 ## 2026-07-05
