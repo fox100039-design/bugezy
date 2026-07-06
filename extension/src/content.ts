@@ -234,7 +234,17 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
     window.dispatchEvent(new CustomEvent('bugezy-mic-volume', { detail: { level: msg.level } }));
     sendResponse({ ok: true });
   } else if (msg.type === 'START_SCREENSHOT') {
-    injectScreenshotOverlay();
+    // PM-185：截圖前掃 DOM 敏感欄位——偵測到才彈警告（沒偵測到不打擾）
+    const sensitive = detectSensitiveFields();
+    if (sensitive.length > 0) {
+      showSensitiveWarning(sensitive, () => {
+        void chrome.storage.local.set({ [SENSITIVE_DETECTED_KEY]: true }); // 供 annotate 頁顯示提示條
+        injectScreenshotOverlay();
+      });
+    } else {
+      void chrome.storage.local.remove(SENSITIVE_DETECTED_KEY); // 清掉舊 flag
+      injectScreenshotOverlay();
+    }
     sendResponse({ ok: true });
   } else if (msg.type === 'REWIND_30S') {
     sendToInject('REWIND'); // PM-50：請 inject 打包背景緩存
@@ -276,6 +286,66 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
     // GET_STATE 失敗（background 未就緒），忽略
   }
 })();
+
+// ════════════════════════════════════════════════════════════
+// PM-185：截圖前敏感欄位偵測（掃頁面 DOM，偵測到才提醒；沒偵測到不打擾）
+// content.ts（ISOLATED world）能直接讀頁面 DOM，且截圖流程由此觸發——故偵測放這裡最直接。
+// ════════════════════════════════════════════════════════════
+const SENSITIVE_DETECTED_KEY = 'bugezy:sensitive-detected';
+
+/** 掃 DOM 找敏感 input（密碼/token/key/card/cvv/secret/標記）。回 i18n 標籤 key 陣列（已去重）。 */
+function detectSensitiveFields(): string[] {
+  const groups: Array<{ sels: string[]; key: string }> = [
+    { key: 'sf-password', sels: ['input[type="password"]', 'input[name*="password" i]', 'input[name*="passwd" i]', 'input[autocomplete="current-password"]', 'input[autocomplete="new-password"]'] },
+    { key: 'sf-token', sels: ['input[name*="token" i]'] },
+    { key: 'sf-secret', sels: ['input[name*="secret" i]'] },
+    { key: 'sf-key', sels: ['input[name*="key" i]', 'input[name*="apikey" i]'] },
+    { key: 'sf-card', sels: ['input[name*="card" i]', 'input[autocomplete*="cc-"]'] },
+    { key: 'sf-cvv', sels: ['input[name*="cvv" i]', 'input[name*="cvc" i]'] },
+    { key: 'sf-marked', sels: ['[data-sensitive]'] },
+  ];
+  const found: string[] = [];
+  for (const g of groups) {
+    if (g.sels.some((s) => document.querySelector(s))) found.push(g.key);
+  }
+  return found;
+}
+
+/** 偵測到敏感欄位時彈警告 overlay（繼續截圖 / 取消）。 */
+function showSensitiveWarning(fieldKeys: string[], onContinue: () => void) {
+  document.getElementById('bugezy-sensitive-warning')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'bugezy-sensitive-warning';
+  overlay.style.cssText =
+    'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:2147483647;font-family:-apple-system,system-ui,"Microsoft JhengHei",sans-serif;';
+  const fieldsDesc = fieldKeys.map((k) => ct(k)).join(ct('sensitive-sep'));
+  const card = document.createElement('div');
+  card.style.cssText =
+    'background:#1a1a2e;border:2px solid #f59e0b;border-radius:16px;padding:24px;max-width:360px;text-align:center;';
+  card.innerHTML =
+    `<p style="font-size:28px;margin:0 0 8px;">⚠️</p>` +
+    `<p style="color:#f59e0b;font-size:16px;font-weight:700;margin:0 0 8px;"></p>` +
+    `<p style="color:#e6edf3;font-size:13px;margin:0 0 4px;"></p>` +
+    `<p style="color:#9aa3b2;font-size:12px;margin:0 0 16px;"></p>` +
+    `<div style="display:flex;gap:8px;justify-content:center;">` +
+    `<button id="bz-sens-continue" style="background:#7c3aed;color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:14px;font-weight:600;cursor:pointer;"></button>` +
+    `<button id="bz-sens-cancel" style="background:transparent;color:#888;border:1px solid #444;border-radius:8px;padding:10px 20px;font-size:14px;cursor:pointer;"></button>` +
+    `</div>`;
+  // textContent 設值（避免 fieldsDesc 進 innerHTML 的 XSS——雖為固定字典仍守則）
+  const ps = card.querySelectorAll('p');
+  ps[1].textContent = ct('sensitive-title');
+  ps[2].textContent = ct('sensitive-page-has', { fields: fieldsDesc });
+  ps[3].textContent = ct('sensitive-hint');
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+  card.querySelector<HTMLButtonElement>('#bz-sens-continue')!.textContent = ct('sensitive-continue');
+  card.querySelector<HTMLButtonElement>('#bz-sens-cancel')!.textContent = ct('sensitive-cancel');
+  card.querySelector<HTMLButtonElement>('#bz-sens-continue')!.onclick = () => {
+    overlay.remove();
+    onContinue();
+  };
+  card.querySelector<HTMLButtonElement>('#bz-sens-cancel')!.onclick = () => overlay.remove();
+}
 
 // ════════════════════════════════════════════════════════════
 // PM-19：截圖模式 overlay（整頁 / 區域兩點可捲動 / 自由形狀）

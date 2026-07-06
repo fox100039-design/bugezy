@@ -94,14 +94,20 @@
       transition: opacity 0.3s; line-height: 1.5;
     }
     #liveCaptions.hidden { opacity: 0; }
+    /* PM-185：馬賽克筆刷按鈕 + 敏感提示條 */
+    .toolbar button.mosaic-btn { background: #f59e0b; color: #000; border-color: #f59e0b; }
+    .toolbar button.mosaic-btn.active { background: #ef4444; border-color: #ef4444; color: #fff; box-shadow: 0 0 8px rgba(239,68,68,0.5); }
+    .sensitive-tip { display: none; background: rgba(245,158,11,0.15); color: #f59e0b; border-bottom: 1px solid rgba(245,158,11,0.5); padding: 8px 16px; font-size: 13px; text-align: center; font-weight: 600; }
   </style>
 </head>
 <body>
+  <div id="sensitiveTip" class="sensitive-tip"></div>
   <div class="toolbar">
     <button id="penTool" class="active" title="畫筆" data-i18n="annotate-pen">✏️ 畫筆</button>
     <button id="arrowTool" title="箭頭" data-i18n="annotate-arrow">➡️ 箭頭</button>
     <button id="rectTool" title="框框" data-i18n="annotate-rect">⬜ 框框</button>
     <button id="textTool" title="文字" data-i18n="annotate-text">📝 文字</button>
+    <button id="mosaicTool" class="mosaic-btn" title="馬賽克" data-i18n="annotate-mosaic">🔒 馬賽克</button>
     <div class="separator"></div>
     <label data-i18n="annotate-color">顏色</label>
     <input type="color" id="colorPicker" value="#ff0000">

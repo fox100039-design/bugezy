@@ -42,6 +42,28 @@ const dict: Record<string, Record<UILang, string>> = {
   // ── 日票 / 月費 ──
   'upgrade-unlock': { zh: '升級解鎖無限次', en: 'Upgrade for unlimited' },
   'my-reports': { zh: '📋 我的報告', en: '📋 My Reports' }, // PM-184
+  // PM-185：截圖敏感偵測 + 馬賽克
+  'sf-password': { zh: '密碼欄位', en: 'password fields' },
+  'sf-token': { zh: 'Token 欄位', en: 'token fields' },
+  'sf-secret': { zh: 'Secret 欄位', en: 'secret fields' },
+  'sf-key': { zh: 'API Key 欄位', en: 'API key fields' },
+  'sf-card': { zh: '信用卡欄位', en: 'credit card fields' },
+  'sf-cvv': { zh: 'CVV 欄位', en: 'CVV fields' },
+  'sf-marked': { zh: '標記為敏感的元素', en: 'sensitive-marked elements' },
+  'sensitive-sep': { zh: '、', en: ', ' },
+  'sensitive-title': { zh: '偵測到敏感欄位', en: 'Sensitive fields detected' },
+  'sensitive-page-has': { zh: '頁面上有：{fields}', en: 'This page contains: {fields}' },
+  'sensitive-hint': {
+    zh: '截圖後可用 🔒 馬賽克筆刷塗掉敏感區域再上傳',
+    en: 'Use the 🔒 mosaic brush to cover sensitive areas before uploading',
+  },
+  'sensitive-continue': { zh: '繼續截圖', en: 'Continue' },
+  'sensitive-cancel': { zh: '取消', en: 'Cancel' },
+  'sensitive-tip': {
+    zh: '🔒 偵測到敏感欄位，建議用馬賽克筆刷塗掉再上傳',
+    en: '🔒 Sensitive fields detected — use the mosaic brush to cover them before uploading',
+  },
+  'annotate-mosaic': { zh: '🔒 馬賽克', en: '🔒 Mosaic' },
   'day-pass-btn': { zh: '⚡ 日票 NT$20（24hr）', en: '⚡ Day Pass NT$20 (24hr)' },
   'monthly-btn': { zh: '✨ 月費 NT$80/月', en: '✨ Monthly NT$80/mo' },
   // PM-170：用完升級引導 overlay

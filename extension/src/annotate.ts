@@ -52,6 +52,7 @@ const penTool = $<HTMLButtonElement>('penTool');
 const arrowTool = $<HTMLButtonElement>('arrowTool');
 const rectTool = $<HTMLButtonElement>('rectTool');
 const textTool = $<HTMLButtonElement>('textTool');
+const mosaicTool = $<HTMLButtonElement>('mosaicTool'); // PM-185
 const colorPicker = $<HTMLInputElement>('colorPicker');
 const lineWidthSel = $<HTMLSelectElement>('lineWidth');
 const undoBtn = $<HTMLButtonElement>('undoBtn');
@@ -84,9 +85,22 @@ chrome.storage.local.get(TOOLBAR_EFFECT_KEY, (store) => {
 const params = new URLSearchParams(location.search);
 const key = params.get('key');
 
+// PM-185：若截圖前偵測到敏感欄位（content 設 flag），頂部顯示橘色提示條並清 flag
+void chrome.storage.local.get('bugezy:sensitive-detected').then((store) => {
+  if (store['bugezy:sensitive-detected']) {
+    const tip = document.getElementById('sensitiveTip');
+    if (tip) {
+      tip.textContent = t('sensitive-tip', annotateUILang);
+      tip.style.display = 'block';
+    }
+    void chrome.storage.local.remove('bugezy:sensitive-detected');
+  }
+});
+
 // ── 工具狀態 ──────────────────────────────────────────────
-type Tool = 'pen' | 'arrow' | 'rect' | 'text';
+type Tool = 'pen' | 'arrow' | 'rect' | 'text' | 'mosaic'; // PM-185：+mosaic
 let currentTool: Tool = 'pen';
+const MOSAIC_SIZE = 16; // PM-185：馬賽克方塊邊長（canvas 像素）
 let drawing = false;
 let startX = 0;
 let startY = 0;
@@ -99,6 +113,7 @@ const toolButtons: Record<Tool, HTMLButtonElement> = {
   arrow: arrowTool,
   rect: rectTool,
   text: textTool,
+  mosaic: mosaicTool,
 };
 
 function setTool(tool: Tool) {
@@ -106,11 +121,35 @@ function setTool(tool: Tool) {
   (Object.keys(toolButtons) as Tool[]).forEach((t) => {
     toolButtons[t].classList.toggle('active', t === tool);
   });
+  canvas.style.cursor = tool === 'mosaic' ? 'crosshair' : 'crosshair';
 }
 penTool.addEventListener('click', () => setTool('pen'));
 arrowTool.addEventListener('click', () => setTool('arrow'));
 rectTool.addEventListener('click', () => setTool('rect'));
 textTool.addEventListener('click', () => setTool('text'));
+mosaicTool.addEventListener('click', () => setTool('mosaic'));
+
+/** PM-185：在 (x,y) 所屬的網格方塊填該區平均色，模擬馬賽克。 */
+function paintMosaic(x: number, y: number) {
+  const bx = Math.floor(x / MOSAIC_SIZE) * MOSAIC_SIZE;
+  const by = Math.floor(y / MOSAIC_SIZE) * MOSAIC_SIZE;
+  const w = Math.min(MOSAIC_SIZE, canvas.width - bx);
+  const h = Math.min(MOSAIC_SIZE, canvas.height - by);
+  if (w <= 0 || h <= 0) return;
+  const img = ctx!.getImageData(bx, by, w, h);
+  const px = img.data;
+  let r = 0,
+    g = 0,
+    b = 0;
+  const n = px.length / 4;
+  for (let i = 0; i < px.length; i += 4) {
+    r += px[i];
+    g += px[i + 1];
+    b += px[i + 2];
+  }
+  ctx!.fillStyle = `rgb(${Math.round(r / n)},${Math.round(g / n)},${Math.round(b / n)})`;
+  ctx!.fillRect(bx, by, w, h);
+}
 
 // ── 畫圖工具 ──────────────────────────────────────────────
 function applyStyle() {
@@ -179,12 +218,18 @@ canvas.addEventListener('mousedown', (e) => {
     applyStyle();
     ctx!.beginPath();
     ctx!.moveTo(x, y);
+  } else if (currentTool === 'mosaic') {
+    paintMosaic(x, y); // PM-185：單擊也塗一格
   }
 });
 
 canvas.addEventListener('mousemove', (e) => {
   if (!drawing) return;
   const { x, y } = pos(e);
+  if (currentTool === 'mosaic') {
+    paintMosaic(x, y); // PM-185：拖曳塗抹馬賽克（不用 snapshot 預覽，直接累積）
+    return;
+  }
   applyStyle();
   if (currentTool === 'pen') {
     ctx!.lineTo(x, y);

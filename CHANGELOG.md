@@ -4,6 +4,8 @@
 
 Day 21（PM-170~）。
 
+- PM-185：**截圖敏感偵測 + 馬賽克筆刷（偵測到才提醒）**（`extension/content.ts`/`annotate.ts`/`annotate.html`/`i18n.ts`）。截圖可能拍到密碼/API key/卡號 → 截圖前掃 DOM 防護。`detectSensitiveFields()`（content.ts，掃 password/token/secret/key/card/cvv/data-sensitive 共 7 類 input）→ 偵測到才彈 ⚠️ 警告 overlay（繼續截圖/取消）+ 設 flag，**沒偵測到不打擾直接截**；annotate 工具列加「🔒 馬賽克」筆刷（拖曳塗該網格方塊平均色）；偵測到時標注頁頂部橘色提示條；i18n 中英。`npm run build` ✅（dist 3 檔 wiring 確認）。未 deploy（純 extension，待重上架）。
+
 - PM-184：**「我的報告」列表頁 + popup 入口**（`server/index.ts` + `extension/popup.html`/`popup.ts`/`i18n.ts`）。使用者沒地方回看歷史報告 → 新增 `GET /reports?token=`（抽 `verifySessionByToken` 驗證→查 reports→server 渲染表格：時間/標題/描述/badges ❌🌐🎙️📸🎬/查看連結，中英雙語 + 語言切換）；無/無效 token 顯示提示頁；popup 加「📋 我的報告」按鈕（帶 session token 開網頁）；robots.txt `Disallow: /reports` + `noindex` + `no-store`；全站 footer 加連結。線上實測無 token 提示(中英)/無效 token 過期/robots/no-store/footer 皆 ✅。`wrangler deploy`（`262e684e`）+ extension build。
 
 - PM-182/183：**Sessions cron 清理 + MCP 端點防護**（`server/index.ts`）。**PM-182**：`scheduled` cron（每日 03:00 UTC）追加清理過期 sessions（`delete().lt('expires_at', now)`，log Cleaned N；verifySession 即時清理保留為雙保險）。**PM-183**：①稽核 13 個 MCP tool 成功回傳皆走 `logMcpUsage`（mcp_usage 表計數），**get_timeline 確認有、無遺漏**；②`/mcp` 入口加 body 1MB 限制（Content-Length>1MB→413，補 Cloudflare rate-limit 只覆蓋 /api/ 的缺口）。線上實測 /mcp >1MB→413、正常→200。（釐清：users.mcp_count 配額對 report_id-based tool 無使用者身分故無法遞增，實際用量計數靠 mcp_usage 表，已完整。）`wrangler deploy`（`cf37486b`）。
