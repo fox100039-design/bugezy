@@ -2494,6 +2494,71 @@ function formatTerminalLogs(data: Record<string, unknown>): string {
   return result.trim() ? result : '目前沒有終端機錯誤記錄。';
 }
 
+// PM-179：Terminal 錯誤 AI 導航摘要（規則引擎，零成本，同 PM-159 精神）。
+// 取 parsed_errors 最後一個為根因（最內層/最近拋出）→ 白話解釋 + 修復建議 + 位置（file 第 N 行）。
+const PY_HINTS: Record<string, string> = {
+  KeyError: '字典裡找不到這個 key → 檢查 key 是否拼錯，或先用 .get() 帶預設值',
+  TypeError: '型別不對 → 檢查變數是否為 None、字串當數字用等',
+  NameError: '變數或函式未定義 → 檢查拼寫、是否忘了 import',
+  ImportError: '模組載入失敗 → 檢查是否 pip install 過、虛擬環境是否啟動',
+  ModuleNotFoundError: '模組不存在 → pip install <模組名>',
+  AttributeError: '物件沒有這個屬性 → 檢查物件型別是否正確',
+  IndexError: '索引超出範圍 → 陣列長度不夠，檢查迴圈邊界',
+  ValueError: '值不合法 → 檢查輸入資料格式',
+  FileNotFoundError: '檔案不存在 → 檢查路徑是否正確',
+  PermissionError: '權限不足 → 用管理員執行或檢查檔案權限',
+  ConnectionError: '連線失敗 → 檢查網路、API URL、port 是否正確',
+  TimeoutError: '逾時 → 伺服器回應太慢或網路問題',
+  IntegrityError: '資料庫完整性錯誤 → 重複的 unique key 或缺少 NOT NULL 欄位',
+  OperationalError: '資料庫操作失敗 → 連線池耗盡、查詢語法錯、資料庫鎖住',
+  DoesNotExist: '查詢結果為空 → 資料庫沒這筆資料，檢查查詢條件',
+  ValidationError: '驗證失敗 → 輸入資料不符合格式要求',
+};
+const NODE_HINTS: Record<string, string> = {
+  TypeError: '型別錯誤 → 通常是 undefined/null 存取屬性，檢查 optional chaining',
+  ReferenceError: '變數未定義 → 檢查 import/require 和拼寫',
+  SyntaxError: '語法錯誤 → 檢查括號、逗號、引號',
+  RangeError: '超出範圍 → stack overflow 或 array 超大',
+  Error: '一般錯誤 → 看 message 內容判斷',
+};
+function generateTerminalSummary(data: Record<string, unknown>): string {
+  const errors = (data.parsed_errors as Array<{
+    type?: string;
+    message?: string;
+    frames?: Array<{ file?: string; line?: number; function?: string; code?: string }>;
+  }>) || [];
+  const runtime = (data.runtime as { language?: string; version?: string }) || {};
+  const lines: string[] = ['🔍 Terminal Bug 導航摘要', ''];
+
+  if (errors.length === 0) {
+    lines.push('✅ 未偵測到結構化錯誤，請查看原始 stderr');
+    return lines.join('\n');
+  }
+
+  // 最後一個錯誤通常是根因（Python：最近拋出；Node：最上層 Error）
+  const rootError = errors[errors.length - 1];
+  const hints = runtime.language === 'python' ? PY_HINTS : NODE_HINTS;
+  const hint = rootError.type ? hints[rootError.type] || '' : '';
+
+  lines.push(`⚡ 根因：${rootError.type || '?'}: ${rootError.message || ''}`);
+  if (hint) lines.push(`💡 白話：${hint}`);
+
+  // 指出哪個檔案第幾行（Python 最內層=frames 最後一個；Node 最上層=frames 第一個，取有 file 者）
+  if (Array.isArray(rootError.frames) && rootError.frames.length > 0) {
+    const innerFrame = rootError.frames[rootError.frames.length - 1];
+    lines.push(`📍 位置：${innerFrame.file} 第 ${innerFrame.line} 行 → ${innerFrame.function}()`);
+    if (innerFrame.code) lines.push(`   程式：${innerFrame.code}`);
+  }
+
+  if (runtime.language) lines.push(`🖥 環境：${runtime.language} ${runtime.version || ''}`.trim());
+
+  if (errors.length > 1) {
+    lines.push(`\n⚠ 共 ${errors.length} 個錯誤，以上為最可能的根因。完整錯誤見下方。`);
+  }
+
+  return lines.join('\n');
+}
+
 // ── PM-48：測試專頁（Test Harness）──────────────────────────
 // 共用 CSS（page1 與 page2/3 shell 共用，單一來源）
 const TEST_STYLE = `
@@ -4634,8 +4699,9 @@ function createMcpServer(env: Env): McpServer {
       if (data.stale) {
         return txt('終端機 Agent 未啟動或資料已過期（>30 秒）。請在終端機執行：npx bugezy-watch -- npm run dev');
       }
-      // PM-178：回傳結構化文字（🖥 環境 + 🔍 結構化錯誤 + 原始 stderr）而非原始 JSON
-      return txtWithTokens(formatTerminalLogs(data), 'get_terminal_logs');
+      // PM-179：最前面插入 AI 導航摘要（根因+白話+位置）；PM-178：後接結構化文字 + 原始 stderr
+      const summary = generateTerminalSummary(data);
+      return txtWithTokens(summary + '\n\n' + formatTerminalLogs(data), 'get_terminal_logs');
     },
   );
 

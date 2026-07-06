@@ -4,6 +4,8 @@
 
 Day 21（PM-170~）。
 
+- PM-179：**CLI 錯誤 AI 導航摘要（Terminal 版 generateBugSummary）**（`server/index.ts`）。同 PM-159 精神，規則引擎零成本：`generateTerminalSummary()` 取 parsed_errors 最後一個為根因 → ⚡根因 + 💡白話（**Python 16 種**+**Node 5 種**常見錯誤解釋與修復建議）+ 📍位置（file 第 N 行 → function + 程式碼）+ 🖥環境；多錯誤標註、無錯誤提示查 stderr。`get_terminal_logs` 回傳最前面插入摘要（摘要→結構化錯誤→原始 stderr）。node 實測 KeyError/ImportError(pip install)/Node TypeError(optional chaining)/位置皆正確。至此 Python 9 分升級 PM-176~179 完成。`wrangler deploy`（`ceee9a59`）。
+
 - PM-178：**MCP get_terminal_logs 回傳結構化**（`server/index.ts`）。PM-176/177 讓 CLI 傳 parsed_errors+runtime → 新 `formatTerminalLogs()` 把回傳從原始 JSON 改結構化文字：🖥 環境（language/version/os + 📦 套件前 20）→ 🔍 偵測到 N 個錯誤（每個類型/訊息/堆疊 `file:line in function()` + 程式碼）→ 原始 stderr（logs 陣列轉文字）；全空→「目前沒有終端機錯誤記錄」。`readTerminalLogs` 無需改（原本就 passthrough 整包 R2，含 parsed_errors/runtime）。node 實測輸出格式正確。`wrangler deploy`（`25a48724`）。
 
 - PM-177：**CLI 環境快照（語言/版本/OS/套件）**（`cli/detect-env.ts`(新) + `cli/index.ts`）。AI 診斷需環境背景 → 新 `detectRuntime(command)` 依指令關鍵字判語言（python/node/go），抓 `python --version`+`pip list --format=freeze` / `node --version`+`npm list --json`（`name@version`）、OS=`platform arch`、packages ≤50；跨平台（`2>&1` cmd/sh 皆可、stderr 忽略、5s timeout、失敗靜默）。CLI 啟動抓一次 → payload 加 `runtime`；server 靠既有 full-payload passthrough 自動存 R2（runtime 無敏感欄位）。node 實測 node→v22.22.2+packages、python→3.14.3+pip、unknown→空。`wrangler deploy`（`c2d93214`）+ CLI build。
