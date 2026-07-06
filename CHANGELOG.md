@@ -4,6 +4,8 @@
 
 Day 21（PM-170~）。
 
+- PM-172：**付費判斷改 IP 國家偵測（取代 PM-171 語言判斷）**（`server/index.ts` + `extension/popup.ts`）。PM-171 用語言判斷不嚴謹（台灣人選英文看不到付費、香港人選中文付不了）→ 改用 Cloudflare `request.cf.country`（零成本/準確/無法偽造）。①`cfCountry()`/`isPayCountry()`（白名單 `['TW']`）helper；`getUserPlan` 回 `country`；②popup 改 `currentCountry`（來自 plan.country）+ `isTaiwanUser()=country==='TW'`，移除語言判斷（語言只控 UI/語音、不控付費）；③`homePage(lang, request)` 定價 CTA 依國家（非語言）；④`/checkout`+`/api/day-pass/create` 加 `country!=='TW'` 403（防繞 UI 直呼）。線上實測（本環境 IP=TW）：首頁 EN 版顯示付費按鈕（語言≠付費，驗收 #2）。`wrangler deploy`（`bfb538fa`）+ extension build。
+
 - PM-171：**非台灣用戶付費 coming soon（策略 B：全球下載 + payments coming soon）**（`server/index.ts` + `extension/popup.ts`/`popup.html`/`i18n.ts`）。綠界只收台灣卡 → 用**語言判斷**（非 IP）：`zh`=台灣正常付費，`yue`/`en`/其他=coming soon。①popup `isTaiwanUser()`（原始語言判斷）；免費版台灣→日票/月費鈕、非台灣→`#intlNotice`（🌏 國際付款即將開放藍框）；**修正** langSelect zh↔yue 早退不重繪 → 改一律 loadPlan（付費地區會變）；②PM-170 用完 overlay 非台灣隱藏付費鈕改 coming soon；③首頁 EN 定價 CTA/hint 改「Install Free →」+「International payments coming soon」（ZH 不變）；④i18n intl-* 中英。`wrangler deploy`（`6cb37ac5`）+ extension build。
 
 - PM-170：**免費版每月用量重置 + 回溯用量檢查 + 用完升級引導**（`server/index.ts` + `extension/background.ts`/`popup.ts`/`popup.html`/`i18n.ts`）。修三缺口：①用量不重置（一生累加永久鎖）→ `bumpUsage` 加「距上次重置 ≥30 天歸零三個 count」（`usage_reset_at` 欄位 PM-63 已存在）；②回溯無用量檢查 → `background.ts` 抽泛型 `checkUsage(type)` + 新 `checkRewindUsage`，`REWIND_30S` 前檢查達上限不進入；③用完沒引導 → popup 新增 `#upgradeOverlay`（📋 本月額度已用完 + 錄製/回溯 N/N + ⚡日票 + ✨月費 + 💡每月自動重置），錄製/回溯 403 即彈；popup 三卡片顯示「剩 N 次」（≤2 紅色）/付費「✨ 無限次」；`getUserPlan` 回 `usage_reset_at`；i18n 中英 7 鍵。`wrangler deploy`（`a4c29ca8`）+ extension build。

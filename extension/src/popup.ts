@@ -83,11 +83,13 @@ const upgradeOverlayDesc = $('upgradeOverlayDesc');
 const overlayDayPassBtn = $<HTMLButtonElement>('overlayDayPassBtn');
 const overlayMonthlyBtn = $<HTMLButtonElement>('overlayMonthlyBtn');
 let freeLimits: PlanInfo['limits'] = null; // 最近一次 loadPlan 的免費額度（供 overlay 顯示 used/max）
-// PM-171：非台灣（語言≠繁中）→ 綠界收不了款，付費按鈕改 coming soon（用語言判斷，不需 IP）
+// PM-171/172：非台灣 → 綠界收不了款，付費按鈕改 coming soon。
+// PM-172：改用 IP 國家碼（來自 getUserPlan 的 request.cf.country），取代語言判斷——
+// 台灣人選英文仍可付費、香港人選中文仍是 coming soon。
 const intlNotice = $('intlNotice');
 const overlayIntlNotice = $('overlayIntlNotice');
-let currentSpeechLang = 'zh'; // 原始語言（zh/yue/en…）——付費地區判斷用 raw lang 非 UI lang
-const isTaiwanUser = () => currentSpeechLang === 'zh';
+let currentCountry = 'UNKNOWN'; // IP 國家碼（loadPlan 從 plan.country 更新）
+const isTaiwanUser = () => currentCountry === 'TW';
 
 // PM-49：鍵盤模式 toggle（關閉語音）— 狀態存 chrome.storage.local
 const keyboardMode = $<HTMLInputElement>('keyboardMode');
@@ -142,7 +144,6 @@ function applyTranslations() {
 chrome.storage.local.get(LANG_KEY, (r) => {
   const speechLang = (r[LANG_KEY] as string) || 'zh';
   langSelect.value = speechLang;
-  currentSpeechLang = speechLang; // PM-171：付費地區判斷用
   currentUILang = getUILang(speechLang);
   applyTranslations();
   void loadPlan(); // 依語言重繪動態文字（用量/倒數/paid 等）
@@ -151,13 +152,9 @@ chrome.storage.local.get(LANG_KEY, (r) => {
 langSelect.addEventListener('change', () => {
   const speechLang = langSelect.value;
   void chrome.storage.local.set({ [LANG_KEY]: speechLang });
-  currentSpeechLang = speechLang; // PM-171：raw lang 變了（含 zh↔yue）→ 付費地區可能改變
   const newUILang = getUILang(speechLang);
-  // PM-171：即使 UI 語言沒變（zh↔yue），付費地區（台灣 vs coming soon）仍可能改變 → 一律重跑 loadPlan
-  if (newUILang === currentUILang) {
-    void loadPlan();
-    return;
-  }
+  // PM-172：付費資格改用 IP 國家（與語言無關）→ UI 語言沒變（zh↔yue）就不需重繪
+  if (newUILang === currentUILang) return;
   const oldUILang = currentUILang; // 先存舊語言（closure 內判斷「是否還是舊語言預設」）
   // PM-139：AI 輪盤——只有使用者「沒自訂過」（仍是舊語言的預設值）時，才換成新語言的預設
   void chrome.storage.local.get(PROMPTS_KEY).then((store) => {
@@ -681,6 +678,7 @@ interface PlanInfo {
   plan_expires_at?: string | null; // PM-134：月費到期日（cancelled 顯示用；與 expires_at 同值）
   day_pass_expires_at?: string | null; // PM-111：日票到期時間
   usage_reset_at?: string | null; // PM-170：免費額度上次重置時間
+  country?: string; // PM-172：IP 國家碼（TW=可付費，其餘 coming soon）
   limits: null | {
     recording: { used: number; max: number };
     rewind: { used: number; max: number };
@@ -746,6 +744,7 @@ async function loadPlan() {
     if (!res.ok) return; // 表未建/未授權等 → 不顯示用量，按鈕維持原樣（非阻擋）
     const plan = (await res.json()) as PlanInfo;
     freeLimits = plan.limits; // PM-170：快取免費額度供 overlay 顯示 used/max
+    currentCountry = plan.country ?? 'UNKNOWN'; // PM-172：IP 國家碼決定付費資格
     // PM-87：持久化 plan 供 background/content 路由語音引擎（free→Web Speech、paid/cancelled→Groq Whisper）
     void chrome.storage.local.set({ [USER_PLAN_KEY]: plan.plan });
     // PM-91：更新模式選擇可見性（付費版才顯示）

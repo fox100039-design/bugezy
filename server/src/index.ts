@@ -339,6 +339,16 @@ function getLang(request: Request): PageLang {
   return detectLang(request);
 }
 
+// ── PM-172：付費資格用 Cloudflare IP 國家碼判斷（零成本、準確、無法偽造），取代 PM-171 的語言判斷。──
+// 綠界目前只收台灣卡 → 只有 TW 開放付費；其餘顯示 coming soon。未來特約通過改白名單即可（見 §5）。
+function cfCountry(request: Request): string {
+  return (request as Request & { cf?: { country?: string } }).cf?.country || 'UNKNOWN';
+}
+const PAY_COUNTRIES = ['TW']; // 目前只開放台灣；未來：['TW','HK','JP','KR','SG','VN']
+function isPayCountry(request: Request): boolean {
+  return PAY_COUNTRIES.includes(cfCountry(request));
+}
+
 // ── PM-136：SEO — sitemap.xml + robots.txt（讓搜尋引擎收錄 bugezy.dev）──
 function sitemapXml(): Response {
   const urls: Array<[string, string, string]> = [
@@ -477,7 +487,8 @@ async function isActiveUserId(userId: string, env: Env): Promise<boolean> {
 
 // ── PM-62：產品首頁（GET /）— 一頁式、深色主題、無 JS、RWD（綠界審核 + 客戶訪問用）──
 // PM-150：首頁改為函式（依 lang 中英切換）。CSS/script 不變，只切換文字 + <html lang> + meta。
-function homePage(lang: PageLang): string {
+function homePage(lang: PageLang, request: Request): string {
+  const isTaiwan = isPayCountry(request); // PM-172：定價區付費按鈕依 IP 國家（TW=付費，其餘 coming soon）
   const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
   return `<!DOCTYPE html>
 <html lang="${lang === 'zh' ? 'zh-TW' : 'en'}">
@@ -766,7 +777,7 @@ Full guide: https://bugezy.dev/install`,
           <li>${t('信用卡 / ATM / 超商', 'Credit card / ATM / store')}</li>
         </ul>
         <p class="pricing-hint">${t('24 小時內享所有付費功能', 'All premium features for 24 hours')}</p>
-        <a class="day-btn" href="/install">${t('安裝後購買 →', 'Install Free →')}</a>
+        <a class="day-btn" href="/install">${isTaiwan ? t('安裝後購買 →', 'Buy after install →') : t('免費安裝 →', 'Install Free →')}</a>
       </div>
       <div class="plan featured">
         <div class="plan-badge">${t('✨ 最划算', '✨ Best value')}</div>
@@ -781,8 +792,8 @@ Full guide: https://bugezy.dev/install`,
           <li>${t('報告保留 90 天', 'Reports kept 90 days')}</li>
           <li>${t('團隊協作（即將推出）', 'Team collaboration (coming soon)')}</li>
         </ul>
-        <p class="pricing-hint">${t('安裝 Chrome 擴充後，在工具中一鍵升級付費', '🌏 International payments coming soon. Free plan available now!')}</p>
-        <a class="plan-cta" href="/install">${t('安裝後即可升級 →', 'Install Free →')}</a>
+        <p class="pricing-hint">${isTaiwan ? t('安裝 Chrome 擴充後，在工具中一鍵升級付費', 'Install the Chrome extension, then upgrade in one click') : t('🌏 國際付款即將開放，免費版現在就能用！', '🌏 International payments coming soon. Free plan available now!')}</p>
+        <a class="plan-cta" href="/install">${isTaiwan ? t('安裝後即可升級 →', 'Upgrade after install →') : t('免費安裝 →', 'Install Free →')}</a>
       </div>
     </div>
   </section>
@@ -2586,7 +2597,7 @@ export default {
     // PM-62：產品首頁（根目錄）— 放在所有路由之前
     // PM-150：首頁依語言變動——no-store 避免 CF 邊緣快取把某語言版本跨語言誤送（?lang 覆蓋另有獨立 URL）
     if (request.method === 'GET' && path === '/') {
-      const res = html(homePage(getLang(request)));
+      const res = html(homePage(getLang(request), request)); // PM-172：傳 request 供 IP 國家判斷
       res.headers.set('Cache-Control', 'no-store');
       return res;
     }
@@ -2742,6 +2753,10 @@ export default {
       if (request.method === 'POST' && path === '/checkout') {
         const userId = await getAuthUserId(request, env);
         if (!userId) return json({ error: '請先登入' }, 401);
+        // PM-172：非台灣 IP 直接擋（防繞過 UI 直呼 API → 綠界拒付）
+        if (!isPayCountry(request)) {
+          return json({ error: 'International payments coming soon. Currently available in Taiwan only.' }, 403);
+        }
         return await ecpayCheckout(userId, url.origin, env);
       }
       if (request.method === 'POST' && path === '/api/ecpay/callback') {
@@ -3291,6 +3306,7 @@ async function getUserPlan(request: Request, env: Env): Promise<Response> {
             mcp: { used: u.mcp_count, max: FREE_LIMITS.mcp },
           },
       usage_reset_at: u.usage_reset_at ?? null, // PM-170：供 popup 顯示「每月自動重置」
+      country: cfCountry(request), // PM-172：popup 用 IP 國家碼判斷付費資格（TW=正常，其餘 coming soon）
     });
   } catch (err) {
     console.error('plan error:', err);
@@ -3563,6 +3579,10 @@ async function ecpayResult(request: Request): Promise<Response> {
 async function handleDayPassCreate(request: Request, env: Env): Promise<Response> {
   const userId = await getAuthUserId(request, env);
   if (!userId) return json({ error: '請先登入' }, 401);
+  // PM-172：非台灣 IP 直接擋（防繞過 UI 直呼 API → 綠界拒付）
+  if (!isPayCountry(request)) {
+    return json({ error: 'International payments coming soon. Currently available in Taiwan only.' }, 403);
+  }
 
   // 已是月費 / 已有有效日票 → 擋
   const { data } = await supa(env)
