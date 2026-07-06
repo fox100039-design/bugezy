@@ -104,6 +104,19 @@ CREATE TABLE IF NOT EXISTS payments (
   paid_at           TIMESTAMPTZ
 );
 
+-- ── PM-174：官網問題回報（GET /feedback 表單 → POST /api/feedback 存此表，不需登入）。
+--    status: new → read → resolved（FOX 手動更新追蹤）。Worker 用 service_role 寫入（RLS 鎖 anon）。
+CREATE TABLE IF NOT EXISTS feedback (
+  id         SERIAL PRIMARY KEY,
+  email      TEXT,
+  category   TEXT NOT NULL,
+  message    TEXT NOT NULL,
+  user_agent TEXT,
+  country    TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  status     TEXT DEFAULT 'new'
+);
+
 -- ── PM-93：全 public table 開 RLS(deny all)，anon key 完全鎖死；唯一存取途徑是 Worker 的 service_role。
 --    ⚠ 執行前務必先 `wrangler secret put SUPABASE_SERVICE_ROLE_KEY`，否則 Worker(anon) 會被鎖死。
 --    完整腳本 + 步驟見 server/rls-lockdown.sql。
@@ -112,3 +125,4 @@ ALTER TABLE mcp_usage ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sessions  ENABLE ROW LEVEL SECURITY; -- PM-128：只有 service_role 能存取
 ALTER TABLE payments  ENABLE ROW LEVEL SECURITY; -- PM-145：只有 service_role 能存取
+ALTER TABLE feedback  ENABLE ROW LEVEL SECURITY; -- PM-174：只有 service_role 能存取

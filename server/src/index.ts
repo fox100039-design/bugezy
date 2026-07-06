@@ -358,6 +358,7 @@ function sitemapXml(): Response {
     ['/changelog', 'weekly', '0.7'],
     ['/guide', 'monthly', '0.6'],
     ['/faq', 'monthly', '0.5'],
+    ['/feedback', 'monthly', '0.4'], // PM-174
     ['/privacy', 'yearly', '0.3'],
   ];
   const body =
@@ -805,7 +806,7 @@ Full guide: https://bugezy.dev/install`,
       <p>📱 ${t('電話', 'Phone')}：<a href="tel:+886983101085">0983-101-085</a></p>
       <p>${t('服務時間：週一至週五 09:00-18:00', 'Hours: Mon–Fri 09:00–18:00 (UTC+8)')}</p>
     </div>
-    <div style="margin-top:8px;"><a href="/install">${t('安裝指南', 'Install')}</a> | <a href="/features">${t('功能說明', 'Features')}</a> | <a href="/guide">${t('使用指南', 'Guide')}</a> | <a href="/faq">${t('常見問題', 'FAQ')}</a> | <a href="/privacy">${t('隱私政策', 'Privacy')}</a> | <a href="/changelog">${t('更新日誌', 'Changelog')}</a></div>
+    <div style="margin-top:8px;"><a href="/install">${t('安裝指南', 'Install')}</a> | <a href="/features">${t('功能說明', 'Features')}</a> | <a href="/guide">${t('使用指南', 'Guide')}</a> | <a href="/faq">${t('常見問題', 'FAQ')}</a> | <a href="/privacy">${t('隱私政策', 'Privacy')}</a> | <a href="/changelog">${t('更新日誌', 'Changelog')}</a> | <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a></div>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy · ${t('亞洲平價 MCP 語音除錯工具', 'Affordable MCP voice debugging for Asia')}</div>
   </footer>
   <script>
@@ -983,6 +984,7 @@ ${t(
     <a href="/guide">${t('使用指南', 'Guide')}</a>
     <a href="/faq">FAQ</a>
     <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
+    <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a>
     <a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
   </footer>
@@ -1181,6 +1183,7 @@ function guidePage(lang: PageLang): string {
       <a href="/faq">FAQ</a>
       <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
       <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
+    <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a>
     </div>
     <div style="margin-top:8px;">${t('聯絡', 'Contact')}：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
@@ -1299,6 +1302,7 @@ function faqPage(lang: PageLang): string {
       <a href="/guide">${t('使用指南', 'Guide')}</a>
       <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
       <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
+    <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a>
     </div>
     <div style="margin-top:8px;">${t('聯絡', 'Contact')}：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
@@ -1562,6 +1566,7 @@ $ BUGEZY_TOKEN=&lt;${t('你的 token', 'your token')}&gt; npx bugezy-watch -- go
       <a href="/faq">FAQ</a>
       <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
       <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
+    <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a>
     </div>
     <div style="margin-top:8px;">${t('聯絡', 'Contact')}：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
@@ -1728,6 +1733,7 @@ function featuresPage(lang: PageLang): string {
       <a href="/faq">FAQ</a>
       <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
       <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
+    <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a>
     </div>
     <div style="margin-top:8px;">${t('聯絡', 'Contact')}：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
@@ -1811,12 +1817,146 @@ function changelogPage(lang: PageLang): string {
       <a href="/faq">FAQ</a>
       <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
       <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
+    <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a>
     </div>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
   </footer>
 </div>
 </body>
 </html>`;
+}
+
+// ── PM-174：問題回報頁（GET /feedback）+ POST /api/feedback（存 Supabase feedback 表，不需登入）──
+function feedbackPage(lang: PageLang): string {
+  const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
+  return `<!DOCTYPE html>
+<html lang="${lang === 'zh' ? 'zh-Hant' : 'en'}">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${t('問題回報 · BugEzy', 'Feedback · BugEzy')}</title>
+<meta name="description" content="${t('回報 BugEzy 的問題或提出功能建議。', 'Report bugs or suggest features for BugEzy.')}">
+<meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
+<link rel="canonical" href="https://bugezy.dev/feedback">
+<style>
+  * { box-sizing: border-box; }
+  .lang-switch { position:fixed; top:14px; right:16px; z-index:10; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:5px 12px; font-size:13px; color:#c4b5fd; text-decoration:none; }
+  .lang-switch:hover { background:#2a2a3e; }
+  body { margin:0; padding:0; background:#0f0f1a; color:#e8e8f0; font-family:system-ui,-apple-system,"Segoe UI","Microsoft JhengHei",sans-serif; line-height:1.7; font-size:15px; }
+  .wrap { max-width:600px; margin:0 auto; padding:48px 24px 80px; }
+  header { border-bottom:1px solid #2a2a3e; padding-bottom:20px; margin-bottom:24px; }
+  .brand { font-size:24px; font-weight:700; color:#a78bfa; text-decoration:none; }
+  h1 { font-size:26px; margin:16px 0 6px; }
+  .lead { color:#8b8fa3; font-size:14px; margin:0 0 24px; }
+  form { display:flex; flex-direction:column; gap:6px; }
+  label { font-size:13px; color:#c4b5fd; font-weight:600; margin-top:12px; }
+  input, select, textarea { background:#1a1a2e; border:1px solid #2a2a3e; border-radius:8px; padding:10px 12px; color:#e8e8f0; font-size:14px; font-family:inherit; width:100%; }
+  input:focus, select:focus, textarea:focus { outline:none; border-color:#7c3aed; }
+  textarea { resize:vertical; }
+  button { margin-top:20px; background:#7c3aed; color:#fff; border:none; border-radius:10px; padding:12px; font-size:15px; font-weight:600; cursor:pointer; }
+  button:disabled { opacity:0.5; cursor:not-allowed; }
+  .msg { margin-top:16px; padding:12px; border-radius:8px; text-align:center; font-size:14px; display:none; }
+  .msg.ok { background:rgba(34,197,94,0.12); border:1px solid rgba(34,197,94,0.4); color:#22c55e; }
+  .msg.err { background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.4); color:#ef4444; }
+  .char-hint { font-size:11px; color:#666; text-align:right; margin-top:2px; }
+  footer { margin-top:40px; padding-top:20px; border-top:1px solid #2a2a3e; color:#8b8fa3; font-size:13px; }
+  footer a { color:#a78bfa; margin-right:14px; }
+</style>
+</head>
+<body>
+<a class="lang-switch" href="?lang=${lang === 'zh' ? 'en' : 'zh'}">${t('EN', '中文')}</a>
+<div class="wrap">
+  <header><a class="brand" href="/">🐛 BugEzy</a></header>
+  <h1>${t('📬 問題回報', '📬 Feedback')}</h1>
+  <p class="lead">${t('遇到問題或有建議？告訴我們！', 'Found a bug or have a suggestion? Let us know!')}</p>
+  <form id="feedback-form">
+    <label for="fb-email">${t('Email（選填，方便我們回覆）', 'Email (optional, so we can reply)')}</label>
+    <input type="email" id="fb-email" name="email" placeholder="you@example.com" maxlength="200" />
+    <label for="fb-category">${t('類型', 'Category')}</label>
+    <select id="fb-category" name="category">
+      <option value="bug">${t('🐛 Bug 回報', '🐛 Bug Report')}</option>
+      <option value="feature">${t('💡 功能建議', '💡 Feature Request')}</option>
+      <option value="question">${t('❓ 使用問題', '❓ Question')}</option>
+      <option value="other">${t('📝 其他', '📝 Other')}</option>
+    </select>
+    <label for="fb-message">${t('描述', 'Description')}</label>
+    <textarea id="fb-message" name="message" rows="6" required maxlength="5000" placeholder="${t('請描述你遇到的問題或建議…', 'Describe the issue or suggestion…')}"></textarea>
+    <div class="char-hint"><span id="fb-count">0</span>/5000</div>
+    <button type="submit" id="fb-submit">${t('📤 送出', '📤 Submit')}</button>
+  </form>
+  <div class="msg ok" id="fb-ok">${t('✅ 感謝回報！我們會盡快處理。', '✅ Thanks for your feedback! We will get on it soon.')}</div>
+  <div class="msg err" id="fb-err"></div>
+  <footer>
+    <a href="/">${t('首頁', 'Home')}</a>
+    <a href="/faq">FAQ</a>
+    <a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a>
+  </footer>
+</div>
+<script>
+  var form = document.getElementById('feedback-form');
+  var msgEl = document.getElementById('fb-message');
+  var countEl = document.getElementById('fb-count');
+  var okBox = document.getElementById('fb-ok');
+  var errBox = document.getElementById('fb-err');
+  var submitBtn = document.getElementById('fb-submit');
+  msgEl.addEventListener('input', function () { countEl.textContent = String(msgEl.value.length); });
+  var ERR_EMPTY = ${JSON.stringify(t('請填寫問題描述', 'Please enter a description'))};
+  var ERR_LONG = ${JSON.stringify(t('描述過長，請控制在 5000 字內', 'Too long — please keep it under 5000 characters'))};
+  var ERR_FAIL = ${JSON.stringify(t('送出失敗，請稍後再試', 'Submit failed, please try again later'))};
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    errBox.style.display = 'none';
+    var message = msgEl.value.trim();
+    if (!message) { errBox.textContent = ERR_EMPTY; errBox.style.display = 'block'; return; }
+    if (message.length > 5000) { errBox.textContent = ERR_LONG; errBox.style.display = 'block'; return; }
+    submitBtn.disabled = true;
+    fetch('/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: document.getElementById('fb-email').value.trim(),
+        category: document.getElementById('fb-category').value,
+        message: message,
+      }),
+    }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (res) {
+        if (res.ok && res.d.ok) { form.style.display = 'none'; okBox.style.display = 'block'; }
+        else { errBox.textContent = (res.d && res.d.error) || ERR_FAIL; errBox.style.display = 'block'; submitBtn.disabled = false; }
+      })
+      .catch(function () { errBox.textContent = ERR_FAIL; errBox.style.display = 'block'; submitBtn.disabled = false; });
+  });
+</script>
+</body>
+</html>`;
+}
+
+// POST /api/feedback → 存 Supabase feedback 表（不需登入，降低回報門檻；CF /api/ 有 rate limit）。
+async function handleFeedback(request: Request, env: Env): Promise<Response> {
+  const body = (await request.json().catch(() => null)) as {
+    email?: string;
+    category?: string;
+    message?: string;
+  } | null;
+  if (!body || !body.message || !body.message.trim() || !body.category) {
+    return json({ error: '請填寫問題描述 / Please enter a description' }, 400);
+  }
+  if (body.message.length > 5000) {
+    return json({ error: '描述過長，請控制在 5000 字內 / Too long (max 5000 chars)' }, 400);
+  }
+  const { error } = await supa(env)
+    .from('feedback')
+    .insert({
+      email: body.email?.slice(0, 200) || null,
+      category: String(body.category).slice(0, 50),
+      message: body.message.slice(0, 5000),
+      user_agent: request.headers.get('User-Agent')?.slice(0, 500) || '',
+      country: cfCountry(request), // PM-172 helper
+    });
+  if (error) {
+    console.error('feedback insert failed:', error.message); // 原始錯誤只記 log（PM-130 脫敏）
+    return json({ error: GENERIC_500 }, 500);
+  }
+  return json({ ok: true });
 }
 
 // ── PM-59：Server 直接 serve 報告頁 HTML（vanilla JS 讀 /api/reports/:id 渲染）──
@@ -2636,6 +2776,15 @@ export default {
       const res = html(changelogPage(getLang(request))); // PM-126/151
       res.headers.set('Cache-Control', 'no-store');
       return res;
+    }
+    // PM-174：問題回報頁 + 提交端點（不需登入）
+    if (request.method === 'GET' && path === '/feedback') {
+      const res = html(feedbackPage(getLang(request)));
+      res.headers.set('Cache-Control', 'no-store'); // 依語言變動
+      return res;
+    }
+    if (request.method === 'POST' && path === '/api/feedback') {
+      return await handleFeedback(request, env);
     }
     // PM-136：SEO — sitemap + robots（讓 Google/Bing 收錄 bugezy.dev）
     if (request.method === 'GET' && path === '/sitemap.xml') return sitemapXml();

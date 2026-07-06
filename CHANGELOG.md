@@ -4,6 +4,8 @@
 
 Day 21（PM-170~）。
 
+- PM-174：**官網問題回報頁 /feedback**（`server/index.ts` + `schema.sql`）。使用者遇問題無回報入口 → 新增 `feedbackPage(lang)`（中英表單：Email 選填/類型/描述 5000 字上限+字數計數，inline JS fetch 不跳頁、成功顯示感謝）+ `POST /api/feedback`（**不需登入**，驗證非空/≤5000、存 Supabase `feedback` 表含 `country` IP 偵測、錯誤脫敏）+ 全站 7 處 footer 加「📬 問題回報」+ sitemap 加 /feedback + SEO meta。`feedback` 表加入 schema.sql（RLS，service_role 寫入）。線上實測：GET 中英、POST 空白/過長→400、正常→200 實寫入、sitemap+footer ✅。`wrangler deploy`（`fa0ba8e2`）。
+
 - PM-173：**全站文案「MCP」→「MCP AI 讀取」並列 + 免費額度數字核對**（`server/index.ts` + `extension/i18n.ts`/`popup.html`）。小白不懂「MCP」→ 保留 MCP 並列「AI 讀取」（行家認得出）：①面向使用者的配額/用量文案改「MCP AI 讀取」——首頁定價 `MCP 月 20 次→MCP AI 讀取 月 20 次`、FAQ 免費額度/Token 說明、bumpUsage 403 label、隱私、日票成功頁、extension `usage-desc-mcp`/`intl-free-hint`（中英皆改）；②**技術設定不動**——/install MCP config/端點、「MCP 是什麼？」教育條、meta 品牌詞、工具清單、tool name；③免費額度數字全站核對**本就一致**（10 錄製/5 回溯/20 MCP AI 讀取/截圖無限/7 天）。`wrangler deploy`（`5f8bda9b`）+ extension build。
 
 - PM-172：**付費判斷改 IP 國家偵測（取代 PM-171 語言判斷）**（`server/index.ts` + `extension/popup.ts`）。PM-171 用語言判斷不嚴謹（台灣人選英文看不到付費、香港人選中文付不了）→ 改用 Cloudflare `request.cf.country`（零成本/準確/無法偽造）。①`cfCountry()`/`isPayCountry()`（白名單 `['TW']`）helper；`getUserPlan` 回 `country`；②popup 改 `currentCountry`（來自 plan.country）+ `isTaiwanUser()=country==='TW'`，移除語言判斷（語言只控 UI/語音、不控付費）；③`homePage(lang, request)` 定價 CTA 依國家（非語言）；④`/checkout`+`/api/day-pass/create` 加 `country!=='TW'` 403（防繞 UI 直呼）。線上實測（本環境 IP=TW）：首頁 EN 版顯示付費按鈕（語言≠付費，驗收 #2）。`wrangler deploy`（`bfb538fa`）+ extension build。
