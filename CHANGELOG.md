@@ -4,6 +4,8 @@
 
 Day 21（PM-170~）。
 
+- PM-176：**CLI stderr 智慧解析——Python traceback / Node Error 結構化**（`cli/parse-traceback.ts`(新) + `cli/index.ts` + `server/index.ts`）。CLI 原把 stderr 當純文字上傳 → 新增 `parsePythonTraceback`/`parseNodeError` 解析成 `{type,message,frames[file,line,function,code],raw,runtime}`；stderr chunk **先 maskStderr 再解析**（結構化資料也遮罩）→ payload 加 `parsed_errors` 陣列（logs 維持既有陣列相容）；server `POST /api/terminal-logs` 整包存 R2 + `maskTerminalPayload` 擴充雙重遮罩 parsed_errors（message/raw/frames.code）。node 實測：Python KeyError/Node TypeError 正確結構化、正常 stderr→null、DB 密碼在 frame.code 已遮罩。`wrangler deploy`（`a7e4781e`）+ CLI build。
+
 - PM-175：**修復 AI 輪盤語言切回中文不重置 bug**（`extension/popup.ts`）。根因：原 `JSON.stringify` 比對預設值因序列化微差異誤判「已自訂」→ 英→中切不回來。改用明確 flag `bugezy:prompts-customized`：未自訂（flag≠true，含舊使用者）→ 切語言重置為新語言預設；已自訂（儲存/編輯切換時設 true）→ 不重置。移除 JSON 比對。`npm run build` ✅（dist 含 flag、舊 JSON 比對已移除）。未 deploy（純 extension，待重上架）。
 
 - PM-174：**官網問題回報頁 /feedback**（`server/index.ts` + `schema.sql`）。使用者遇問題無回報入口 → 新增 `feedbackPage(lang)`（中英表單：Email 選填/類型/描述 5000 字上限+字數計數，inline JS fetch 不跳頁、成功顯示感謝）+ `POST /api/feedback`（**不需登入**，驗證非空/≤5000、存 Supabase `feedback` 表含 `country` IP 偵測、錯誤脫敏）+ 全站 7 處 footer 加「📬 問題回報」+ sitemap 加 /feedback + SEO meta。`feedback` 表加入 schema.sql（RLS，service_role 寫入）。線上實測：GET 中英、POST 空白/過長→400、正常→200 實寫入、sitemap+footer ✅。`wrangler deploy`（`fa0ba8e2`）。

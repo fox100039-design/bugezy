@@ -2409,6 +2409,23 @@ function maskTerminalPayload(data: Record<string, unknown>): Record<string, unkn
     );
   }
   if (typeof out.command === 'string') out.command = serverMaskStderr(out.command);
+  // PM-176：結構化錯誤（parsed_errors）雙重遮罩——CLI 已在遮罩後文字上解析，此為防舊/改版 CLI 的縱深。
+  if (Array.isArray(out.parsed_errors)) {
+    out.parsed_errors = (out.parsed_errors as Array<Record<string, unknown>>).map((e) => {
+      if (!e || typeof e !== 'object') return e;
+      const masked = { ...e };
+      if (typeof masked.message === 'string') masked.message = serverMaskStderr(masked.message);
+      if (typeof masked.raw === 'string') masked.raw = serverMaskStderr(masked.raw);
+      if (Array.isArray(masked.frames)) {
+        masked.frames = (masked.frames as Array<Record<string, unknown>>).map((f) =>
+          f && typeof f === 'object' && typeof f.code === 'string'
+            ? { ...f, code: serverMaskStderr(f.code) }
+            : f,
+        );
+      }
+      return masked;
+    });
+  }
   return out;
 }
 

@@ -6,6 +6,7 @@
 
 import { spawn } from 'node:child_process';
 import { maskStderr } from './pii-mask'; // PM-167：上傳前遮罩敏感資料（DB 密碼/金鑰/token/PII）
+import { parsePythonTraceback, parseNodeError, type ParsedError } from './parse-traceback'; // PM-176：結構化解析
 
 const API_BASE = process.env.BUGEZY_API_URL || 'https://bugezy-api.bugezy-api.workers.dev';
 // PM-143：/api/terminal-logs 已加認證 + per-user key。CLI 需帶 session token（從 BugEzy 擴充複製）。
@@ -55,6 +56,9 @@ interface TerminalLog {
 
 const buffer: TerminalLog[] = [];
 let totalCaptured = 0;
+// PM-176：本輪結構化解析出的錯誤（Python traceback / Node Error stack），flush 時一起上傳後清空
+let parsedErrors: ParsedError[] = [];
+const MAX_PARSED = 20; // 上限，避免爆量
 
 function isErrorLine(line: string): boolean {
   return ERROR_PATTERNS.some((p) => p.test(line));
@@ -104,8 +108,9 @@ console.log('─'.repeat(50));
 
 // ── 定時推送 ──
 async function flushBuffer(): Promise<void> {
-  if (buffer.length === 0) return;
+  if (buffer.length === 0 && parsedErrors.length === 0) return;
   const logs = buffer.splice(0, buffer.length);
+  const parsed = parsedErrors.splice(0, parsedErrors.length); // PM-176：結構化錯誤，一起上傳後清空
   try {
     const res = await fetch(`${API_BASE}/api/terminal-logs`, {
       method: 'POST',
@@ -115,6 +120,7 @@ async function flushBuffer(): Promise<void> {
       },
       body: JSON.stringify({
         logs,
+        parsed_errors: parsed, // PM-176：結構化 traceback（type/message/frames）
         command: userCommand.join(' '),
         cwd: process.cwd(),
         timestamp: Date.now(),
@@ -159,6 +165,16 @@ child.stdout?.on('data', (data: Buffer) => {
 child.stderr?.on('data', (data: Buffer) => {
   const text = data.toString();
   process.stderr.write(text);
+  // PM-176：先遮罩整塊，再在遮罩後的文字上解析 Python traceback / Node Error（結構化，AI 一秒定位）。
+  // 註：解析以「單次 stderr chunk」為單位——python -c/throw 多半一次印完整 traceback；跨 chunk 的巨型
+  //     traceback 可能解析不到（fallback 到 logs 原文，仍可用）。
+  const maskedChunk = maskStderr(text);
+  if (parsedErrors.length < MAX_PARSED) {
+    const pyError = parsePythonTraceback(maskedChunk);
+    const nodeError = pyError ? null : parseNodeError(maskedChunk);
+    if (pyError) parsedErrors.push(pyError);
+    else if (nodeError) parsedErrors.push(nodeError);
+  }
   for (const line of text.split('\n').filter(Boolean)) {
     if (!isExcluded(line)) {
       const level: TerminalLog['level'] = isErrorLine(line) ? 'error' : 'warn';
