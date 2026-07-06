@@ -43,6 +43,14 @@ const dict: Record<string, Record<UILang, string>> = {
   'upgrade-unlock': { zh: '升級解鎖無限次', en: 'Upgrade for unlimited' },
   'day-pass-btn': { zh: '⚡ 日票 NT$20（24hr）', en: '⚡ Day Pass NT$20 (24hr)' },
   'monthly-btn': { zh: '✨ 月費 NT$80/月', en: '✨ Monthly NT$80/mo' },
+  // PM-170：用完升級引導 overlay
+  'usage-exhausted': { zh: '本月額度已用完', en: 'Monthly quota exhausted' },
+  'usage-desc-record': { zh: '錄製 {used}/{max} 次已使用', en: 'Recording {used}/{max} used' },
+  'usage-desc-rewind': { zh: '回溯 {used}/{max} 次已使用', en: 'Rewind {used}/{max} used' },
+  'usage-desc-mcp': { zh: 'AI 讀取 {used}/{max} 次已使用', en: 'AI reads {used}/{max} used' },
+  'usage-reset-hint': { zh: '💡 免費額度每月自動重置', en: '💡 Free quota resets monthly' },
+  'day-pass-btn-full': { zh: '⚡ 日票 NT$20（24hr 無限）', en: '⚡ Day Pass NT$20 (24hr unlimited)' },
+  'monthly-btn-full': { zh: '✨ 月費 NT$80/月（最划算）', en: '✨ Monthly NT$80/mo (best value)' },
   'day-pass-badge': { zh: '⚡ 日票', en: '⚡ Day Pass' },
   'day-pass-remaining': { zh: '剩餘 {h}h {m}m {s}s', en: '{h}h {m}m {s}s left' },
   'day-pass-expire-hint': {

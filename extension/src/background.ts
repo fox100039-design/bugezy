@@ -138,19 +138,19 @@ async function getActiveTab(): Promise<chrome.tabs.Tab | undefined> {
 }
 
 /**
- * PM-63：錄製前檢查免費版用量。POST /api/user/usage（type:recording）同時遞增計數並檢查。
+ * PM-63/170：操作前檢查免費版用量。POST /api/user/usage（type）同時遞增計數並檢查。
  * - 未登入（無 token）→ 不檢查，回 null（公測期不阻擋匿名使用）。
  * - 達上限 → 回傳升級訊息字串；否則回 null。
- * - API 不通 → 回 null（不因後端問題卡住錄製）。
+ * - API 不通 → 回 null（不因後端問題卡住操作）。
  */
-async function checkRecordingUsage(): Promise<string | null> {
+async function checkUsage(type: 'recording' | 'rewind'): Promise<string | null> {
   const headers = await getAuthHeaders();
   if (!headers.Authorization) return null; // 未登入 → 不檢查（公測期不阻擋匿名使用）
   try {
     const res = await fetch(`${API_BASE}/api/user/usage`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ type: 'recording' }),
+      body: JSON.stringify({ type }),
     });
     if (res.status === 403) {
       const err = (await res.json()) as { error?: string; message?: string };
@@ -158,10 +158,13 @@ async function checkRecordingUsage(): Promise<string | null> {
     }
     return null;
   } catch (e) {
-    blog('checkRecordingUsage failed', e);
+    blog('checkUsage failed', e);
     return null;
   }
 }
+const checkRecordingUsage = (): Promise<string | null> => checkUsage('recording');
+// PM-170：回溯（30s）也遞增/檢查 rewind_count，達上限不進入回溯
+const checkRewindUsage = (): Promise<string | null> => checkUsage('rewind');
 
 // PM-97：本次錄製的 tab id 快取，供 MIC_VOLUME（每 200ms）轉發音量到頁面，免每次讀 storage。
 let recordingTabId: number | null = null;
@@ -605,6 +608,12 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summ
         }
         // PM-50：⏪ 回溯——通知 active tab 的 content 打包背景緩存
         case 'REWIND_30S': {
+          // PM-170：回溯前檢查並遞增 rewind 用量；達上限不進入回溯，回傳升級提示供 popup 彈引導
+          const limitReached = await checkRewindUsage();
+          if (limitReached) {
+            sendResponse({ ok: false, limitReached });
+            break;
+          }
           const tab = await getActiveTab();
           if (tab?.id) {
             await chrome.tabs.sendMessage(tab.id, { type: 'REWIND_30S' } satisfies ControlMessage);

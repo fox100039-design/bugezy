@@ -76,6 +76,13 @@ const dayPassStatus = $('dayPassStatus');
 const dayPassCountdown = $('dayPassCountdown');
 const dayPassHint = $('dayPassHint');
 let dayPassTimer: number | undefined;
+// PM-170：用完升級引導 overlay + 各卡片剩餘次數用的免費額度快取
+const upgradeOverlay = $('upgradeOverlay');
+const upgradeOverlayClose = $<HTMLButtonElement>('upgradeOverlayClose');
+const upgradeOverlayDesc = $('upgradeOverlayDesc');
+const overlayDayPassBtn = $<HTMLButtonElement>('overlayDayPassBtn');
+const overlayMonthlyBtn = $<HTMLButtonElement>('overlayMonthlyBtn');
+let freeLimits: PlanInfo['limits'] = null; // 最近一次 loadPlan 的免費額度（供 overlay 顯示 used/max）
 
 // PM-49：鍵盤模式 toggle（關閉語音）— 狀態存 chrome.storage.local
 const keyboardMode = $<HTMLInputElement>('keyboardMode');
@@ -226,7 +233,12 @@ rewindBtn.addEventListener('click', async () => {
   rewindBtn.disabled = true;
   if (label) label.textContent = '⏪ 擷取中...';
   try {
-    await send('REWIND_30S');
+    // PM-170：回溯達上限 → background 回 { limitReached }，彈升級引導 overlay，不進入回溯
+    const res = await send<{ ok?: boolean; limitReached?: string }>('REWIND_30S');
+    if (res?.limitReached) {
+      showUpgradeOverlay('rewind');
+      void loadPlan();
+    }
   } catch (err) {
     console.error('[BugEzy popup] rewind failed', err);
   }
@@ -400,12 +412,11 @@ async function doStartRecording() {
   try {
     // 語音改由 inject.ts（MAIN world）處理，麥克風授權由網頁觸發，popup 不需先搶
     const res = await send<StateResponse>('START_RECORDING');
-    // PM-63：免費版用量已達上限 → 不進入錄製，顯示升級提示
+    // PM-63/170：免費版用量已達上限 → 不進入錄製，彈升級引導 overlay
     if (res.limitReached) {
       setRecordDesc(t('used-up', currentUILang));
-      const span = upgradeHint.querySelector('span');
-      if (span) span.textContent = res.limitReached;
-      upgradeHint.classList.remove('hidden');
+      showUpgradeOverlay('recording');
+      void loadPlan(); // 刷新剩餘次數顯示（0）
       return;
     }
     render(res); // render 內 lockSettings(true) 會鎖定設定（PM-106）
@@ -658,6 +669,7 @@ interface PlanInfo {
   expires_at?: string | null;
   plan_expires_at?: string | null; // PM-134：月費到期日（cancelled 顯示用；與 expires_at 同值）
   day_pass_expires_at?: string | null; // PM-111：日票到期時間
+  usage_reset_at?: string | null; // PM-170：免費額度上次重置時間
   limits: null | {
     recording: { used: number; max: number };
     rewind: { used: number; max: number };
@@ -670,10 +682,42 @@ function fmtDate(iso?: string | null): string {
   return iso ? iso.slice(0, 10).replace(/-/g, '/') : '本期結束';
 }
 
-/** 只更新錄製按鈕的 .action-desc（不覆寫整顆按鈕，保留 icon/label span）。 */
+/** 更新指定按鈕的 .action-desc（保留 icon/label span）；PM-170：low=剩 ≤2 次上紅色。 */
+function setActionDesc(btn: HTMLButtonElement, text: string, low = false) {
+  const desc = btn.querySelector<HTMLElement>('.action-desc');
+  if (!desc) return;
+  desc.textContent = text;
+  desc.classList.toggle('low', low);
+}
+/** 只更新錄製按鈕的 .action-desc（保留既有呼叫端）。 */
 function setRecordDesc(text: string) {
-  const desc = startBtn.querySelector<HTMLElement>('.action-desc');
-  if (desc) desc.textContent = text;
+  setActionDesc(startBtn, text);
+}
+
+/** PM-170：三張免費卡片剩餘次數（record/rewind 顯示剩 N 次，剩 ≤2 紅色；screenshot 無限）。 */
+function renderFreeUsage(limits: NonNullable<PlanInfo['limits']>) {
+  const setRemain = (btn: HTMLButtonElement, used: number, max: number) => {
+    const remain = Math.max(0, max - used);
+    setActionDesc(
+      btn,
+      remain > 0 ? t('remaining', currentUILang, { n: remain }) : t('used-up', currentUILang),
+      remain <= 2,
+    );
+  };
+  setRemain(startBtn, limits.recording.used, limits.recording.max);
+  setRemain(rewindBtn, limits.rewind.used, limits.rewind.max);
+  setActionDesc(screenshotBtn, t('unlimited', currentUILang)); // 截圖免費無限
+}
+
+/** PM-170：本月額度用完 → 彈升級引導 overlay（day-pass / monthly + 每月重置提示）。 */
+function showUpgradeOverlay(type: 'recording' | 'rewind' | 'mcp') {
+  const lim = freeLimits?.[type];
+  const max = lim?.max ?? 0;
+  const descKey =
+    type === 'recording' ? 'usage-desc-record' : type === 'rewind' ? 'usage-desc-rewind' : 'usage-desc-mcp';
+  // 用完 → used 已達上限，顯示 max/max
+  upgradeOverlayDesc.textContent = t(descKey, currentUILang, { used: max, max });
+  upgradeOverlay.classList.remove('hidden');
 }
 
 // PM-63/75：查方案 → 依 plan 狀態（source of truth）控制 UI。
@@ -685,6 +729,7 @@ async function loadPlan() {
     });
     if (!res.ok) return; // 表未建/未授權等 → 不顯示用量，按鈕維持原樣（非阻擋）
     const plan = (await res.json()) as PlanInfo;
+    freeLimits = plan.limits; // PM-170：快取免費額度供 overlay 顯示 used/max
     // PM-87：持久化 plan 供 background/content 路由語音引擎（free→Web Speech、paid/cancelled→Groq Whisper）
     void chrome.storage.local.set({ [USER_PLAN_KEY]: plan.plan });
     // PM-91：更新模式選擇可見性（付費版才顯示）
@@ -706,35 +751,33 @@ async function loadPlan() {
       ? new Date(plan.day_pass_expires_at).getTime() - Date.now()
       : 0;
 
+    // PM-170：付費/日票/取消 → 三張卡片皆「✨ 無限次」
+    const setAllUnlimited = () => {
+      setActionDesc(startBtn, t('unlimited', currentUILang));
+      setActionDesc(rewindBtn, t('unlimited', currentUILang));
+      setActionDesc(screenshotBtn, t('unlimited', currentUILang));
+    };
+
     if (plan.plan === 'paid') {
       // 付費版 → 無限功能 + ✨付費版徽章（含取消訂閱）
-      setRecordDesc(t('unlimited', currentUILang));
+      setAllUnlimited();
       startBtn.disabled = false;
       paidBadge.classList.remove('hidden');
     } else if (plan.plan === 'cancelled') {
       // 已取消未到期 → 仍享無限功能 + 到期日 + 重新訂閱
-      setRecordDesc(t('unlimited', currentUILang));
+      setAllUnlimited();
       startBtn.disabled = false;
       expiresDate.textContent = fmtDate(plan.plan_expires_at ?? plan.expires_at);
       cancelledBadge.classList.remove('hidden');
     } else if (plan.plan === 'day_pass' && dayPassRemainMs > 0) {
       // PM-111：日票有效中 → 無限功能 + ⚡日票 badge + 倒數；隱藏升級鈕（鎖月費）+ 顯示到期提示
-      setRecordDesc(t('unlimited', currentUILang));
+      setAllUnlimited();
       startBtn.disabled = false;
       showDayPassActive(dayPassRemainMs);
     } else {
-      // 免費版（含未知狀態 fallback）→ 剩餘次數 + 升級提示
-      const rec = plan.limits?.recording;
-      if (rec) {
-        const remain = rec.max - rec.used;
-        if (remain > 0) {
-          setRecordDesc(t('remaining', currentUILang, { n: remain }));
-          startBtn.disabled = false;
-        } else {
-          setRecordDesc(t('used-up', currentUILang));
-          startBtn.disabled = true;
-        }
-      }
+      // 免費版（含未知狀態 fallback）→ PM-170：三張卡片剩餘次數（record/rewind 剩 N 次、screenshot 無限）
+      if (plan.limits) renderFreeUsage(plan.limits);
+      startBtn.disabled = (plan.limits?.recording.max ?? 1) - (plan.limits?.recording.used ?? 0) <= 0;
       upgradeHint.classList.remove('hidden');
     }
   } catch {
@@ -761,6 +804,20 @@ resubBtn.addEventListener('click', () => void openCheckout());
 // 不能像月費直接 tabs.create 到 API（日票 create 是 POST+auth），故走擴充頁跳板。
 dayPassBtn.addEventListener('click', () => {
   void chrome.tabs.create({ url: 'day-pass-checkout.html' });
+});
+
+// PM-170：升級引導 overlay 的按鈕（日票 / 月費 / 關閉）
+overlayDayPassBtn.addEventListener('click', () => {
+  upgradeOverlay.classList.add('hidden');
+  void chrome.tabs.create({ url: 'day-pass-checkout.html' });
+});
+overlayMonthlyBtn.addEventListener('click', () => {
+  upgradeOverlay.classList.add('hidden');
+  void openCheckout();
+});
+upgradeOverlayClose.addEventListener('click', () => upgradeOverlay.classList.add('hidden'));
+upgradeOverlay.addEventListener('click', (e) => {
+  if (e.target === upgradeOverlay) upgradeOverlay.classList.add('hidden'); // 點背景關閉
 });
 
 // PM-111：顯示日票有效中狀態（⚡ badge + 每秒倒數；到期自動 reload 刷新回免費升級畫面）。

@@ -1,5 +1,11 @@
 # BugEzy Changelog
 
+## 2026-07-06
+
+Day 21（PM-170~）。
+
+- PM-170：**免費版每月用量重置 + 回溯用量檢查 + 用完升級引導**（`server/index.ts` + `extension/background.ts`/`popup.ts`/`popup.html`/`i18n.ts`）。修三缺口：①用量不重置（一生累加永久鎖）→ `bumpUsage` 加「距上次重置 ≥30 天歸零三個 count」（`usage_reset_at` 欄位 PM-63 已存在）；②回溯無用量檢查 → `background.ts` 抽泛型 `checkUsage(type)` + 新 `checkRewindUsage`，`REWIND_30S` 前檢查達上限不進入；③用完沒引導 → popup 新增 `#upgradeOverlay`（📋 本月額度已用完 + 錄製/回溯 N/N + ⚡日票 + ✨月費 + 💡每月自動重置），錄製/回溯 403 即彈；popup 三卡片顯示「剩 N 次」（≤2 紅色）/付費「✨ 無限次」；`getUserPlan` 回 `usage_reset_at`；i18n 中英 7 鍵。`wrangler deploy`（`a4c29ca8`）+ extension build。
+
 ## 2026-07-05
 
 Day 20（PM-153~169）。**Bug 捕捉 10/10 + 安全 9.5/10（Fable5 第三輪全清）**。前半（PM-153~159）Bug 捕捉升級（漏網錯誤 + 效能兜底 + 網路/儲存快照 + MCP 時序麵包屑 + AI 導航摘要）；後半（PM-160~168）Fable5 R3 安全與體驗收尾——Stored XSS 三層防禦 + CSP（script-src 'self'）+ 存取模型文案釐清 + MCP live/terminal 授權補強與必填 session + createReport 額度縱深 + ECPay callback 原子性 + PII 規則擴充 + CLI stderr PII 遮罩 + session rotation + 報告頁 i18n（全站 8 頁完成）；PM-169 extension 改用正式域名 bugezy.dev。

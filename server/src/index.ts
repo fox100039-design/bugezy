@@ -3290,6 +3290,7 @@ async function getUserPlan(request: Request, env: Env): Promise<Response> {
             rewind: { used: u.rewind_count, max: FREE_LIMITS.rewind },
             mcp: { used: u.mcp_count, max: FREE_LIMITS.mcp },
           },
+      usage_reset_at: u.usage_reset_at ?? null, // PM-170：供 popup 顯示「每月自動重置」
     });
   } catch (err) {
     console.error('plan error:', err);
@@ -3307,7 +3308,7 @@ async function bumpUsage(request: Request, env: Env): Promise<Response> {
 
     const { data: user, error } = await supa(env)
       .from('users')
-      .select('plan, recording_count, rewind_count, mcp_count, day_pass_expires_at')
+      .select('plan, recording_count, rewind_count, mcp_count, day_pass_expires_at, usage_reset_at')
       .eq('user_id', userId)
       .maybeSingle();
     if (error) {
@@ -3322,9 +3323,30 @@ async function bumpUsage(request: Request, env: Env): Promise<Response> {
       rewind_count: number;
       mcp_count: number;
       day_pass_expires_at: string | null;
+      usage_reset_at: string | null;
     };
     // PM-73/109：cancelled 未到期、day_pass 未到期皆視同付費（無限）
     if (isActiveUser(u)) return json({ ok: true, unlimited: true });
+
+    // PM-170：免費版每月自動重置——距上次重置 ≥30 天就把三個 count 歸零（否則用完永久鎖住）。
+    // 免費用戶才需要（付費上面已 early-return）。usage_reset_at 缺值視為很久以前 → 觸發重置。
+    const resetAt = new Date(u.usage_reset_at ?? 0);
+    const now = new Date();
+    const daysSinceReset = (now.getTime() - resetAt.getTime()) / (1000 * 60 * 60 * 24);
+    if (daysSinceReset >= 30) {
+      await supa(env)
+        .from('users')
+        .update({
+          recording_count: 0,
+          rewind_count: 0,
+          mcp_count: 0,
+          usage_reset_at: now.toISOString(),
+        })
+        .eq('user_id', userId);
+      u.recording_count = 0;
+      u.rewind_count = 0;
+      u.mcp_count = 0;
+    }
 
     const countField = `${type}_count` as 'recording_count' | 'rewind_count' | 'mcp_count';
     const currentCount = u[countField] || 0;
