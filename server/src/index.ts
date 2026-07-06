@@ -3011,6 +3011,12 @@ export default {
     // MCP 端點（Streamable HTTP）— 給 Claude.ai Connectors / IDE 直接連。
     // PM-130：不套自訂 CORS（交給 handler 自理，避免破壞 Claude.ai 連線）。
     if (path === '/mcp' || path.startsWith('/mcp/')) {
+      // PM-183：MCP 基本防護——body 上限 1MB（Cloudflare Dashboard rate-limit 規則只覆蓋 /api/，
+      // /mcp 不在其下；免費版只能建 1 條規則已用在 /api/，故在程式層擋大 payload）。
+      const cl = parseInt(request.headers.get('Content-Length') || '0', 10);
+      if (cl > 1024 * 1024) {
+        return new Response('Request too large', { status: 413 });
+      }
       const handler = createMcpHandler(createMcpServer(env), { route: '/mcp' });
       return handler(request, env, ctx);
     }
@@ -3257,6 +3263,17 @@ export default {
       else console.log(`[Cron] Supabase keepalive OK: ${count ?? 0} users`);
     } catch (err) {
       console.error('[Cron] Supabase keepalive failed:', err);
+    }
+    // PM-182：清理過期 sessions（verifySession 只在被查時刪，主動清理避免表無限膨脹）
+    try {
+      const { count, error } = await supa(env)
+        .from('sessions')
+        .delete({ count: 'exact' })
+        .lt('expires_at', new Date().toISOString());
+      if (error) console.error('[Cron] Session cleanup failed:', error.message);
+      else console.log(`[Cron] Cleaned ${count ?? 0} expired sessions`);
+    } catch (err) {
+      console.error('[Cron] Session cleanup failed:', err);
     }
   },
 };
