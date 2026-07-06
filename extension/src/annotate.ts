@@ -85,17 +85,44 @@ chrome.storage.local.get(TOOLBAR_EFFECT_KEY, (store) => {
 const params = new URLSearchParams(location.search);
 const key = params.get('key');
 
-// PM-185：若截圖前偵測到敏感欄位（content 設 flag），頂部顯示橘色提示條並清 flag
-void chrome.storage.local.get('bugezy:sensitive-detected').then((store) => {
-  if (store['bugezy:sensitive-detected']) {
-    const tip = document.getElementById('sensitiveTip');
-    if (tip) {
-      tip.textContent = t('sensitive-tip', annotateUILang);
-      tip.style.display = 'block';
+// PM-186：敏感欄位座標型別 + storage keys（提示/自動遮罩統一在 init 處理，避免雙提示）
+interface SensitiveRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  label: string;
+}
+const SENSITIVE_DETECTED_KEY = 'bugezy:sensitive-detected';
+const SENSITIVE_RECTS_KEY = 'bugezy:sensitive-rects';
+
+/** PM-186：在 (x,y,w,h) 區域畫馬賽克（blockSize 網格取平均色），供自動遮罩敏感欄位。 */
+function applyMosaic(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  const block = 10;
+  const x0 = Math.max(0, x);
+  const y0 = Math.max(0, y);
+  const x1 = Math.min(canvas.width, x + w);
+  const y1 = Math.min(canvas.height, y + h);
+  for (let bx = x0; bx < x1; bx += block) {
+    for (let by = y0; by < y1; by += block) {
+      const pw = Math.min(block, x1 - bx);
+      const ph = Math.min(block, y1 - by);
+      if (pw <= 0 || ph <= 0) continue;
+      const px = c.getImageData(bx, by, pw, ph).data;
+      let r = 0,
+        g = 0,
+        b = 0;
+      const n = px.length / 4;
+      for (let i = 0; i < px.length; i += 4) {
+        r += px[i];
+        g += px[i + 1];
+        b += px[i + 2];
+      }
+      c.fillStyle = `rgb(${Math.round(r / n)},${Math.round(g / n)},${Math.round(b / n)})`;
+      c.fillRect(bx, by, pw, ph);
     }
-    void chrome.storage.local.remove('bugezy:sensitive-detected');
   }
-});
+}
 
 // ── 工具狀態 ──────────────────────────────────────────────
 type Tool = 'pen' | 'arrow' | 'rect' | 'text' | 'mosaic'; // PM-185：+mosaic
@@ -657,7 +684,48 @@ async function init() {
   canvas.width = img.naturalWidth;
   canvas.height = img.naturalHeight;
   ctx!.drawImage(img, 0, 0);
-  baseImage = ctx!.getImageData(0, 0, canvas.width, canvas.height);
+  baseImage = ctx!.getImageData(0, 0, canvas.width, canvas.height); // 原始（未遮罩），供撤銷/清除還原
   blog('標注頁載入截圖', `${canvas.width}x${canvas.height}`);
+
+  // PM-186：自動遮罩敏感欄位（預設安全）+ 提示；沒有座標則回退 PM-185 偵測提示
+  const s = await chrome.storage.local.get([SENSITIVE_RECTS_KEY, SENSITIVE_DETECTED_KEY]);
+  void chrome.storage.local.remove([SENSITIVE_RECTS_KEY, SENSITIVE_DETECTED_KEY]);
+  const payload = s[SENSITIVE_RECTS_KEY] as
+    | { rects?: SensitiveRect[]; viewportWidth?: number; viewportHeight?: number }
+    | undefined;
+  const tip = document.getElementById('sensitiveTip');
+  let autoMasked = 0;
+  if (payload?.rects?.length && (payload.viewportWidth ?? 0) > 0 && (payload.viewportHeight ?? 0) > 0) {
+    const scaleX = canvas.width / payload.viewportWidth!;
+    const scaleY = canvas.height / payload.viewportHeight!;
+    // 只在「整頁截圖」（canvas 與 viewport 比例一致）自動遮罩——區域/自由截圖是裁切，座標會錯位，
+    // 強行遮罩反而蓋錯地方造成假安全，故略過（改靠手動筆刷 + PM-185 警告）。
+    if (Math.abs(scaleX - scaleY) / Math.max(scaleX, scaleY) < 0.05) {
+      for (const r of payload.rects) {
+        applyMosaic(ctx!, Math.round(r.x * scaleX), Math.round(r.y * scaleY), Math.round(r.width * scaleX), Math.round(r.height * scaleY));
+      }
+      autoMasked = payload.rects.length;
+    }
+  }
+  if (tip) {
+    if (autoMasked > 0) {
+      // PM-186：已自動遮罩 N 個 + 撤銷遮罩（還原原始截圖）
+      tip.textContent = t('auto-masked', annotateUILang, { n: autoMasked }) + '  ';
+      const undoBtn = document.createElement('button');
+      undoBtn.textContent = t('undo-mask', annotateUILang);
+      undoBtn.style.cssText =
+        'margin-left:8px;background:#fff;color:#000;border:none;border-radius:4px;padding:3px 12px;cursor:pointer;font-size:12px;font-weight:600;';
+      undoBtn.onclick = () => {
+        if (baseImage) ctx!.putImageData(baseImage, 0, 0); // 還原未遮罩原圖
+        tip.style.display = 'none';
+      };
+      tip.appendChild(undoBtn);
+      tip.style.display = 'block';
+    } else if (s[SENSITIVE_DETECTED_KEY]) {
+      // PM-185：偵測到但未自動遮罩（如區域截圖）→ 提示手動塗
+      tip.textContent = t('sensitive-tip', annotateUILang);
+      tip.style.display = 'block';
+    }
+  }
 }
 void init();

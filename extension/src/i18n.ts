@@ -64,6 +64,9 @@ const dict: Record<string, Record<UILang, string>> = {
     en: '🔒 Sensitive fields detected — use the mosaic brush to cover them before uploading',
   },
   'annotate-mosaic': { zh: '🔒 馬賽克', en: '🔒 Mosaic' },
+  // PM-186：自動遮罩
+  'auto-masked': { zh: '🔒 已自動遮罩 {n} 個敏感欄位', en: '🔒 Auto-masked {n} sensitive field(s)' },
+  'undo-mask': { zh: '撤銷遮罩', en: 'Undo mask' },
   'day-pass-btn': { zh: '⚡ 日票 NT$20（24hr）', en: '⚡ Day Pass NT$20 (24hr)' },
   'monthly-btn': { zh: '✨ 月費 NT$80/月', en: '✨ Monthly NT$80/mo' },
   // PM-170：用完升級引導 overlay

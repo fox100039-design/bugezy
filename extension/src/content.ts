@@ -237,12 +237,18 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
     // PM-185：截圖前掃 DOM 敏感欄位——偵測到才彈警告（沒偵測到不打擾）
     const sensitive = detectSensitiveFields();
     if (sensitive.length > 0) {
+      // PM-186：一併收集敏感欄位座標 + 當前 viewport 尺寸，供 annotate 自動遮罩（預設安全）
+      const rectPayload = {
+        rects: getSensitiveRects(),
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+      };
       showSensitiveWarning(sensitive, () => {
-        void chrome.storage.local.set({ [SENSITIVE_DETECTED_KEY]: true }); // 供 annotate 頁顯示提示條
+        void chrome.storage.local.set({ [SENSITIVE_DETECTED_KEY]: true, [SENSITIVE_RECTS_KEY]: rectPayload });
         injectScreenshotOverlay();
       });
     } else {
-      void chrome.storage.local.remove(SENSITIVE_DETECTED_KEY); // 清掉舊 flag
+      void chrome.storage.local.remove([SENSITIVE_DETECTED_KEY, SENSITIVE_RECTS_KEY]); // 清掉舊 flag/座標
       injectScreenshotOverlay();
     }
     sendResponse({ ok: true });
@@ -292,6 +298,49 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
 // content.ts（ISOLATED world）能直接讀頁面 DOM，且截圖流程由此觸發——故偵測放這裡最直接。
 // ════════════════════════════════════════════════════════════
 const SENSITIVE_DETECTED_KEY = 'bugezy:sensitive-detected';
+const SENSITIVE_RECTS_KEY = 'bugezy:sensitive-rects'; // PM-186：敏感欄位座標 + viewport 尺寸
+
+// PM-186：敏感欄位座標選擇器（比 detectSensitiveFields 精一點，label 給英文供 annotate 顯示）
+const SENSITIVE_RECT_SELECTORS: Array<{ sel: string; label: string }> = [
+  { sel: 'input[type="password"]', label: 'password' },
+  { sel: 'input[name*="password" i]', label: 'password' },
+  { sel: 'input[name*="passwd" i]', label: 'password' },
+  { sel: 'input[autocomplete="current-password"]', label: 'password' },
+  { sel: 'input[autocomplete="new-password"]', label: 'password' },
+  { sel: 'input[name*="secret" i]', label: 'secret' },
+  { sel: 'input[name*="token" i]', label: 'token' },
+  { sel: 'input[name*="key" i]:not([name*="keyboard" i])', label: 'key' },
+  { sel: 'input[name*="card" i]', label: 'card' },
+  { sel: 'input[autocomplete*="cc-"]', label: 'card' },
+  { sel: 'input[name*="cvv" i]', label: 'cvv' },
+  { sel: 'input[name*="cvc" i]', label: 'cvv' },
+  { sel: '[data-sensitive]', label: 'sensitive' },
+];
+
+/** PM-186：收集敏感欄位在 viewport 的座標（getBoundingClientRect），供 annotate 截圖後自動遮罩。
+ *  只收可見（寬高>0 且在視窗內）；同一元素被多選擇器命中只留一份（用 element Set 去重）。 */
+function getSensitiveRects(): Array<{ x: number; y: number; width: number; height: number; label: string }> {
+  const seen = new Set<Element>();
+  const rects: Array<{ x: number; y: number; width: number; height: number; label: string }> = [];
+  for (const { sel, label } of SENSITIVE_RECT_SELECTORS) {
+    let els: NodeListOf<Element>;
+    try {
+      els = document.querySelectorAll(sel);
+    } catch {
+      continue; // 選擇器不合法（極少數瀏覽器）→ 略過
+    }
+    els.forEach((el) => {
+      if (seen.has(el)) return;
+      const r = el.getBoundingClientRect();
+      // 只收可見且在視窗內（截圖只拍 viewport）
+      if (r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 && r.top < window.innerHeight && r.left < window.innerWidth) {
+        seen.add(el);
+        rects.push({ x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height), label });
+      }
+    });
+  }
+  return rects;
+}
 
 /** 掃 DOM 找敏感 input（密碼/token/key/card/cvv/secret/標記）。回 i18n 標籤 key 陣列（已去重）。 */
 function detectSensitiveFields(): string[] {

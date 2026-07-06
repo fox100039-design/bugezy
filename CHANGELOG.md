@@ -4,6 +4,8 @@
 
 Day 21（PM-170~）。
 
+- PM-186：**截圖敏感欄位自動遮罩（預設安全 + 可撤銷）**（`extension/content.ts`/`annotate.ts`/`i18n.ts`）。PM-185 只提醒 → 進階為自動遮罩。content `getSensitiveRects()` 截圖時收集敏感欄位 viewport 座標（+原頁 viewport 尺寸）存 storage；annotate 載入截圖後按比例（用原頁尺寸換算）`applyMosaic` 自動在敏感座標畫馬賽克 + 頂部「🔒 已自動遮罩 N 個」+「撤銷遮罩」（還原原圖）。**安全 gate**：只在整頁截圖（scaleX≈scaleY）自動遮，區域/自由裁切座標會錯位故略過（避免假安全）。PM-185 手動馬賽克筆刷 + 警告保留（雙保險）。`npm run build` ✅。未 deploy（純 extension，待重上架）。
+
 - PM-185：**截圖敏感偵測 + 馬賽克筆刷（偵測到才提醒）**（`extension/content.ts`/`annotate.ts`/`annotate.html`/`i18n.ts`）。截圖可能拍到密碼/API key/卡號 → 截圖前掃 DOM 防護。`detectSensitiveFields()`（content.ts，掃 password/token/secret/key/card/cvv/data-sensitive 共 7 類 input）→ 偵測到才彈 ⚠️ 警告 overlay（繼續截圖/取消）+ 設 flag，**沒偵測到不打擾直接截**；annotate 工具列加「🔒 馬賽克」筆刷（拖曳塗該網格方塊平均色）；偵測到時標注頁頂部橘色提示條；i18n 中英。`npm run build` ✅（dist 3 檔 wiring 確認）。未 deploy（純 extension，待重上架）。
 
 - PM-184：**「我的報告」列表頁 + popup 入口**（`server/index.ts` + `extension/popup.html`/`popup.ts`/`i18n.ts`）。使用者沒地方回看歷史報告 → 新增 `GET /reports?token=`（抽 `verifySessionByToken` 驗證→查 reports→server 渲染表格：時間/標題/描述/badges ❌🌐🎙️📸🎬/查看連結，中英雙語 + 語言切換）；無/無效 token 顯示提示頁；popup 加「📋 我的報告」按鈕（帶 session token 開網頁）；robots.txt `Disallow: /reports` + `noindex` + `no-store`；全站 footer 加連結。線上實測無 token 提示(中英)/無效 token 過期/robots/no-store/footer 皆 ✅。`wrangler deploy`（`262e684e`）+ extension build。
