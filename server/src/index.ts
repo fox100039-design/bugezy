@@ -760,7 +760,7 @@ Full guide: https://bugezy.dev/install`,
           <li>${t('鍵盤模式', 'Keyboard mode')}</li>
           <li>${t('錄製 月 10 次', 'Recording 10/mo')}</li>
           <li>${t('回溯 月 5 次', 'Rewind 5/mo')}</li>
-          <li>${t('MCP 月 20 次', 'MCP 20/mo')}</li>
+          <li>${t('MCP AI 讀取 月 20 次', 'MCP AI reads 20/mo')}</li>
           <li>${t('報告保留 7 天', 'Reports kept 7 days')}</li>
         </ul>
         <a class="free-btn" href="/install">${t('免費安裝 →', 'Install free →')}</a>
@@ -880,7 +880,7 @@ ${t(
   <ul>
     <li>Google 帳號資訊（email、姓名、頭像）用於登入</li>
     <li>Bug 報告內容（Console logs、Network errors、DOM 快照、語音記錄、截圖）</li>
-    <li>使用量統計（MCP 呼叫次數、Token 估算）</li>
+    <li>使用量統計（MCP AI 讀取次數、Token 估算）</li>
   </ul>
 
   <h2>2. 我們如何使用資料</h2>
@@ -931,7 +931,7 @@ ${t(
   <ul>
     <li>Google account info (email, name, avatar) for sign-in</li>
     <li>Bug report contents (console logs, network errors, DOM snapshots, voice notes, screenshots)</li>
-    <li>Usage statistics (MCP call counts, token estimates)</li>
+    <li>Usage statistics (MCP AI read counts, token estimates)</li>
   </ul>
 
   <h2>2. How We Use Data</h2>
@@ -1267,7 +1267,7 @@ function faqPage(lang: PageLang): string {
 
   <h2>${t('💰 關於方案與付費', '💰 Plans & billing')}</h2>
   <div class="faq-q">${t('免費版有什麼限制？', 'What are the free plan limits?')}</div>
-  <div class="faq-a"><p>${t('免費版每月可錄製 10 次、回溯 5 次、MCP 查詢 20 次。截圖標注和即時監控無限使用。報告保留 7 天。', 'The free plan includes 10 recordings, 5 rewinds, and 20 MCP queries per month. Screenshot annotation and live monitor are unlimited. Reports are kept for 7 days.')}</p></div>
+  <div class="faq-a"><p>${t('免費版每月可錄製 10 次、回溯 5 次、MCP AI 讀取 20 次。截圖標注和即時監控無限使用。報告保留 7 天。', 'The free plan includes 10 recordings, 5 rewinds, and 20 MCP AI reads per month. Screenshot annotation and live monitor are unlimited. Reports are kept for 7 days.')}</p></div>
 
   <div class="faq-q">${t('付費版多少錢？', 'How much is Premium?')}</div>
   <div class="faq-a"><p>${t('NT$80/月（約 $3 USD），解鎖全功能無限次使用，報告保留 90 天，加上終端機 CLI、Whisper 精準語音等進階功能。', 'NT$80/mo (about US$3) unlocks unlimited use of all features, 90-day report retention, plus advanced features like terminal CLI and Whisper precise voice.')}</p></div>
@@ -1289,7 +1289,7 @@ function faqPage(lang: PageLang): string {
   <div class="faq-a"><p>${t('Model Context Protocol（模型上下文協議），是 Anthropic 推出的開放標準，讓 AI 工具可以連接外部服務。BugEzy 的 MCP 讓 AI 直接讀取你的 Bug 報告，不需要複製貼上。', 'Model Context Protocol — an open standard from Anthropic that lets AI tools connect to external services. BugEzy MCP lets AI read your bug reports directly, with no copy-paste.')}</p></div>
 
   <div class="faq-q">${t('Token 是什麼？為什麼 BugEzy 能省 Token？', 'What are tokens, and how does BugEzy save them?')}</div>
-  <div class="faq-a"><p>${t('Token 是 AI 處理文字的計量單位，等於你的 AI 使用費用。BugEzy 用結構化文字（而非截圖）傳送報告給 AI，同樣的 Bug 資訊只需要 1/20 的 Token。每次 MCP 查詢都會顯示 Token 估算，讓你看到省了多少。', 'Tokens are the unit AI uses to process text — effectively your AI cost. BugEzy sends reports as structured text (not screenshots), so the same bug info takes 1/20 the tokens. Every MCP query shows a token estimate so you can see the savings.')}</p></div>
+  <div class="faq-a"><p>${t('Token 是 AI 處理文字的計量單位，等於你的 AI 使用費用。BugEzy 用結構化文字（而非截圖）傳送報告給 AI，同樣的 Bug 資訊只需要 1/20 的 Token。每次 MCP AI 讀取都會顯示 Token 估算，讓你看到省了多少。', 'Tokens are the unit AI uses to process text — effectively your AI cost. BugEzy sends reports as structured text (not screenshots), so the same bug info takes 1/20 the tokens. Every MCP AI read shows a token estimate so you can see the savings.')}</p></div>
 
   <footer>
     <div class="links">
@@ -3368,7 +3368,7 @@ async function bumpUsage(request: Request, env: Env): Promise<Response> {
     const currentCount = u[countField] || 0;
     const limit = FREE_LIMITS[type];
     if (currentCount >= limit) {
-      const label = type === 'recording' ? '錄製' : type === 'rewind' ? '回溯' : 'MCP 查詢';
+      const label = type === 'recording' ? '錄製' : type === 'rewind' ? '回溯' : 'MCP AI 讀取';
       return json(
         {
           error: 'limit_reached',
@@ -3712,7 +3712,7 @@ function dayPassSuccessPage(): Response {
     `p{color:#aaa;margin:0 0 24px;line-height:1.6;}a{color:#a78bfa;text-decoration:none;}</style></head>` +
     `<body><div class="card"><div class="icon">🎉</div>` +
     `<h1>日票啟動成功！</h1>` +
-    `<p>24 小時內享有所有付費功能（無限錄製 / MCP / Whisper 精準語音）。重新開啟 BugEzy 即可使用。</p>` +
+    `<p>24 小時內享有所有付費功能（無限錄製 / MCP AI 讀取 / Whisper 精準語音）。重新開啟 BugEzy 即可使用。</p>` +
     `<a href="/">← 回到首頁</a></div></body></html>`;
   return html(body);
 }
