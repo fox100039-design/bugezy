@@ -2438,6 +2438,62 @@ async function readTerminalLogs(env: Env, userId: string): Promise<Record<string
   return { ...data, stale: false };
 }
 
+// PM-178：把 terminal-logs 資料組成結構化文字——先🖥環境（PM-177 runtime）、再🔍結構化錯誤（PM-176 parsed_errors，
+// 含類型/訊息/堆疊 file:line in function + 程式碼），最後附原始 stderr（logs 為 TerminalLog[] 陣列 → 轉文字）。
+function formatTerminalLogs(data: Record<string, unknown>): string {
+  let result = '';
+
+  const runtime = data.runtime as
+    | { language?: string; version?: string; os?: string; packages?: string[] }
+    | undefined;
+  if (runtime && runtime.language) {
+    result += `🖥 環境：${runtime.language} ${runtime.version || ''} / ${runtime.os || ''}\n`;
+    if (Array.isArray(runtime.packages) && runtime.packages.length > 0) {
+      result += `📦 套件：${runtime.packages.slice(0, 20).join(', ')}\n`;
+    }
+    result += '\n';
+  }
+
+  const parsed = data.parsed_errors as
+    | Array<{
+        type?: string;
+        message?: string;
+        frames?: Array<{ file?: string; line?: number; function?: string; code?: string }>;
+      }>
+    | undefined;
+  if (Array.isArray(parsed) && parsed.length > 0) {
+    result += `🔍 偵測到 ${parsed.length} 個錯誤：\n\n`;
+    parsed.forEach((err, i) => {
+      result += `--- 錯誤 ${i + 1} ---\n`;
+      result += `類型：${err.type || '?'}\n`;
+      result += `訊息：${err.message || ''}\n`;
+      if (Array.isArray(err.frames) && err.frames.length > 0) {
+        result += `堆疊：\n`;
+        err.frames.forEach((f) => {
+          result += `  → ${f.file}:${f.line} in ${f.function}()\n`;
+          if (f.code) result += `    ${f.code}\n`;
+        });
+      }
+      result += '\n';
+    });
+  }
+
+  // 原始 stderr（logs 是 TerminalLog[] 陣列 → 取 message 串起；相容舊字串格式）
+  const logs = data.logs;
+  let rawText = '';
+  if (Array.isArray(logs)) {
+    rawText = (logs as Array<{ message?: string }>)
+      .map((l) => (l && typeof l === 'object' ? l.message || '' : String(l)))
+      .filter(Boolean)
+      .join('\n');
+  } else if (typeof logs === 'string') {
+    rawText = logs;
+  }
+  if (rawText) result += `--- 原始 stderr ---\n${rawText}\n`;
+
+  return result.trim() ? result : '目前沒有終端機錯誤記錄。';
+}
+
 // ── PM-48：測試專頁（Test Harness）──────────────────────────
 // 共用 CSS（page1 與 page2/3 shell 共用，單一來源）
 const TEST_STYLE = `
@@ -4578,7 +4634,8 @@ function createMcpServer(env: Env): McpServer {
       if (data.stale) {
         return txt('終端機 Agent 未啟動或資料已過期（>30 秒）。請在終端機執行：npx bugezy-watch -- npm run dev');
       }
-      return txtWithTokens(data, 'get_terminal_logs');
+      // PM-178：回傳結構化文字（🖥 環境 + 🔍 結構化錯誤 + 原始 stderr）而非原始 JSON
+      return txtWithTokens(formatTerminalLogs(data), 'get_terminal_logs');
     },
   );
 
