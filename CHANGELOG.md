@@ -4,6 +4,8 @@
 
 Day 21（PM-170~）。
 
+- PM-180：**官方測試頁大更新（涵蓋所有捕捉能力 + Python CLI 指引 + 中英雙語）**（`server/index.ts`）。`TEST_PAGE_1` 常數改函式 `testPage1(lang)`，新增 6 區塊：⚡Promise 靜默失敗（PM-154）/🖼資源載入失敗 404（PM-155）/📡Web Vitals CLS·LCP（PM-155）/🌐網路環境即時顯示（PM-156）/💾儲存快照+PII 遮罩測試（PM-157）/🐍Python·Node CLI 可複製指令（PM-176~179）；保留現有 Console/Network/DOM/截圖/跨頁/輸入；全 `getLang`+`t(zh,en)` 中英 + 語言切換鈕 + no-store；副標改「完整測試所有捕捉能力 — 前端+後端+AI 分析」。線上中英雙語實測 12 區塊 + 新 JS 函式 + Python 指令皆present。`wrangler deploy`（`d058123b`）。
+
 - PM-179：**CLI 錯誤 AI 導航摘要（Terminal 版 generateBugSummary）**（`server/index.ts`）。同 PM-159 精神，規則引擎零成本：`generateTerminalSummary()` 取 parsed_errors 最後一個為根因 → ⚡根因 + 💡白話（**Python 16 種**+**Node 5 種**常見錯誤解釋與修復建議）+ 📍位置（file 第 N 行 → function + 程式碼）+ 🖥環境；多錯誤標註、無錯誤提示查 stderr。`get_terminal_logs` 回傳最前面插入摘要（摘要→結構化錯誤→原始 stderr）。node 實測 KeyError/ImportError(pip install)/Node TypeError(optional chaining)/位置皆正確。至此 Python 9 分升級 PM-176~179 完成。`wrangler deploy`（`ceee9a59`）。
 
 - PM-178：**MCP get_terminal_logs 回傳結構化**（`server/index.ts`）。PM-176/177 讓 CLI 傳 parsed_errors+runtime → 新 `formatTerminalLogs()` 把回傳從原始 JSON 改結構化文字：🖥 環境（language/version/os + 📦 套件前 20）→ 🔍 偵測到 N 個錯誤（每個類型/訊息/堆疊 `file:line in function()` + 程式碼）→ 原始 stderr（logs 陣列轉文字）；全空→「目前沒有終端機錯誤記錄」。`readTerminalLogs` 無需改（原本就 passthrough 整包 R2，含 parsed_errors/runtime）。node 實測輸出格式正確。`wrangler deploy`（`25a48724`）。

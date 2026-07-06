@@ -2643,65 +2643,145 @@ ${inner}
 </html>`;
 }
 
-const TEST_PAGE_1 = `<!DOCTYPE html>
-<html lang="zh-TW">
+// PM-180：官方測試頁——涵蓋 PM-153~179 全部捕捉能力 + Python CLI 指引；中英雙語（getLang）。
+function testPage1(lang: PageLang): string {
+  const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
+  return `<!DOCTYPE html>
+<html lang="${lang === 'zh' ? 'zh-Hant' : 'en'}">
 <head>
   <meta charset="utf-8">
-  <title>🧪 BugEzy 測試頁</title>
-  <style>${TEST_STYLE}</style>
+  <title>${t('🧪 BugEzy 測試頁', '🧪 BugEzy Test Page')}</title>
+  <style>${TEST_STYLE}
+    .lang-switch { position:fixed; top:12px; right:12px; z-index:10; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:5px 12px; font-size:13px; color:#c4b5fd; text-decoration:none; }
+    .section pre { background:#0f0f1a; color:#7ee0c5; padding:12px 14px; border-radius:8px; overflow-x:auto; font-size:12px; line-height:1.7; }
+    .section h3 { font-size:14px; color:#555; margin:14px 0 6px; }</style>
 </head>
 <body>
-  <div class="page-id">📍 測試頁 1</div>
+  <a class="lang-switch" href="?lang=${lang === 'zh' ? 'en' : 'zh'}">${t('EN', '中文')}</a>
+  <div class="page-id">${t('📍 測試頁 1', '📍 Test Page 1')}</div>
 
-  <h1>🧪 BugEzy 測試頁</h1>
-  <p class="subtitle">用這個頁面測試 BugEzy 的各項功能。每個按鈕觸發可預測的事件。</p>
+  <h1>${t('🧪 BugEzy 測試頁', '🧪 BugEzy Test Page')}</h1>
+  <p class="subtitle">${t('完整測試 BugEzy 的所有捕捉能力 — 前端 + 後端 + AI 分析', "Test all of BugEzy's capture capabilities — frontend + backend + AI analysis")}</p>
 
   <!-- Console 測試 -->
   <div class="section">
-    <h2>🖥 Console 測試</h2>
+    <h2>${t('🖥 Console 測試', '🖥 Console Test')}</h2>
     <div class="btn-grid">
-      <button class="btn-error" onclick="console.error('❌ [TEST] TypeError: Cannot read property of undefined')">觸發 console.error</button>
-      <button class="btn-warn" onclick="console.warn('⚠ [TEST] Deprecated API usage detected')">觸發 console.warn</button>
-      <button class="btn-error" onclick="console.error('❌ [TEST] Uncaught ReferenceError: foo is not defined')">觸發 ReferenceError</button>
-      <button class="btn-error" onclick="try{null.toString()}catch(e){console.error('❌ [TEST]',e.message)}">觸發真實 TypeError</button>
+      <button class="btn-error" onclick="console.error('❌ [TEST] TypeError: Cannot read property of undefined')">${t('觸發 console.error', 'Trigger console.error')}</button>
+      <button class="btn-warn" onclick="console.warn('⚠ [TEST] Deprecated API usage detected')">${t('觸發 console.warn', 'Trigger console.warn')}</button>
+      <button class="btn-error" onclick="console.error('❌ [TEST] Uncaught ReferenceError: foo is not defined')">${t('觸發 ReferenceError', 'Trigger ReferenceError')}</button>
+      <button class="btn-error" onclick="try{null.toString()}catch(e){console.error('❌ [TEST]',e.message)}">${t('觸發真實 TypeError', 'Trigger real TypeError')}</button>
     </div>
-    <div class="output" id="consoleOutput">Console 輸出會顯示在這裡...</div>
+    <div class="output" id="consoleOutput">${t('Console 輸出會顯示在這裡...', 'Console output appears here...')}</div>
   </div>
 
   <!-- Network 測試 -->
   <div class="section">
-    <h2>🌐 Network 測試</h2>
+    <h2>${t('🌐 Network 測試', '🌐 Network Test')}</h2>
     <div class="btn-grid">
-      <button class="btn-network" onclick="testFetch(404)">觸發 fetch 404</button>
-      <button class="btn-network" onclick="testFetch(500)">觸發 fetch 500</button>
-      <button class="btn-network" onclick="testFetch(403)">觸發 fetch 403</button>
-      <button class="btn-network" onclick="testXHR(404)">觸發 XHR 404</button>
+      <button class="btn-network" onclick="testFetch(404)">${t('觸發 fetch 404', 'Trigger fetch 404')}</button>
+      <button class="btn-network" onclick="testFetch(500)">${t('觸發 fetch 500', 'Trigger fetch 500')}</button>
+      <button class="btn-network" onclick="testFetch(403)">${t('觸發 fetch 403', 'Trigger fetch 403')}</button>
+      <button class="btn-network" onclick="testXHR(404)">${t('觸發 XHR 404', 'Trigger XHR 404')}</button>
     </div>
-    <div class="output" id="networkOutput">Network 結果會顯示在這裡...</div>
+    <div class="output" id="networkOutput">${t('Network 結果會顯示在這裡...', 'Network results appear here...')}</div>
   </div>
 
   <!-- DOM 變化測試 -->
   <div class="section">
-    <h2>🎨 DOM 變化測試（rrweb 會錄到）</h2>
+    <h2>${t('🎨 DOM 變化測試（rrweb 會錄到）', '🎨 DOM Changes (recorded by rrweb)')}</h2>
     <div class="btn-grid">
-      <button class="btn-dom" onclick="addElement()">新增 DOM 元素</button>
-      <button class="btn-dom" onclick="removeElement()">移除 DOM 元素</button>
-      <button class="btn-dom" onclick="toggleAnimation()">切換動畫</button>
-      <button class="btn-dom" onclick="changeColors()">隨機變色</button>
+      <button class="btn-dom" onclick="addElement()">${t('新增 DOM 元素', 'Add DOM element')}</button>
+      <button class="btn-dom" onclick="removeElement()">${t('移除 DOM 元素', 'Remove DOM element')}</button>
+      <button class="btn-dom" onclick="toggleAnimation()">${t('切換動畫', 'Toggle animation')}</button>
+      <button class="btn-dom" onclick="changeColors()">${t('隨機變色', 'Randomize colors')}</button>
     </div>
-    <div id="animBox">動畫</div>
+    <div id="animBox">${t('動畫', 'Anim')}</div>
     <div class="test-area" id="domArea">
-      <p>DOM 測試區域 — 新增的元素會出現在這裡</p>
+      <p>${t('DOM 測試區域 — 新增的元素會出現在這裡', 'DOM test area — new elements appear here')}</p>
     </div>
+  </div>
+
+  <!-- PM-154：Promise 靜默失敗 -->
+  <div class="section">
+    <h2>${t('⚡ Promise 靜默失敗測試', '⚡ Silent Promise Failure Test')}</h2>
+    <p>${t('小白最常犯的 async/await 忘了 catch，BugEzy 也抓得到。', 'The classic async/await-without-catch mistake — BugEzy still catches it.')}</p>
+    <div class="btn-grid">
+      <button class="btn-error" onclick="Promise.reject('TEST: forgot to catch!')">${t('觸發 Unhandled Rejection（字串）', 'Trigger Unhandled Rejection (string)')}</button>
+      <button class="btn-error" onclick="Promise.reject(new Error('TEST: async function failed'))">${t('觸發 Unhandled Rejection（Error）', 'Trigger Unhandled Rejection (Error)')}</button>
+      <button class="btn-error" onclick="(async()=>{ throw new Error('TEST: async throw') })()">${t('觸發 async throw', 'Trigger async throw')}</button>
+    </div>
+  </div>
+
+  <!-- PM-155：資源載入失敗 -->
+  <div class="section">
+    <h2>${t('🖼 資源載入失敗測試', '🖼 Resource Load Failure Test')}</h2>
+    <p>${t('圖片/CSS/JS 404 時頁面破版，BugEzy 自動捕捉。', 'When images/CSS/JS 404 and break the page, BugEzy auto-captures it.')}</p>
+    <div class="btn-grid">
+      <button class="btn-warn" onclick="loadBroken('img')">${t('載入不存在的圖片', 'Load missing image')}</button>
+      <button class="btn-warn" onclick="loadBroken('script')">${t('載入不存在的 JS', 'Load missing JS')}</button>
+      <button class="btn-warn" onclick="loadBroken('css')">${t('載入不存在的 CSS', 'Load missing CSS')}</button>
+    </div>
+    <div id="resourceArea"></div>
+  </div>
+
+  <!-- PM-155：Web Vitals -->
+  <div class="section">
+    <h2>${t('📡 Web Vitals 效能', '📡 Web Vitals Performance')}</h2>
+    <p>${t('BugEzy 自動捕捉 LCP / CLS / FID。頁面載入後即可在報告中看到。', 'BugEzy auto-captures LCP / CLS / FID — visible in the report after load.')}</p>
+    <div class="btn-grid">
+      <button class="btn-dom" onclick="causeLayoutShift()">${t('觸發版面位移 (CLS)', 'Trigger layout shift (CLS)')}</button>
+      <button class="btn-dom" onclick="causeSlowRender()">${t('模擬慢渲染 (LCP)', 'Simulate slow render (LCP)')}</button>
+    </div>
+  </div>
+
+  <!-- PM-156：網路環境快照 -->
+  <div class="section">
+    <h2>${t('🌐 網路環境快照', '🌐 Network Environment Snapshot')}</h2>
+    <p>${t('BugEzy 自動捕捉你的網路狀態。以下是目前偵測到的：', "BugEzy auto-captures your network state. Currently detected:")}</p>
+    <div class="output" id="networkEnvOutput">${t('偵測中...', 'Detecting...')}</div>
+  </div>
+
+  <!-- PM-157：儲存快照 + PII 遮罩 -->
+  <div class="section">
+    <h2>${t('💾 儲存空間快照 + PII 遮罩', '💾 Storage Snapshot + PII Masking')}</h2>
+    <p>${t('BugEzy 捕捉 localStorage/sessionStorage，敏感值自動遮罩。點按鈕模擬：', 'BugEzy captures localStorage/sessionStorage with sensitive values auto-masked. Click to simulate:')}</p>
+    <div class="btn-grid">
+      <button class="btn-dom" onclick="setTestStorage()">${t('寫入測試資料（含敏感值）', 'Write test data (incl. sensitive)')}</button>
+      <button class="btn-warn" onclick="clearTestStorage()">${t('清除測試資料', 'Clear test data')}</button>
+    </div>
+    <div class="output" id="storageOutput">${t('點上方按鈕後錄製，報告中會看到遮罩效果。', 'Click above then record — the report will show the masking.')}</div>
+  </div>
+
+  <!-- PM-176~179：Python / Terminal CLI 指引 -->
+  <div class="section">
+    <h2>${t('🐍 Python / Terminal CLI 測試', '🐍 Python / Terminal CLI Test')}</h2>
+    <p>${t('BugEzy 也能捕捉後端錯誤！在終端機執行以下指令測試：', 'BugEzy captures backend errors too! Run these in your terminal:')}</p>
+    <h3>${t('Python 測試（需要 Python 環境）', 'Python (requires Python)')}</h3>
+    <pre><code># ${t('KeyError 測試', 'KeyError test')}
+BUGEZY_TOKEN=&lt;token&gt; npx bugezy-watch -- python -c "d={'a':1}; print(d['b'])"
+
+# ${t('ImportError 測試', 'ImportError test')}
+BUGEZY_TOKEN=&lt;token&gt; npx bugezy-watch -- python -c "import nonexistent_module"
+
+# ${t('TypeError 測試', 'TypeError test')}
+BUGEZY_TOKEN=&lt;token&gt; npx bugezy-watch -- python -c "'hello' + 123"</code></pre>
+    <h3>${t('Node.js 測試', 'Node.js')}</h3>
+    <pre><code># ${t('TypeError 測試', 'TypeError test')}
+BUGEZY_TOKEN=&lt;token&gt; npx bugezy-watch -- node -e "null.foo"
+
+# ${t('ReferenceError 測試', 'ReferenceError test')}
+BUGEZY_TOKEN=&lt;token&gt; npx bugezy-watch -- node -e "undefinedVar"</code></pre>
+    <p>${t('💡 執行後用 MCP <code>get_terminal_logs</code> 讀取，AI 會看到結構化錯誤 + 環境快照 + 白話導航摘要。', '💡 Then read via MCP <code>get_terminal_logs</code> — AI sees structured errors + env snapshot + a plain-language navigation summary.')}</p>
   </div>
 
   <!-- 截圖測試 -->
   <div class="section">
-    <h2>📸 截圖測試區域</h2>
-    <p>用 BugEzy 截圖功能擷取這個區域，測試三種模式。</p>
+    <h2>${t('📸 截圖測試區域', '📸 Screenshot Test Area')}</h2>
+    <p>${t('用 BugEzy 截圖功能擷取這個區域，測試三種模式。', "Use BugEzy's screenshot feature to capture this area in all 3 modes.")}</p>
     <div class="test-area">
-      <p style="font-size: 24px; color: #7c3aed;">🎯 這段文字應該出現在截圖中</p>
-      <p>小字測試 — 驗證截圖解析度是否足夠</p>
+      <p style="font-size: 24px; color: #7c3aed;">${t('🎯 這段文字應該出現在截圖中', '🎯 This text should appear in the screenshot')}</p>
+      <p>${t('小字測試 — 驗證截圖解析度是否足夠', 'Small text — verify screenshot resolution')}</p>
       <div style="display:flex;gap:8px;justify-content:center;margin-top:12px;">
         <div style="width:60px;height:60px;background:#ef4444;border-radius:8px;"></div>
         <div style="width:60px;height:60px;background:#f59e0b;border-radius:8px;"></div>
@@ -2714,19 +2794,19 @@ const TEST_PAGE_1 = `<!DOCTYPE html>
 
   <!-- 跨頁跳轉測試 -->
   <div class="section">
-    <h2>🔗 跨頁跳轉測試</h2>
-    <p>點擊連結跳到其他測試頁，驗證跨頁錄製 + 語音保留。</p>
+    <h2>${t('🔗 跨頁跳轉測試', '🔗 Cross-Page Navigation Test')}</h2>
+    <p>${t('點擊連結跳到其他測試頁，驗證跨頁錄製 + 語音保留。', 'Click a link to another test page — verify cross-page recording + voice retention.')}</p>
     <div class="nav-links">
-      <a href="/test/page2">跳到測試頁 2 →</a>
-      <a href="/test/page3">跳到測試頁 3 →</a>
+      <a href="/test/page2">${t('跳到測試頁 2 →', 'Go to Test Page 2 →')}</a>
+      <a href="/test/page3">${t('跳到測試頁 3 →', 'Go to Test Page 3 →')}</a>
     </div>
   </div>
 
   <!-- 輸入測試 -->
   <div class="section">
-    <h2>⌨️ 輸入測試</h2>
-    <input type="text" placeholder="測試文字輸入..." style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;margin-bottom:8px;">
-    <textarea placeholder="測試多行輸入..." rows="3" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;"></textarea>
+    <h2>${t('⌨️ 輸入測試', '⌨️ Input Test')}</h2>
+    <input type="text" placeholder="${t('測試文字輸入...', 'Test text input...')}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;margin-bottom:8px;">
+    <textarea placeholder="${t('測試多行輸入...', 'Test multi-line input...')}" rows="3" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;"></textarea>
   </div>
 
   <script>
@@ -2799,9 +2879,80 @@ const TEST_PAGE_1 = `<!DOCTYPE html>
         s.style.borderLeft = '4px solid ' + '#' + Math.floor(Math.random()*16777215).toString(16);
       });
     }
+
+    // PM-155：資源載入失敗（圖片/JS/CSS 404）
+    function loadBroken(kind) {
+      const area = document.getElementById('resourceArea');
+      if (kind === 'img') {
+        const img = document.createElement('img');
+        img.src = 'https://bugezy.dev/test/fake-image-404.png';
+        img.style.cssText = 'width:1px;height:1px;';
+        area.appendChild(img);
+      } else if (kind === 'script') {
+        const s = document.createElement('script');
+        s.src = 'https://bugezy.dev/test/fake-script-404.js';
+        document.head.appendChild(s);
+      } else if (kind === 'css') {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://bugezy.dev/test/fake-style-404.css';
+        document.head.appendChild(link);
+      }
+    }
+
+    // PM-155：Web Vitals（CLS / LCP）
+    function causeLayoutShift() {
+      const el = document.createElement('div');
+      el.style.cssText = 'height:100px;background:#f59e0b;margin:10px 0;border-radius:8px;text-align:center;line-height:100px;color:#000;font-weight:bold;';
+      el.textContent = '⚠ CLS';
+      const first = document.querySelector('.section');
+      if (first) first.before(el);
+    }
+    function causeSlowRender() {
+      const start = Date.now();
+      while (Date.now() - start < 200) {} // 阻塞 200ms 模擬慢渲染
+      const el = document.createElement('div');
+      el.style.cssText = 'padding:20px;background:#ef4444;color:#fff;border-radius:8px;text-align:center;margin:10px 0;';
+      el.textContent = '🐢 200ms';
+      const area = document.getElementById('resourceArea');
+      if (area) area.after(el);
+    }
+
+    // PM-156：即時顯示網路環境
+    (function showNetworkEnv() {
+      const conn = navigator.connection || {};
+      const info = [
+        'status: ' + (navigator.onLine ? '🟢 online' : '🔴 offline'),
+        'type: ' + (conn.effectiveType || 'unknown'),
+        'rtt: ' + (conn.rtt != null ? conn.rtt + 'ms' : 'N/A'),
+        'downlink: ' + (conn.downlink != null ? conn.downlink + ' Mbps' : 'N/A'),
+        'saveData: ' + (conn.saveData ? 'on' : 'off'),
+      ];
+      const out = document.getElementById('networkEnvOutput');
+      if (out) out.textContent = info.join('\\n');
+    })();
+
+    // PM-157：儲存快照 + PII 遮罩（寫入敏感值供錄製後看遮罩效果）
+    function setTestStorage() {
+      localStorage.setItem('bugezy_test_token', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.fake.token');
+      localStorage.setItem('bugezy_test_email', 'user@example.com');
+      localStorage.setItem('bugezy_test_theme', 'dark');
+      localStorage.setItem('bugezy_test_password', 'super_secret_123');
+      localStorage.setItem('bugezy_test_api_key', 'sk-1234567890abcdefghijklmnop');
+      sessionStorage.setItem('bugezy_test_temp', 'this is normal data');
+      const out = document.getElementById('storageOutput');
+      if (out) out.textContent = '✅ localStorage x5 + sessionStorage x1\\n→ token/password/api_key → ***MASKED***\\n→ email → 局部遮罩 / partial\\n→ theme/temp → 不遮罩 / not masked';
+    }
+    function clearTestStorage() {
+      ['bugezy_test_token','bugezy_test_email','bugezy_test_theme','bugezy_test_password','bugezy_test_api_key'].forEach(k => localStorage.removeItem(k));
+      sessionStorage.removeItem('bugezy_test_temp');
+      const out = document.getElementById('storageOutput');
+      if (out) out.textContent = '🗑 cleared';
+    }
   </script>
 </body>
 </html>`;
+}
 
 const TEST_PAGE_2 = testShell(
   '📍 測試頁 2',
@@ -2943,7 +3094,11 @@ export default {
     }
 
     // PM-48：測試專頁（Test Harness）— 可預測的 Bug 場景，供 BugEzy 測試用
-    if (request.method === 'GET' && path === '/test') return html(TEST_PAGE_1);
+    if (request.method === 'GET' && path === '/test') {
+      const res = html(testPage1(getLang(request))); // PM-180：多語系
+      res.headers.set('Cache-Control', 'no-store'); // 依語言變動
+      return res;
+    }
     if (request.method === 'GET' && path === '/test/page2') return html(TEST_PAGE_2);
     if (request.method === 'GET' && path === '/test/page3') return html(TEST_PAGE_3);
     // /test/api/:status — 回傳指定 HTTP status（觸發 4xx/5xx 給 Network 攔截）
