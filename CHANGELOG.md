@@ -4,6 +4,8 @@
 
 Day 21（PM-170~）。
 
+- PM-177：**CLI 環境快照（語言/版本/OS/套件）**（`cli/detect-env.ts`(新) + `cli/index.ts`）。AI 診斷需環境背景 → 新 `detectRuntime(command)` 依指令關鍵字判語言（python/node/go），抓 `python --version`+`pip list --format=freeze` / `node --version`+`npm list --json`（`name@version`）、OS=`platform arch`、packages ≤50；跨平台（`2>&1` cmd/sh 皆可、stderr 忽略、5s timeout、失敗靜默）。CLI 啟動抓一次 → payload 加 `runtime`；server 靠既有 full-payload passthrough 自動存 R2（runtime 無敏感欄位）。node 實測 node→v22.22.2+packages、python→3.14.3+pip、unknown→空。`wrangler deploy`（`c2d93214`）+ CLI build。
+
 - PM-176：**CLI stderr 智慧解析——Python traceback / Node Error 結構化**（`cli/parse-traceback.ts`(新) + `cli/index.ts` + `server/index.ts`）。CLI 原把 stderr 當純文字上傳 → 新增 `parsePythonTraceback`/`parseNodeError` 解析成 `{type,message,frames[file,line,function,code],raw,runtime}`；stderr chunk **先 maskStderr 再解析**（結構化資料也遮罩）→ payload 加 `parsed_errors` 陣列（logs 維持既有陣列相容）；server `POST /api/terminal-logs` 整包存 R2 + `maskTerminalPayload` 擴充雙重遮罩 parsed_errors（message/raw/frames.code）。node 實測：Python KeyError/Node TypeError 正確結構化、正常 stderr→null、DB 密碼在 frame.code 已遮罩。`wrangler deploy`（`a7e4781e`）+ CLI build。
 
 - PM-175：**修復 AI 輪盤語言切回中文不重置 bug**（`extension/popup.ts`）。根因：原 `JSON.stringify` 比對預設值因序列化微差異誤判「已自訂」→ 英→中切不回來。改用明確 flag `bugezy:prompts-customized`：未自訂（flag≠true，含舊使用者）→ 切語言重置為新語言預設；已自訂（儲存/編輯切換時設 true）→ 不重置。移除 JSON 比對。`npm run build` ✅（dist 含 flag、舊 JSON 比對已移除）。未 deploy（純 extension，待重上架）。

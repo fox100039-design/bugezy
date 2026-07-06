@@ -7,6 +7,7 @@
 import { spawn } from 'node:child_process';
 import { maskStderr } from './pii-mask'; // PM-167：上傳前遮罩敏感資料（DB 密碼/金鑰/token/PII）
 import { parsePythonTraceback, parseNodeError, type ParsedError } from './parse-traceback'; // PM-176：結構化解析
+import { detectRuntime, type RuntimeEnv } from './detect-env'; // PM-177：環境快照（語言/版本/OS/套件）
 
 const API_BASE = process.env.BUGEZY_API_URL || 'https://bugezy-api.bugezy-api.workers.dev';
 // PM-143：/api/terminal-logs 已加認證 + per-user key。CLI 需帶 session token（從 BugEzy 擴充複製）。
@@ -92,6 +93,9 @@ const userCommand = process.argv.slice(separatorIndex + 1);
 const cmd = userCommand[0];
 const args = userCommand.slice(1);
 
+// PM-177：啟動時抓一次執行環境快照（語言/版本/OS/套件），隨每次上傳附帶供 AI 診斷。只讀不改、失敗靜默。
+const runtime: RuntimeEnv = detectRuntime(userCommand.join(' '));
+
 // PM-144：終端機 CLI 為付費功能，必須帶 session token（缺 token 直接退出，不啟動子程序）
 if (!API_TOKEN) {
   console.error('❌ 請設定 BUGEZY_TOKEN 環境變數');
@@ -121,6 +125,7 @@ async function flushBuffer(): Promise<void> {
       body: JSON.stringify({
         logs,
         parsed_errors: parsed, // PM-176：結構化 traceback（type/message/frames）
+        runtime, // PM-177：環境快照（語言/版本/OS/套件）
         command: userCommand.join(' '),
         cwd: process.cwd(),
         timestamp: Date.now(),
