@@ -718,7 +718,7 @@ function homePage(lang: PageLang, request: Request): string {
     `請幫我安裝 BugEzy MCP 除錯工具，讓你可以直接讀取我的 Bug 報告來幫我修 Bug。
 
 安裝步驟：
-1. Chrome 擴充功能：https://chromewebstore.google.com/detail/bugezy/mpkakmmfllghcdaeicdlnpogneeanhmb
+1. Chrome 擴充功能：https://chromewebstore.google.com/detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj
 2. MCP 連線設定，在你的 MCP config 加入：
 {
   "mcpServers": {
@@ -734,7 +734,7 @@ function homePage(lang: PageLang, request: Request): string {
     `Please help me install the BugEzy MCP debugging tool so you can read my bug reports and fix bugs for me.
 
 Steps:
-1. Chrome extension: https://chromewebstore.google.com/detail/bugezy/mpkakmmfllghcdaeicdlnpogneeanhmb
+1. Chrome extension: https://chromewebstore.google.com/detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj
 2. MCP connection — add this to your MCP config:
 {
   "mcpServers": {
@@ -1430,7 +1430,7 @@ function installPage(lang: PageLang): string {
     `請幫我安裝 BugEzy MCP 除錯工具，讓你可以直接讀取我的 Bug 報告來幫我修 Bug。
 
 安裝步驟：
-1. Chrome 擴充功能：https://chromewebstore.google.com/detail/bugezy/mpkakmmfllghcdaeicdlnpogneeanhmb
+1. Chrome 擴充功能：https://chromewebstore.google.com/detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj
 2. MCP 連線設定，在你的 MCP config 加入：
 {
   "mcpServers": {
@@ -1446,7 +1446,7 @@ function installPage(lang: PageLang): string {
     `Please help me install the BugEzy MCP debugging tool so you can read my bug reports and fix bugs for me.
 
 Steps:
-1. Chrome extension: https://chromewebstore.google.com/detail/bugezy/mpkakmmfllghcdaeicdlnpogneeanhmb
+1. Chrome extension: https://chromewebstore.google.com/detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj
 2. MCP connection — add this to your MCP config:
 {
   "mcpServers": {
