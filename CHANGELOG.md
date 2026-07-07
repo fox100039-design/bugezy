@@ -2,7 +2,9 @@
 
 ## 2026-07-07
 
-Day 22（PM-187~195）。**Chrome Web Store 1.1.0 過審 + manifest key 統一 ID + 一連串資安/商業/體驗修復**。
+Day 22（PM-187~196）。**Chrome Web Store 1.1.0 過審 + manifest key 統一 ID + 一連串資安/商業/體驗修復**。
+
+- PM-196：**報告頁分享連結一鍵複製 + 我的報告勾選批次刪除**（`server/index.ts`）。**§1** 報告頁 `/report/:id` 底部加分享連結 input + 「📋 複製連結」（`report-page.js?v=196`：render 成功才顯示、填 `location.origin+'/report/'+id`、複製用 `select()`+`execCommand('copy')` **非 clipboard API、非 inline onclick**——報告頁 CSP `script-src 'self'` 不允許 inline handler，故寫在外部 JS 用 addEventListener，按完變「✅ 已複製！」2s 恢復）。**§2** 我的報告 `/reports` 每行加 checkbox + 表頭全選 + 底部「🗑️ 刪除選取 (N)」（≥1 勾才顯示）+ `confirm('確定刪除 N 份？此操作無法還原')` → DELETE 後 `location.reload()`。**§3** 新增 `DELETE /api/reports`（`deleteReportsApi`：Bearer `verifySession` → `.eq(user_id).in(report_id, ids)` 只刪自己的、`report_ids` 最多 50 筆、回 `{deleted:N}`；無 token→401、無 ids→400）。**§4** i18n 中英。線上實測：/reports delete UI + /report share 複製 wiring、DELETE 無/錯 token→401、中英雙語皆present。`tsc` clean → `wrangler deploy`（`27605259`，同時帶上先前已 commit 未 deploy 的 FOX 手改：guide/faq URL + install regex 修 + 舊 URL redirect）。（技術債：刪除只刪 DB 列，R2 rrweb/screenshots 物件成孤兒——報告已 404 不可存取，孤兒僅少量儲存成本。）
 
 - PM-195：**編輯報告頁 Token 估算加 USD 單位（與最終報告頁一致）**（`extension/edit-report.ts`）。停止錄製後的編輯/補充說明頁 `renderTokenEstimate` 底部總計與 Claude in Chrome 對比原本只顯示 `≈ $0.0049`，最終報告頁（server）是 `≈ USD $0.0049` → 兩處改 `≈ USD $` 對齊。計算邏輯/最終報告頁/MCP 皆不動。純 extension，`tsc` clean → `npm run build` ✅（dist `USD $`×2 確認）。待重上架。
 

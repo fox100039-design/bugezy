@@ -2106,6 +2106,14 @@ function reportsShell(lang: PageLang, bodyHtml: string, langSwitchHref: string):
   .reports-table a { color:#7c3aed; text-decoration:none; }
   .reports-table a:hover { text-decoration:underline; }
   .badges { white-space:nowrap; font-size:13px; }
+  /* PM-196：勾選刪除 */
+  .col-cb { width:34px; text-align:center; }
+  .reports-table td.col-cb, .reports-table th.col-cb { text-align:center; padding-left:8px; padding-right:8px; }
+  .report-cb, #selectAll { width:16px; height:16px; accent-color:#7c3aed; cursor:pointer; }
+  .delete-bar { display:flex; justify-content:flex-end; margin-top:16px; }
+  .delete-btn { background:#da3633; color:#fff; border:none; border-radius:8px; padding:9px 16px; font-size:14px; font-weight:600; cursor:pointer; }
+  .delete-btn:hover { background:#f85149; }
+  .delete-btn:disabled { background:#3a2a2a; color:#8b8fa3; cursor:not-allowed; }
   @media (max-width:640px) { .col-desc, .col-time { display:none; } }
 </style>
 </head>
@@ -2152,6 +2160,12 @@ async function reportsPage(request: Request, env: Env): Promise<Response> {
     thContent: t('內容', 'Content'),
     thAction: t('操作', 'Action'),
     view: t('查看', 'View'),
+    // PM-196：批次刪除
+    selectAll: t('全選', 'Select all'),
+    del: t('🗑️ 刪除選取', '🗑️ Delete selected'),
+    delConfirm: t('確定要刪除 {n} 份報告嗎？此操作無法還原。', 'Delete {n} report(s)? This cannot be undone.'),
+    deleting: t('刪除中…', 'Deleting…'),
+    delFail: t('刪除失敗，請稍後再試。', 'Delete failed — please try again later.'),
   };
 
   // 注意：以下為內嵌 client script，全程用 textContent/DOM 建表（XSS 安全），fetch 帶 Bearer header。
@@ -2224,6 +2238,23 @@ async function reportsPage(request: Request, env: Env): Promise<Response> {
     return a;
   }
 
+  var token = null; // PM-196：供刪除 API 用（下方 resolveSessionToken 後賦值）
+
+  // PM-196：依勾選狀態更新底部刪除列（≥1 勾才顯示）+ 全選 checkbox 同步
+  function updateDeleteBar(){
+    var boxes = document.querySelectorAll('.report-cb');
+    var checked = 0;
+    boxes.forEach(function(b){ if (b.checked) checked++; });
+    var bar = document.getElementById('deleteBar');
+    var btn = document.getElementById('deleteSelected');
+    var cnt = document.getElementById('delCount');
+    if (bar) bar.style.display = checked > 0 ? 'flex' : 'none';
+    if (btn) btn.disabled = checked === 0;
+    if (cnt) cnt.textContent = checked;
+    var sa = document.getElementById('selectAll');
+    if (sa) sa.checked = boxes.length > 0 && checked === boxes.length;
+  }
+
   function renderTable(list){
     container.textContent = '';
     var n = list.length;
@@ -2233,6 +2264,17 @@ async function reportsPage(request: Request, env: Env): Promise<Response> {
     table.className = 'reports-table';
     var thead = document.createElement('thead');
     var htr = document.createElement('tr');
+    // PM-196：全選 checkbox 欄（表頭）
+    var thCb = document.createElement('th'); thCb.className = 'col-cb';
+    if (n > 0) {
+      var selAll = document.createElement('input'); selAll.type = 'checkbox'; selAll.id = 'selectAll'; selAll.title = T.selectAll;
+      selAll.addEventListener('change', function(){
+        document.querySelectorAll('.report-cb').forEach(function(b){ b.checked = selAll.checked; });
+        updateDeleteBar();
+      });
+      thCb.appendChild(selAll);
+    }
+    htr.appendChild(thCb);
     [['col-time', T.thTime], ['', T.thTitle], ['col-desc', T.thDesc], ['', T.thContent], ['', T.thAction]].forEach(function(h){
       var th = document.createElement('th');
       if (h[0]) th.className = h[0];
@@ -2246,7 +2288,7 @@ async function reportsPage(request: Request, env: Env): Promise<Response> {
     if (n === 0) {
       var tr = document.createElement('tr');
       var td = document.createElement('td');
-      td.colSpan = 5; td.className = 'empty'; td.textContent = T.empty;
+      td.colSpan = 6; td.className = 'empty'; td.textContent = T.empty;
       tr.appendChild(td); tbody.appendChild(tr);
     } else {
       list.forEach(function(r){
@@ -2254,21 +2296,52 @@ async function reportsPage(request: Request, env: Env): Promise<Response> {
         var title = r.title || r.url || T.untitled;
         var desc = r.description ? String(r.description).slice(0, 60) : '';
 
+        // PM-196：每行勾選框（帶 report_id）
+        var tdCb = document.createElement('td'); tdCb.className = 'col-cb';
+        var cb = document.createElement('input'); cb.type = 'checkbox'; cb.className = 'report-cb';
+        cb.setAttribute('data-id', r.report_id);
+        cb.addEventListener('change', updateDeleteBar);
+        tdCb.appendChild(cb);
+
         var tdTime = document.createElement('td'); tdTime.className = 'col-time'; tdTime.textContent = fmtDate(r.created_at);
         var tdTitle = document.createElement('td'); tdTitle.appendChild(reportLink(r.report_id, title));
         var tdDesc = document.createElement('td'); tdDesc.className = 'col-desc'; tdDesc.textContent = desc;
         var tdBadge = document.createElement('td'); tdBadge.className = 'badges'; tdBadge.textContent = badgesFor(r);
         var tdAct = document.createElement('td'); tdAct.appendChild(reportLink(r.report_id, T.view));
 
-        tr.appendChild(tdTime); tr.appendChild(tdTitle); tr.appendChild(tdDesc); tr.appendChild(tdBadge); tr.appendChild(tdAct);
+        tr.appendChild(tdCb); tr.appendChild(tdTime); tr.appendChild(tdTitle); tr.appendChild(tdDesc); tr.appendChild(tdBadge); tr.appendChild(tdAct);
         tbody.appendChild(tr);
       });
     }
     table.appendChild(tbody);
     container.appendChild(table);
+    updateDeleteBar();
   }
 
-  var token = resolveSessionToken();
+  // PM-196：底部「🗑️ 刪除選取 (N)」→ 確認 → DELETE /api/reports（Bearer + report_ids）→ 重載列表
+  var deleteBtn = document.getElementById('deleteSelected');
+  if (deleteBtn) {
+    deleteBtn.addEventListener('click', function(){
+      var ids = [];
+      document.querySelectorAll('.report-cb').forEach(function(b){ if (b.checked) ids.push(b.getAttribute('data-id')); });
+      if (ids.length === 0) return;
+      if (!confirm(T.delConfirm.replace('{n}', ids.length))) return;
+      deleteBtn.disabled = true;
+      fetch('/api/reports', {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ report_ids: ids })
+      }).then(function(res){
+        if (!res.ok) throw new Error('http ' + res.status);
+        location.reload(); // token 在 localStorage，reload 後 resolveSessionToken 正常
+      }).catch(function(){
+        deleteBtn.disabled = false;
+        alert(T.delFail);
+      });
+    });
+  }
+
+  token = resolveSessionToken();
   if (!token) { showNotice(T.loginRequired, true); return; }
 
   fetch('/api/my-reports', { headers: { 'Authorization': 'Bearer ' + token } })
@@ -2285,6 +2358,9 @@ async function reportsPage(request: Request, env: Env): Promise<Response> {
   const body = `<h1>${t('📋 我的報告', '📋 My Reports')}</h1>
     <p class="count" id="reportCount"></p>
     <div id="reportsContainer"><div class="notice">${T.loading}</div></div>
+    <div id="deleteBar" class="delete-bar" style="display:none;">
+      <button id="deleteSelected" class="delete-btn" disabled>${T.del} (<span id="delCount">0</span>)</button>
+    </div>
     ${script}`;
 
   return reportsShell(lang, body, switchHref);
@@ -2307,6 +2383,34 @@ async function myReportsApi(request: Request, env: Env): Promise<Response> {
   return jsonNoStore({ reports: reports || [] });
 }
 
+// PM-196：批次刪除自己的報告（Bearer 驗證 + owner 過濾 + 最多 50 筆）。只刪 DB 列 → getReport 即 404（報告消失）。
+async function deleteReportsApi(request: Request, env: Env): Promise<Response> {
+  const userId = await verifySession(request, env);
+  if (!userId) return jsonNoStore({ error: 'unauthorized' }, 401);
+  let parsed: { report_ids?: unknown };
+  try {
+    parsed = (await request.json()) as { report_ids?: unknown };
+  } catch {
+    return jsonNoStore({ error: 'invalid_body' }, 400);
+  }
+  const ids = Array.isArray(parsed.report_ids)
+    ? parsed.report_ids.filter((x): x is string => typeof x === 'string' && x.length > 0).slice(0, 50) // 最多 50 筆
+    : [];
+  if (ids.length === 0) return jsonNoStore({ error: 'no_ids' }, 400);
+  // .eq(user_id) 確保只刪自己的報告（別人的 id 帶進來也刪不到）；.select 回傳實際刪除筆數
+  const { data, error } = await supa(env)
+    .from('reports')
+    .delete()
+    .eq('user_id', userId)
+    .in('report_id', ids)
+    .select('report_id');
+  if (error) {
+    console.error('deleteReportsApi failed:', error.message); // 原始錯誤只記 log
+    return jsonNoStore({ error: 'delete_failed' }, 500);
+  }
+  return jsonNoStore({ deleted: (data as Array<{ report_id: string }> | null)?.length ?? 0 });
+}
+
 // ── PM-59：Server 直接 serve 報告頁 HTML（vanilla JS 讀 /api/reports/:id 渲染）──
 // ⚠ 規格 HTML 讀 snake_case（console_logs / rrweb_count），但 GET /api/reports/:id 實際回
 // camelCase（consoleLogs / networkErrors / voiceTranscript / rrwebEvents）——已實測確認。
@@ -2324,6 +2428,12 @@ function reportPageHtml(lang: PageLang): string {
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     body { background:#0f0f1a; color:#e0e0e0; font-family:system-ui,"Microsoft JhengHei",sans-serif; }
+    /* PM-196：分享連結複製列 */
+    .share-box { max-width:1100px; margin:0 auto 40px; padding:0 24px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .share-box .share-label { color:#8b949e; font-size:14px; white-space:nowrap; }
+    .share-box input { flex:1; min-width:200px; background:#0d1117; border:1px solid #30363d; border-radius:8px; padding:9px 12px; color:#c9d1d9; font-size:13px; font-family:monospace; }
+    .share-copy-btn { background:#238636; color:#fff; border:none; border-radius:8px; padding:9px 16px; font-size:14px; font-weight:600; cursor:pointer; white-space:nowrap; }
+    .share-copy-btn:hover { background:#2ea043; }
     .topbar { display:flex; align-items:center; gap:12px; padding:12px 24px; background:#1a1a2e; border-bottom:1px solid #2a2a3e; }
     .topbar-brand { font-size:18px; font-weight:700; color:#a78bfa; }
     .topbar-title { color:#888; font-size:14px; }
@@ -2403,13 +2513,19 @@ function reportPageHtml(lang: PageLang): string {
   <div class="report" id="app">
     <div class="loading" id="loading">${t('載入中…', 'Loading…')}</div>
   </div>
+  <!-- PM-196：分享報告連結 + 一鍵複製（select+execCommand，非 clipboard API；複製邏輯在 report-page.js，因報告頁 CSP script-src 'self' 不允許 inline onclick）。預設隱藏，render 成功才顯示。 -->
+  <div id="share-box" class="share-box" style="display:none;">
+    <span class="share-label">${t('📤 分享報告連結：', '📤 Share report link:')}</span>
+    <input id="share-url" type="text" readonly />
+    <button id="share-copy" class="share-copy-btn">${t('📋 複製連結', '📋 Copy link')}</button>
+  </div>
   <!-- PM-99：截圖點擊頁內 lightbox（base64 data URL 無法 window.open，會開空白頁；改頁內放大）。PM-166：onclick 改由 report-page.js addEventListener -->
   <div id="bugezy-lightbox" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;background:rgba(0,0,0,0.85);cursor:zoom-out;align-items:center;justify-content:center;">
     <img id="bugezy-lightbox-img" style="max-width:95vw;max-height:95vh;border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,0.5);" />
   </div>
   <!-- PM-166：全部 client 邏輯（render + lightbox）抽到外部檔，CSP script-src 'self' 才能拿掉 unsafe-inline。
        PM-168：加 ?v 版本號——report-page.js 快取 1 天，改版時 bump 版本強制邊緣快取失效（否則新 HTML 配舊 JS）。 -->
-  <script src="/report-page.js?v=188"></script>
+  <script src="/report-page.js?v=196"></script>
 </body>
 </html>`;
 }
@@ -2692,6 +2808,27 @@ const REPORT_PAGE_JS = `
           document.getElementById('tab-' + btn.dataset.tab)?.classList.add('active');
         });
       });
+
+      // PM-196：render 成功才顯示分享連結列；一鍵複製用 select+execCommand（非 clipboard API，避免 PM-192 的坑；無反斜線 regex）。
+      var shareBox = document.getElementById('share-box');
+      var shareInput = document.getElementById('share-url');
+      if (shareBox && shareInput) {
+        shareInput.value = location.origin + '/report/' + reportId;
+        shareBox.style.display = 'flex';
+        var shareBtn = document.getElementById('share-copy');
+        if (shareBtn && !shareBtn.__wired) {
+          shareBtn.__wired = true;
+          var shareOrig = shareBtn.textContent;
+          shareBtn.addEventListener('click', function () {
+            shareInput.focus();
+            shareInput.select();
+            try { shareInput.setSelectionRange(0, 99999); } catch (e) {}
+            try { document.execCommand('copy'); } catch (e) {}
+            shareBtn.textContent = t('✅ 已複製！', '✅ Copied!');
+            setTimeout(function () { shareBtn.textContent = shareOrig; }, 2000);
+          });
+        }
+      }
 
       // PM-82/84：高畫質 AI 分析（高 Token）— 勾選即時更新提示 + PATCH 存回 Supabase
       const ssToggle = document.getElementById('allow-images-toggle');
@@ -3508,6 +3645,10 @@ export default {
     // PM-187：報告列表 JSON 資料端點（Bearer 驗證）
     if (request.method === 'GET' && path === '/api/my-reports') {
       return await myReportsApi(request, env);
+    }
+    // PM-196：批次刪除自己的報告（Bearer 驗證 + owner 過濾 + 最多 50 筆）
+    if (request.method === 'DELETE' && path === '/api/reports') {
+      return await deleteReportsApi(request, env);
     }
     // PM-136：SEO — sitemap + robots（讓 Google/Bing 收錄 bugezy.dev）
     if (request.method === 'GET' && path === '/sitemap.xml') return sitemapXml();
