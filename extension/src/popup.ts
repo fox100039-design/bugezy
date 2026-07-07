@@ -79,9 +79,15 @@ let dayPassTimer: number | undefined;
 // PM-170：用完升級引導 overlay + 各卡片剩餘次數用的免費額度快取
 const upgradeOverlay = $('upgradeOverlay');
 const upgradeOverlayClose = $<HTMLButtonElement>('upgradeOverlayClose');
+const upgradeOverlayTitle = $('upgradeOverlayTitle'); // PM-189：升級 overlay 標題（usage / json paid-only 共用）
 const upgradeOverlayDesc = $('upgradeOverlayDesc');
 const overlayDayPassBtn = $<HTMLButtonElement>('overlayDayPassBtn');
 const overlayMonthlyBtn = $<HTMLButtonElement>('overlayMonthlyBtn');
+// PM-189：JSON 複製/匯出免責警語 overlay
+const jsonWarnOverlay = $('jsonWarnOverlay');
+const jsonWarnConfirm = $<HTMLButtonElement>('jsonWarnConfirm');
+const jsonWarnCancel = $<HTMLButtonElement>('jsonWarnCancel');
+let isPaidMember = false; // PM-189：付費會員（paid/cancelled 未到期/day_pass 未到期）→ JSON 複製匯出解鎖
 let freeLimits: PlanInfo['limits'] = null; // 最近一次 loadPlan 的免費額度（供 overlay 顯示 used/max）
 // PM-171/172：非台灣 → 綠界收不了款，付費按鈕改 coming soon。
 // PM-172：改用 IP 國家碼（來自 getUserPlan 的 request.cf.country），取代語言判斷——
@@ -139,6 +145,13 @@ function applyTranslations() {
     const key = el.getAttribute('data-i18n');
     if (key) el.textContent = t(key, currentUILang);
   });
+  updateJsonLockUI(); // PM-189：靜態翻譯會把 copy/export 還原為預設文字，依付費狀態覆寫鎖頭
+}
+
+/** PM-189：依付費狀態設定「複製/匯出 JSON」按鈕文字（免費 → 🔒 會員鎖頭）。 */
+function updateJsonLockUI() {
+  copyBtn.textContent = t(isPaidMember ? 'copy-json' : 'json-copy-locked', currentUILang);
+  exportBtn.textContent = t(isPaidMember ? 'export-json' : 'json-export-locked', currentUILang);
 }
 
 chrome.storage.local.get(LANG_KEY, (r) => {
@@ -520,13 +533,16 @@ clearBtn.addEventListener('click', async () => {
 });
 
 copyBtn.addEventListener('click', async () => {
+  // PM-189：複製 JSON 為會員進階功能——免費 → 引導升級；付費 → 先過免責警語
+  if (!isPaidMember) return showJsonPaidOverlay();
+  if (!(await confirmJsonDisclaimer())) return;
   const { payload } = await send<{ payload: RecordingPayload | null }>('GET_LAST_PAYLOAD');
   if (!payload) return;
   await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-  copyBtn.textContent = '✅ 已複製';
+  copyBtn.textContent = currentUILang === 'en' ? '✅ Copied' : '✅ 已複製';
   copyBtn.classList.add('copied');
   setTimeout(() => {
-    copyBtn.textContent = '📋 複製 JSON';
+    updateJsonLockUI(); // 還原（付費 → 📋 複製 JSON）
     copyBtn.classList.remove('copied');
   }, 1500);
 });
@@ -544,6 +560,9 @@ copyLinkBtn.addEventListener('click', () => {
 
 // 匯出 payload 成檔案 → Downloads/bugezy-debug/，給 Claude Chat 用 dc-light 直接讀
 exportBtn.addEventListener('click', async () => {
+  // PM-189：匯出 JSON 為會員進階功能——免費 → 引導升級；付費 → 先過免責警語
+  if (!isPaidMember) return showJsonPaidOverlay();
+  if (!(await confirmJsonDisclaimer())) return;
   const { payload } = await send<{ payload: RecordingPayload | null }>('GET_LAST_PAYLOAD');
   if (!payload) return;
   const d = new Date();
@@ -558,10 +577,11 @@ exportBtn.addEventListener('click', async () => {
       filename: `bugezy-debug/payload-${ts}.json`, // 相對 Downloads 根；子資料夾自動建立
       saveAs: false,
     });
-    exportBtn.textContent = '✅ 已匯出到 Downloads/bugezy-debug';
+    exportBtn.textContent =
+      currentUILang === 'en' ? '✅ Saved to Downloads/bugezy-debug' : '✅ 已匯出到 Downloads/bugezy-debug';
     exportBtn.classList.add('done');
     setTimeout(() => {
-      exportBtn.textContent = '💾 匯出 JSON（給 AI 讀）';
+      updateJsonLockUI(); // 還原（付費 → 💾 匯出 JSON）
       exportBtn.classList.remove('done');
     }, 2000);
   } finally {
@@ -724,6 +744,7 @@ function showUpgradeOverlay(type: 'recording' | 'rewind' | 'mcp') {
   const max = lim?.max ?? 0;
   const descKey =
     type === 'recording' ? 'usage-desc-record' : type === 'rewind' ? 'usage-desc-rewind' : 'usage-desc-mcp';
+  upgradeOverlayTitle.textContent = t('usage-exhausted', currentUILang); // PM-189：title 與 json 共用，明確設回
   // 用完 → used 已達上限，顯示 max/max
   upgradeOverlayDesc.textContent = t(descKey, currentUILang, { used: max, max });
   // PM-171：非台灣 → 隱藏日票/月費鈕（綠界收不了款），改顯示 coming soon
@@ -732,6 +753,40 @@ function showUpgradeOverlay(type: 'recording' | 'rewind' | 'mcp') {
   overlayMonthlyBtn.classList.toggle('hidden', !taiwan);
   overlayIntlNotice.classList.toggle('hidden', taiwan);
   upgradeOverlay.classList.remove('hidden');
+}
+
+/** PM-189：免費用戶點 JSON 複製/匯出 → 沿用升級 overlay，改標題為「會員進階功能」引導付費。 */
+function showJsonPaidOverlay() {
+  upgradeOverlayTitle.textContent = t('json-paid-only', currentUILang);
+  upgradeOverlayDesc.textContent = '';
+  const taiwan = isTaiwanUser();
+  overlayDayPassBtn.classList.toggle('hidden', !taiwan);
+  overlayMonthlyBtn.classList.toggle('hidden', !taiwan);
+  overlayIntlNotice.classList.toggle('hidden', taiwan);
+  upgradeOverlay.classList.remove('hidden');
+}
+
+/** PM-189：JSON 敏感資料免責警語彈窗——每次操作都顯示（法律免責，不設「不再提示」）。
+ *  resolve(true)=用戶按「我了解，繼續」；resolve(false)=取消/關背景。 */
+function confirmJsonDisclaimer(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const close = (ok: boolean) => {
+      jsonWarnOverlay.classList.add('hidden');
+      jsonWarnConfirm.removeEventListener('click', onOk);
+      jsonWarnCancel.removeEventListener('click', onCancel);
+      jsonWarnOverlay.removeEventListener('click', onBackdrop);
+      resolve(ok);
+    };
+    const onOk = () => close(true);
+    const onCancel = () => close(false);
+    const onBackdrop = (e: MouseEvent) => {
+      if (e.target === jsonWarnOverlay) close(false);
+    };
+    jsonWarnConfirm.addEventListener('click', onOk);
+    jsonWarnCancel.addEventListener('click', onCancel);
+    jsonWarnOverlay.addEventListener('click', onBackdrop);
+    jsonWarnOverlay.classList.remove('hidden');
+  });
 }
 
 // PM-63/75：查方案 → 依 plan 狀態（source of truth）控制 UI。
@@ -766,6 +821,13 @@ async function loadPlan() {
     const dayPassRemainMs = plan.day_pass_expires_at
       ? new Date(plan.day_pass_expires_at).getTime() - Date.now()
       : 0;
+
+    // PM-189：付費會員（月費 paid / 取消未到期 cancelled / 日票未到期）→ 解鎖 JSON 複製匯出
+    isPaidMember =
+      plan.plan === 'paid' ||
+      plan.plan === 'cancelled' ||
+      (plan.plan === 'day_pass' && dayPassRemainMs > 0);
+    updateJsonLockUI();
 
     // PM-170：付費/日票/取消 → 三張卡片皆「✨ 無限次」
     const setAllUnlimited = () => {

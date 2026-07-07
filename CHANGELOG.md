@@ -2,7 +2,9 @@
 
 ## 2026-07-07
 
-Day 22（PM-187~）。**資安：修復 URL token 洩漏（P0）+ 報告分享閱讀權限付費牆（P0 資安＋商業）**。
+Day 22（PM-187~）。**資安：修復 URL token 洩漏（P0）+ 報告分享閱讀權限付費牆（P0 資安＋商業）+ JSON 複製/匯出改付費 + 免責警語（P1）**。
+
+- PM-189：**JSON 複製/匯出改為付費功能 + 敏感資料免責警語（P1）**（`extension/popup.ts`/`popup.html`/`i18n.ts`）。原「📋 複製 JSON」「💾 匯出 JSON」免費開放 → 任何人可取完整未遮罩 payload（console/network 敏感資料）；此為進階用途，限付費會員並加免責。`loadPlan` 計 `isPaidMember`（月費 paid / 取消未到期 cancelled / 日票未到期 day_pass）；免費用戶點 → `showJsonPaidOverlay`（沿用 PM-170 升級 overlay，標題改「此為會員進階功能」+ 日票/月費 CTA，非台灣 coming soon）不執行；付費用戶點 → `confirmJsonDisclaimer()`（⚠️ 敏感資料免責警語彈窗，[取消]/[我了解，繼續]，**每次都顯示**，法律免責不設「不再提示」）→ 確認才複製/匯出。免費按鈕顯示 `🔒 複製 JSON（會員）`/`🔒 匯出 JSON（會員）`（`updateJsonLockUI`，於 `applyTranslations` 後套用避免被靜態翻譯還原）。i18n 7 鍵中英。MCP 輪盤「複製指令」/複製分享連結/報告頁/Server/MCP 皆不動。`tsc` clean → `npm run build` ✅（dist popup.js/html wiring 確認）。純 extension，待重上架。
 
 - PM-188：**報告分享閱讀權限——非擁有者需付費會員才能讀（P0 資安＋商業）**（`server/index.ts`）。原 `/report/:id` 是「有連結就能看」→ 任何人拿 UUID 即可讀完整 console/network/語音，貼公開論壇就外洩；同時做付費動機（想看別人分享的報告 → 需成為會員 → 病毒式引流）。`getReport()` 加認證：讀 `Authorization: Bearer`（可選）→ `verifySessionByToken`；**owner 看自己不論付費狀態放行**；非 owner 訪客（無/無效 token）→ 403 `login_required`；已登入非 owner 且非付費 → 403 `upgrade_required`（複用既有 `isActiveUserId`，不重寫付費檢查）；403 走 `jsonNoStore` 防邊緣快取跨使用者外洩。報告頁 `report-page.js`（`?v=188`）加 `resolveSessionToken()`（同 PM-187：`#token` fragment 優先→清 URL→否則同源 localStorage）帶 Bearer；403 顯示付費牆（🔒 標題 + 說明 + 「免費安裝 BugEzy」/「了解會員方案」兩 CTA + 「已是會員請從擴充登入」，中英）。owner 身分靠 PM-187 存於 bugezy.dev localStorage 的 token（同源可讀，開 📋 我的報告即 seed）。MCP tools（自帶 session_token + 付費檢查）/ `/api/my-reports` / `createReport`（免費可上傳）/ ECPay 皆不動。線上實測：兩份真實報告 visitor/錯 token → 403 `login_required` no-store、fake id → 404（存在性先於認證）、`report-page.js?v=188` 含 resolveSessionToken/renderPaywall/Authorization。`tsc` clean → `wrangler deploy`（`5d015795`）。
 

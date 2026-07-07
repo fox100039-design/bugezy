@@ -302,6 +302,9 @@
       .upgrade-overlay-desc { font-size: 13px; color: #9aa3b2; margin: 0 0 16px; }
       .upgrade-overlay-card .day-pass-btn, .upgrade-overlay-card .monthly-btn { width: 100%; margin: 0 0 8px; }
       .upgrade-overlay-hint { font-size: 12px; color: #7c8; margin: 8px 0 0; }
+      /* PM-189：JSON 免責警語 overlay */
+      .json-warn-body { text-align: left; line-height: 1.6; margin-bottom: 18px; }
+      .json-cancel-btn { width: 100%; background: #2a2a3e; color: #ccc; border: 1px solid #3a3a4e; border-radius: 8px; padding: 8px 4px; font-size: 12px; font-weight: 600; cursor: pointer; margin-top: 8px; }
       /* PM-171：非台灣付費 coming soon 藍色提示框 */
       .intl-notice { background: rgba(59,130,246,0.1); border: 1px solid #3b82f6; border-radius: 10px; padding: 12px; text-align: center; margin-top: 10px; }
       .intl-notice.hidden { display: none; }
@@ -539,7 +542,7 @@
       <div class="upgrade-overlay-card">
         <button id="upgradeOverlayClose" class="upgrade-overlay-close" aria-label="close">✕</button>
         <p class="upgrade-overlay-icon">📋</p>
-        <p class="upgrade-overlay-title" data-i18n="usage-exhausted">本月額度已用完</p>
+        <p id="upgradeOverlayTitle" class="upgrade-overlay-title" data-i18n="usage-exhausted">本月額度已用完</p>
         <p id="upgradeOverlayDesc" class="upgrade-overlay-desc"></p>
         <button id="overlayDayPassBtn" class="day-pass-btn" data-i18n="day-pass-btn-full">⚡ 日票 NT$20（24hr 無限）</button>
         <button id="overlayMonthlyBtn" class="monthly-btn" data-i18n="monthly-btn-full">✨ 月費 NT$80/月（最划算）</button>
@@ -549,6 +552,17 @@
           <p class="intl-desc" data-i18n="intl-desc">我們正在開通國際信用卡付款，敬請期待！</p>
         </div>
         <p class="upgrade-overlay-hint" data-i18n="usage-reset-hint">💡 免費額度每月自動重置</p>
+      </div>
+    </div>
+
+    <!-- PM-189：JSON 複製/匯出付費會員專用——每次操作前顯示敏感資料免責警語 -->
+    <div id="jsonWarnOverlay" class="upgrade-overlay hidden">
+      <div class="upgrade-overlay-card">
+        <p class="upgrade-overlay-icon">⚠️</p>
+        <p class="upgrade-overlay-title" data-i18n="json-warning-title">⚠️ JSON 資料包含完整除錯紀錄</p>
+        <p class="upgrade-overlay-desc json-warn-body" data-i18n="json-warning-body">此資料可能包含敏感資訊（API 金鑰、Token、錯誤訊息等），請勿將 JSON 資料分享給不信任的對象。因資料外洩造成的損失，BugEzy 不承擔責任。</p>
+        <button id="jsonWarnConfirm" class="monthly-btn" data-i18n="json-confirm">我了解，繼續</button>
+        <button id="jsonWarnCancel" class="json-cancel-btn" data-i18n="json-cancel">取消</button>
       </div>
     </div>
 

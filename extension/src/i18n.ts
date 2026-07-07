@@ -126,6 +126,17 @@ const dict: Record<string, Record<UILang, string>> = {
   'export-json': { zh: '💾 匯出 JSON（給 AI 讀）', en: '💾 Export JSON (for AI)' },
   'clear-restart': { zh: '🗑️ 清除，重新錄製', en: '🗑️ Clear & Restart' },
   'copy-link': { zh: '📋 複製連結', en: '📋 Copy Link' },
+  // PM-189：JSON 複製/匯出改付費功能 + 敏感資料免責警語
+  'json-paid-only': { zh: '此為會員進階功能，請升級後使用', en: 'This is a member feature. Please upgrade to use.' },
+  'json-warning-title': { zh: '⚠️ JSON 資料包含完整除錯紀錄', en: '⚠️ JSON data contains full debug records' },
+  'json-warning-body': {
+    zh: '此資料可能包含敏感資訊（API 金鑰、Token、錯誤訊息等），請勿將 JSON 資料分享給不信任的對象。因資料外洩造成的損失，BugEzy 不承擔責任。',
+    en: 'This data may contain sensitive information (API keys, tokens, error messages, etc.). Do not share JSON data with untrusted parties. BugEzy is not responsible for any loss caused by data leakage.',
+  },
+  'json-confirm': { zh: '我了解，繼續', en: 'I understand, continue' },
+  'json-cancel': { zh: '取消', en: 'Cancel' },
+  'json-copy-locked': { zh: '🔒 複製 JSON（會員）', en: '🔒 Copy JSON (member)' },
+  'json-export-locked': { zh: '🔒 匯出 JSON（會員）', en: '🔒 Export JSON (member)' },
 
   // ── mic OFF 提示 ──
   'mic-prompt-title': { zh: '麥克風目前關閉', en: 'Microphone is off' },
