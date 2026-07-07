@@ -10,9 +10,19 @@ let audioCtx: AudioContext | null = null;
 let analyser: AnalyserNode | null = null;
 let volumeTimer: ReturnType<typeof setInterval> | null = null;
 
-function startVolumeMeter(stream: MediaStream): void {
+async function startVolumeMeter(stream: MediaStream): Promise<void> {
   try {
     audioCtx = new AudioContext();
+    // PM-192 修：offscreen document 無 user gesture → AudioContext 預設 'suspended'，
+    //   analyser 不會被推進、getByteFrequencyData 全 0 → 音量條完全不動（即時字幕走頁面 gesture 故正常）。
+    //   必須 resume() 讓 context 運轉（麥克風擷取型 context 允許在無 gesture 下 resume）。
+    if (audioCtx.state === 'suspended') {
+      try {
+        await audioCtx.resume();
+      } catch (e) {
+        console.warn('[BugEzy offscreen] AudioContext resume 失敗:', e);
+      }
+    }
     const source = audioCtx.createMediaStreamSource(stream);
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 256;
@@ -25,6 +35,7 @@ function startVolumeMeter(stream: MediaStream): void {
       const level = Math.min(avg / 128, 1);
       chrome.runtime.sendMessage({ type: 'MIC_VOLUME', level }).catch(() => {});
     }, 200);
+    console.log('[BugEzy offscreen] 音量分析啟動（AudioContext state=' + audioCtx.state + '）');
   } catch (err) {
     console.error('[BugEzy offscreen] 音量分析啟動失敗:', err);
   }
@@ -42,7 +53,7 @@ function stopVolumeMeter(): void {
   }
 }
 
-async function startRecording(): Promise<void> {
+async function startRecording(): Promise<{ ok: boolean; error?: string }> {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
@@ -58,10 +69,14 @@ async function startRecording(): Promise<void> {
       if (e.data.size > 0) chunks.push(e.data);
     };
     mediaRecorder.start(1000); // 每秒一個 chunk
-    startVolumeMeter(stream); // PM-97：同一條 stream 開音量表
+    void startVolumeMeter(stream); // PM-97：同一條 stream 開音量表（PM-192：內含 AudioContext.resume）
     console.log('[BugEzy offscreen] 錄音開始');
+    return { ok: true };
   } catch (err) {
-    console.error('[BugEzy offscreen] getUserMedia 失敗:', err);
+    // PM-192 修：getUserMedia 失敗回報給 background（原本吞掉→背景以為成功，麥克風實則沒開）
+    const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    console.error('[BugEzy offscreen] getUserMedia 失敗:', msg);
+    return { ok: false, error: msg };
   }
 }
 
@@ -94,8 +109,9 @@ function stopRecording(): Promise<{ audioBlob?: string; error?: string }> {
 
 chrome.runtime.onMessage.addListener((msg: { type?: string }, _sender, sendResponse) => {
   if (msg?.type === 'OFFSCREEN_START_MIC') {
-    void startRecording();
-    sendResponse({ ok: true });
+    // PM-192 修：等 startRecording（getUserMedia）真正完成再回應，把成功/失敗如實回報（原本秒回 ok:true 蓋掉真實結果）
+    startRecording().then(sendResponse);
+    return true; // async 回應
   } else if (msg?.type === 'OFFSCREEN_STOP_MIC') {
     stopRecording().then(sendResponse);
     return true; // async 回應

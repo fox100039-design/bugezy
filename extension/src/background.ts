@@ -194,8 +194,15 @@ async function startRecording(): Promise<StateResponse> {
     try {
       const ready = await ensureMicReady(); // PM-88/89：未授權 → 跳過語音（授權改由 popup toggle 觸發）
       if (ready) {
-        await chrome.runtime.sendMessage({ type: 'OFFSCREEN_START_MIC' });
-        blog('語音引擎：Groq Whisper（付費版精準轉錄）');
+        // PM-192 修：offscreen 現在回報 getUserMedia 真實結果——失敗（如授權被撤/裝置佔用）就記錄，不再誤以為成功
+        const micRes = (await chrome.runtime.sendMessage({ type: 'OFFSCREEN_START_MIC' })) as
+          | { ok?: boolean; error?: string }
+          | undefined;
+        if (micRes?.ok) {
+          blog('語音引擎：Groq Whisper（付費版精準轉錄）');
+        } else {
+          blog('⚠ offscreen 麥克風開啟失敗（不阻擋錄製）：', micRes?.error ?? '未知錯誤');
+        }
       } else {
         blog('麥克風未授權，本次不錄語音（請在 popup 開麥克風 toggle 授權）');
       }
