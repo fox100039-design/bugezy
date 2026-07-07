@@ -4,6 +4,8 @@
 
 Day 22（PM-187~）。**資安：修復 URL token 洩漏（P0）+ 報告分享閱讀權限付費牆（P0 資安＋商業）+ JSON 複製/匯出改付費 + 免責警語（P1）+ MCP URL 帶 token 方案 B（P1）+ popup 一鍵複製 MCP 設定（P1）**。
 
+- PM-192：**/install「一鍵複製，貼給你的 AI」按鈕修復**（`server/index.ts`）。問題：按下無視覺回饋、貼出空白。修法：①copy handler 改 IIFE 確保綁定；②複製 `#ai-install-prompt` 完整安裝指令（含 Chrome Web Store 連結 + MCP JSON）；③`navigator.clipboard.writeText` 失敗 → fallback（隱藏 `readonly` textarea + `select()` + `execCommand('copy')`），無 clipboard API 也走 fallback，解「貼出空白」；④按鈕按下變綠色「✅ 已複製！」（`.copied` #238636）2s 後恢復原文字；⑤`.copy-btn:active { transform:scale(0.97); opacity:0.8 }` 沉下去回饋 + `transition`。線上實測 /install 中英：fallbackCopy/execCommand/flashDone/active/copied 皆present、複製內容含商店連結 + mcpServers JSON。`wrangler deploy`（`fae65da2`）。
+
 - fix：**Chrome Web Store extension ID 更新**（`server/index.ts`）。全站 4 處 Chrome Web Store 連結的 extension ID `mpkakmmfllghcdaeicdlnpogneeanhmb` → `hfnkjlbbpehkflgfbjenfmnmjkdjadcj`（首頁 + /install 的 AI 安裝提示中英各 2 處）。/install「一鍵複製」按鈕（`navigator.clipboard.writeText` 複製 `#ai-install-prompt` textContent）複製到的內容因此帶正確商店連結。線上實測 /install + 首頁 新 ID present、舊 ID 0。`wrangler deploy`（`63c74467`）。
 
 - PM-191：**popup 進階設定「📋 複製 MCP 設定」一鍵複製（含 token）**（`extension/popup.ts`/`popup.html`/`i18n.ts`）。配合 PM-190 URL token，讓使用者一鍵拿到帶 token 的完整 MCP JSON 貼給 Claude/Cursor（AI 零操作讀報告）。進階設定區加 `#copyMcpBtn`；點擊讀 `chrome.storage.local['bugezy:session-token']` → 組 `{"mcpServers":{"bugezy":{"url":"https://bugezy.dev/mcp?token=<token>"}}}`（`JSON.stringify` 縮排 2）→ 寫剪貼簿 → 顯示綠色「✅ 已複製！貼到 Claude/Cursor 設定即可」（4s 後隱藏）；未登入（無 token）→ 不複製空設定，改橘色提示「請先登入 BugEzy 再複製」。i18n 3 鍵中英。純 extension，`tsc` clean → `npm run build` ✅（dist wiring 確認），待重上架。

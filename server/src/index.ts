@@ -1407,8 +1407,11 @@ function installPage(lang: PageLang): string {
   /* PM-112：最快安裝——複製貼給 AI */
   .ai-install-box { background:#161b22; border:1px solid #7c3aed; border-radius:12px; padding:20px; text-align:left; margin:16px 0 8px; }
   .ai-install-box pre { color:#e6edf3; font-size:13px; font-family:'Consolas','Monaco',monospace; white-space:pre-wrap; word-break:break-word; line-height:1.6; margin:0 0 14px 0; }
-  .copy-btn { background:#7c3aed; color:#fff; border:none; border-radius:10px; padding:12px 24px; font-size:15px; font-weight:600; cursor:pointer; width:100%; }
+  .copy-btn { background:#7c3aed; color:#fff; border:none; border-radius:10px; padding:12px 24px; font-size:15px; font-weight:600; cursor:pointer; width:100%; transition:transform 0.08s ease, opacity 0.08s ease, background 0.2s; }
   .copy-btn:hover { background:#6d28d9; }
+  /* PM-192：按下去沉下去的回饋 */
+  .copy-btn:active { transform:scale(0.97); opacity:0.8; }
+  .copy-btn.copied { background:#238636; }
   .copy-feedback { color:#3fb950; font-size:14px; margin-top:8px; display:inline-block; }
   .ai-install-tools { color:#8b8fa3; font-size:13px; margin-top:8px; }
   @media (max-width: 640px) { .wrap { padding: 32px 16px 60px; } h1 { font-size: 24px; } }
@@ -1599,13 +1602,48 @@ $ BUGEZY_TOKEN=&lt;${t('你的 token', 'your token')}&gt; npx bugezy-watch -- go
     } catch (e) {}
   })();
 
-  document.getElementById('copy-ai-prompt')?.addEventListener('click', function () {
-    var text = document.getElementById('ai-install-prompt')?.textContent || '';
-    navigator.clipboard.writeText(text).then(function () {
-      var fb = document.getElementById('copy-feedback');
-      if (fb) { fb.style.display = 'inline-block'; setTimeout(function () { fb.style.display = 'none'; }, 2000); }
+  // PM-192：一鍵複製修復——①確保 handler 綁定 ②複製完整安裝指令（含商店連結 + MCP JSON）
+  //   ③navigator.clipboard.writeText 失敗時 fallback（隱藏 textarea + execCommand）④按鈕變「✅ 已複製！」綠色 2s 後恢復。
+  (function () {
+    var btn = document.getElementById('copy-ai-prompt');
+    if (!btn) return;
+    var originalLabel = btn.textContent;
+    var DONE_LABEL = ${JSON.stringify(t('✅ 已複製！', '✅ Copied!'))};
+
+    function flashDone() {
+      btn.textContent = DONE_LABEL;
+      btn.classList.add('copied');
+      setTimeout(function () {
+        btn.textContent = originalLabel;
+        btn.classList.remove('copied');
+      }, 2000);
+    }
+    function fallbackCopy(text) {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        var ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        if (ok) flashDone();
+      } catch (e) {}
+    }
+    btn.addEventListener('click', function () {
+      var text = (document.getElementById('ai-install-prompt') || {}).textContent || '';
+      if (!text) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(flashDone, function () { fallbackCopy(text); });
+      } else {
+        fallbackCopy(text);
+      }
     });
-  });
+  })();
 </script>
 </body>
 </html>`;
