@@ -1651,73 +1651,52 @@ $ BUGEZY_TOKEN=&lt;${t('你的 token', 'your token')}&gt; npx bugezy-watch -- go
     } catch (e) {}
   })();
 
-  // PM-192 續修：「貼出空白」根因——原 fallback textarea 用 opacity:0 + left:-9999px，部分瀏覽器無法 select()，
-  //   execCommand('copy') 回 true（假成功→觸發回饋）但剪貼簿其實空。修法：fallback textarea 改「視窗內 1px 可選取」
-  //   （不用 opacity:0/off-screen）確實 select+copy；並加 console.log 供 DevTools 診斷（印文字長度/預覽/走哪條路徑）。
-  //   CSP 說明：本頁 CSP script-src 含 'unsafe-inline'（行銷頁），inline script 未被擋；clipboard API 不受 CSP 管轄，故不需外部 JS/hash。
-  (function () {
-    var btn = document.getElementById('copy-ai-prompt');
-    if (!btn) { console.warn('[BugEzy] copy-ai-prompt button not found'); return; }
-    var originalLabel = btn.textContent;
-    var DONE_LABEL = ${JSON.stringify(t('✅ 已複製！', '✅ Copied!'))};
-
-    function flashDone() {
-      btn.textContent = DONE_LABEL;
-      btn.classList.add('copied');
-      setTimeout(function () {
-        btn.textContent = originalLabel;
-        btn.classList.remove('copied');
-      }, 2000);
-    }
-    // 可靠 fallback：textarea 必須在視窗內且可選取（opacity:0 / left:-9999px 在部分瀏覽器 select() 失效→假成功空剪貼簿）
-    function fallbackCopy(text) {
-      try {
-        var ta = document.createElement('textarea');
-        ta.value = text;
-        ta.setAttribute('readonly', '');
-        ta.style.position = 'fixed';
-        ta.style.top = '0';
-        ta.style.left = '0';
-        ta.style.width = '1px';
-        ta.style.height = '1px';
-        ta.style.padding = '0';
-        ta.style.border = 'none';
-        ta.style.outline = 'none';
-        ta.style.boxShadow = 'none';
-        ta.style.background = 'transparent';
-        document.body.appendChild(ta);
-        ta.focus();
-        ta.select();
-        try { ta.setSelectionRange(0, text.length); } catch (e2) {}
-        var ok = document.execCommand('copy');
-        document.body.removeChild(ta);
-        console.log('[BugEzy] fallback execCommand copy ok=' + ok);
-        if (ok) flashDone();
-        return ok;
-      } catch (e) { console.warn('[BugEzy] fallback copy failed', e); return false; }
-    }
-    // PM-192（三修）：優先從 btn.dataset.copyText（decodeURIComponent）讀，不依賴 DOM textContent（徹底解「貼出空白」）
-    function getText() {
-      var d = btn.dataset ? btn.dataset.copyText : null;
-      if (d) { try { return decodeURIComponent(d); } catch (e) {} }
-      var el = document.getElementById('ai-install-prompt');
-      return el ? (el.textContent || '') : '';
-    }
-    btn.addEventListener('click', function () {
-      var text = getText();
-      console.log('[BugEzy] copy prompt length=' + text.length + ' preview=' + text.slice(0, 80));
-      if (!text) { console.warn('[BugEzy] nothing to copy — data-copy-text/#ai-install-prompt empty'); return; }
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(
-          function () { console.log('[BugEzy] clipboard.writeText OK'); flashDone(); },
-          function (err) { console.warn('[BugEzy] clipboard.writeText failed → fallback', err); fallbackCopy(text); },
-        );
-      } else {
-        console.log('[BugEzy] no clipboard API → fallback');
-        fallbackCopy(text);
+    // PM-192（三修）：複製優先從 btn.dataset.copyText（decodeURIComponent）讀，不依賴 DOM textContent，
+    //   徹底解「貼出空白」。clipboard 失敗 → 視窗內 1px textarea + execCommand fallback；按鈕變「✅ 已複製！」2s 恢復。
+    (function () {
+      var btn = document.getElementById('copy-ai-prompt');
+      if (!btn) return;
+      var originalLabel = btn.textContent;
+      var DONE_LABEL = ${JSON.stringify(t('✅ 已複製！', '✅ Copied!'))};
+      function getText() {
+        var d = btn.dataset ? btn.dataset.copyText : null;
+        if (d) { try { return decodeURIComponent(d); } catch (e) {} }
+        var el = document.getElementById('ai-install-prompt');
+        return el ? (el.textContent || '') : '';
       }
-    });
-  })();
+      function flashDone() {
+        btn.textContent = DONE_LABEL;
+        btn.classList.add('copied');
+        setTimeout(function () { btn.textContent = originalLabel; btn.classList.remove('copied'); }, 2000);
+      }
+      function fallbackCopy(text) {
+        try {
+          var ta = document.createElement('textarea');
+          ta.value = text; ta.setAttribute('readonly', '');
+          ta.style.position = 'fixed'; ta.style.top = '0'; ta.style.left = '0';
+          ta.style.width = '1px'; ta.style.height = '1px'; ta.style.padding = '0';
+          ta.style.border = 'none'; ta.style.outline = 'none'; ta.style.boxShadow = 'none'; ta.style.background = 'transparent';
+          document.body.appendChild(ta); ta.focus(); ta.select();
+          try { ta.setSelectionRange(0, text.length); } catch (e2) {}
+          var ok = document.execCommand('copy');
+          document.body.removeChild(ta);
+          console.log('[BugEzy] home fallback execCommand copy ok=' + ok);
+          if (ok) flashDone();
+          return ok;
+        } catch (e) { console.warn('[BugEzy] home fallback copy failed', e); return false; }
+      }
+      btn.addEventListener('click', function () {
+        var text = getText();
+        console.log('[BugEzy] home copy length=' + text.length);
+        if (!text) { console.warn('[BugEzy] home copy empty'); return; }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(
+            function () { console.log('[BugEzy] home clipboard.writeText OK'); flashDone(); },
+            function (err) { console.warn('[BugEzy] home clipboard failed → fallback', err); fallbackCopy(text); },
+          );
+        } else { fallbackCopy(text); }
+      });
+    })();
 </script>
 </body>
 </html>`;
