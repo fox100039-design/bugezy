@@ -108,8 +108,9 @@ function renderTokenEstimate(payload: RecordingPayload) {
   const chromeUSD = ((chromeTokens * 8) / 1_000_000).toFixed(4);
   const savedPercent = chromeTokens > 0 ? Math.round((1 - totalTokens / chromeTokens) * 100) : 0;
 
-  html += `<div class="token-row total"><span>AI 讀取總計</span><span>~${totalTokens.toLocaleString()} tokens ≈ $${bugezyUSD}</span></div>`;
-  html += `<div class="token-save">💡 同場景 Claude in Chrome：~${chromeTokens.toLocaleString()} tokens ≈ $${chromeUSD}<br>✅ BugEzy 為你省了 ${savedPercent}%</div>`;
+  // PM-195：加 USD 單位，與最終報告頁（server）格式一致 `≈ USD $<amount>`
+  html += `<div class="token-row total"><span>AI 讀取總計</span><span>~${totalTokens.toLocaleString()} tokens ≈ USD $${bugezyUSD}</span></div>`;
+  html += `<div class="token-save">💡 同場景 Claude in Chrome：~${chromeTokens.toLocaleString()} tokens ≈ USD $${chromeUSD}<br>✅ BugEzy 為你省了 ${savedPercent}%</div>`;
 
   container.innerHTML = html;
 }

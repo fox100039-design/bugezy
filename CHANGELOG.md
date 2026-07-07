@@ -2,7 +2,9 @@
 
 ## 2026-07-07
 
-Day 22（PM-187~194）。**Chrome Web Store 1.1.0 過審 + manifest key 統一 ID + 一連串資安/商業/體驗修復**。
+Day 22（PM-187~195）。**Chrome Web Store 1.1.0 過審 + manifest key 統一 ID + 一連串資安/商業/體驗修復**。
+
+- PM-195：**編輯報告頁 Token 估算加 USD 單位（與最終報告頁一致）**（`extension/edit-report.ts`）。停止錄製後的編輯/補充說明頁 `renderTokenEstimate` 底部總計與 Claude in Chrome 對比原本只顯示 `≈ $0.0049`，最終報告頁（server）是 `≈ USD $0.0049` → 兩處改 `≈ USD $` 對齊。計算邏輯/最終報告頁/MCP 皆不動。純 extension，`tsc` clean → `npm run build` ✅（dist `USD $`×2 確認）。待重上架。
 
 - PM-194：**鍵盤模式與麥克風 toggle 互斥聯動**（`extension/popup.ts`）。勾「⌨ 鍵盤模式（關閉語音）」時麥克風仍 ON 不合理。修：①勾鍵盤模式 → 若麥克風 ON 則 `micToggle.checked=false` + `dispatchEvent('change')`（走既有關閉邏輯，含存 `MIC_KEY`）；②手動開麥克風 → 若鍵盤模式勾選則 `keyboardMode.checked=false` + `dispatchEvent('change')`（存 `KEYBOARD_MODE_KEY`）；③取消鍵盤模式不自動開麥克風（使用者自己決定）。用 dispatchEvent 復用兩個既有 handler 的存 storage 邏輯 → 狀態同步、reload 一致；互斥設計無事件迴圈（對方被設 false 後反向條件不成立）。純 extension，`tsc` clean → `npm run build` ✅（dist wiring 確認）。待重上架。
 
