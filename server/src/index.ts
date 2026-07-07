@@ -1602,11 +1602,13 @@ $ BUGEZY_TOKEN=&lt;${t('你的 token', 'your token')}&gt; npx bugezy-watch -- go
     } catch (e) {}
   })();
 
-  // PM-192：一鍵複製修復——①確保 handler 綁定 ②複製完整安裝指令（含商店連結 + MCP JSON）
-  //   ③navigator.clipboard.writeText 失敗時 fallback（隱藏 textarea + execCommand）④按鈕變「✅ 已複製！」綠色 2s 後恢復。
+  // PM-192 續修：「貼出空白」根因——原 fallback textarea 用 opacity:0 + left:-9999px，部分瀏覽器無法 select()，
+  //   execCommand('copy') 回 true（假成功→觸發回饋）但剪貼簿其實空。修法：fallback textarea 改「視窗內 1px 可選取」
+  //   （不用 opacity:0/off-screen）確實 select+copy；並加 console.log 供 DevTools 診斷（印文字長度/預覽/走哪條路徑）。
+  //   CSP 說明：本頁 CSP script-src 含 'unsafe-inline'（行銷頁），inline script 未被擋；clipboard API 不受 CSP 管轄，故不需外部 JS/hash。
   (function () {
     var btn = document.getElementById('copy-ai-prompt');
-    if (!btn) return;
+    if (!btn) { console.warn('[BugEzy] copy-ai-prompt button not found'); return; }
     var originalLabel = btn.textContent;
     var DONE_LABEL = ${JSON.stringify(t('✅ 已複製！', '✅ Copied!'))};
 
@@ -1618,28 +1620,45 @@ $ BUGEZY_TOKEN=&lt;${t('你的 token', 'your token')}&gt; npx bugezy-watch -- go
         btn.classList.remove('copied');
       }, 2000);
     }
+    // 可靠 fallback：textarea 必須在視窗內且可選取（opacity:0 / left:-9999px 在部分瀏覽器 select() 失效→假成功空剪貼簿）
     function fallbackCopy(text) {
       try {
         var ta = document.createElement('textarea');
         ta.value = text;
         ta.setAttribute('readonly', '');
         ta.style.position = 'fixed';
-        ta.style.left = '-9999px';
-        ta.style.opacity = '0';
+        ta.style.top = '0';
+        ta.style.left = '0';
+        ta.style.width = '1px';
+        ta.style.height = '1px';
+        ta.style.padding = '0';
+        ta.style.border = 'none';
+        ta.style.outline = 'none';
+        ta.style.boxShadow = 'none';
+        ta.style.background = 'transparent';
         document.body.appendChild(ta);
         ta.focus();
         ta.select();
+        try { ta.setSelectionRange(0, text.length); } catch (e2) {}
         var ok = document.execCommand('copy');
         document.body.removeChild(ta);
+        console.log('[BugEzy] fallback execCommand copy ok=' + ok);
         if (ok) flashDone();
-      } catch (e) {}
+        return ok;
+      } catch (e) { console.warn('[BugEzy] fallback copy failed', e); return false; }
     }
     btn.addEventListener('click', function () {
-      var text = (document.getElementById('ai-install-prompt') || {}).textContent || '';
-      if (!text) return;
+      var el = document.getElementById('ai-install-prompt');
+      var text = el ? (el.textContent || '') : '';
+      console.log('[BugEzy] copy prompt length=' + text.length + ' preview=' + text.slice(0, 80));
+      if (!text) { console.warn('[BugEzy] nothing to copy — #ai-install-prompt empty'); return; }
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(flashDone, function () { fallbackCopy(text); });
+        navigator.clipboard.writeText(text).then(
+          function () { console.log('[BugEzy] clipboard.writeText OK'); flashDone(); },
+          function (err) { console.warn('[BugEzy] clipboard.writeText failed → fallback', err); fallbackCopy(text); },
+        );
       } else {
+        console.log('[BugEzy] no clipboard API → fallback');
         fallbackCopy(text);
       }
     });
