@@ -104,6 +104,12 @@ chrome.storage.local.get(KEYBOARD_MODE_KEY, (r) => {
 });
 keyboardMode.addEventListener('change', () => {
   chrome.storage.local.set({ [KEYBOARD_MODE_KEY]: keyboardMode.checked });
+  // PM-194：勾鍵盤模式（=不用語音）→ 自動關麥克風。dispatch change 走 micToggle 既有關閉邏輯（含存 MIC_KEY）。
+  //   取消勾選鍵盤模式 → 不自動開麥克風（使用者自己決定）。
+  if (keyboardMode.checked && micToggle.checked) {
+    micToggle.checked = false;
+    micToggle.dispatchEvent(new Event('change'));
+  }
 });
 
 // PM-51：即時監控 toggle — 開啟 → background 每 10s 推 live errors 給 AI 查
@@ -210,6 +216,12 @@ chrome.storage.local.get(MIC_KEY, (r) => {
   updateMicUI();
 });
 micToggle.addEventListener('change', async () => {
+  // PM-194：手動開麥克風 → 自動取消鍵盤模式（兩者互斥）。dispatch change 走 keyboardMode 既有邏輯（存 KEYBOARD_MODE_KEY）。
+  //   （§1 關麥克風時 dispatch 進來的 micToggle.checked=false，不會誤觸此段。）
+  if (micToggle.checked && keyboardMode.checked) {
+    keyboardMode.checked = false;
+    keyboardMode.dispatchEvent(new Event('change'));
+  }
   // PM-89：開麥克風時若尚未授權 → 先開授權頁（toggle 暫回 OFF，授權頁授完會自動設 ON），
   // 把授權時機放在 toggle，而非錄製時（避免錄製中開頁搶焦點導致停止失效）。
   if (micToggle.checked) {

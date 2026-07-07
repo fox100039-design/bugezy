@@ -2,7 +2,10 @@
 
 ## 2026-07-07
 
-Day 22（PM-187~193）。**Chrome Web Store 1.1.0 過審 + manifest key 統一 ID + 一連串資安/商業/體驗修復**。
+Day 22（PM-187~194）。**Chrome Web Store 1.1.0 過審 + manifest key 統一 ID + 一連串資安/商業/體驗修復**。
+
+- PM-194：**鍵盤模式與麥克風 toggle 互斥聯動**（`extension/popup.ts`）。勾「⌨ 鍵盤模式（關閉語音）」時麥克風仍 ON 不合理。修：①勾鍵盤模式 → 若麥克風 ON 則 `micToggle.checked=false` + `dispatchEvent('change')`（走既有關閉邏輯，含存 `MIC_KEY`）；②手動開麥克風 → 若鍵盤模式勾選則 `keyboardMode.checked=false` + `dispatchEvent('change')`（存 `KEYBOARD_MODE_KEY`）；③取消鍵盤模式不自動開麥克風（使用者自己決定）。用 dispatchEvent 復用兩個既有 handler 的存 storage 邏輯 → 狀態同步、reload 一致；互斥設計無事件迴圈（對方被設 false 後反向條件不成立）。純 extension，`tsc` clean → `npm run build` ✅（dist wiring 確認）。待重上架。
+
 資安：`/reports` 等頁 session token 移出 URL query（改 fragment + localStorage + `history.replaceState`，P0，PM-187）；`/report/:id` 報告分享改「owner 或付費會員才能讀」付費牆（P0 資安＋商業，PM-188）。商業化：JSON 複製/匯出改付費會員專用 + 每次操作敏感資料免責警語（P1，PM-189）；MCP URL 帶 `?token=`（方案 B，AI 零操作讀報告，`session_token` 參數改 optional，PM-190）+ popup「📋 複製 MCP 設定」一鍵複製含 token（PM-191）。麥克風：精準轉錄（Whisper）offscreen 音量條不動修復（`AudioContext.resume()`，PM-192）+ 「允許這次使用」時自動 fallback 即時字幕 + 頁面橘色提示 + popup 授權小字（PM-193）。維運：Chrome Web Store extension ID 統一 `hfnkjlbbpehkflgfbjenfmnmjkdjadcj`（manifest 加 `key` 綁定固定 ID）；`/install` 一鍵複製徹底修好（`data-copy-text` 解耦 DOM，並修 template literal 內 regex 反斜線被吞的隱藏 bug）；舊 `bugezy-api.workers.dev` → `bugezy.dev` 301 redirect（MCP/API 除外）。
 
 - PM-193：**精準轉錄麥克風授權引導 — 選「允許這次使用」時 fallback 即時字幕 + 提示**（`extension/background.ts`/`content.ts`/`types.ts`/`popup.html`/`popup.ts`/`i18n.ts`）。根因：Chrome「允許這次使用」= 單次單頁面權限，offscreen document 是另一個頁面 → 拿不到 → Whisper 麥克風開不了（選「允許這個網站使用」才正常，瀏覽器設計限制無法繞過）。修法：①background `startRecording` 收到 offscreen 回報 `getUserMedia` 失敗（`micRes.ok=false` 或例外）→ 設 `whisperMicFailed`，`START_RECORDING` 帶 `micFallback:true`；②content 收到 `micFallback` 且原為 whisper → **無縫改用即時字幕**（`useOldVoice=true`/`whisperMode=false`，走頁面 SpeechRecognition——頁面有單次權限所以可用），錄製不中斷；③content 在頁面頂部顯示橘色提示條 8 秒（`showMicFallbackTip`，i18n `mic-fallback-tip`）；④popup 語音模式選擇下方加小字「💡 精準轉錄需選永久允許」（`micPermHint`，跟 micMode 一起顯示）；i18n 中英。純 extension，`tsc` clean → `npm run build` ✅（dist wiring 確認）。待重上架。
