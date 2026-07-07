@@ -1,5 +1,11 @@
 # BugEzy Changelog
 
+## 2026-07-07
+
+Day 22（PM-187~）。**資安：修復 URL token 洩漏（P0）**。
+
+- PM-187：**修復 /reports session token 放 URL 的資安洩漏（P0）**（`server/index.ts` + `extension/popup.ts`）。原 `/reports?token=xxx` 把 session token 放 query string → 洩漏於瀏覽器歷史/Referrer/截圖分享。改法：①**popup** 改開乾淨 `bugezy.dev/reports#token=xxx`（fragment 不送 server、不入 Referrer/歷史）；②**/reports** 由 server 端渲染改為 **client bootstrap shell**——內嵌 `resolveSessionToken()` 依序讀 `?token=`/`#token=`（讀到即存 `localStorage['bugezy_session_token']` + `history.replaceState` 清 URL）→ 否則讀 localStorage → 皆無顯示「請先從 BugEzy 擴充登入」；有 token 則以 `Authorization: Bearer` 打新端點 `GET /api/my-reports` 取 JSON、client 端用 `textContent`/DOM 建表（XSS 安全）；③新增 `myReportsApi`（Bearer 驗證，401 無授權，私人資料 `no-store`）；④語言切換連結只帶 `?lang=` 絕不帶 token。稽核確認 `/feedback`（公開免登入）與 `/report/:id`（分享用 latestReportUrl，無 token）本就無 URL token 洩漏。`verifySession`/MCP token 驗證/ECPay 流程皆不動。線上實測：GET /reports 200 text/html no-store（含 resolveSessionToken/reportsContainer/history.replaceState）、中英登入提示、`/api/my-reports` 無/錯 token→401、網址列不含 token。`tsc` clean → `wrangler deploy`（`b107139d`）+ extension `npm run build`（dist `reports#token` 確認、無殘留 `?token=`）。
+
 ## 2026-07-06
 
 Day 21（PM-170~186）。**免費版留存 + 全球化 + Python 9→10 + 我的報告 + 截圖 PII 防護 + 維運**。

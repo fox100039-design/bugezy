@@ -2012,26 +2012,178 @@ function reportsShell(lang: PageLang, bodyHtml: string, langSwitchHref: string):
   return res;
 }
 
+// PM-187（P0 資安）：token 不再放 URL query。頁面改為 client 端 bootstrap shell——
+//   resolveSessionToken() 依序讀 ?token= / #token= / localStorage，讀到 URL 上的 token 立即存
+//   localStorage 並 history.replaceState 清掉（不留歷史/Referrer/截圖洩漏），再以 Authorization
+//   header 打 GET /api/my-reports 取資料、client 端渲染表格。無 token → 顯示登入提示。
 async function reportsPage(request: Request, env: Env): Promise<Response> {
   const lang = getLang(request);
   const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
-  const url = new URL(request.url);
-  const token = url.searchParams.get('token') || '';
-  // 語言切換連結保留 token
-  const switchHref = `?token=${encodeURIComponent(token)}&lang=${lang === 'zh' ? 'en' : 'zh'}`;
+  // 語言切換只帶 lang，絕不帶 token
+  const switchHref = `?lang=${lang === 'zh' ? 'en' : 'zh'}`;
 
-  if (!token) {
-    const body = `<h1>${t('📋 我的報告', '📋 My Reports')}</h1>
-      <div class="notice">${t('請從 BugEzy Chrome 擴充的「📋 我的報告」按鈕開啟此頁面。', 'Please open this page from the "📋 My Reports" button in the BugEzy Chrome extension.')}</div>`;
-    return reportsShell(lang, body, switchHref);
+  // client 端字串（JSON.stringify 內嵌，安全）
+  const T = {
+    loading: t('載入中…', 'Loading…'),
+    loginRequired: t('請先從 BugEzy 擴充登入', 'Please log in from the BugEzy extension first'),
+    hint: t(
+      '請從 BugEzy Chrome 擴充的「📋 我的報告」按鈕開啟此頁面。',
+      'Please open this page from the "📋 My Reports" button in the BugEzy Chrome extension.',
+    ),
+    expired: t('登入已過期，請重新從擴充開啟。', 'Session expired — please reopen from the extension.'),
+    loadError: t('載入失敗，請稍後再試。', 'Failed to load — please try again later.'),
+    empty: t('還沒有報告，去錄製你的第一個 Bug 吧！', 'No reports yet. Record your first bug!'),
+    countOne: t('共 1 份報告', '1 report'),
+    countN: t('共 {n} 份報告', '{n} reports'),
+    untitled: t('未命名', 'Untitled'),
+    thTime: t('時間', 'Time'),
+    thTitle: t('標題 / 頁面', 'Title / Page'),
+    thDesc: t('描述', 'Description'),
+    thContent: t('內容', 'Content'),
+    thAction: t('操作', 'Action'),
+    view: t('查看', 'View'),
+  };
+
+  // 注意：以下為內嵌 client script，全程用 textContent/DOM 建表（XSS 安全），fetch 帶 Bearer header。
+  const script = `<script>
+(function(){
+  var LS_KEY = 'bugezy_session_token';
+  var container = document.getElementById('reportsContainer');
+  var countEl = document.getElementById('reportCount');
+  var T = ${JSON.stringify(T)};
+
+  // §2/§3 共用：解析 session token（優先讀 URL 上的新鮮注入，讀到即存 localStorage 並清 URL）
+  function resolveSessionToken(){
+    var url = new URL(location.href);
+    var fromQuery = url.searchParams.get('token');
+    var fromHash = null;
+    if (location.hash && location.hash.indexOf('token=') !== -1) {
+      try { fromHash = new URLSearchParams(location.hash.replace(/^#/, '')).get('token'); } catch(e){}
+    }
+    var injected = fromQuery || fromHash;
+    if (injected) {
+      try { localStorage.setItem(LS_KEY, injected); } catch(e){}
+      // 清掉 URL 上的 token（保留 lang 等其他參數），並清 hash
+      url.searchParams.delete('token');
+      var clean = url.pathname + (url.searchParams.toString() ? '?' + url.searchParams.toString() : '');
+      try { history.replaceState(null, '', clean); } catch(e){}
+      return injected;
+    }
+    try { return localStorage.getItem(LS_KEY); } catch(e){ return null; }
   }
 
-  const userId = await verifySessionByToken(token, env);
-  if (!userId) {
-    const body = `<h1>${t('📋 我的報告', '📋 My Reports')}</h1>
-      <div class="notice">${t('登入已過期，請重新從擴充開啟。', 'Session expired — please reopen from the extension.')}</div>`;
-    return reportsShell(lang, body, switchHref);
+  function showNotice(msg, withHint){
+    container.textContent = '';
+    countEl.textContent = '';
+    var d = document.createElement('div');
+    d.className = 'notice';
+    d.textContent = msg;
+    container.appendChild(d);
+    if (withHint) {
+      var h = document.createElement('div');
+      h.className = 'notice';
+      h.style.fontSize = '13px';
+      h.textContent = T.hint;
+      container.appendChild(h);
+    }
   }
+
+  function pad(n){ return (n < 10 ? '0' : '') + n; }
+  function fmtDate(iso){
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+
+  function badgesFor(r){
+    var parts = [];
+    if ((r.console_count||0) > 0) parts.push('❌' + r.console_count);
+    if ((r.network_count||0) > 0) parts.push('🌐' + r.network_count);
+    if ((r.voice_count||0) > 0) parts.push('🎙️');
+    if ((r.screenshot_count||0) > 0) parts.push('📸');
+    if ((r.rrweb_count||0) > 0) parts.push('🎬');
+    return parts.join(' ');
+  }
+
+  function reportLink(id, text){
+    var a = document.createElement('a');
+    a.href = '/report/' + encodeURIComponent(id);
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.textContent = text;
+    return a;
+  }
+
+  function renderTable(list){
+    container.textContent = '';
+    var n = list.length;
+    countEl.textContent = n === 1 ? T.countOne : T.countN.replace('{n}', n);
+
+    var table = document.createElement('table');
+    table.className = 'reports-table';
+    var thead = document.createElement('thead');
+    var htr = document.createElement('tr');
+    [['col-time', T.thTime], ['', T.thTitle], ['col-desc', T.thDesc], ['', T.thContent], ['', T.thAction]].forEach(function(h){
+      var th = document.createElement('th');
+      if (h[0]) th.className = h[0];
+      th.textContent = h[1];
+      htr.appendChild(th);
+    });
+    thead.appendChild(htr);
+    table.appendChild(thead);
+
+    var tbody = document.createElement('tbody');
+    if (n === 0) {
+      var tr = document.createElement('tr');
+      var td = document.createElement('td');
+      td.colSpan = 5; td.className = 'empty'; td.textContent = T.empty;
+      tr.appendChild(td); tbody.appendChild(tr);
+    } else {
+      list.forEach(function(r){
+        var tr = document.createElement('tr');
+        var title = r.title || r.url || T.untitled;
+        var desc = r.description ? String(r.description).slice(0, 60) : '';
+
+        var tdTime = document.createElement('td'); tdTime.className = 'col-time'; tdTime.textContent = fmtDate(r.created_at);
+        var tdTitle = document.createElement('td'); tdTitle.appendChild(reportLink(r.report_id, title));
+        var tdDesc = document.createElement('td'); tdDesc.className = 'col-desc'; tdDesc.textContent = desc;
+        var tdBadge = document.createElement('td'); tdBadge.className = 'badges'; tdBadge.textContent = badgesFor(r);
+        var tdAct = document.createElement('td'); tdAct.appendChild(reportLink(r.report_id, T.view));
+
+        tr.appendChild(tdTime); tr.appendChild(tdTitle); tr.appendChild(tdDesc); tr.appendChild(tdBadge); tr.appendChild(tdAct);
+        tbody.appendChild(tr);
+      });
+    }
+    table.appendChild(tbody);
+    container.appendChild(table);
+  }
+
+  var token = resolveSessionToken();
+  if (!token) { showNotice(T.loginRequired, true); return; }
+
+  fetch('/api/my-reports', { headers: { 'Authorization': 'Bearer ' + token } })
+    .then(function(res){
+      if (res.status === 401) { try { localStorage.removeItem(LS_KEY); } catch(e){} showNotice(T.expired, true); return null; }
+      if (!res.ok) throw new Error('http ' + res.status);
+      return res.json();
+    })
+    .then(function(data){ if (data) renderTable(data.reports || []); })
+    .catch(function(){ showNotice(T.loadError); });
+})();
+</script>`;
+
+  const body = `<h1>${t('📋 我的報告', '📋 My Reports')}</h1>
+    <p class="count" id="reportCount"></p>
+    <div id="reportsContainer"><div class="notice">${T.loading}</div></div>
+    ${script}`;
+
+  return reportsShell(lang, body, switchHref);
+}
+
+// PM-187：JSON 資料端點（Bearer 驗證）——供 /reports client shell 取自己的報告列表。私人資料 no-store。
+async function myReportsApi(request: Request, env: Env): Promise<Response> {
+  const userId = await verifySession(request, env);
+  if (!userId) return jsonNoStore({ error: 'unauthorized' }, 401);
 
   const { data: reports } = await supa(env)
     .from('reports')
@@ -2042,62 +2194,7 @@ async function reportsPage(request: Request, env: Env): Promise<Response> {
     .order('created_at', { ascending: false })
     .limit(50);
 
-  const list = (reports as Array<{
-    report_id: string;
-    url?: string;
-    title?: string;
-    description?: string;
-    created_at: string;
-    console_count?: number;
-    network_count?: number;
-    voice_count?: number;
-    screenshot_count?: number;
-    rrweb_count?: number;
-  }>) || [];
-
-  let rows = '';
-  if (list.length === 0) {
-    rows = `<tr><td colspan="5" class="empty">${t('還沒有報告，去錄製你的第一個 Bug 吧！', 'No reports yet. Record your first bug!')}</td></tr>`;
-  } else {
-    for (const r of list) {
-      const d = new Date(r.created_at);
-      const p = (n: number) => String(n).padStart(2, '0');
-      const date = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
-      const title = r.title || r.url || t('未命名', 'Untitled');
-      const desc = r.description ? r.description.slice(0, 60) : '';
-      const badges = [
-        (r.console_count ?? 0) > 0 ? `❌${r.console_count}` : '',
-        (r.network_count ?? 0) > 0 ? `🌐${r.network_count}` : '',
-        (r.voice_count ?? 0) > 0 ? '🎙️' : '',
-        (r.screenshot_count ?? 0) > 0 ? '📸' : '',
-        (r.rrweb_count ?? 0) > 0 ? '🎬' : '',
-      ]
-        .filter(Boolean)
-        .join(' ');
-      rows += `<tr>
-        <td class="col-time">${date}</td>
-        <td><a href="/report/${escapeAttr(r.report_id)}" target="_blank" rel="noopener">${escapeAttr(title)}</a></td>
-        <td class="col-desc">${escapeAttr(desc)}</td>
-        <td class="badges">${badges}</td>
-        <td><a href="/report/${escapeAttr(r.report_id)}" target="_blank" rel="noopener">${t('查看', 'View')}</a></td>
-      </tr>`;
-    }
-  }
-
-  const body = `<h1>${t('📋 我的報告', '📋 My Reports')}</h1>
-    <p class="count">${t(`共 ${list.length} 份報告`, `${list.length} report${list.length === 1 ? '' : 's'}`)}</p>
-    <table class="reports-table">
-      <thead><tr>
-        <th class="col-time">${t('時間', 'Time')}</th>
-        <th>${t('標題 / 頁面', 'Title / Page')}</th>
-        <th class="col-desc">${t('描述', 'Description')}</th>
-        <th>${t('內容', 'Content')}</th>
-        <th>${t('操作', 'Action')}</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>`;
-
-  return reportsShell(lang, body, switchHref);
+  return jsonNoStore({ reports: reports || [] });
 }
 
 // ── PM-59：Server 直接 serve 報告頁 HTML（vanilla JS 讀 /api/reports/:id 渲染）──
@@ -3223,8 +3320,13 @@ export default {
       return await handleFeedback(request, env);
     }
     // PM-184：我的報告列表（需 session token，私人頁 noindex + no-store）
+    // PM-187：token 改由 client 端（fragment/localStorage）解析，不再走 URL query（資安）
     if (request.method === 'GET' && path === '/reports') {
       return await reportsPage(request, env);
+    }
+    // PM-187：報告列表 JSON 資料端點（Bearer 驗證）
+    if (request.method === 'GET' && path === '/api/my-reports') {
+      return await myReportsApi(request, env);
     }
     // PM-136：SEO — sitemap + robots（讓 Google/Bing 收錄 bugezy.dev）
     if (request.method === 'GET' && path === '/sitemap.xml') return sitemapXml();

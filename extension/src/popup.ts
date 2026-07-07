@@ -827,12 +827,14 @@ dayPassBtn.addEventListener('click', () => {
   void chrome.tabs.create({ url: 'day-pass-checkout.html' });
 });
 
-// PM-184：📋 我的報告 → 帶 session token 開 /reports 網頁（server 驗證 token 後渲染列表）
+// PM-184：📋 我的報告 → 開 /reports 網頁
+// PM-187（P0 資安）：token 改放 URL fragment（#token=）而非 query（?token=）——
+//   fragment 不會送到 server、不會出現在 Referrer/歷史紀錄；頁面讀完立即存 localStorage 並清 URL。
 const myReportsBtn = $<HTMLButtonElement>('myReportsBtn');
 myReportsBtn.addEventListener('click', async () => {
   const store = await chrome.storage.local.get(SESSION_TOKEN_KEY);
   const token = (store[SESSION_TOKEN_KEY] as string) || '';
-  void chrome.tabs.create({ url: `${API_BASE}/reports?token=${encodeURIComponent(token)}` });
+  void chrome.tabs.create({ url: `${API_BASE}/reports#token=${encodeURIComponent(token)}` });
 });
 
 // PM-170：升級引導 overlay 的按鈕（日票 / 月費 / 關閉）
