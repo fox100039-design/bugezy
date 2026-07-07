@@ -1,6 +1,6 @@
 # BugEzy 專案全貌與接手指南
 
-> 最後更新：2026-07-06（Day 21：免費版留存 + 全球化 IP 國家 + Python 9→10 + 我的報告 + 截圖 PII 自動遮罩 + 維運 PM-170~186）
+> 最後更新：2026-07-07（Day 22：Chrome Web Store 1.1.0 過審 + manifest key 統一 ID + session token 移出 URL + 報告分享付費牆 + JSON 匯出付費 + MCP URL token + Whisper 麥克風修復/fallback PM-187~193）
 > 維護者：FOX（Claude Chat PM 角色）
 > 用途：新 Chat 對話開始時讀此檔，快速掌握全貌並接手開發
 
@@ -600,6 +600,26 @@ FOX = 創辦人 + 決策者 + 手動驗收
 - CLI（**改檔未發佈**）：`parse-traceback.ts` + `detect-env.ts` 新 + `index.ts` 上傳 parsed_errors/runtime。
 - 判斷/修正（動手前先驗）：付費改 IP 國家（PM-171 語言判斷改 PM-172 country，語言只控 UI/語音）；MCP body 1MB（rate-limit 缺口，users.mcp_count 對 report_id tool 無使用者身分故無法遞增，實際計數靠 mcp_usage 表已完整）；截圖敏感偵測放 content.ts（handle START_SCREENSHOT + DOM 存取，非 inject）；自動遮罩用原頁 viewport 尺寸換算 + scaleX≈scaleY gate 防區域截圖錯位；輪盤 JSON 比對改 flag。
 - ⚠ 技術債 / FOX 待辦（Day 21）：① **extension 重上架**（Day 19~21 整套：用量 UI/國家/我的報告/截圖 PII/輪盤修 等）；② **CLI `npm publish`**（PM-167 PII + PM-176/177 結構化解析/環境快照）；③ feedback 表須存在（線上實測已存在）；④ 建議後續：付款後 token rotation、CSP 全站移 unsafe-inline、region/free 截圖自動遮罩座標對映、MCP 每月配額對 report_id tool 的計數方案；⑤ 沿用：日韓越解鎖、user_id 遷移、Rate Limiting、rls-lockdown。
+
+---
+
+## §6q Day 22（2026-07-07，PM-187~193）— Chrome Web Store 1.1.0 過審 + manifest key 統一 ID + 資安/商業/麥克風修復
+
+> Web Store 1.1.0 過審。本日主軸：把 session token 移出 URL、報告分享與 JSON 匯出加付費牆、MCP URL 帶 token（AI 零操作）、Whisper 麥克風修復＋fallback，並統一擴充 ID。
+
+- **PM-187 session token 移出 URL（P0 資安）**：`/reports?token=` 洩漏於歷史/Referrer/截圖 → popup 改開 `/reports#token=`（fragment 不送 server）；`/reports` 改 client bootstrap shell——`resolveSessionToken()` 讀 query/fragment → 存 `localStorage['bugezy_session_token']` + `history.replaceState` 清 URL → 否則讀 localStorage → 無則登入提示；新增 `GET /api/my-reports`（Bearer + `jsonNoStore`）client 端 `textContent` 建表（XSS 安全）。稽核 `/feedback`（公開）與 `/report/:id`（分享 latestReportUrl）本就無 token。
+- **PM-188 報告分享閱讀付費牆（P0 資安＋商業）**：`getReport` 加認證——owner 看自己不論付費、非 owner 訪客→403 `login_required`、已登入非付費→403 `upgrade_required`（複用 `isActiveUserId`，403 `jsonNoStore`）；`report-page.js` 帶 Bearer（同源 localStorage token）+ 403 付費牆（免費安裝/了解方案 CTA，中英）。**病毒式引流**：想看別人分享的報告要成為會員。
+- **PM-189 JSON 複製/匯出改付費 + 免責警語（P1，extension）**：`loadPlan` 計 `isPaidMember`（paid/cancelled 未到期/day_pass 未到期）；免費 → `showJsonPaidOverlay`（🔒 會員鎖頭 + 升級 CTA），付費 → `confirmJsonDisclaimer`（⚠️ 敏感資料免責，每次都彈）。
+- **PM-190 MCP URL 帶 token 方案 B（P1）**：`/mcp` 從 `?token=` 讀入 **per-request env 副本** `__mcp_session_token`（非改共用 env，避免併發競態）；三個 tool `token = env.__mcp_session_token || args.session_token`（URL 優先），`session_token` 改 optional；`/install` `.mcp-cfg` 登入自動補 `?token=`。**PM-191** popup「📋 複製 MCP 設定」一鍵複製含 token。
+- **PM-192 Whisper 麥克風音量條不動修復（extension）**：根因 offscreen document 無 user gesture → `AudioContext` 預設 `suspended`、analyser 全 0；`startVolumeMeter` 加 `await resume()`；`startRecording` 回報真實 `{ok,error}`（不再吞 getUserMedia 失敗、handler 不再秒回 ok:true）。
+- **PM-193 麥克風授權引導 + fallback（extension）**：「允許這次使用」= 單次單頁面權限、offscreen 拿不到 → background `micFallback` → content 無縫改即時字幕（頁面 SpeechRecognition 有單次權限可用）+ 頁面頂部橘色提示 8 秒 + popup「💡 精準轉錄需選永久允許」小字；i18n 中英。
+- **維運**：Chrome Web Store **1.1.0 過審**；manifest 加 `key` 綁定固定 ID **`hfnkjlbbpehkflgfbjenfmnmjkdjadcj`**（全站商店連結同步）；`/install` 一鍵複製徹底修好（PM-192 一/二/三/四/五修 → 最終 `data-copy-text` 解耦 DOM）+ 修 template literal 內 token-fill regex 反斜線被吞的隱藏 bug（`\.`→`\\.`）；舊 `bugezy-api.workers.dev` → `bugezy.dev` 301 redirect（MCP/API 除外）。
+
+### 增量（Day 22）
+- Server（已部署至 `8e1693f1`；**PM-190/188/187 已部署，但本日 FOX 手改的 guide/faq URL 清理 + install regex 反斜線修 + 舊 URL redirect 尚未 deploy**）：`/api/my-reports`、`reportsPage` shell、`getReport` 付費牆 + `myReportsApi`、MCP `__mcp_session_token` + optional token、`/install` `.mcp-cfg` token script + `data-copy-text`、Chrome Web Store extension ID 更新、舊 URL 301 redirect、regex 反斜線修。
+- Extension（build 過、**未重上架**）：popup token 改 fragment + 「📋 複製 MCP 設定」、JSON 匯出付費 overlay + 免責、offscreen `AudioContext.resume` + startRecording 回報、background `micFallback` + content fallback 即時字幕/橘色提示、i18n、manifest `key`。
+- 判斷/修正（動手前先驗）：token URL-first 優先於 localStorage（避免舊 token 假過期）；`getReport` owner 早於付費檢查；MCP env 用 per-request 副本非 mutate 共用 env；offscreen suspended context 是「即時字幕正常、精準轉錄不動」的差異點；「一鍵複製空白」根因是點擊當下讀 DOM textContent（改 render 期編碼進 `data-copy-text`）；template literal 內 `\.` 會被吞成 `.` → regex 破損（改 `\\.`）。
+- ⚠ 技術債 / FOX 待辦（Day 22）：① **extension 重上架**（Day 19~22 整套 + manifest key）；② **server deploy**（FOX 手改的 guide/faq URL + install regex 反斜線修 + 舊 URL redirect 已 commit 未 deploy）；③ **CLI `npm publish`**（PM-167/176/177）；④ **麥克風實機驗收**：精準轉錄選「允許這次使用」驗 fallback、選「允許這個網站使用」驗正常 Whisper + 音量條會動；⑤ 沿用：付款後 token rotation、CSP 全站移 unsafe-inline、日韓越解鎖、user_id 遷移、Rate Limiting、rls-lockdown。
 
 ---
 

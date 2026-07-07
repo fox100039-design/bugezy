@@ -2,7 +2,8 @@
 
 ## 2026-07-07
 
-Day 22（PM-187~）。**資安：修復 URL token 洩漏（P0）+ 報告分享閱讀權限付費牆（P0 資安＋商業）+ JSON 複製/匯出改付費 + 免責警語（P1）+ MCP URL 帶 token 方案 B（P1）+ popup 一鍵複製 MCP 設定（P1）**。
+Day 22（PM-187~193）。**Chrome Web Store 1.1.0 過審 + manifest key 統一 ID + 一連串資安/商業/體驗修復**。
+資安：`/reports` 等頁 session token 移出 URL query（改 fragment + localStorage + `history.replaceState`，P0，PM-187）；`/report/:id` 報告分享改「owner 或付費會員才能讀」付費牆（P0 資安＋商業，PM-188）。商業化：JSON 複製/匯出改付費會員專用 + 每次操作敏感資料免責警語（P1，PM-189）；MCP URL 帶 `?token=`（方案 B，AI 零操作讀報告，`session_token` 參數改 optional，PM-190）+ popup「📋 複製 MCP 設定」一鍵複製含 token（PM-191）。麥克風：精準轉錄（Whisper）offscreen 音量條不動修復（`AudioContext.resume()`，PM-192）+ 「允許這次使用」時自動 fallback 即時字幕 + 頁面橘色提示 + popup 授權小字（PM-193）。維運：Chrome Web Store extension ID 統一 `hfnkjlbbpehkflgfbjenfmnmjkdjadcj`（manifest 加 `key` 綁定固定 ID）；`/install` 一鍵複製徹底修好（`data-copy-text` 解耦 DOM，並修 template literal 內 regex 反斜線被吞的隱藏 bug）；舊 `bugezy-api.workers.dev` → `bugezy.dev` 301 redirect（MCP/API 除外）。
 
 - PM-193：**精準轉錄麥克風授權引導 — 選「允許這次使用」時 fallback 即時字幕 + 提示**（`extension/background.ts`/`content.ts`/`types.ts`/`popup.html`/`popup.ts`/`i18n.ts`）。根因：Chrome「允許這次使用」= 單次單頁面權限，offscreen document 是另一個頁面 → 拿不到 → Whisper 麥克風開不了（選「允許這個網站使用」才正常，瀏覽器設計限制無法繞過）。修法：①background `startRecording` 收到 offscreen 回報 `getUserMedia` 失敗（`micRes.ok=false` 或例外）→ 設 `whisperMicFailed`，`START_RECORDING` 帶 `micFallback:true`；②content 收到 `micFallback` 且原為 whisper → **無縫改用即時字幕**（`useOldVoice=true`/`whisperMode=false`，走頁面 SpeechRecognition——頁面有單次權限所以可用），錄製不中斷；③content 在頁面頂部顯示橘色提示條 8 秒（`showMicFallbackTip`，i18n `mic-fallback-tip`）；④popup 語音模式選擇下方加小字「💡 精準轉錄需選永久允許」（`micPermHint`，跟 micMode 一起顯示）；i18n 中英。純 extension，`tsc` clean → `npm run build` ✅（dist wiring 確認）。待重上架。
 

@@ -1195,20 +1195,20 @@ function guidePage(lang: PageLang): string {
     <div class="mcp-box">
       <b>${t('🔌 MCP 連接設定', '🔌 MCP connection setup')}</b><br />
       ${t('BugEzy MCP 網址（所有工具通用）：', 'BugEzy MCP URL (same for all tools):')}<br />
-      <code>https://bugezy-api.bugezy-api.workers.dev/mcp</code>
+      <code>https://bugezy.dev/mcp</code>
       <div class="mcp-warn">${t('⚠ 注意：這個網址<b>不能用瀏覽器開</b>，它是專給 AI 工具連接的協議。用瀏覽器開只會看到一段錯誤訊息，屬正常現象——請依下方步驟在 AI 工具裡設定。', '⚠ Note: <b>do not open this URL in a browser</b> — it is a protocol endpoint for AI tools. Opening it in a browser just shows an error, which is normal. Set it up in your AI tool per the steps below.')}</div>
 
       <div class="mcp-tool"><div class="tname">Claude.ai</div><div class="tstep">${t('Settings → Connectors → Add → 貼上網址 → 連接', 'Settings → Connectors → Add → paste the URL → Connect')}</div></div>
       <div class="mcp-tool"><div class="tname">Claude Desktop</div><div class="tstep">${t('編輯 claude_desktop_config.json，加入：', 'Edit claude_desktop_config.json, add:')}</div><pre>{
   "mcpServers": {
     "bugezy": {
-      "url": "https://bugezy-api.bugezy-api.workers.dev/mcp"
+      "url": "https://bugezy.dev/mcp"
     }
   }
 }</pre></div>
       <div class="mcp-tool"><div class="tname">Cursor</div><div class="tstep">${t('Settings → MCP → Add Server → 貼上網址', 'Settings → MCP → Add Server → paste the URL')}</div></div>
       <div class="mcp-tool"><div class="tname">VS Code</div><div class="tstep">${t('Settings → 搜尋 MCP → Add Server → 貼上網址', 'Settings → search MCP → Add Server → paste the URL')}</div></div>
-      <div class="mcp-tool"><div class="tname">${t('Claude Code（終端機）', 'Claude Code (terminal)')}</div><div class="tstep">${t('執行：', 'Run:')} <code>claude mcp add --transport http bugezy https://bugezy-api.bugezy-api.workers.dev/mcp</code></div></div>
+      <div class="mcp-tool"><div class="tname">${t('Claude Code（終端機）', 'Claude Code (terminal)')}</div><div class="tstep">${t('執行：', 'Run:')} <code>claude mcp add --transport http bugezy https://bugezy.dev/mcp</code></div></div>
       <div class="mcp-tool"><div class="tname">Zed</div><div class="tstep">${t('設定檔加 context_servers', 'Add context_servers to the config file')}</div></div>
 
       <div style="margin-top:14px;color:#ccc;font-size:13px;">${t('連接成功後，直接問 AI：', 'Once connected, just ask your AI:')}<br /><b style="color:#a78bfa;">${t('「讀我最新的 BugEzy 報告，告訴我怎麼修」', '"Read my latest BugEzy report and tell me how to fix it"')}</b><br />${t('AI 就會透過 MCP 自動讀取你的 Bug 報告。', 'The AI will read your bug report automatically via MCP.')}</div>
@@ -1307,7 +1307,7 @@ function faqPage(lang: PageLang): string {
   <div class="faq-a"><p>${t('專為亞洲開發者設計：中文/粵語/日韓語音支援、NT$80 超平價月費、MCP 整合讓 AI 直接讀報告。獨家功能：即時監控、30 秒回溯、Whisper 精準語音、終端機 CLI、Token 透明度。', 'Built for Asian developers: Chinese / Cantonese / Japanese / Korean voice support, an affordable NT$80/mo plan, and MCP integration so AI reads reports directly. Signature features: live monitor, 30-second rewind, Whisper precise voice, terminal CLI, and token transparency.')}</p></div>
 
   <div class="faq-q">${t('支援哪些 AI 工具？', 'Which AI tools are supported?')}</div>
-  <div class="faq-a"><p>${t('任何支援 MCP 的 AI 工具都能用，包括 Claude Desktop、Claude Code、Cursor、VS Code + Copilot、Zed、Windsurf、Codex、Replit 等。只需要一行 URL：', 'Any MCP-capable AI tool works, including Claude Desktop, Claude Code, Cursor, VS Code, Zed, Windsurf, Google Antigravity, Gemini CLI, and more. Just one URL:')}<code>https://bugezy-api.bugezy-api.workers.dev/mcp</code></p></div>
+  <div class="faq-a"><p>${t('任何支援 MCP 的 AI 工具都能用，包括 Claude Desktop、Claude Code、Cursor、VS Code + Copilot、Zed、Windsurf、Codex、Replit 等。只需要一行 URL：', 'Any MCP-capable AI tool works, including Claude Desktop, Claude Code, Cursor, VS Code, Zed, Windsurf, Google Antigravity, Gemini CLI, and more. Just one URL:')}<code>https://bugezy.dev/mcp</code></p></div>
 
   <h2>${t('🔒 關於隱私與安全', '🔒 Privacy & security')}</h2>
   <div class="faq-q">${t('BugEzy 會錄到我的密碼嗎？', 'Will BugEzy record my passwords?')}</div>
@@ -1509,8 +1509,8 @@ Full guide: https://bugezy.dev/install`,
     <p style="color:#8b8fa3;margin:0 0 4px;">${t('不懂技術？把下面這段複製貼給你的 AI（Claude Desktop / Claude Code / Cursor / Windsurf / VS Code + Cline / Google Antigravity / Gemini CLI），它會幫你搞定。', 'Not technical? Copy the text below to your AI (Claude Desktop / Claude Code / Cursor / Windsurf / VS Code + Cline / Google Antigravity / Gemini CLI) and it will handle it.')}</p>
     <div class="ai-install-box">
       <pre id="ai-install-prompt" class="mcp-cfg">${aiPrompt}</pre>
-      <button id="copy-ai-prompt" class="copy-btn" data-copy-text="${encodeURIComponent(aiPrompt)}">${t('📋 一鍵複製，貼給你的 AI', '📋 Copy & paste to your AI')}</button>
-      <span id="copy-feedback" class="copy-feedback" style="display:none;">${t('✅ 已複製！', '✅ Copied!')}</span>
+      <textarea id="install-copy-source" readonly style="position:absolute;left:-9999px;opacity:0;">${aiPrompt.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/&/g, '&amp;')}</textarea>
+      <button class="copy-btn" onclick="var s=document.getElementById('install-copy-source');s.style.position='fixed';s.style.left='0';s.style.top='0';s.style.opacity='0.01';s.select();try{s.setSelectionRange(0,99999)}catch(e){}document.execCommand('copy');s.style.position='absolute';s.style.left='-9999px';s.style.opacity='0';this.textContent='${t('✅ 已複製！', '✅ Copied!')}';this.classList.add('copied');var b=this;setTimeout(function(){b.textContent='${t('📋 一鍵複製，貼給你的 AI', '📋 Copy & paste to your AI')}';b.classList.remove('copied')},2000)">${t('📋 一鍵複製，貼給你的 AI', '📋 Copy & paste to your AI')}</button>
     </div>
     <p class="ai-install-tools">${t('或依下方手動五步安裝 ↓', 'Or install manually in five steps below ↓')}</p>
   </div>
@@ -1646,7 +1646,7 @@ $ BUGEZY_TOKEN=&lt;${t('你的 token', 'your token')}&gt; npx bugezy-watch -- go
         // PM-192（四修）：跳過複製按鈕的來源 <pre id="ai-install-prompt">——它的複製走靜態 data-copy-text（跟首頁一樣），
         //   不讓 token 改寫它的 textContent（避免任何改動影響複製來源；一鍵複製 = server render 的乾淨安裝指令）。
         if (el.id === 'ai-install-prompt') return;
-        el.textContent = el.textContent.replace(/(bugezy\.dev\/mcp)(?!\?|[\w])/g, '$1?token=' + enc);
+        el.textContent = el.textContent.replace(/(bugezy\\.dev\\/mcp)(?!\\?|[\\w])/g, '$1?token=' + enc);
       });
     } catch (e) {}
   })();
@@ -3417,6 +3417,11 @@ export default {
 
     const url = new URL(request.url);
     const path = url.pathname;
+
+    // 舊 URL redirect → bugezy.dev（MCP 和 API 除外，因為已連線的工具可能還用舊 URL）
+    if (url.hostname === 'bugezy-api.bugezy-api.workers.dev' && !path.startsWith('/mcp') && !path.startsWith('/api/')) {
+      return Response.redirect(`https://bugezy.dev${path}${url.search}`, 301);
+    }
 
     // MCP 端點（Streamable HTTP）— 給 Claude.ai Connectors / IDE 直接連。
     // PM-130：不套自訂 CORS（交給 handler 自理，避免破壞 Claude.ai 連線）。
