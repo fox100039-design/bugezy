@@ -899,6 +899,34 @@ myReportsBtn.addEventListener('click', async () => {
   void chrome.tabs.create({ url: `${API_BASE}/reports#token=${encodeURIComponent(token)}` });
 });
 
+// PM-191：一鍵複製完整 MCP 設定（含 session token）→ 貼給 Claude/Cursor，AI 零操作讀報告（配合 PM-190 URL token）
+const copyMcpBtn = $<HTMLButtonElement>('copyMcpBtn');
+const copyMcpFeedback = $('copyMcpFeedback');
+copyMcpBtn.addEventListener('click', async () => {
+  const store = await chrome.storage.local.get(SESSION_TOKEN_KEY);
+  const token = (store[SESSION_TOKEN_KEY] as string) || '';
+  const showFeedback = (msg: string, color: string) => {
+    copyMcpFeedback.textContent = msg;
+    copyMcpFeedback.style.color = color;
+    copyMcpFeedback.style.display = 'block';
+    setTimeout(() => {
+      copyMcpFeedback.style.display = 'none';
+    }, 4000);
+  };
+  if (!token) {
+    // 未登入 → 不複製空 token 的設定，改提示先登入
+    showFeedback(t('copy-mcp-login', currentUILang), '#f59e0b');
+    return;
+  }
+  const config = JSON.stringify(
+    { mcpServers: { bugezy: { url: `${API_BASE}/mcp?token=${token}` } } },
+    null,
+    2,
+  );
+  await navigator.clipboard.writeText(config);
+  showFeedback(t('copy-mcp-done', currentUILang), '#22c55e');
+});
+
 // PM-170：升級引導 overlay 的按鈕（日票 / 月費 / 關閉）
 overlayDayPassBtn.addEventListener('click', () => {
   upgradeOverlay.classList.add('hidden');

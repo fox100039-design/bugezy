@@ -137,6 +137,10 @@ const dict: Record<string, Record<UILang, string>> = {
   'json-cancel': { zh: '取消', en: 'Cancel' },
   'json-copy-locked': { zh: '🔒 複製 JSON（會員）', en: '🔒 Copy JSON (member)' },
   'json-export-locked': { zh: '🔒 匯出 JSON（會員）', en: '🔒 Export JSON (member)' },
+  // PM-191：一鍵複製 MCP 設定
+  'copy-mcp': { zh: '📋 複製 MCP 設定', en: '📋 Copy MCP Config' },
+  'copy-mcp-done': { zh: '✅ 已複製！貼到 Claude/Cursor 設定即可', en: '✅ Copied! Paste into your Claude/Cursor settings' },
+  'copy-mcp-login': { zh: '請先登入 BugEzy 再複製 MCP 設定', en: 'Please sign in to BugEzy before copying the MCP config' },
 
   // ── mic OFF 提示 ──
   'mic-prompt-title': { zh: '麥克風目前關閉', en: 'Microphone is off' },
