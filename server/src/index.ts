@@ -497,6 +497,41 @@ async function isActiveUserId(userId: string, env: Env): Promise<boolean> {
 function homePage(lang: PageLang, request: Request): string {
   const isTaiwan = isPayCountry(request); // PM-172：定價區付費按鈕依 IP 國家（TW=付費，其餘 coming soon）
   const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
+  // PM-192（三修）：安裝指令抽成變數，供 <pre> 顯示與按鈕 data-copy-text 共用（複製從 attribute 讀，不受 DOM textContent 影響）。
+  const aiPrompt = t(
+    `請幫我安裝 BugEzy MCP 除錯工具，讓你可以直接讀取我的 Bug 報告來幫我修 Bug。
+
+安裝步驟：
+1. Chrome 擴充功能：https://chromewebstore.google.com/detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj
+2. MCP 連線設定，在你的 MCP config 加入：
+{
+  "mcpServers": {
+    "bugezy": {
+      "url": "https://bugezy.dev/mcp"
+    }
+  }
+}
+
+安裝完成後，我只要用 BugEzy 錄製 Bug，你就能透過 MCP 讀取我的報告（Console 錯誤、Network 問題、語音描述、截圖），直接幫我修。
+
+詳細教學：https://bugezy.dev/install`,
+    `Please help me install the BugEzy MCP debugging tool so you can read my bug reports and fix bugs for me.
+
+Steps:
+1. Chrome extension: https://chromewebstore.google.com/detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj
+2. MCP connection — add this to your MCP config:
+{
+  "mcpServers": {
+    "bugezy": {
+      "url": "https://bugezy.dev/mcp"
+    }
+  }
+}
+
+Once installed, whenever I record a bug with BugEzy, you can read my report via MCP (console errors, network issues, voice description, screenshots) and fix it directly.
+
+Full guide: https://bugezy.dev/install`,
+  );
   return `<!DOCTYPE html>
 <html lang="${lang === 'zh' ? 'zh-TW' : 'en'}">
 <head>
@@ -560,7 +595,9 @@ function homePage(lang: PageLang, request: Request): string {
     .ai-install-desc { color:#9aa3b2; font-size:15px; margin-bottom:24px; }
     .ai-install-box { background:#161b22; border:1px solid #7c3aed; border-radius:12px; padding:24px; text-align:left; position:relative; }
     .ai-install-box pre { color:#e6edf3; font-size:13px; font-family:'Consolas','Monaco',monospace; white-space:pre-wrap; word-break:break-word; line-height:1.6; margin:0 0 16px 0; }
-    .copy-btn { background:#7c3aed; color:#fff; border:none; border-radius:10px; padding:12px 24px; font-size:16px; font-weight:600; cursor:pointer; width:100%; transition:background 0.2s; }
+    .copy-btn { background:#7c3aed; color:#fff; border:none; border-radius:10px; padding:12px 24px; font-size:16px; font-weight:600; cursor:pointer; width:100%; transition:transform 0.08s ease, opacity 0.08s ease, background 0.2s; }
+    .copy-btn:active { transform:scale(0.97); opacity:0.8; } /* PM-192：按下沉下去回饋 */
+    .copy-btn.copied { background:#238636; }
     .copy-btn:hover { background:#6d28d9; }
     .copy-feedback { color:#3fb950; font-size:14px; margin-top:8px; display:inline-block; }
     .ai-install-tools { color:#666; font-size:13px; margin-top:16px; }
@@ -714,41 +751,8 @@ function homePage(lang: PageLang, request: Request): string {
     <h2>${t('🤖 讓 AI 幫你安裝 BugEzy', '🤖 Let AI Install BugEzy for You')}</h2>
     <p class="ai-install-desc">${t('不懂技術？沒關係。把下面這段複製貼給你的 AI，它會幫你搞定一切。', 'Not technical? No problem. Copy the text below and paste it to your AI — it will handle everything.')}</p>
     <div class="ai-install-box">
-      <pre id="ai-install-prompt" class="mcp-cfg">${t(
-    `請幫我安裝 BugEzy MCP 除錯工具，讓你可以直接讀取我的 Bug 報告來幫我修 Bug。
-
-安裝步驟：
-1. Chrome 擴充功能：https://chromewebstore.google.com/detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj
-2. MCP 連線設定，在你的 MCP config 加入：
-{
-  "mcpServers": {
-    "bugezy": {
-      "url": "https://bugezy.dev/mcp"
-    }
-  }
-}
-
-安裝完成後，我只要用 BugEzy 錄製 Bug，你就能透過 MCP 讀取我的報告（Console 錯誤、Network 問題、語音描述、截圖），直接幫我修。
-
-詳細教學：https://bugezy.dev/install`,
-    `Please help me install the BugEzy MCP debugging tool so you can read my bug reports and fix bugs for me.
-
-Steps:
-1. Chrome extension: https://chromewebstore.google.com/detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj
-2. MCP connection — add this to your MCP config:
-{
-  "mcpServers": {
-    "bugezy": {
-      "url": "https://bugezy.dev/mcp"
-    }
-  }
-}
-
-Once installed, whenever I record a bug with BugEzy, you can read my report via MCP (console errors, network issues, voice description, screenshots) and fix it directly.
-
-Full guide: https://bugezy.dev/install`,
-  )}</pre>
-      <button id="copy-ai-prompt" class="copy-btn">${t('📋 一鍵複製，貼給你的 AI', '📋 Copy & paste to your AI')}</button>
+      <pre id="ai-install-prompt" class="mcp-cfg">${aiPrompt}</pre>
+      <button id="copy-ai-prompt" class="copy-btn" data-copy-text="${encodeURIComponent(aiPrompt)}">${t('📋 一鍵複製，貼給你的 AI', '📋 Copy & paste to your AI')}</button>
       <span id="copy-feedback" class="copy-feedback" style="display:none;">${t('✅ 已複製！', '✅ Copied!')}</span>
     </div>
     <p class="ai-install-tools">${t('支援', 'Supports')}：Claude Desktop · Claude Code · Cursor · Windsurf · VS Code + Cline · Google Antigravity · Gemini CLI</p>
@@ -816,13 +820,52 @@ Full guide: https://bugezy.dev/install`,
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy · ${t('亞洲平價 MCP 語音除錯工具', 'Affordable MCP voice debugging for Asia')}</div>
   </footer>
   <script>
-    document.getElementById('copy-ai-prompt')?.addEventListener('click', function () {
-      var text = document.getElementById('ai-install-prompt')?.textContent || '';
-      navigator.clipboard.writeText(text).then(function () {
-        var fb = document.getElementById('copy-feedback');
-        if (fb) { fb.style.display = 'inline-block'; setTimeout(function () { fb.style.display = 'none'; }, 2000); }
+    // PM-192（三修）：複製優先從 btn.dataset.copyText（decodeURIComponent）讀，不依賴 DOM textContent，
+    //   徹底解「貼出空白」。clipboard 失敗 → 視窗內 1px textarea + execCommand fallback；按鈕變「✅ 已複製！」2s 恢復。
+    (function () {
+      var btn = document.getElementById('copy-ai-prompt');
+      if (!btn) return;
+      var originalLabel = btn.textContent;
+      var DONE_LABEL = ${JSON.stringify(t('✅ 已複製！', '✅ Copied!'))};
+      function getText() {
+        var d = btn.dataset ? btn.dataset.copyText : null;
+        if (d) { try { return decodeURIComponent(d); } catch (e) {} }
+        var el = document.getElementById('ai-install-prompt');
+        return el ? (el.textContent || '') : '';
+      }
+      function flashDone() {
+        btn.textContent = DONE_LABEL;
+        btn.classList.add('copied');
+        setTimeout(function () { btn.textContent = originalLabel; btn.classList.remove('copied'); }, 2000);
+      }
+      function fallbackCopy(text) {
+        try {
+          var ta = document.createElement('textarea');
+          ta.value = text; ta.setAttribute('readonly', '');
+          ta.style.position = 'fixed'; ta.style.top = '0'; ta.style.left = '0';
+          ta.style.width = '1px'; ta.style.height = '1px'; ta.style.padding = '0';
+          ta.style.border = 'none'; ta.style.outline = 'none'; ta.style.boxShadow = 'none'; ta.style.background = 'transparent';
+          document.body.appendChild(ta); ta.focus(); ta.select();
+          try { ta.setSelectionRange(0, text.length); } catch (e2) {}
+          var ok = document.execCommand('copy');
+          document.body.removeChild(ta);
+          console.log('[BugEzy] home fallback execCommand copy ok=' + ok);
+          if (ok) flashDone();
+          return ok;
+        } catch (e) { console.warn('[BugEzy] home fallback copy failed', e); return false; }
+      }
+      btn.addEventListener('click', function () {
+        var text = getText();
+        console.log('[BugEzy] home copy length=' + text.length);
+        if (!text) { console.warn('[BugEzy] home copy empty'); return; }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(
+            function () { console.log('[BugEzy] home clipboard.writeText OK'); flashDone(); },
+            function (err) { console.warn('[BugEzy] home clipboard failed → fallback', err); fallbackCopy(text); },
+          );
+        } else { fallbackCopy(text); }
       });
-    });
+    })();
   </script>
 </body>
 </html>`;
@@ -1339,6 +1382,42 @@ document.querySelectorAll('.faq-q').forEach(function (q) {
 // PM-150：/install 改為函式（依 lang 中英切換）。
 function installPage(lang: PageLang): string {
   const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
+  // PM-192（三修）：安裝指令抽成變數，供 <pre> 顯示與按鈕 data-copy-text 共用——複製改從 attribute 讀，
+  //   徹底不受 DOM textContent（PM-190 .mcp-cfg 改寫、空白、瀏覽器差異）影響。
+  const aiPrompt = t(
+    `請幫我安裝 BugEzy MCP 除錯工具，讓你可以直接讀取我的 Bug 報告來幫我修 Bug。
+
+安裝步驟：
+1. Chrome 擴充功能：https://chromewebstore.google.com/detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj
+2. MCP 連線設定，在你的 MCP config 加入：
+{
+  "mcpServers": {
+    "bugezy": {
+      "url": "https://bugezy.dev/mcp"
+    }
+  }
+}
+
+安裝完成後，我只要用 BugEzy 錄製 Bug，你就能透過 MCP 讀取我的報告（Console 錯誤、Network 問題、語音描述、截圖），直接幫我修。
+
+詳細教學：https://bugezy.dev/install`,
+    `Please help me install the BugEzy MCP debugging tool so you can read my bug reports and fix bugs for me.
+
+Steps:
+1. Chrome extension: https://chromewebstore.google.com/detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj
+2. MCP connection — add this to your MCP config:
+{
+  "mcpServers": {
+    "bugezy": {
+      "url": "https://bugezy.dev/mcp"
+    }
+  }
+}
+
+Once installed, whenever I record a bug with BugEzy, you can read my report via MCP (console errors, network issues, voice description, screenshots) and fix it directly.
+
+Full guide: https://bugezy.dev/install`,
+  );
   return `<!DOCTYPE html>
 <html lang="${lang === 'zh' ? 'zh-Hant' : 'en'}">
 <head>
@@ -1429,41 +1508,8 @@ function installPage(lang: PageLang): string {
     <h2>${t('🤖 最快的安裝方式：複製貼給 AI', '🤖 Fastest way: copy & paste to AI')}</h2>
     <p style="color:#8b8fa3;margin:0 0 4px;">${t('不懂技術？把下面這段複製貼給你的 AI（Claude Desktop / Claude Code / Cursor / Windsurf / VS Code + Cline / Google Antigravity / Gemini CLI），它會幫你搞定。', 'Not technical? Copy the text below to your AI (Claude Desktop / Claude Code / Cursor / Windsurf / VS Code + Cline / Google Antigravity / Gemini CLI) and it will handle it.')}</p>
     <div class="ai-install-box">
-      <pre id="ai-install-prompt" class="mcp-cfg">${t(
-    `請幫我安裝 BugEzy MCP 除錯工具，讓你可以直接讀取我的 Bug 報告來幫我修 Bug。
-
-安裝步驟：
-1. Chrome 擴充功能：https://chromewebstore.google.com/detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj
-2. MCP 連線設定，在你的 MCP config 加入：
-{
-  "mcpServers": {
-    "bugezy": {
-      "url": "https://bugezy.dev/mcp"
-    }
-  }
-}
-
-安裝完成後，我只要用 BugEzy 錄製 Bug，你就能透過 MCP 讀取我的報告（Console 錯誤、Network 問題、語音描述、截圖），直接幫我修。
-
-詳細教學：https://bugezy.dev/install`,
-    `Please help me install the BugEzy MCP debugging tool so you can read my bug reports and fix bugs for me.
-
-Steps:
-1. Chrome extension: https://chromewebstore.google.com/detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj
-2. MCP connection — add this to your MCP config:
-{
-  "mcpServers": {
-    "bugezy": {
-      "url": "https://bugezy.dev/mcp"
-    }
-  }
-}
-
-Once installed, whenever I record a bug with BugEzy, you can read my report via MCP (console errors, network issues, voice description, screenshots) and fix it directly.
-
-Full guide: https://bugezy.dev/install`,
-  )}</pre>
-      <button id="copy-ai-prompt" class="copy-btn">${t('📋 一鍵複製，貼給你的 AI', '📋 Copy & paste to your AI')}</button>
+      <pre id="ai-install-prompt" class="mcp-cfg">${aiPrompt}</pre>
+      <button id="copy-ai-prompt" class="copy-btn" data-copy-text="${encodeURIComponent(aiPrompt)}">${t('📋 一鍵複製，貼給你的 AI', '📋 Copy & paste to your AI')}</button>
       <span id="copy-feedback" class="copy-feedback" style="display:none;">${t('✅ 已複製！', '✅ Copied!')}</span>
     </div>
     <p class="ai-install-tools">${t('或依下方手動五步安裝 ↓', 'Or install manually in five steps below ↓')}</p>
@@ -1599,6 +1645,10 @@ $ BUGEZY_TOKEN=&lt;${t('你的 token', 'your token')}&gt; npx bugezy-watch -- go
         // 只在還沒帶 token 的 /mcp 後面補（冪等，避免重複）
         el.textContent = el.textContent.replace(/(bugezy\.dev\/mcp)(?!\?|[\w])/g, '$1?token=' + enc);
       });
+      // PM-192（三修）：token 填入後同步更新複製按鈕的 data-copy-text，讓「顯示」與「複製」內容一致（皆帶 token）
+      var cbtn = document.getElementById('copy-ai-prompt');
+      var cpre = document.getElementById('ai-install-prompt');
+      if (cbtn && cpre) cbtn.setAttribute('data-copy-text', encodeURIComponent(cpre.textContent || ''));
     } catch (e) {}
   })();
 
@@ -1647,11 +1697,17 @@ $ BUGEZY_TOKEN=&lt;${t('你的 token', 'your token')}&gt; npx bugezy-watch -- go
         return ok;
       } catch (e) { console.warn('[BugEzy] fallback copy failed', e); return false; }
     }
-    btn.addEventListener('click', function () {
+    // PM-192（三修）：優先從 btn.dataset.copyText（decodeURIComponent）讀，不依賴 DOM textContent（徹底解「貼出空白」）
+    function getText() {
+      var d = btn.dataset ? btn.dataset.copyText : null;
+      if (d) { try { return decodeURIComponent(d); } catch (e) {} }
       var el = document.getElementById('ai-install-prompt');
-      var text = el ? (el.textContent || '') : '';
+      return el ? (el.textContent || '') : '';
+    }
+    btn.addEventListener('click', function () {
+      var text = getText();
       console.log('[BugEzy] copy prompt length=' + text.length + ' preview=' + text.slice(0, 80));
-      if (!text) { console.warn('[BugEzy] nothing to copy — #ai-install-prompt empty'); return; }
+      if (!text) { console.warn('[BugEzy] nothing to copy — data-copy-text/#ai-install-prompt empty'); return; }
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(
           function () { console.log('[BugEzy] clipboard.writeText OK'); flashDone(); },
