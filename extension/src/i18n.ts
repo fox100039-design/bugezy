@@ -141,6 +141,7 @@ const dict: Record<string, Record<UILang, string>> = {
   'copy-mcp': { zh: '📋 複製 MCP 設定', en: '📋 Copy MCP Config' },
   'copy-mcp-done': { zh: '✅ 已複製！貼到 Claude/Cursor 設定即可', en: '✅ Copied! Paste into your Claude/Cursor settings' },
   'copy-mcp-login': { zh: '請先登入 BugEzy 再複製 MCP 設定', en: 'Please sign in to BugEzy before copying the MCP config' },
+  'mcp-config-hint': { zh: '當 AI 無法讀取你的報告時，按此複製，貼給你的 AI 重新設定', en: 'If AI cannot read your reports, copy this and paste to your AI to reconfigure' },
   // PM-193：精準轉錄麥克風授權引導
   'mic-fallback-tip': {
     zh: '⚠️ 精準轉錄麥克風授權不足，已切換為即時字幕模式。下次請選「允許這個網站使用」。',

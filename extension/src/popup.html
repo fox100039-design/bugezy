@@ -317,6 +317,8 @@
       .copy-mcp-btn { display: block; width: 100%; background: transparent; color: #c4b5fd; border: 1px solid #7c3aed; border-radius: 8px; padding: 8px; font-size: 13px; cursor: pointer; margin: 8px 0 4px; font-weight: 600; }
       .copy-mcp-btn:hover { background: rgba(124,58,237,0.1); }
       .copy-mcp-feedback { margin: 2px 0 6px; font-size: 12px; color: #22c55e; text-align: center; }
+      /* PM-197：MCP 設定使用時機備註 */
+      .mcp-hint { color: #666; font-size: 11px; margin: 4px 0 0; text-align: center; }
       .intl-title { color: #3b82f6; font-size: 14px; font-weight: 700; margin: 0 0 4px; }
       .intl-desc { color: #9aa3b2; font-size: 12px; margin: 0 0 8px; }
       .intl-free { color: #22c55e; font-size: 11px; margin: 0; }
@@ -453,6 +455,7 @@
       </div>
       <!-- PM-191：一鍵複製完整 MCP 設定（含 session token）貼給 Claude/Cursor -->
       <button id="copyMcpBtn" class="copy-mcp-btn" data-i18n="copy-mcp">📋 複製 MCP 設定</button>
+      <p class="mcp-hint" data-i18n="mcp-config-hint">當 AI 無法讀取你的報告時，按此複製，貼給你的 AI 重新設定</p>
       <p id="copyMcpFeedback" class="copy-mcp-feedback" style="display:none;"></p>
         </div>
       </div>

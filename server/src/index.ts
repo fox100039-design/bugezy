@@ -1521,7 +1521,7 @@ Full guide: https://bugezy.dev/install`,
       <li>${t('前往 Chrome Web Store 的 BugEzy 頁面', 'Open the BugEzy page on the Chrome Web Store')}</li>
       <li>${t('點「加到 Chrome」→ 在彈窗按「新增擴充功能」確認', 'Click "Add to Chrome" → confirm "Add extension" in the popup')}</li>
     </ol>
-    <a class="cta-btn" href="https://chromewebstore.google.com/" target="_blank" rel="noopener">${t('前往 Chrome Web Store →', 'Go to Chrome Web Store →')}</a>
+    <a class="cta-btn" href="https://chromewebstore.google.com/detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj" target="_blank" rel="noopener">${t('前往 Chrome Web Store →', 'Go to Chrome Web Store →')}</a>
     <div class="note">${t('支援 Chrome 以及所有 Chromium 核心瀏覽器（Edge、Brave、Arc 等）。', 'Works on Chrome and all Chromium-based browsers (Edge, Brave, Arc, etc.).')}</div>
   </div>
 
@@ -3621,7 +3621,7 @@ export default {
     // PM-126：版本檢查（popup 亮燈用）+ 更新日誌頁
     if (request.method === 'GET' && path === '/api/version') {
       // 每次上新版到 Chrome Web Store 時，同步改 latest + deploy
-      return json({ latest: '1.1.0', changelog_url: 'https://bugezy.dev/changelog' });
+      return json({ latest: '1.1.1', changelog_url: 'https://bugezy.dev/changelog' });
     }
     if (request.method === 'GET' && path === '/changelog') {
       const res = html(changelogPage(getLang(request))); // PM-126/151

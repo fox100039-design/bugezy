@@ -90,11 +90,16 @@ function stopRecording(): Promise<{ audioBlob?: string; error?: string }> {
     stopVolumeMeter(); // PM-97：先停音量表
     rec.onstop = () => {
       const blob = new Blob(chunks, { type: 'audio/webm;codecs=opus' });
+      // PM-198：診斷 log——確認 MediaRecorder 停止後有沒有產生有效 Blob（size>0）
+      console.log(
+        `[BugEzy offscreen] recording stopped, blob size=${blob.size}, type=${blob.type}, chunks=${chunks.length}`,
+      );
       chunks = [];
       rec.stream.getTracks().forEach((t) => t.stop());
       mediaRecorder = null;
 
       if (blob.size < 100) {
+        console.warn(`[BugEzy offscreen] Blob 太短（size=${blob.size}）→ 不轉錄`);
         resolve({ error: '錄音太短' });
         return;
       }

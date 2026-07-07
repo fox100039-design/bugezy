@@ -750,6 +750,36 @@ uploadBtn.addEventListener('click', async () => {
     a.target = '_blank';
     a.textContent = resp.shareUrl;
     result.appendChild(a);
+    // PM-199：分享連結旁加「📋」複製按鈕（hidden input + select + execCommand，不用 clipboard API）
+    const shareUrl = resp.shareUrl;
+    const copyInput = document.createElement('input');
+    copyInput.type = 'text';
+    copyInput.readOnly = true;
+    copyInput.value = shareUrl;
+    // 保持可選取但視覺上不佔位（execCommand 需元素在視窗內且可 select，故非 display:none/離屏）
+    copyInput.style.cssText =
+      'position:absolute;width:1px;height:1px;padding:0;border:0;opacity:0;left:0;top:0;';
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.textContent = '📋';
+    copyBtn.title = '複製連結';
+    copyBtn.style.cssText =
+      'margin-left:8px;background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:2px 8px;font-size:13px;cursor:pointer;vertical-align:middle;';
+    copyBtn.addEventListener('click', () => {
+      copyInput.select();
+      copyInput.setSelectionRange(0, shareUrl.length);
+      try {
+        document.execCommand('copy');
+      } catch {
+        /* 極少數環境不支援，靜默略過 */
+      }
+      copyBtn.textContent = '✅';
+      setTimeout(() => {
+        copyBtn.textContent = '📋';
+      }, 2000);
+    });
+    result.appendChild(copyInput);
+    result.appendChild(copyBtn);
     uploadBtn.textContent = '✅ 已上傳';
     discardBtn.textContent = '關閉';
     await chrome.storage.local.remove(STORAGE_KEY); // 上傳後清本機 payload

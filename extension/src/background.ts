@@ -429,27 +429,51 @@ async function stopMicAndTranscribe(): Promise<{ ok?: boolean; text?: string; er
     audioBlob?: string;
     error?: string;
   };
-  if (!res?.audioBlob) return res ?? { error: '未取得音訊' };
+  // PM-198：確認 offscreen 有把音訊（base64 dataURL）傳回來
+  if (!res?.audioBlob) {
+    console.warn('[BugEzy background] offscreen 未回傳音訊 →', res?.error ?? '未取得音訊');
+    return res ?? { error: '未取得音訊' };
+  }
   try {
     const blob = await (await fetch(res.audioBlob)).blob();
+    // PM-198：診斷 log——送轉錄前確認 blob 有效
+    console.log(`[BugEzy background] transcribe request sent, size=${blob.size}, type=${blob.type}`);
+    if (blob.size < 100) {
+      console.warn(`[BugEzy background] blob 太小（size=${blob.size}）→ 放棄轉錄`);
+      return { error: '音訊太短' };
+    }
     const form = new FormData();
     form.append('audio', blob, 'recording.webm');
     // PM-137：帶使用者選的 Whisper 語言（server 端有白名單驗證，非白名單 fallback zh）
     const langStore = await chrome.storage.local.get(LANG_KEY);
     form.append('language', (langStore[LANG_KEY] as string) || 'zh');
     // PM-135：帶 session token（transcribe 需登入 + 付費驗證）。multipart 不可手動設 Content-Type。
+    const authHeader = await getAuthHeaderOnly();
+    // PM-198：確認有帶 Authorization（無 token → server 回 401「請先登入」，語音會靜默消失）
+    console.log(
+      `[BugEzy background] POST ${API_BASE}/api/transcribe, hasAuth=${!!authHeader.Authorization}, lang=${(langStore[LANG_KEY] as string) || 'zh'}`,
+    );
     const transcribeRes = await fetch(`${API_BASE}/api/transcribe`, {
       method: 'POST',
-      headers: await getAuthHeaderOnly(),
+      headers: authHeader,
       body: form,
     });
-    const result = (await transcribeRes.json()) as {
-      ok?: boolean;
-      text?: string;
-      segments?: unknown[];
-      duration?: number;
-    };
-    if (result.ok) {
+    // PM-198：先讀 raw text，再嘗試 parse（非 JSON 回應如 401/502 HTML 才不會 throw 進 catch 被吞）
+    const raw = await transcribeRes.text();
+    let result: { ok?: boolean; text?: string; segments?: unknown[]; duration?: number; error?: string };
+    try {
+      result = JSON.parse(raw);
+    } catch {
+      console.error(
+        `[BugEzy background] transcribe 回應非 JSON, status=${transcribeRes.status}, body=${raw.slice(0, 200)}`,
+      );
+      return { error: `轉錄失敗（HTTP ${transcribeRes.status}）` };
+    }
+    // PM-198：無條件印出 status + 轉錄文字（成功/失敗都看得到）
+    console.log(
+      `[BugEzy background] transcribe response status=${transcribeRes.status}, ok=${result.ok}, text=${(result.text ?? result.error ?? '').slice(0, 80)}`,
+    );
+    if (result.ok && (result.text ?? '').trim()) {
       await chrome.storage.local.set({
         [VOICE_TRANSCRIPT_KEY]: {
           text: result.text,
@@ -458,11 +482,16 @@ async function stopMicAndTranscribe(): Promise<{ ok?: boolean; text?: string; er
           timestamp: Date.now(),
         },
       });
-      blog('語音轉錄完成:', (result.text ?? '').substring(0, 50));
+      console.log('[BugEzy background] 語音轉錄完成，已存 VOICE_TRANSCRIPT_KEY:', (result.text ?? '').substring(0, 50));
+    } else {
+      // PM-198：ok=false（401/403 付費/未登入）或 text 空 → 明確 log，避免「靜默無文字」
+      console.warn(
+        `[BugEzy background] 轉錄無有效文字（status=${transcribeRes.status}, ok=${result.ok}, error=${result.error ?? '無'}）→ voice_count 將為 0`,
+      );
     }
     return result;
   } catch (err) {
-    blog('轉錄失敗:', err);
+    console.error('[BugEzy background] 轉錄失敗（例外）:', err);
     return { error: '轉錄失敗' };
   }
 }
@@ -477,7 +506,10 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summ
         case 'STOP_RECORDING': {
           // PM-87/91：Whisper 模式 → 先通知頁面顯示「轉錄中」，停 offscreen 並轉錄（存 VOICE_TRANSCRIPT_KEY）
           // → 再停錄製打包，讓隨後的 RECORDING_DONE 合併時能讀到 Whisper 結果。
-          if ((await getMicMode()) === 'whisper') {
+          const micMode = await getMicMode();
+          // PM-198：印出本次語音模式（若非 whisper 就不會跑 Groq 轉錄，voice_count 會是 0）
+          console.log(`[BugEzy background] STOP_RECORDING, micMode=${micMode}`);
+          if (micMode === 'whisper') {
             const st = await getState();
             const tid = st.tabId ?? (await getActiveTab())?.id;
             if (tid) {
@@ -489,7 +521,11 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summ
                 /* 頁面可能已關，忽略 */
               }
             }
-            await stopMicAndTranscribe();
+            // PM-198：不再吞掉結果——記下轉錄成敗，方便 DevTools 追蹤
+            const tr = await stopMicAndTranscribe();
+            console.log(
+              `[BugEzy background] 轉錄結果 ok=${tr.ok}, textLen=${(tr.text ?? '').length}, error=${tr.error ?? '無'}`,
+            );
           }
           sendResponse(await stopRecording());
           break;
@@ -607,7 +643,13 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summ
               },
             ];
             await chrome.storage.local.remove(VOICE_TRANSCRIPT_KEY);
+            // PM-198：確認 Whisper 文字有寫進報告 payload 的 voiceTranscript
+            console.log('[BugEzy background] RECORDING_DONE 已併入 Whisper 語音:', whisper.text.substring(0, 50));
           } else {
+            // PM-198：沒有 Whisper 文字 → 保留即時字幕（免費版）；付費版精準轉錄失敗時這裡會是空的
+            console.log(
+              `[BugEzy background] RECORDING_DONE 無 Whisper 文字（VOICE_TRANSCRIPT_KEY=${whisper ? '存在但空' : '不存在'}）→ 用 web-speech 段落 ${merged.voiceTranscript.length} 筆`,
+            );
             merged.voiceTranscript.forEach((s) => {
               if (!s.source) s.source = 'web-speech';
             });

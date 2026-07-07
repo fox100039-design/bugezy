@@ -1,6 +1,6 @@
 # BugEzy 專案全貌與接手指南
 
-> 最後更新：2026-07-07（Day 22：Chrome Web Store 1.1.0 過審 + manifest key 統一 ID + session token 移出 URL + 報告分享付費牆 + JSON 匯出付費 + MCP URL token + Whisper 麥克風修復/fallback PM-187~193）
+> 最後更新：2026-07-07（Day 22：Chrome Web Store 1.1.0 過審 →（收工）打包 1.1.1 送審 + manifest key 統一 ID + session token 移出 URL + 報告分享付費牆 + JSON 匯出付費 + MCP URL token + Whisper 麥克風修復/fallback + MCP 設定備註 + Whisper 無文字診斷 log + 編輯頁複製鈕 + 全站商店連結對接 + 版號 1.1.1 PM-187~200）
 > 維護者：FOX（Claude Chat PM 角色）
 > 用途：新 Chat 對話開始時讀此檔，快速掌握全貌並接手開發
 
@@ -603,9 +603,9 @@ FOX = 創辦人 + 決策者 + 手動驗收
 
 ---
 
-## §6q Day 22（2026-07-07，PM-187~193）— Chrome Web Store 1.1.0 過審 + manifest key 統一 ID + 資安/商業/麥克風修復
+## §6q Day 22（2026-07-07，PM-187~200）— Chrome Web Store 1.1.0 過審 → 1.1.1 打包送審 + manifest key 統一 ID + 資安/商業/麥克風修復
 
-> Web Store 1.1.0 過審。本日主軸：把 session token 移出 URL、報告分享與 JSON 匯出加付費牆、MCP URL 帶 token（AI 零操作）、Whisper 麥克風修復＋fallback，並統一擴充 ID。
+> Web Store 1.1.0 過審。本日主軸：把 session token 移出 URL、報告分享與 JSON 匯出加付費牆、MCP URL 帶 token（AI 零操作）、Whisper 麥克風修復＋fallback，並統一擴充 ID。收工再補 UX/診斷/維運（PM-197~200）並升版 1.1.1 打包送審。
 
 - **PM-187 session token 移出 URL（P0 資安）**：`/reports?token=` 洩漏於歷史/Referrer/截圖 → popup 改開 `/reports#token=`（fragment 不送 server）；`/reports` 改 client bootstrap shell——`resolveSessionToken()` 讀 query/fragment → 存 `localStorage['bugezy_session_token']` + `history.replaceState` 清 URL → 否則讀 localStorage → 無則登入提示；新增 `GET /api/my-reports`（Bearer + `jsonNoStore`）client 端 `textContent` 建表（XSS 安全）。稽核 `/feedback`（公開）與 `/report/:id`（分享 latestReportUrl）本就無 token。
 - **PM-188 報告分享閱讀付費牆（P0 資安＋商業）**：`getReport` 加認證——owner 看自己不論付費、非 owner 訪客→403 `login_required`、已登入非付費→403 `upgrade_required`（複用 `isActiveUserId`，403 `jsonNoStore`）；`report-page.js` 帶 Bearer（同源 localStorage token）+ 403 付費牆（免費安裝/了解方案 CTA，中英）。**病毒式引流**：想看別人分享的報告要成為會員。
@@ -614,12 +614,17 @@ FOX = 創辦人 + 決策者 + 手動驗收
 - **PM-192 Whisper 麥克風音量條不動修復（extension）**：根因 offscreen document 無 user gesture → `AudioContext` 預設 `suspended`、analyser 全 0；`startVolumeMeter` 加 `await resume()`；`startRecording` 回報真實 `{ok,error}`（不再吞 getUserMedia 失敗、handler 不再秒回 ok:true）。
 - **PM-193 麥克風授權引導 + fallback（extension）**：「允許這次使用」= 單次單頁面權限、offscreen 拿不到 → background `micFallback` → content 無縫改即時字幕（頁面 SpeechRecognition 有單次權限可用）+ 頁面頂部橘色提示 8 秒 + popup「💡 精準轉錄需選永久允許」小字；i18n 中英。
 - **維運**：Chrome Web Store **1.1.0 過審**；manifest 加 `key` 綁定固定 ID **`hfnkjlbbpehkflgfbjenfmnmjkdjadcj`**（全站商店連結同步）；`/install` 一鍵複製徹底修好（PM-192 一/二/三/四/五修 → 最終 `data-copy-text` 解耦 DOM）+ 修 template literal 內 token-fill regex 反斜線被吞的隱藏 bug（`\.`→`\\.`）；舊 `bugezy-api.workers.dev` → `bugezy.dev` 301 redirect（MCP/API 除外）。
+- **PM-197 popup「📋 複製 MCP 設定」加使用時機備註（extension）**：按鈕下方加灰色 11px 小字（`mcp-config-hint` i18n）「當 AI 無法讀取你的報告時，按此複製，貼給你的 AI 重新設定」。
+- **PM-198 Whisper 錄音正常卻 voice_count=0 → 全鏈路埋 log（extension）**：程式路徑本身無 bug（Blob 有效、mimeType 對、帶 Bearer+FormData、API_BASE 正確、server 邏輯正常），真因是「停止→轉錄→存檔」幾乎零 log 且靜默吞失敗；offscreen 印 blob size/type、background 印送出 size/hasAuth/`response status/ok/text`、`STOP_RECORDING` 不再丟棄轉錄結果、`res.text()` 先讀再 parse（防非 JSON 401/502 被吞）、存檔收緊為 `ok && text.trim()`。log 用 `console.*` 實機可見，FOX 錄一段看哪行斷即定位（size=0/hasAuth=false/401/403/Groq 空）。
+- **PM-199 編輯報告頁分享連結加複製鈕（extension）**：`edit-report.ts` 上傳成功「✅ 已上傳！分享連結」旁加 hidden input + 紫色「📋」鈕（`select`+`execCommand`，非 clipboard API，按後變「✅」2s 恢復），對齊 PM-196 報告頁。
+- **PM-200 全站商店連結對接正式詳情頁（server）**：/install「前往 Chrome Web Store →」由通用首頁 `chromewebstore.google.com/` 改 `.../detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj`（永久不變）；其餘 4 處本就 detail、首頁 CTA 走 `/install` 漏斗未改。`wrangler deploy 0be0cd64`。
+- **版號 1.1.0 → 1.1.1**：`manifest.json` + `/api/version` latest 同步升版（`wrangler deploy 9de89e2f`，線上 `GET /api/version`→`{"latest":"1.1.1"}`）；`bugezy-1.1.1.zip` 已打包待重上架。
 
 ### 增量（Day 22）
-- Server（已部署至 `8e1693f1`；**PM-190/188/187 已部署，但本日 FOX 手改的 guide/faq URL 清理 + install regex 反斜線修 + 舊 URL redirect 尚未 deploy**）：`/api/my-reports`、`reportsPage` shell、`getReport` 付費牆 + `myReportsApi`、MCP `__mcp_session_token` + optional token、`/install` `.mcp-cfg` token script + `data-copy-text`、Chrome Web Store extension ID 更新、舊 URL 301 redirect、regex 反斜線修。
-- Extension（build 過、**未重上架**）：popup token 改 fragment + 「📋 複製 MCP 設定」、JSON 匯出付費 overlay + 免責、offscreen `AudioContext.resume` + startRecording 回報、background `micFallback` + content fallback 即時字幕/橘色提示、i18n、manifest `key`。
-- 判斷/修正（動手前先驗）：token URL-first 優先於 localStorage（避免舊 token 假過期）；`getReport` owner 早於付費檢查；MCP env 用 per-request 副本非 mutate 共用 env；offscreen suspended context 是「即時字幕正常、精準轉錄不動」的差異點；「一鍵複製空白」根因是點擊當下讀 DOM textContent（改 render 期編碼進 `data-copy-text`）；template literal 內 `\.` 會被吞成 `.` → regex 破損（改 `\\.`）。
-- ⚠ 技術債 / FOX 待辦（Day 22）：① **extension 重上架**（Day 19~22 整套 + manifest key）；② **server deploy**（FOX 手改的 guide/faq URL + install regex 反斜線修 + 舊 URL redirect 已 commit 未 deploy）；③ **CLI `npm publish`**（PM-167/176/177）；④ **麥克風實機驗收**：精準轉錄選「允許這次使用」驗 fallback、選「允許這個網站使用」驗正常 Whisper + 音量條會動；⑤ 沿用：付款後 token rotation、CSP 全站移 unsafe-inline、日韓越解鎖、user_id 遷移、Rate Limiting、rls-lockdown。
+- Server（已部署至最新 `9de89e2f`；PM-187~200 + 收工版號皆已 deploy，含先前 FOX 手改的 guide/faq URL + install regex 修 + 舊 URL redirect 已隨 PM-196/200 上線）：`/api/my-reports`、`reportsPage` shell、`getReport` 付費牆 + `myReportsApi`、MCP `__mcp_session_token` + optional token、`/install` `.mcp-cfg` token script + `data-copy-text`、Chrome Web Store 商店連結對接 detail 頁、舊 URL 301 redirect、`/api/version` latest 1.1.1、報告頁分享複製 + `DELETE /api/reports` 批次刪除（PM-196）。
+- Extension（build 過、**未重上架**，`bugezy-1.1.1.zip` 已打包）：popup token 改 fragment + 「📋 複製 MCP 設定」+ 使用時機備註、JSON 匯出付費 overlay + 免責、offscreen `AudioContext.resume` + startRecording 回報 + Whisper 診斷 log、background `micFallback` + content fallback 即時字幕/橘色提示 + 轉錄 log、edit-report 分享複製鈕、鍵盤/麥克風互斥聯動、edit-report Token USD 單位、i18n、manifest `key` + version 1.1.1。
+- 判斷/修正（動手前先驗）：token URL-first 優先於 localStorage（避免舊 token 假過期）；`getReport` owner 早於付費檢查；MCP env 用 per-request 副本非 mutate 共用 env；offscreen suspended context 是「即時字幕正常、精準轉錄不動」的差異點；「一鍵複製空白」根因是點擊當下讀 DOM textContent（改 render 期編碼進 `data-copy-text`）；template literal 內 `\.` 會被吞成 `.` → regex 破損（改 `\\.`）；Whisper 無文字非程式 bug 而是全鏈路無 log 難診斷（PM-198 埋 log）；商店連結 URL 永久不變不需版本更新。
+- ⚠ 技術債 / FOX 待辦（Day 22）：① **extension 重上架 1.1.1**（Day 19~22 整套 + manifest key，`bugezy-1.1.1.zip` 已打包）；② **CLI `npm publish`**（PM-167/176/177）；③ **麥克風實機驗收**：精準轉錄選「允許這次使用」驗 fallback、選「允許這個網站使用」驗正常 Whisper + 音量條會動；④ **Whisper 無文字實機定位**（PM-198）：錄一段停止 → 開 background + offscreen DevTools Console 看哪行斷（size=0/hasAuth=false/401/403/Groq 空）→ 回報以精準修下一版；⑤ 沿用：付款後 token rotation、CSP 全站移 unsafe-inline、日韓越解鎖、user_id 遷移、Rate Limiting、rls-lockdown、報告刪除連帶清 R2 孤兒。
 
 ---
 
