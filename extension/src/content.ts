@@ -38,6 +38,18 @@ function applyBugezyLang(speechLang: string) {
   document.documentElement.setAttribute('data-bugezy-lang', speechLang);
   contentUILang = getUILang(speechLang);
 }
+
+// PM-193：精準轉錄麥克風失敗 → 頁面頂部橘色提示條（8 秒後移除）。content 與頁面共用 DOM，直接建節點。
+function showMicFallbackTip() {
+  document.getElementById('bugezy-mic-fallback-tip')?.remove();
+  const tip = document.createElement('div');
+  tip.id = 'bugezy-mic-fallback-tip';
+  tip.style.cssText =
+    'position:fixed;top:0;left:0;right:0;background:#f59e0b;color:#000;text-align:center;padding:10px;font-size:13px;font-weight:600;z-index:2147483647;font-family:system-ui,-apple-system,"Microsoft JhengHei",sans-serif;';
+  tip.textContent = ct('mic-fallback-tip'); // i18n 值已含 ⚠️
+  document.body.prepend(tip);
+  setTimeout(() => tip.remove(), 8000);
+}
 void chrome.storage.local.get(LANG_KEY, (r) => applyBugezyLang((r[LANG_KEY] as string) || 'zh'));
 // 使用者在 popup 改語言 → 即時更新 DOM attr（開著的頁面也跟著切）
 chrome.storage.onChanged.addListener((changes, area) => {
@@ -217,8 +229,15 @@ window.addEventListener('message', async (e: MessageEvent) => {
 chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse) => {
   if (msg.type === 'START_RECORDING') {
     // PM-49/87/91：送 START 前算語音旗標（即時字幕 / Whisper / 鍵盤），一併帶給 inject
+    const micFallback = msg.micFallback === true; // PM-193：精準轉錄麥克風失敗 → 改即時字幕
     void computeStartFlags().then(({ keyboardMode, useOldVoice, whisperMode, speechLang }) => {
-      sendToInject('START', keyboardMode, useOldVoice, whisperMode, speechLang);
+      if (micFallback && whisperMode) {
+        // PM-193：offscreen 麥克風拿不到（多半是「允許這次使用」）→ 無縫切成即時字幕（頁面 SpeechRecognition）+ 橘色提示
+        showMicFallbackTip();
+        sendToInject('START', keyboardMode, true /* useOldVoice */, false /* whisperMode */, speechLang);
+      } else {
+        sendToInject('START', keyboardMode, useOldVoice, whisperMode, speechLang);
+      }
       sendResponse({ ok: true });
     });
   } else if (msg.type === 'STOP_RECORDING') {

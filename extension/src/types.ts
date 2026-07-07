@@ -113,7 +113,8 @@ export interface RecordingSummary {
 
 /** popup ↔ background ↔ content 的控制訊息 */
 export type ControlMessage =
-  | { type: 'START_RECORDING' }
+  // PM-193：micFallback=精準轉錄 offscreen 麥克風失敗 → content 改用即時字幕 + 顯示頁面提示
+  | { type: 'START_RECORDING'; micFallback?: boolean }
   | { type: 'STOP_RECORDING' }
   | { type: 'CLEAR_RECORDING' }
   | { type: 'GET_STATE' }

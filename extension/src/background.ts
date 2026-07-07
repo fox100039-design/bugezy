@@ -190,6 +190,9 @@ async function startRecording(): Promise<StateResponse> {
   // PM-87：付費版 + 麥克風開啟 → 用 offscreen 錄音（Groq Whisper，一次授權通用，不彈頁面授權橫幅）。
   // 免費版則由 inject.ts 的 SpeechRecognition 自行啟動（content 依 plan 決定 micEnabled）。
   // PM-91：只有付費版「精準轉錄(whisper)」模式才走 offscreen 錄音；即時字幕由 inject 處理
+  // PM-193：offscreen getUserMedia 失敗（多半是使用者選「允許這次使用」→ 權限只給當前頁、offscreen 拿不到）
+  //   → 自動 fallback 即時字幕（content 走頁面 SpeechRecognition，頁面有單次權限所以可用）+ 頁面橘色提示。
+  let whisperMicFailed = false;
   if ((await getMicMode()) === 'whisper') {
     try {
       const ready = await ensureMicReady(); // PM-88/89：未授權 → 跳過語音（授權改由 popup toggle 觸發）
@@ -201,17 +204,23 @@ async function startRecording(): Promise<StateResponse> {
         if (micRes?.ok) {
           blog('語音引擎：Groq Whisper（付費版精準轉錄）');
         } else {
-          blog('⚠ offscreen 麥克風開啟失敗（不阻擋錄製）：', micRes?.error ?? '未知錯誤');
+          whisperMicFailed = true; // PM-193：fallback 即時字幕
+          blog('⚠ offscreen 麥克風開啟失敗，fallback 即時字幕：', micRes?.error ?? '未知錯誤');
         }
       } else {
         blog('麥克風未授權，本次不錄語音（請在 popup 開麥克風 toggle 授權）');
       }
     } catch (err) {
-      blog('offscreen 麥克風啟動失敗（不阻擋錄製）', err);
+      whisperMicFailed = true; // PM-193：例外也 fallback
+      blog('offscreen 麥克風啟動失敗，fallback 即時字幕', err);
     }
   }
   // 截圖改為獨立功能（PM-18），不再混入錄製
-  await chrome.tabs.sendMessage(tab.id, { type: 'START_RECORDING' } satisfies ControlMessage);
+  // PM-193：帶 micFallback → content 收到後改用即時字幕並在頁面顯示橘色提示
+  await chrome.tabs.sendMessage(tab.id, {
+    type: 'START_RECORDING',
+    micFallback: whisperMicFailed,
+  } satisfies ControlMessage);
   const s = await setState({
     recording: true,
     startedAt: Date.now(),

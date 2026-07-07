@@ -141,6 +141,15 @@ const dict: Record<string, Record<UILang, string>> = {
   'copy-mcp': { zh: '📋 複製 MCP 設定', en: '📋 Copy MCP Config' },
   'copy-mcp-done': { zh: '✅ 已複製！貼到 Claude/Cursor 設定即可', en: '✅ Copied! Paste into your Claude/Cursor settings' },
   'copy-mcp-login': { zh: '請先登入 BugEzy 再複製 MCP 設定', en: 'Please sign in to BugEzy before copying the MCP config' },
+  // PM-193：精準轉錄麥克風授權引導
+  'mic-fallback-tip': {
+    zh: '⚠️ 精準轉錄麥克風授權不足，已切換為即時字幕模式。下次請選「允許這個網站使用」。',
+    en: '⚠️ Whisper mic permission denied. Switched to realtime mode. Next time select "Always allow".',
+  },
+  'mic-perm-hint': {
+    zh: '💡 精準轉錄需選「永久允許」此網站使用麥克風',
+    en: '💡 Whisper requires "Always allow" microphone permission',
+  },
 
   // ── mic OFF 提示 ──
   'mic-prompt-title': { zh: '麥克風目前關閉', en: 'Microphone is off' },

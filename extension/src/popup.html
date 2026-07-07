@@ -59,6 +59,8 @@
       .mic-mode-label { color: #9aa3b2; font-size: 11px; }
       .mic-mode-btn { width: auto; margin: 0; background: #2a2a3e; color: #999; border: 1px solid #333; border-radius: 12px; padding: 2px 10px; font-size: 11px; cursor: pointer; font-weight: 500; }
       .mic-mode-btn.active { background: #7c3aed; color: #fff; border-color: #7c3aed; }
+      /* PM-193：精準轉錄授權提示小字 */
+      .mic-perm-hint { color: #d29922; font-size: 11px; margin: 0 0 6px; line-height: 1.4; text-align: center; }
 
       /* 通用按鈕 */
       button {
@@ -360,6 +362,8 @@
         <button class="mic-mode-btn" data-mode="realtime" data-i18n="mode-realtime">即時字幕</button>
         <button class="mic-mode-btn" data-mode="whisper" data-i18n="mode-whisper">精準轉錄</button>
       </div>
+      <!-- PM-193：精準轉錄需選「永久允許」麥克風的小提示（跟 micMode 一起顯示） -->
+      <p class="mic-perm-hint" id="micPermHint" data-i18n="mic-perm-hint" style="display:none;">💡 精準轉錄需選「永久允許」此網站使用麥克風</p>
       <!-- PM-106：錄製中設定鎖定提示 -->
       <div id="settingsHint" data-i18n="settings-locked" style="display:none;font-size:11px;color:#f59e0b;text-align:center;margin:2px 0 0;">🔒 錄製中，設定已鎖定</div>
 

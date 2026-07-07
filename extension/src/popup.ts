@@ -190,12 +190,15 @@ const micToggle = $<HTMLInputElement>('micToggle');
 const micIcon = $('micIcon');
 // PM-91：付費版語音模式（即時字幕 / 精準轉錄）— 免費版隱藏
 const micMode = $('micMode');
+const micPermHint = $('micPermHint'); // PM-193：精準轉錄需選永久允許的提示
 const modeBtns = Array.from(document.querySelectorAll<HTMLButtonElement>('.mic-mode-btn'));
 let micPlan = 'free';
 
 function updateMicModeUI() {
   // 付費版（paid/cancelled）+ 麥克風開啟才顯示模式選擇
-  micMode.style.display = micPlan !== 'free' && micToggle.checked ? 'flex' : 'none';
+  const show = micPlan !== 'free' && micToggle.checked;
+  micMode.style.display = show ? 'flex' : 'none';
+  micPermHint.style.display = show ? 'block' : 'none'; // PM-193：跟模式選擇一起顯示
 }
 function updateMicUI() {
   micIcon.style.opacity = micToggle.checked ? '1' : '0.3';
