@@ -1643,12 +1643,11 @@ $ BUGEZY_TOKEN=&lt;${t('你的 token', 'your token')}&gt; npx bugezy-watch -- go
       var enc = encodeURIComponent(token);
       document.querySelectorAll('.mcp-cfg').forEach(function (el) {
         // 只在還沒帶 token 的 /mcp 後面補（冪等，避免重複）
+        // PM-192（四修）：跳過複製按鈕的來源 <pre id="ai-install-prompt">——它的複製走靜態 data-copy-text（跟首頁一樣），
+        //   不讓 token 改寫它的 textContent（避免任何改動影響複製來源；一鍵複製 = server render 的乾淨安裝指令）。
+        if (el.id === 'ai-install-prompt') return;
         el.textContent = el.textContent.replace(/(bugezy\.dev\/mcp)(?!\?|[\w])/g, '$1?token=' + enc);
       });
-      // PM-192（三修）：token 填入後同步更新複製按鈕的 data-copy-text，讓「顯示」與「複製」內容一致（皆帶 token）
-      var cbtn = document.getElementById('copy-ai-prompt');
-      var cpre = document.getElementById('ai-install-prompt');
-      if (cbtn && cpre) cbtn.setAttribute('data-copy-text', encodeURIComponent(cpre.textContent || ''));
     } catch (e) {}
   })();
 
