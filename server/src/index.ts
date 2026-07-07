@@ -2267,6 +2267,18 @@ function reportPageHtml(lang: PageLang): string {
     .token-save { margin-top:10px; padding:10px; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); border-radius:8px; font-size:13px; color:#10b981; text-align:center; }
     .loading { text-align:center; padding:60px; color:#888; }
     .error-msg { text-align:center; padding:60px; color:#ef4444; }
+    /* PM-188：非會員閱讀他人分享報告的付費牆 */
+    .paywall { max-width:520px; margin:60px auto; padding:40px 32px; background:#161b22; border:1px solid #30363d; border-radius:16px; text-align:center; }
+    .paywall-icon { font-size:48px; line-height:1; margin-bottom:16px; }
+    .paywall h2 { font-size:20px; color:#f0f6fc; margin-bottom:12px; }
+    .paywall-desc { font-size:15px; color:#c9d1d9; margin-bottom:6px; }
+    .paywall-sub { font-size:14px; color:#8b949e; margin-bottom:24px; }
+    .paywall-cta { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-bottom:20px; }
+    .paywall-btn { display:inline-block; padding:11px 22px; border-radius:10px; font-size:15px; font-weight:600; text-decoration:none; transition:filter 0.15s; }
+    .paywall-btn:hover { filter:brightness(1.1); }
+    .paywall-btn.primary { background:#7c3aed; color:#fff; }
+    .paywall-btn.secondary { background:#21262d; color:#c9d1d9; border:1px solid #30363d; }
+    .paywall-note { font-size:13px; color:#6e7681; }
     .empty { text-align:center; padding:24px; color:#555; font-size:13px; }
     .lang-switch { margin-left:auto; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:4px 12px; font-size:13px; color:#c4b5fd; text-decoration:none; }
     .lang-switch:hover { background:#2a2a3e; }
@@ -2287,7 +2299,7 @@ function reportPageHtml(lang: PageLang): string {
   </div>
   <!-- PM-166：全部 client 邏輯（render + lightbox）抽到外部檔，CSP script-src 'self' 才能拿掉 unsafe-inline。
        PM-168：加 ?v 版本號——report-page.js 快取 1 天，改版時 bump 版本強制邊緣快取失效（否則新 HTML 配舊 JS）。 -->
-  <script src="/report-page.js?v=168"></script>
+  <script src="/report-page.js?v=188"></script>
 </body>
 </html>`;
 }
@@ -2304,10 +2316,60 @@ const REPORT_PAGE_JS = `
     const LANG = document.documentElement.getAttribute('data-bugezy-lang') === 'en' ? 'en' : 'zh';
     function t(zh, en) { return LANG === 'en' ? en : zh; }
 
-    fetch(API + '/api/reports/' + reportId)
-      .then(r => { if (!r.ok) throw new Error('not found'); return r.json(); })
-      .then(render)
-      .catch(() => {
+    // PM-188：分享閱讀權限——帶 session token 證明 owner / 付費會員身分。
+    //   token 來源同 PM-187：URL fragment（#token=，讀完清）優先，否則 bugezy.dev localStorage（同源，開自己列表時已存）。
+    //   分享連結本身不帶 token（§7），非 owner 訪客會拿到 403 → 顯示付費牆。
+    var LS_KEY = 'bugezy_session_token';
+    function resolveSessionToken() {
+      try {
+        var url = new URL(location.href);
+        var fromHash = null;
+        if (location.hash && location.hash.indexOf('token=') !== -1) {
+          try { fromHash = new URLSearchParams(location.hash.replace(/^#/, '')).get('token'); } catch (e) {}
+        }
+        var injected = url.searchParams.get('token') || fromHash;
+        if (injected) {
+          try { localStorage.setItem(LS_KEY, injected); } catch (e) {}
+          url.searchParams.delete('token');
+          var clean = url.pathname + (url.searchParams.toString() ? '?' + url.searchParams.toString() : '');
+          try { history.replaceState(null, '', clean); } catch (e) {}
+          return injected;
+        }
+        return localStorage.getItem(LS_KEY);
+      } catch (e) { return null; }
+    }
+
+    function renderPaywall(code) {
+      var isLogin = code === 'login_required';
+      var sub = isLogin
+        ? t('請登入 BugEzy 並升級會員才能閱讀', 'Please log in to BugEzy and upgrade to read this report')
+        : t('升級會員即可閱讀他人分享的報告', 'Upgrade to read reports shared by others');
+      var h = '<div class="paywall">';
+      h += '<div class="paywall-icon">🔒</div>';
+      h += '<h2>' + t('此報告需要會員權限才能閱讀', 'This report requires a membership to read') + '</h2>';
+      h += '<p class="paywall-desc">' + t('BugEzy 會員可以閱讀他人分享的除錯報告', 'BugEzy members can read debug reports shared by others') + '</p>';
+      h += '<p class="paywall-sub">' + sub + '</p>';
+      h += '<div class="paywall-cta">';
+      h += '<a class="paywall-btn primary" href="' + API + '/install">' + t('免費安裝 BugEzy', 'Install BugEzy free') + '</a>';
+      h += '<a class="paywall-btn secondary" href="' + API + '/#pricing">' + t('了解會員方案', 'View plans') + '</a>';
+      h += '</div>';
+      h += '<p class="paywall-note">' + t('已經是會員？請從 BugEzy 擴充登入', 'Already a member? Please log in from the BugEzy extension') + '</p>';
+      h += '</div>';
+      document.getElementById('app').innerHTML = h;
+    }
+
+    var __token = resolveSessionToken();
+    var __headers = __token ? { 'Authorization': 'Bearer ' + __token } : {};
+    fetch(API + '/api/reports/' + reportId, { headers: __headers })
+      .then(function (r) {
+        if (r.status === 403) {
+          return r.json().then(function (b) { renderPaywall(b && b.error); return null; }, function () { renderPaywall(null); return null; });
+        }
+        if (!r.ok) throw new Error('not found');
+        return r.json();
+      })
+      .then(function (r) { if (r) render(r); })
+      .catch(function () {
         document.getElementById('app').innerHTML = '<div class="error-msg">' + t('找不到報告', 'Report not found') + '</div>';
       });
 
@@ -3486,7 +3548,7 @@ export default {
       }
       const match = path.match(/^\/api\/reports\/([^/]+)$/);
       if (request.method === 'GET' && match) {
-        return await getReport(match[1], env);
+        return await getReport(match[1], request, env);
       }
       return json({ error: 'not found' }, 404);
       } catch (err) {
@@ -3659,7 +3721,7 @@ async function createReport(request: Request, env: Env, origin: string): Promise
 }
 
 // GET /api/reports/:id — 讀回報告
-async function getReport(reportId: string, env: Env): Promise<Response> {
+async function getReport(reportId: string, request: Request, env: Env): Promise<Response> {
   const { data, error } = await supa(env)
     .from('reports')
     .select('*')
@@ -3668,6 +3730,30 @@ async function getReport(reportId: string, env: Env): Promise<Response> {
 
   if (error || !data) {
     return json({ error: 'report not found' }, 404);
+  }
+
+  // PM-188（P0 資安 + 商業）：分享閱讀權限——非擁有者需付費會員才能讀。
+  //   token 可選（訪客無 token）；owner 看自己不論付費狀態；非 owner 須為有效付費會員（isActiveUserId）。
+  //   403 用 jsonNoStore 防邊緣快取跨使用者外洩。owner 身分靠 PM-187 存在 bugezy.dev localStorage 的 token（同源可讀）。
+  const auth = request.headers.get('Authorization');
+  const token = auth?.startsWith('Bearer ') ? auth.slice(7).trim() : null;
+  const userId = token ? await verifySessionByToken(token, env) : null;
+  const isOwner = !!userId && userId === (data.user_id as string | null);
+  if (!isOwner) {
+    if (!userId) {
+      // 訪客（無 token / token 無效）
+      return jsonNoStore(
+        { error: 'login_required', message: '請登入 BugEzy 並升級會員才能閱讀' },
+        403,
+      );
+    }
+    // 已登入但非 owner → 須為有效付費會員
+    if (!(await isActiveUserId(userId, env))) {
+      return jsonNoStore(
+        { error: 'upgrade_required', message: '升級會員即可閱讀他人分享的報告' },
+        403,
+      );
+    }
   }
 
   // 從 R2 取回 rrweb 軌跡

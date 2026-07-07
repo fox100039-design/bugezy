@@ -2,7 +2,9 @@
 
 ## 2026-07-07
 
-Day 22（PM-187~）。**資安：修復 URL token 洩漏（P0）**。
+Day 22（PM-187~）。**資安：修復 URL token 洩漏（P0）+ 報告分享閱讀權限付費牆（P0 資安＋商業）**。
+
+- PM-188：**報告分享閱讀權限——非擁有者需付費會員才能讀（P0 資安＋商業）**（`server/index.ts`）。原 `/report/:id` 是「有連結就能看」→ 任何人拿 UUID 即可讀完整 console/network/語音，貼公開論壇就外洩；同時做付費動機（想看別人分享的報告 → 需成為會員 → 病毒式引流）。`getReport()` 加認證：讀 `Authorization: Bearer`（可選）→ `verifySessionByToken`；**owner 看自己不論付費狀態放行**；非 owner 訪客（無/無效 token）→ 403 `login_required`；已登入非 owner 且非付費 → 403 `upgrade_required`（複用既有 `isActiveUserId`，不重寫付費檢查）；403 走 `jsonNoStore` 防邊緣快取跨使用者外洩。報告頁 `report-page.js`（`?v=188`）加 `resolveSessionToken()`（同 PM-187：`#token` fragment 優先→清 URL→否則同源 localStorage）帶 Bearer；403 顯示付費牆（🔒 標題 + 說明 + 「免費安裝 BugEzy」/「了解會員方案」兩 CTA + 「已是會員請從擴充登入」，中英）。owner 身分靠 PM-187 存於 bugezy.dev localStorage 的 token（同源可讀，開 📋 我的報告即 seed）。MCP tools（自帶 session_token + 付費檢查）/ `/api/my-reports` / `createReport`（免費可上傳）/ ECPay 皆不動。線上實測：兩份真實報告 visitor/錯 token → 403 `login_required` no-store、fake id → 404（存在性先於認證）、`report-page.js?v=188` 含 resolveSessionToken/renderPaywall/Authorization。`tsc` clean → `wrangler deploy`（`5d015795`）。
 
 - PM-187：**修復 /reports session token 放 URL 的資安洩漏（P0）**（`server/index.ts` + `extension/popup.ts`）。原 `/reports?token=xxx` 把 session token 放 query string → 洩漏於瀏覽器歷史/Referrer/截圖分享。改法：①**popup** 改開乾淨 `bugezy.dev/reports#token=xxx`（fragment 不送 server、不入 Referrer/歷史）；②**/reports** 由 server 端渲染改為 **client bootstrap shell**——內嵌 `resolveSessionToken()` 依序讀 `?token=`/`#token=`（讀到即存 `localStorage['bugezy_session_token']` + `history.replaceState` 清 URL）→ 否則讀 localStorage → 皆無顯示「請先從 BugEzy 擴充登入」；有 token 則以 `Authorization: Bearer` 打新端點 `GET /api/my-reports` 取 JSON、client 端用 `textContent`/DOM 建表（XSS 安全）；③新增 `myReportsApi`（Bearer 驗證，401 無授權，私人資料 `no-store`）；④語言切換連結只帶 `?lang=` 絕不帶 token。稽核確認 `/feedback`（公開免登入）與 `/report/:id`（分享用 latestReportUrl，無 token）本就無 URL token 洩漏。`verifySession`/MCP token 驗證/ECPay 流程皆不動。線上實測：GET /reports 200 text/html no-store（含 resolveSessionToken/reportsContainer/history.replaceState）、中英登入提示、`/api/my-reports` 無/錯 token→401、網址列不含 token。`tsc` clean → `wrangler deploy`（`b107139d`）+ extension `npm run build`（dist `reports#token` 確認、無殘留 `?token=`）。
 
