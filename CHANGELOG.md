@@ -2,7 +2,9 @@
 
 ## 2026-07-07
 
-Day 22（PM-187~）。**資安：修復 URL token 洩漏（P0）+ 報告分享閱讀權限付費牆（P0 資安＋商業）+ JSON 複製/匯出改付費 + 免責警語（P1）**。
+Day 22（PM-187~）。**資安：修復 URL token 洩漏（P0）+ 報告分享閱讀權限付費牆（P0 資安＋商業）+ JSON 複製/匯出改付費 + 免責警語（P1）+ MCP URL 帶 token 方案 B（P1）**。
+
+- PM-190：**MCP URL 帶 session_token（方案 B — AI 零操作讀報告）（P1）**（`server/index.ts`）。PM-165 把 MCP session_token 改必填、安全但 AI 每次要手動帶 token；改為業界標準做法（Asana/Jira/GitHub MCP）把 token 放 MCP URL。①**§1 handler 入口**：`/mcp` 從 URL query 讀 `?token=` → 存進「per-request env 副本」`mcpEnv = { ...env, __mcp_session_token: urlToken }`（用副本非改共用 env，避免同 isolate 併發 request 跨 tool await 期間互相覆寫 token 的競態）→ `createMcpServer(mcpEnv)` + `handler(request, mcpEnv, ctx)`。②**§2 三個需 token 的 tool**（list_reports / get_live_errors / get_terminal_logs）：`const token = env.__mcp_session_token || args.session_token || ''`（URL 優先 → 參數向下相容），`session_token` schema 改 `.optional()`。③**§3 /install 頁**：MCP 設定/網址加 `.mcp-cfg` class + 內嵌 script——已登入（同源 localStorage `bugezy_session_token`，PM-187 seed）→ 自動把本頁所有 `bugezy.dev/mcp` 補上 `?token=<token>`（冪等 regex），未登入維持乾淨 `/mcp`（token 現 optional）+ 提示文。④**§4 log**：確認 `/mcp` 不 `console.log` request URL（無 token 進 log）。verifySession/功能邏輯/extension/ECPay/報告頁 皆不動。線上實測（真實 MCP JSON-RPC）：initialize 200；list_reports 無 token→「請在 MCP URL 加上 ?token=」（證 optional 生效）、`?token=invalid`→「驗證失敗」（證讀 URL token）、param token→「驗證失敗」（證向下相容）；/install 6 處 mcp-cfg + token script + 提示。`tsc` clean → `wrangler deploy`（`c7c44abe`）。
 
 - PM-189：**JSON 複製/匯出改為付費功能 + 敏感資料免責警語（P1）**（`extension/popup.ts`/`popup.html`/`i18n.ts`）。原「📋 複製 JSON」「💾 匯出 JSON」免費開放 → 任何人可取完整未遮罩 payload（console/network 敏感資料）；此為進階用途，限付費會員並加免責。`loadPlan` 計 `isPaidMember`（月費 paid / 取消未到期 cancelled / 日票未到期 day_pass）；免費用戶點 → `showJsonPaidOverlay`（沿用 PM-170 升級 overlay，標題改「此為會員進階功能」+ 日票/月費 CTA，非台灣 coming soon）不執行；付費用戶點 → `confirmJsonDisclaimer()`（⚠️ 敏感資料免責警語彈窗，[取消]/[我了解，繼續]，**每次都顯示**，法律免責不設「不再提示」）→ 確認才複製/匯出。免費按鈕顯示 `🔒 複製 JSON（會員）`/`🔒 匯出 JSON（會員）`（`updateJsonLockUI`，於 `applyTranslations` 後套用避免被靜態翻譯還原）。i18n 7 鍵中英。MCP 輪盤「複製指令」/複製分享連結/報告頁/Server/MCP 皆不動。`tsc` clean → `npm run build` ✅（dist popup.js/html wiring 確認）。純 extension，待重上架。
 

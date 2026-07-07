@@ -1,5 +1,6 @@
 {
   "manifest_version": 3,
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmkmqnYkm9Hp4Iz3ONcWwU4SFgooZ6A0JxmR66KfDlh8kE/0rYB5qt4VZ5dm6Y15B5mGXs9ZRf8VMFwalL2pII3NqwBzbfBVnaotBGAexC6gKERyPxYUlMZcL8D+IFtDDB9DvbJxnzfTit5vTmwxdc3J18yBJyQOPSKLHT4XOVJ1EyKYjkCTi4B1ra5OvLisclLVm8krF8akFESAig97hq4QZMMpX73dAfm0EuJDnaZBpVmDUqdHSt5L+mvVZe30lvMvVyWp/8ZbhABQpF/DeJWEatgMUMxS1ikk69h63rdFA1wwE/7GK3oBQ49prZAqhQyn4J9vtzD3U3iDZTnAmpwIDAQAB",
   "name": "BugEzy",
   "version": "1.1.0",
   "description": "Voice-powered bug reporter with MCP AI integration — record DOM, Console, Network + voice in one click. 語音 Bug 回報工具，AI 一鍵分析。",

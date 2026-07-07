@@ -28,6 +28,9 @@ export interface Env {
   GROQ_API_KEY: string;
   // PM-133：Google OAuth client_id（公開資訊，非機密）。createSession 驗 token audience 用。
   GOOGLE_CLIENT_ID: string;
+  // PM-190：MCP handler 入口從 URL query（?token=）讀出的 session_token，供 MCP tools 免參數自動取用（方案 B）。
+  //   per-request 設定：Worker 每個 request 用同一 env 物件實例，MCP handler 同步呼叫 tools，不會跨 request 汙染。
+  __mcp_session_token?: string;
 }
 
 // ── 與擴充端一致的 payload 型別 ──────────────────────────
@@ -711,7 +714,7 @@ function homePage(lang: PageLang, request: Request): string {
     <h2>${t('🤖 讓 AI 幫你安裝 BugEzy', '🤖 Let AI Install BugEzy for You')}</h2>
     <p class="ai-install-desc">${t('不懂技術？沒關係。把下面這段複製貼給你的 AI，它會幫你搞定一切。', 'Not technical? No problem. Copy the text below and paste it to your AI — it will handle everything.')}</p>
     <div class="ai-install-box">
-      <pre id="ai-install-prompt">${t(
+      <pre id="ai-install-prompt" class="mcp-cfg">${t(
     `請幫我安裝 BugEzy MCP 除錯工具，讓你可以直接讀取我的 Bug 報告來幫我修 Bug。
 
 安裝步驟：
@@ -1423,7 +1426,7 @@ function installPage(lang: PageLang): string {
     <h2>${t('🤖 最快的安裝方式：複製貼給 AI', '🤖 Fastest way: copy & paste to AI')}</h2>
     <p style="color:#8b8fa3;margin:0 0 4px;">${t('不懂技術？把下面這段複製貼給你的 AI（Claude Desktop / Claude Code / Cursor / Windsurf / VS Code + Cline / Google Antigravity / Gemini CLI），它會幫你搞定。', 'Not technical? Copy the text below to your AI (Claude Desktop / Claude Code / Cursor / Windsurf / VS Code + Cline / Google Antigravity / Gemini CLI) and it will handle it.')}</p>
     <div class="ai-install-box">
-      <pre id="ai-install-prompt">${t(
+      <pre id="ai-install-prompt" class="mcp-cfg">${t(
     `請幫我安裝 BugEzy MCP 除錯工具，讓你可以直接讀取我的 Bug 報告來幫我修 Bug。
 
 安裝步驟：
@@ -1507,11 +1510,12 @@ Full guide: https://bugezy.dev/install`,
     <p style="margin:0;">${t('支援 Claude Desktop · Claude Code · Cursor · Windsurf · VS Code + Cline · Google Antigravity · Gemini CLI 等所有 MCP 工具。', 'Works with all MCP tools: Claude Desktop · Claude Code · Cursor · Windsurf · VS Code + Cline · Google Antigravity · Gemini CLI.')}</p>
     <div class="mcp-box">
       <b>${t('🔌 BugEzy MCP 網址（所有工具通用）', '🔌 BugEzy MCP URL (same for all tools)')}</b><br />
-      <code>https://bugezy.dev/mcp</code>
+      <code class="mcp-cfg">https://bugezy.dev/mcp</code>
+      <p class="mcp-token-hint" style="margin:6px 0 0;font-size:12px;color:#8b8fa3;">${t('登入 BugEzy 後，本頁的網址與設定會自動幫你補上 ?token=（AI 就不用每次手動帶 token）。', 'After signing in to BugEzy, this page auto-appends ?token= to the URL and configs (so your AI never needs to pass a token manually).')}</p>
       <div class="mcp-warn">${t('⚠ 這個網址<b>不能用瀏覽器開</b>，它是給 AI 工具連接的協議。用瀏覽器開只會看到錯誤訊息，屬正常現象——請依下方步驟在 AI 工具裡設定。', '⚠ <b>Do not open this URL in a browser</b> — it is a protocol endpoint for AI tools. Opening it in a browser just shows an error, which is normal. Set it up in your AI tool per the steps below.')}</div>
 
       <div class="mcp-tool"><div class="tname">Claude.ai</div><div class="tstep">${t('Settings → Connectors → Add → 貼上網址 → 連接', 'Settings → Connectors → Add → paste the URL → Connect')}</div></div>
-      <div class="mcp-tool"><div class="tname">Claude Desktop / Cursor / Windsurf</div><div class="tstep">${t('編輯設定檔（claude_desktop_config.json / mcp.json），加入：', 'Edit the config file (claude_desktop_config.json / mcp.json), add:')}</div><pre>{
+      <div class="mcp-tool"><div class="tname">Claude Desktop / Cursor / Windsurf</div><div class="tstep">${t('編輯設定檔（claude_desktop_config.json / mcp.json），加入：', 'Edit the config file (claude_desktop_config.json / mcp.json), add:')}</div><pre class="mcp-cfg">{
   "mcpServers": {
     "bugezy": {
       "url": "https://bugezy.dev/mcp"
@@ -1519,8 +1523,8 @@ Full guide: https://bugezy.dev/install`,
   }
 }</pre></div>
       <div class="mcp-tool"><div class="tname">VS Code + Cline</div><div class="tstep">${t('Cline → MCP Servers → Add → 貼上網址', 'Cline → MCP Servers → Add → paste the URL')}</div></div>
-      <div class="mcp-tool"><div class="tname">${t('Claude Code（終端機）', 'Claude Code (terminal)')}</div><div class="tstep"><code>claude mcp add --transport http bugezy https://bugezy.dev/mcp</code></div></div>
-      <div class="mcp-tool"><div class="tname">Google Antigravity / Gemini CLI</div><div class="tstep">${t('在 MCP 設定加入（協定通用，格式同上）：', 'Add to your MCP config (same protocol / format as above):')}</div><pre>{
+      <div class="mcp-tool"><div class="tname">${t('Claude Code（終端機）', 'Claude Code (terminal)')}</div><div class="tstep"><code class="mcp-cfg">claude mcp add --transport http bugezy https://bugezy.dev/mcp</code></div></div>
+      <div class="mcp-tool"><div class="tname">Google Antigravity / Gemini CLI</div><div class="tstep">${t('在 MCP 設定加入（協定通用，格式同上）：', 'Add to your MCP config (same protocol / format as above):')}</div><pre class="mcp-cfg">{
   "mcpServers": {
     "bugezy": {
       "url": "https://bugezy.dev/mcp"
@@ -1580,6 +1584,21 @@ $ BUGEZY_TOKEN=&lt;${t('你的 token', 'your token')}&gt; npx bugezy-watch -- go
   </footer>
 </div>
 <script>
+  // PM-190（方案 B）：已登入 → 把本頁所有 MCP 設定/網址（.mcp-cfg）的 bugezy.dev/mcp 自動補上 ?token=<session token>，
+  //   AI 端就零操作讀報告。token 來自同源 localStorage（PM-187 存於 bugezy.dev；開「📋 我的報告」即 seed）。
+  //   未登入 → 維持乾淨 /mcp（token 現為 optional，仍可手動帶 session_token 參數）。
+  (function () {
+    try {
+      var token = localStorage.getItem('bugezy_session_token');
+      if (!token) return;
+      var enc = encodeURIComponent(token);
+      document.querySelectorAll('.mcp-cfg').forEach(function (el) {
+        // 只在還沒帶 token 的 /mcp 後面補（冪等，避免重複）
+        el.textContent = el.textContent.replace(/(bugezy\.dev\/mcp)(?!\?|[\w])/g, '$1?token=' + enc);
+      });
+    } catch (e) {}
+  })();
+
   document.getElementById('copy-ai-prompt')?.addEventListener('click', function () {
     var text = document.getElementById('ai-install-prompt')?.textContent || '';
     navigator.clipboard.writeText(text).then(function () {
@@ -3317,8 +3336,12 @@ export default {
       if (cl > 1024 * 1024) {
         return new Response('Request too large', { status: 413 });
       }
-      const handler = createMcpHandler(createMcpServer(env), { route: '/mcp' });
-      return handler(request, env, ctx);
+      // PM-190（方案 B）：從 MCP URL query 讀 session_token → 存進「per-request env 副本」供 tools 自動取用。
+      //   用副本（非改共用 env）避免同 isolate 併發 request 互相覆寫 token（跨 tool await 期間的競態）。
+      const urlToken = url.searchParams.get('token') || '';
+      const mcpEnv: Env = { ...env, __mcp_session_token: urlToken };
+      const handler = createMcpHandler(createMcpServer(mcpEnv), { route: '/mcp' });
+      return handler(request, mcpEnv, ctx);
     }
 
     // PM-130：所有一般回應統一在此出口套上動態 CORS（覆蓋預設）
@@ -4911,7 +4934,8 @@ function createMcpServer(env: Env): McpServer {
         .describe('使用者 email；只回傳該 email 的報告。未提供則不回任何報告（安全預設）。'),
       session_token: z
         .string()
-        .describe('你的 BugEzy session token（從 Chrome 擴充進階設定複製）。必填，用於驗證身分。'),
+        .optional()
+        .describe('BugEzy session token（如果 MCP URL 已帶 ?token= 則不需提供）。'),
       limit: z.number().min(1).max(50).optional(),
       url: z.string().optional(),
     },
@@ -4926,9 +4950,10 @@ function createMcpServer(env: Env): McpServer {
           'list_reports',
         );
       }
-      // PM-165：session_token 改必填——不帶就不回任何資料（堵住「知道 email 就能讀」）
-      if (!args.session_token) {
-        return txt('請提供 session_token 參數。可從 BugEzy Chrome 擴充的進階設定中複製。');
+      // PM-190（方案 B）：token 優先序 = URL query token（?token=，自動帶入）→ 參數 session_token（手動，向下相容）
+      const token = env.__mcp_session_token || args.session_token || '';
+      if (!token) {
+        return txt('請在 MCP URL 加上 ?token=xxx，或提供 session_token 參數。可從 BugEzy 擴充進階設定複製。');
       }
       // 以 email 查 user_id
       const { data: user, error: uErr } = await supabase()
@@ -4942,13 +4967,13 @@ function createMcpServer(env: Env): McpServer {
       }
       if (!user) return txtWithTokens([], 'list_reports'); // 查無此 email → 回空
 
-      // PM-142（P1-1）：有帶 session_token 就嚴格驗證身分——查 sessions 表比對 user_id，
-      // 防止「知道某人 email 就能列他報告」。optional 保持向下相容（MCP 客戶端不便自動帶 token）。
-      if (args.session_token) {
+      // PM-142（P1-1）/165/190：嚴格驗證 token 屬於此 user——查 sessions 表比對 user_id，
+      // 防止「知道某人 email 就能列他報告」。token 來自 URL 或參數（見上方優先序）。
+      {
         const { data: session } = await supabase()
           .from('sessions')
           .select('user_id')
-          .eq('session_token', args.session_token)
+          .eq('session_token', token)
           .maybeSingle();
         if (!session || (session as { user_id: string }).user_id !== (user as { user_id: string }).user_id) {
           return txt('session_token 驗證失敗，請確認 token 正確。');
@@ -5152,18 +5177,20 @@ function createMcpServer(env: Env): McpServer {
       user_email: z.string().describe('你的 BugEzy email（只讀你自己的即時錯誤）'),
       session_token: z
         .string()
-        .describe('你的 BugEzy session token（從 Chrome 擴充進階設定複製）。必填，用於驗證身分。'),
+        .optional()
+        .describe('BugEzy session token（如果 MCP URL 已帶 ?token= 則不需提供）。'),
     },
     async (args) => {
       if (!args.user_email) return txt('請提供 user_email 參數。');
-      // PM-165：session_token 改必填——不帶就不回資料
-      if (!args.session_token) {
-        return txt('請提供 session_token 參數。可從 BugEzy Chrome 擴充的進階設定中複製。');
+      // PM-190（方案 B）：token 優先序 = URL query token → 參數 session_token（向下相容）
+      const token = env.__mcp_session_token || args.session_token || '';
+      if (!token) {
+        return txt('請在 MCP URL 加上 ?token=xxx，或提供 session_token 參數。可從 BugEzy 擴充進階設定複製。');
       }
       const userId = await lookupUserId(args.user_email);
       if (!userId) return txt('查無此使用者。');
-      // PM-162/165：驗證 session_token 屬於此 user，防「知道 email 就能讀他即時錯誤」
-      if (!(await sessionMatchesUser(args.session_token, userId))) {
+      // PM-162/165：驗證 token 屬於此 user，防「知道 email 就能讀他即時錯誤」
+      if (!(await sessionMatchesUser(token, userId))) {
         return txt('session_token 驗證失敗，請確認 token 正確。');
       }
       const data = await readLiveErrors(env, userId);
@@ -5182,18 +5209,20 @@ function createMcpServer(env: Env): McpServer {
       user_email: z.string().describe('你的 BugEzy email（只讀你自己的終端機日誌）'),
       session_token: z
         .string()
-        .describe('你的 BugEzy session token（從 Chrome 擴充進階設定複製）。必填，用於驗證身分。'),
+        .optional()
+        .describe('BugEzy session token（如果 MCP URL 已帶 ?token= 則不需提供）。'),
     },
     async (args) => {
       if (!args.user_email) return txt('請提供 user_email 參數。');
-      // PM-165：session_token 改必填——不帶就不回資料
-      if (!args.session_token) {
-        return txt('請提供 session_token 參數。可從 BugEzy Chrome 擴充的進階設定中複製。');
+      // PM-190（方案 B）：token 優先序 = URL query token → 參數 session_token（向下相容）
+      const token = env.__mcp_session_token || args.session_token || '';
+      if (!token) {
+        return txt('請在 MCP URL 加上 ?token=xxx，或提供 session_token 參數。可從 BugEzy 擴充進階設定複製。');
       }
       const userId = await lookupUserId(args.user_email);
       if (!userId) return txt('查無此使用者。');
-      // PM-162/165：驗證 session_token 屬於此 user，防「知道 email 就能讀他終端機 stderr（可能含密鑰）」
-      if (!(await sessionMatchesUser(args.session_token, userId))) {
+      // PM-162/165：驗證 token 屬於此 user，防「知道 email 就能讀他終端機 stderr（可能含密鑰）」
+      if (!(await sessionMatchesUser(token, userId))) {
         return txt('session_token 驗證失敗，請確認 token 正確。');
       }
       // PM-162：終端機 CLI 為付費功能——比照 HTTP 端（PM-144）加付費檢查，MCP 端原本漏了
