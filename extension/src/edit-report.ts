@@ -6,6 +6,7 @@ import '@rrweb/replay/dist/style.css';
 import {
   API_BASE,
   KEYBOARD_MODE_KEY,
+  LANG_KEY,
   STATE_KEY,
   STORAGE_KEY,
   blog,
@@ -15,6 +16,7 @@ import {
   type TimeMarker,
 } from './types';
 import { getAuthHeaders } from './auth';
+import { getUILang } from './i18n';
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -35,23 +37,38 @@ const result = $('result');
 
 // ── 載入摘要 + 語音記錄 ───────────────────────────────────
 async function init() {
-  const store = await chrome.storage.local.get([STORAGE_KEY, STATE_KEY]);
+  const store = await chrome.storage.local.get([STORAGE_KEY, STATE_KEY, LANG_KEY]);
   const payload = store[STORAGE_KEY] as RecordingPayload | undefined;
   const state = store[STATE_KEY] as { summary?: RecordingSummary } | undefined;
+  const uiLang = getUILang((store[LANG_KEY] as string) || 'zh'); // PM-208：截圖語音提示中英
   if (!payload) {
     summaryEl.textContent = '找不到報告資料';
     return;
   }
 
+  // PM-204：截圖標注報告（無 rrweb、有 screenshots）——顯示截圖預覽取代 rrweb 播放器；
+  // 其餘區塊（語音 / 補充說明 / Token / AI 校正 / AI 精簡 / 上傳）完全複用。
+  const isScreenshot =
+    !payload.rrwebEvents?.length &&
+    Array.isArray(payload.screenshots) &&
+    payload.screenshots.length > 0;
+
   const dur = state?.summary?.durationMs ?? 0;
-  const rows: Array<[string, string | number]> = [
-    ['DOM 事件', payload.rrwebEvents.length],
-    ['Console', payload.consoleLogs.length],
-    ['Network', payload.networkErrors.length],
-    ['語音片段', payload.voiceTranscript.length],
-    ['時長', `${Math.round(dur / 1000)} 秒`],
-    ['頁面', payload.pageInfo.title || payload.pageInfo.url],
-  ];
+  const rows: Array<[string, string | number]> = isScreenshot
+    ? [
+        ['截圖', payload.screenshots!.length],
+        ['Console', payload.consoleLogs.length],
+        ['Network', payload.networkErrors.length],
+        ['頁面', payload.pageInfo.title || payload.pageInfo.url],
+      ]
+    : [
+        ['DOM 事件', payload.rrwebEvents.length],
+        ['Console', payload.consoleLogs.length],
+        ['Network', payload.networkErrors.length],
+        ['語音片段', payload.voiceTranscript.length],
+        ['時長', `${Math.round(dur / 1000)} 秒`],
+        ['頁面', payload.pageInfo.title || payload.pageInfo.url],
+      ];
   summaryEl.replaceChildren(
     ...rows.map(([k, v]) => {
       const d = document.createElement('div');
@@ -62,14 +79,51 @@ async function init() {
     }),
   );
 
-  // 語音記錄合成一段
-  voiceText.value = payload.voiceTranscript.map((s) => s.text).join('');
+  // PM-204：把 annotate（或先前）帶入的問題描述載入「補充說明」欄，避免上傳時被空值覆寫
+  if (payload.description) descInput.value = payload.description;
 
-  // PM-28：初始化 mini rrweb 播放器 + 時間軸標記
-  initMiniPlayer(payload.rrwebEvents);
+  if (isScreenshot) {
+    // PM-208：截圖報告的語音已併入補充說明 → 「語音記錄」區改標示（不顯示逐字稿），並隱藏 AI 校正/精簡
+    voiceText.value =
+      uiLang === 'en'
+        ? '📸 Screenshot mode: voice content is included in the description below.'
+        : '📸 截圖模式：語音內容已包含在補充說明中';
+    voiceText.readOnly = true;
+    voiceText.style.color = 'var(--muted)';
+    correctBtn.style.display = 'none';
+    summarizeBtn.style.display = 'none';
+    // 顯示截圖預覽，隱藏播放器控制列與時間軸標記
+    showScreenshotPreview(payload.screenshots![0]?.dataUrl);
+  } else {
+    // 語音記錄合成一段（錄製報告的逐字稿）
+    voiceText.value = payload.voiceTranscript.map((s) => s.text).join('');
+    // PM-28：初始化 mini rrweb 播放器 + 時間軸標記
+    initMiniPlayer(payload.rrwebEvents);
+  }
 
   // PM-55：上傳前先讓使用者看到 AI 讀這份報告的 token 估算 + 省錢對比
   renderTokenEstimate(payload);
+}
+
+// PM-204：截圖報告——用截圖預覽圖取代 rrweb 播放器（標題改「截圖預覽」、隱藏播放/標記控制）
+function showScreenshotPreview(dataUrl?: string) {
+  const section = document.getElementById('markerSection');
+  if (!section) return;
+  const heading = section.querySelector('h2');
+  if (heading) heading.textContent = '📸 截圖預覽';
+  const controls = section.querySelector('.marker-controls') as HTMLElement | null;
+  if (controls) controls.style.display = 'none';
+  const list = document.getElementById('markerList');
+  if (list) list.style.display = 'none';
+  const container = document.getElementById('miniPlayer');
+  if (container && dataUrl) {
+    const img = document.createElement('img');
+    img.src = dataUrl;
+    img.alt = '截圖預覽';
+    img.style.cssText = 'width:100%; display:block; border-radius:8px;';
+    container.replaceChildren(img);
+    container.style.background = 'transparent';
+  }
 }
 void init();
 
@@ -731,61 +785,74 @@ summarizeBtn.addEventListener('click', async () => {
 });
 
 // ── 上傳 / 捨棄 ───────────────────────────────────────────
+// PM-209：上傳成功 UI（✅ 已上傳 + 分享連結 + 📋 複製鈕）。錄製與截圖報告共用同一成功路徑。
+async function showUploadSuccess(shareUrl: string) {
+  blog('報告上傳完成', shareUrl);
+  result.classList.remove('hidden');
+  result.replaceChildren('✅ 已上傳！分享連結：');
+  const a = document.createElement('a');
+  a.href = shareUrl;
+  a.target = '_blank';
+  a.textContent = shareUrl;
+  result.appendChild(a);
+  // PM-199：分享連結旁加「📋」複製按鈕（hidden input + select + execCommand，不用 clipboard API）
+  const copyInput = document.createElement('input');
+  copyInput.type = 'text';
+  copyInput.readOnly = true;
+  copyInput.value = shareUrl;
+  // 保持可選取但視覺上不佔位（execCommand 需元素在視窗內且可 select，故非 display:none/離屏）
+  copyInput.style.cssText =
+    'position:absolute;width:1px;height:1px;padding:0;border:0;opacity:0;left:0;top:0;';
+  const copyBtn = document.createElement('button');
+  copyBtn.type = 'button';
+  copyBtn.textContent = '📋';
+  copyBtn.title = '複製連結';
+  copyBtn.style.cssText =
+    'margin-left:8px;background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:2px 8px;font-size:13px;cursor:pointer;vertical-align:middle;';
+  copyBtn.addEventListener('click', () => {
+    copyInput.select();
+    copyInput.setSelectionRange(0, shareUrl.length);
+    try {
+      document.execCommand('copy');
+    } catch {
+      /* 極少數環境不支援，靜默略過 */
+    }
+    copyBtn.textContent = '✅';
+    setTimeout(() => {
+      copyBtn.textContent = '📋';
+    }, 2000);
+  });
+  result.appendChild(copyInput);
+  result.appendChild(copyBtn);
+  uploadBtn.textContent = '✅ 已上傳';
+  discardBtn.textContent = '關閉';
+  await chrome.storage.local.remove(STORAGE_KEY); // 上傳後清本機 payload
+}
+
+// PM-209：截圖報告上傳成功後按鈕卡在「上傳中」修復——
+//   原因：`await sendMessage` 無 try/catch 且 `resp` 未防呆；截圖 payload 較大、round-trip 較久，
+//   一旦訊息通道關閉導致 sendMessage reject 或 resolve 成 undefined，`resp.ok` 直接 throw，
+//   handler 中斷 → 按鈕永遠停在「⏳ 上傳中...」。修法：try/catch + `resp?.ok` 防呆，任何失敗都復原按鈕。
 uploadBtn.addEventListener('click', async () => {
   stopVoice();
   uploadBtn.disabled = true;
   uploadBtn.textContent = '⏳ 上傳中...';
-  const resp = (await chrome.runtime.sendMessage({
-    type: 'UPLOAD_REPORT',
-    description: descInput.value.trim(),
-    markers, // PM-29：保留所有標記（含無文字的，時間點本身就有價值）
-  } satisfies ControlMessage)) as { ok: boolean; shareUrl?: string; error?: string };
+  let resp: { ok: boolean; shareUrl?: string; error?: string } | undefined;
+  try {
+    resp = (await chrome.runtime.sendMessage({
+      type: 'UPLOAD_REPORT',
+      description: descInput.value.trim(),
+      markers, // PM-29：保留所有標記（含無文字的，時間點本身就有價值）
+    } satisfies ControlMessage)) as { ok: boolean; shareUrl?: string; error?: string } | undefined;
+  } catch (err) {
+    blog('UPLOAD_REPORT 訊息傳遞失敗', err);
+  }
 
-  if (resp.ok && resp.shareUrl) {
-    blog('報告上傳完成', resp.shareUrl);
-    result.classList.remove('hidden');
-    result.replaceChildren('✅ 已上傳！分享連結：');
-    const a = document.createElement('a');
-    a.href = resp.shareUrl;
-    a.target = '_blank';
-    a.textContent = resp.shareUrl;
-    result.appendChild(a);
-    // PM-199：分享連結旁加「📋」複製按鈕（hidden input + select + execCommand，不用 clipboard API）
-    const shareUrl = resp.shareUrl;
-    const copyInput = document.createElement('input');
-    copyInput.type = 'text';
-    copyInput.readOnly = true;
-    copyInput.value = shareUrl;
-    // 保持可選取但視覺上不佔位（execCommand 需元素在視窗內且可 select，故非 display:none/離屏）
-    copyInput.style.cssText =
-      'position:absolute;width:1px;height:1px;padding:0;border:0;opacity:0;left:0;top:0;';
-    const copyBtn = document.createElement('button');
-    copyBtn.type = 'button';
-    copyBtn.textContent = '📋';
-    copyBtn.title = '複製連結';
-    copyBtn.style.cssText =
-      'margin-left:8px;background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:2px 8px;font-size:13px;cursor:pointer;vertical-align:middle;';
-    copyBtn.addEventListener('click', () => {
-      copyInput.select();
-      copyInput.setSelectionRange(0, shareUrl.length);
-      try {
-        document.execCommand('copy');
-      } catch {
-        /* 極少數環境不支援，靜默略過 */
-      }
-      copyBtn.textContent = '✅';
-      setTimeout(() => {
-        copyBtn.textContent = '📋';
-      }, 2000);
-    });
-    result.appendChild(copyInput);
-    result.appendChild(copyBtn);
-    uploadBtn.textContent = '✅ 已上傳';
-    discardBtn.textContent = '關閉';
-    await chrome.storage.local.remove(STORAGE_KEY); // 上傳後清本機 payload
+  if (resp?.ok && resp.shareUrl) {
+    await showUploadSuccess(resp.shareUrl);
   } else {
     result.classList.remove('hidden');
-    result.textContent = `❌ 上傳失敗：${resp.error ?? '未知錯誤'}`;
+    result.textContent = `❌ 上傳失敗：${resp?.error ?? '未知錯誤，請重試'}`;
     uploadBtn.disabled = false;
     uploadBtn.textContent = '✅ 上傳報告';
   }

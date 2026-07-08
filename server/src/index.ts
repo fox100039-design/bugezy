@@ -363,6 +363,7 @@ function sitemapXml(): Response {
     ['/changelog', 'weekly', '0.7'],
     ['/guide', 'monthly', '0.6'],
     ['/faq', 'monthly', '0.5'],
+    ['/skill', 'monthly', '0.5'], // PM-201：AI 客服手冊
     ['/feedback', 'monthly', '0.4'], // PM-174
     ['/privacy', 'yearly', '0.3'],
   ];
@@ -601,6 +602,18 @@ Full guide: https://bugezy.dev/install`,
     .copy-btn:hover { background:#6d28d9; }
     .copy-feedback { color:#3fb950; font-size:14px; margin-top:8px; display:inline-block; }
     .ai-install-tools { color:#666; font-size:13px; margin-top:16px; }
+    /* PM-202：AI Skill 專區 */
+    .skill-box { max-width:720px; margin:24px auto 0; background:linear-gradient(135deg,#1a1533,#161b22); border:1px solid #7c3aed; border-radius:16px; padding:30px 28px; text-align:center; }
+    .skill-box h2 { color:#fff; font-size:24px; margin:0 0 8px; }
+    .skill-box .skill-lead { color:#c4b5fd; font-size:15px; margin:0 0 18px; }
+    .skill-list { list-style:none; margin:0 auto 18px; padding:0; max-width:440px; text-align:left; }
+    .skill-list li { margin:8px 0; font-size:15px; color:#e0e0e8; padding-left:4px; }
+    .skill-note { color:#9aa3b2; font-size:14px; margin:0 0 20px; }
+    .skill-actions { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+    .skill-btn { display:inline-block; background:linear-gradient(135deg,#7c3aed,#6d28d9); color:#fff; font-weight:700; font-size:15px; padding:11px 24px; border-radius:10px; text-decoration:none; }
+    .skill-btn.secondary { background:transparent; border:1px solid #7c3aed; color:#c4b5fd; }
+    .capture-skill-note { max-width:820px; margin:20px auto 0; padding:14px 18px; background:#15152a; border:1px solid #7c3aed; border-radius:12px; font-size:14px; color:#d0d0d8; text-align:center; line-height:1.6; }
+    .capture-skill-note a { color:#a78bfa; font-weight:600; }
     footer { border-top:1px solid #2a2a3e; padding:28px 0; text-align:center; color:#888; font-size:13px; margin-top:24px; }
     footer a { margin:0 6px; }
     /* PM-74：聯絡資訊（綠界審核要求，明顯可見） */
@@ -634,7 +647,7 @@ Full guide: https://bugezy.dev/install`,
   <header class="hero">
     <div class="logo">🐛</div>
     <h1>BugEzy</h1>
-    <p class="tagline">${t('Web 開發者的 AI Bug 報告工具<br>捕捉 95% 以上的 Web Bug — JS 錯誤 / Promise 靜默 / CORS / 效能 / 網路 / 儲存狀態，AI 一鍵分析', 'AI Bug Reporter for Web Developers<br>Catches 95%+ of Web Bugs — JS errors / silent Promise failures / CORS / performance / network / storage state, AI analyzes in one click')}</p>
+    <p class="tagline">${t('Web 開發者的 AI Bug 報告工具<br>六種錄製模式 × 13 個 MCP AI 工具 × 語音辨識 × AI Skill — 捕捉 95% 以上的 Web Bug', 'AI Bug Reporter for Web Developers<br>6 Recording Modes × 13 MCP AI Tools × Voice Recognition × AI Skill — Catches 95%+ of Web Bugs')}</p>
     <div class="bullets">
       <span>${t('✅ 語音描述 Bug，AI 自動分析', '✅ Describe bugs by voice, AI auto-analyzes')}</span>
       <span>${t('✅ 6 種錄製模式，完整重現問題', '✅ 6 recording modes, fully reproduce the issue')}</span>
@@ -695,6 +708,7 @@ Full guide: https://bugezy.dev/install`,
         </ul>
       </div>
     </div>
+    <p class="capture-skill-note">${t('📘 以上所有功能的使用說明、故障排除、Q&A，都在 AI Skill 手冊裡。安裝後你的 AI 就會教你怎麼用。 <a href="/skill/download">下載 SKILL.md →</a>', '📘 Usage guides, troubleshooting & Q&A for all features above are in the AI Skill manual. Install it and your AI will teach you. <a href="/skill/download">Download SKILL.md →</a>')}</p>
   </section>
 
   <section class="wrap" id="frameworks">
@@ -744,6 +758,24 @@ Full guide: https://bugezy.dev/install`,
         <span>Gemini CLI</span>
       </div>
       <p>${t('一行 URL 連接，零安裝', 'One URL to connect, zero install')}</p>
+    </div>
+  </section>
+
+  <section class="wrap" id="skill">
+    <div class="skill-box">
+      <h2>${t('🤖 專屬 AI Skill — 讓 AI 當你的 24 小時客服', '🤖 AI Skill — Let AI Be Your 24/7 Support')}</h2>
+      <p class="skill-lead">${t('安裝 BugEzy 的 AI Skill 後，你的 AI 就會：', "Install BugEzy's AI Skill, and your AI will:")}</p>
+      <ul class="skill-list">
+        <li>${t('• 教你怎麼錄製 Bug', '• Teach you how to record bugs')}</li>
+        <li>${t('• 自動讀取報告並分析根因', '• Auto-read reports and analyze root causes')}</li>
+        <li>${t('• 遇到問題時引導你排除故障', '• Guide you through troubleshooting')}</li>
+        <li>${t('• 告訴你每個功能怎麼用', '• Explain every feature')}</li>
+      </ul>
+      <p class="skill-note">${t('不需要讀文件、不需要看教學影片——問你的 AI 就好。', 'No docs, no tutorials — just ask your AI.')}</p>
+      <div class="skill-actions">
+        <a class="skill-btn" href="/skill/download">${t('下載 SKILL.md →', 'Download SKILL.md →')}</a>
+        <a class="skill-btn secondary" href="/skill">${t('了解更多 →', 'Learn more →')}</a>
+      </div>
     </div>
   </section>
 
@@ -816,7 +848,7 @@ Full guide: https://bugezy.dev/install`,
       <p>📱 ${t('電話', 'Phone')}：<a href="tel:+886983101085">0983-101-085</a></p>
       <p>${t('服務時間：週一至週五 09:00-18:00', 'Hours: Mon–Fri 09:00–18:00 (UTC+8)')}</p>
     </div>
-    <div style="margin-top:8px;"><a href="/install">${t('安裝指南', 'Install')}</a> | <a href="/features">${t('功能說明', 'Features')}</a> | <a href="/guide">${t('使用指南', 'Guide')}</a> | <a href="/faq">${t('常見問題', 'FAQ')}</a> | <a href="/privacy">${t('隱私政策', 'Privacy')}</a> | <a href="/changelog">${t('更新日誌', 'Changelog')}</a> | <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a> | <a href="/reports">${t('📋 我的報告', '📋 My Reports')}</a></div>
+    <div style="margin-top:8px;"><a href="/install">${t('安裝指南', 'Install')}</a> | <a href="/features">${t('功能說明', 'Features')}</a> | <a href="/guide">${t('使用指南', 'Guide')}</a> | <a href="/faq">${t('常見問題', 'FAQ')}</a> | <a href="/privacy">${t('隱私政策', 'Privacy')}</a> | <a href="/changelog">${t('更新日誌', 'Changelog')}</a> | <a href="/skill">${t('🤖 AI 客服手冊', '🤖 AI Manual')}</a> | <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a> | <a href="/reports">${t('📋 我的報告', '📋 My Reports')}</a></div>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy · ${t('亞洲平價 MCP 語音除錯工具', 'Affordable MCP voice debugging for Asia')}</div>
   </footer>
   <script>
@@ -1033,6 +1065,7 @@ ${t(
     <a href="/guide">${t('使用指南', 'Guide')}</a>
     <a href="/faq">FAQ</a>
     <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
+    <a href="/skill">${t('🤖 AI 客服手冊', '🤖 AI Manual')}</a>
     <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a>
     <a href="/reports">${t('📋 我的報告', '📋 My Reports')}</a>
     <a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a>
@@ -1046,6 +1079,363 @@ ${t(
 // ── PM-66：操作說明頁（新手三步上手 + 六種模式 + MCP 設定 + 小技巧）──
 // 深色主題與首頁/隱私頁統一（#0f0f1a / #7c3aed / #a78bfa），一頁式無 JS、RWD、繁中。
 // PM-152：/guide 改為函式（依 lang 中英切換）。
+// ── PM-201：AI 客服手冊（SKILL.md）── 給 AI 讀的使用手冊，/skill 檢視 + /skill/download 下載。
+// 內容須與專案根目錄 SKILL.md 保持一致（Worker 無檔案系統，故內嵌為字串）。
+const SKILL_MD = `# BugEzy — AI 除錯工具使用指南
+
+> 這份文件是給 AI 讀的。當使用者問你關於 BugEzy 的任何問題，請根據以下內容回答。
+
+## 什麼是 BugEzy
+
+BugEzy 是一個 Chrome 擴充工具 + MCP server，讓開發者用語音 + 一鍵錄製 Bug，AI 透過 MCP 直接讀取報告並修復。
+
+- 官網：https://bugezy.dev
+- Chrome Web Store：https://chromewebstore.google.com/detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj
+- 安裝教學：https://bugezy.dev/install
+- 功能說明：https://bugezy.dev/features
+- FAQ：https://bugezy.dev/faq
+- 隱私政策：https://bugezy.dev/privacy
+- 問題回報：https://bugezy.dev/feedback
+
+## 如何讀取使用者的 Bug 報告
+
+### 方法 1：使用者說「讀我最新報告」
+1. 呼叫 MCP tool \`list_reports\`（需要 user_email + session_token）
+2. 取得最新的 report_id
+3. 呼叫 \`get_timeline\`（report_id）→ 取得完整時間軸 + AI 導航摘要
+4. 根據摘要的根因分析，定位程式碼 → 提出修復方案
+
+### 方法 2：使用者貼報告連結
+使用者貼 \`https://bugezy.dev/report/xxx-xxx\` 給你時：
+1. 從 URL 取得 report_id
+2. 呼叫 \`get_timeline\`（report_id）→ 同上
+
+### MCP 工具清單（13 個）
+| Tool | 用途 |
+|---|---|
+| \`list_reports\` | 列出使用者的報告（需 session_token） |
+| \`get_report_overview\` | 報告概覽 + AI Bug 導航摘要 |
+| \`get_timeline\` | ⭐ 最推薦 — 完整時間軸（Console + Network + 語音 + 環境，一次看完） |
+| \`get_console_logs\` | Console error/warn 記錄 |
+| \`get_network_errors\` | Network 4xx/5xx 失敗 |
+| \`get_screenshots\` | 截圖（高 Token，謹慎使用） |
+| \`get_rrweb_events\` | DOM 錄影事件（高 Token，謹慎使用） |
+| \`get_rrweb_summary\` | DOM 摘要（輕量） |
+| \`get_voice_transcript\` | 語音轉錄文字 |
+| \`get_metadata\` | 報告 metadata |
+| \`get_live_errors\` | 即時監控錯誤（需 session_token） |
+| \`get_terminal_logs\` | Terminal CLI 錯誤（需 session_token，付費功能） |
+| \`get_usage_stats\` | Token 用量統計 |
+
+### 建議的讀取順序
+1. 先呼叫 \`get_timeline\` — 一次拿到 AI 導航摘要 + 完整時間軸（最省 Token）
+2. 如果需要更多細節，再呼叫 \`get_console_logs\` 或 \`get_network_errors\`
+3. 截圖和 DOM 錄影 Token 消耗高，最後再用
+
+## 如何教使用者錄製 Bug
+
+當使用者說「程式壞了」但沒有報告時，教他：
+
+1. 點 Chrome 右上角 BugEzy 圖示（紫色 B）
+2. 按「🎬 錄製」按鈕
+3. 操作壞掉的步驟（BugEzy 會自動捕捉 Console 錯誤、Network 失敗、DOM 變化）
+4. 邊操作邊用語音描述問題（可選）
+5. 按「⏹ 停止」
+6. 在編輯頁補充說明（可選）→ 按「上傳」
+7. 跟你說「讀我最新報告」
+
+### 六種錄製模式
+| 模式 | 適合場景 |
+|---|---|
+| 🎬 錄製 | 操作流程中的 Bug |
+| ⏪ 回溯 30s | Bug 已經發生了，回溯最近 30 秒 |
+| 📸 截圖標注 | 畫面問題（UI 破版、樣式錯誤） |
+| 🟢 即時監控 | 背景持續監控，有錯誤時通知 |
+| 🐍 Terminal CLI | Python/Node.js 後端錯誤 |
+| 🤖 MCP AI 讀取 | AI 直接透過 MCP 讀取報告 |
+
+## 故障排除
+
+### AI 無法讀取報告（MCP 連線問題）
+**症狀**：呼叫 \`list_reports\` 回傳「請提供 session_token」
+
+**解法**：
+1. 告訴使用者：「請打開 BugEzy popup → 進階設定 → 📋 複製 MCP 設定 → 貼給我」
+2. 使用者會貼一段 JSON，裡面有帶 token 的 MCP URL
+3. 用這個 URL 重新設定 MCP 連線
+
+### 麥克風無法開啟
+**症狀**：錄製時音量條不跳動
+
+**解法**：
+1. 確認瀏覽器有授權麥克風（網址列左邊的 🔒 圖示 → 麥克風 → 允許）
+2. 如果使用精準轉錄模式，需要選「**允許這個網站使用**」而不是「允許這次使用」
+3. 如果還是不行，切換到「即時字幕」模式（popup 進階設定）
+
+### 語音沒有文字
+**症狀**：錄製時音量條有跳動，但停止後沒有文字
+
+**解法**：
+1. 確認網路連線正常（精準轉錄需要上傳音訊到 server）
+2. 確認是付費用戶（精準轉錄 Whisper 是付費功能）
+3. 免費用戶可用「即時字幕」模式（Web Speech API，不需上傳）
+
+### 免費額度用完
+**症狀**：按錄製彈出「本月額度已用完」
+
+**解法**：
+- 免費版每月限制：錄製 10 次 / 回溯 5 次 / AI 讀取 20 次 / 截圖無限
+- 額度每月自動重置
+- 升級方式：日票 NT$20（24 小時無限）或月費 NT$80/月
+- 在 popup 按「⚡ 日票」或「✨ 月費」升級
+- 目前只支援台灣付款（信用卡/ATM/超商），國際付款即將開放
+
+### 截圖有敏感資料
+**症狀**：截圖可能拍到密碼、API Key
+
+**說明**：
+- BugEzy 會自動偵測頁面上的密碼欄位，截圖後自動馬賽克
+- 使用者也可以用 🔒 馬賽克筆刷手動塗掉敏感區域
+- localStorage/sessionStorage 的敏感值（token、password、API key）會在使用者端自動遮罩，server 永遠不碰原值
+
+### Terminal CLI 使用
+**適用**：Python / Node.js / Go 後端錯誤
+
+\`\`\`bash
+BUGEZY_TOKEN=<token> npx bugezy-watch -- python manage.py runserver
+BUGEZY_TOKEN=<token> npx bugezy-watch -- node server.js
+\`\`\`
+
+- Token 從 popup 進階設定的「📋 複製 MCP 設定」取得
+- 終端機 CLI 是付費功能
+- AI 用 \`get_terminal_logs\` 讀取，會拿到結構化的 Python traceback + 環境快照 + 白話錯誤解釋
+
+## BugEzy 能捕捉什麼
+
+### 前端（Chrome 擴充自動捕捉）
+- JS 執行錯誤（TypeError / ReferenceError / SyntaxError）
+- Promise 靜默失敗（未捕捉的 async/await 錯誤）
+- Console 警告（CORS / Mixed Content / Deprecated API）
+- Network 失敗（API 4xx/5xx / timeout / CORS blocked）
+- 資源載入失敗（圖片/CSS/JS/字型 404）
+- Web Vitals 效能（LCP / CLS / FID 超標警告）
+- 網路環境快照（WiFi/4G/離線/延遲/頻寬）
+- 儲存空間快照（localStorage / sessionStorage / Cookie，敏感值自動遮罩）
+- DOM 變化（rrweb 全紀錄）
+- 語音描述（Whisper 精準轉錄 / Web Speech 即時字幕）
+- 截圖標注（全頁/區域/自由形狀 + 馬賽克筆刷）
+
+### 後端（Terminal CLI）
+- Python traceback / exception（結構化解析：type/message/file/line）
+- Node.js uncaughtException / unhandledRejection
+- 任何語言的 stderr / crash log
+- 環境快照（Python 版本 + pip list / Node 版本 + npm list）
+- 敏感資料自動遮罩（DB URI / API Key / JWT / 密碼）
+
+### 支援框架
+前端：React · Vue · Angular · Next.js · Nuxt · Svelte · 任何 Web 應用
+後端：Django · Flask · FastAPI · Express · Nest.js · 任何語言
+
+## 定價
+| 方案 | 價格 | 內容 |
+|---|---|---|
+| 免費版 | NT$0 | 錄製 10 次/月 · 回溯 5 次/月 · AI 讀取 20 次/月 · 截圖無限 · 報告保留 7 天 |
+| 日票 | NT$20 | 24 小時無限 · Whisper 精準轉錄 · 報告保留 90 天 |
+| 月費 | NT$80/月 | 全部無限 · Whisper · Terminal CLI · 報告保留 90 天 |
+
+目前只支援台灣付款。國際付款即將開放。
+`;
+
+// PM-201：極簡 Markdown → HTML（僅涵蓋 SKILL.md 用到的語法：標題/表格/清單/引言/程式碼區塊/粗體/行內碼/連結/分隔線）。
+function skillEsc(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function skillInline(s: string): string {
+  let h = skillEsc(s);
+  h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
+  h = h.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  h = h.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+  return h;
+}
+function renderMarkdown(md: string): string {
+  const lines = md.split('\n');
+  const out: string[] = [];
+  let i = 0;
+  const N = lines.length;
+  const special = /^(#{1,6})\s|^```|^\||^>\s?|^---+\s*$|^\s*[-*]\s+|^\s*\d+\.\s+/;
+  while (i < N) {
+    const line = lines[i];
+    if (/^```/.test(line)) {
+      i++;
+      const code: string[] = [];
+      while (i < N && !/^```/.test(lines[i])) { code.push(lines[i]); i++; }
+      i++; // 跳過結尾 fence
+      out.push('<pre class="md-code"><code>' + skillEsc(code.join('\n')) + '</code></pre>');
+      continue;
+    }
+    if (/^\|/.test(line) && i + 1 < N && /^\|[\s:\-|]+\|?\s*$/.test(lines[i + 1])) {
+      const header = line.split('|').slice(1, -1).map((c) => c.trim());
+      i += 2;
+      const rows: string[][] = [];
+      while (i < N && /^\|/.test(lines[i])) { rows.push(lines[i].split('|').slice(1, -1).map((c) => c.trim())); i++; }
+      const th = '<tr>' + header.map((c) => '<th>' + skillInline(c) + '</th>').join('') + '</tr>';
+      const tb = rows.map((r) => '<tr>' + r.map((c) => '<td>' + skillInline(c) + '</td>').join('') + '</tr>').join('');
+      out.push('<table class="md-table"><thead>' + th + '</thead><tbody>' + tb + '</tbody></table>');
+      continue;
+    }
+    const hm = /^(#{1,6})\s+(.*)$/.exec(line);
+    if (hm) { const lvl = hm[1].length; out.push('<h' + lvl + '>' + skillInline(hm[2]) + '</h' + lvl + '>'); i++; continue; }
+    if (/^---+\s*$/.test(line)) { out.push('<hr>'); i++; continue; }
+    if (/^>\s?/.test(line)) {
+      const bq: string[] = [];
+      while (i < N && /^>\s?/.test(lines[i])) { bq.push(lines[i].replace(/^>\s?/, '')); i++; }
+      out.push('<blockquote>' + skillInline(bq.join(' ')) + '</blockquote>');
+      continue;
+    }
+    if (/^\s*[-*]\s+/.test(line)) {
+      const items: string[] = [];
+      while (i < N && /^\s*[-*]\s+/.test(lines[i])) { items.push(lines[i].replace(/^\s*[-*]\s+/, '')); i++; }
+      out.push('<ul>' + items.map((it) => '<li>' + skillInline(it) + '</li>').join('') + '</ul>');
+      continue;
+    }
+    if (/^\s*\d+\.\s+/.test(line)) {
+      const items: string[] = [];
+      while (i < N && /^\s*\d+\.\s+/.test(lines[i])) { items.push(lines[i].replace(/^\s*\d+\.\s+/, '')); i++; }
+      out.push('<ol>' + items.map((it) => '<li>' + skillInline(it) + '</li>').join('') + '</ol>');
+      continue;
+    }
+    if (/^\s*$/.test(line)) { i++; continue; }
+    const para: string[] = [];
+    while (i < N && !/^\s*$/.test(lines[i]) && !special.test(lines[i])) { para.push(lines[i]); i++; }
+    out.push('<p>' + skillInline(para.join(' ')) + '</p>');
+  }
+  return out.join('\n');
+}
+
+// PM-201：/skill AI 客服手冊檢視頁（渲染 SKILL.md + 一鍵複製 + 下載 + Claude Desktop 安裝步驟）。
+function skillPage(lang: PageLang): string {
+  const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
+  const bodyHtml = renderMarkdown(SKILL_MD);
+  return `<!DOCTYPE html>
+<html lang="${lang === 'zh' ? 'zh-Hant' : 'en'}">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${t('🤖 AI 客服手冊 · BugEzy', '🤖 AI Support Manual · BugEzy')}</title>
+<meta name="description" content="${t('把 BugEzy AI 客服手冊放進你的專案，AI 就會教你怎麼用 BugEzy、幫你讀報告、排除故障。', 'Add the BugEzy AI support manual to your project and your AI will teach you how to use BugEzy, read reports, and troubleshoot.')}">
+<meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
+<link rel="canonical" href="https://bugezy.dev/skill">
+<style>
+  * { box-sizing: border-box; }
+  .lang-switch { position:fixed; top:14px; right:16px; z-index:10; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:5px 12px; font-size:13px; color:#c4b5fd; text-decoration:none; }
+  .lang-switch:hover { background:#2a2a3e; }
+  body { margin:0; padding:0; background:#0f0f1a; color:#e8e8f0; font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif; line-height:1.75; font-size:15px; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 48px 24px 80px; }
+  header { border-bottom: 1px solid #2a2a3e; padding-bottom: 20px; margin-bottom: 24px; }
+  .brand { font-size: 24px; font-weight: 700; color: #a78bfa; text-decoration: none; }
+  h1 { font-size: 28px; margin: 16px 0 6px; }
+  .lead { color: #8b8fa3; font-size: 15px; margin: 0 0 4px; }
+  .actions { display:flex; gap:10px; flex-wrap:wrap; margin: 20px 0 8px; }
+  .btn { display:inline-block; background:#7c3aed; color:#fff; border:none; border-radius:8px; padding:10px 18px; font-size:14px; font-weight:600; cursor:pointer; text-decoration:none; transition: transform .1s, opacity .1s, background .2s; }
+  .btn:active { transform: scale(0.97); opacity:0.85; }
+  .btn.copied { background:#238636; }
+  .btn.secondary { background:transparent; border:1px solid #7c3aed; color:#c4b5fd; }
+  .install-box { margin: 22px 0 8px; padding: 16px 18px; background:#15152a; border:1px solid #7c3aed; border-radius:12px; font-size:14px; }
+  .install-box h3 { margin:0 0 8px; font-size:15px; color:#c4b5fd; }
+  .install-box ol { margin:0; padding-left:20px; }
+  .install-box li { margin:5px 0; }
+  .install-box code { background:#0f0f1a; color:#7ee0c5; padding:2px 6px; border-radius:5px; font-family: ui-monospace, monospace; font-size:13px; }
+  .md { margin-top: 28px; padding: 26px 28px; background:#1a1a2e; border:1px solid #2a2a3e; border-radius:14px; }
+  .md h1 { font-size:24px; margin: 22px 0 8px; color:#fff; }
+  .md h2 { font-size:20px; margin: 26px 0 8px; color:#c4b5fd; border-top:1px solid #2a2a3e; padding-top:18px; }
+  .md h3 { font-size:16px; margin: 18px 0 6px; color:#a78bfa; }
+  .md p { margin: 8px 0; }
+  .md ul, .md ol { margin: 8px 0; padding-left: 22px; }
+  .md li { margin: 4px 0; }
+  .md blockquote { margin: 10px 0; padding: 8px 14px; border-left:3px solid #7c3aed; background:#15152a; color:#b9b9cf; border-radius:0 8px 8px 0; }
+  .md hr { border:none; border-top:1px solid #2a2a3e; margin: 20px 0; }
+  .md code { background:#0f0f1a; color:#7ee0c5; padding:1px 6px; border-radius:5px; font-family: ui-monospace, monospace; font-size:13px; word-break: break-word; }
+  .md-code { margin: 10px 0; padding: 12px 14px; background:#0f0f1a; border:1px solid #2a2a3e; border-radius:8px; overflow-x:auto; }
+  .md-code code { background:transparent; padding:0; color:#7ee0c5; }
+  .md-table { width:100%; border-collapse: collapse; margin: 12px 0; font-size:14px; }
+  .md-table th, .md-table td { border:1px solid #2a2a3e; padding:8px 10px; text-align:left; vertical-align: top; }
+  .md-table th { background:#15152a; color:#c4b5fd; }
+  a { color: #a78bfa; }
+  footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid #2a2a3e; color: #8b8fa3; font-size: 13px; }
+  footer .links a { margin-right: 16px; }
+</style>
+</head>
+<body>
+<a class="lang-switch" href="?lang=${lang === 'zh' ? 'en' : 'zh'}">${t('EN', '中文')}</a>
+<div class="wrap">
+  <header><a class="brand" href="/">🐛 BugEzy</a></header>
+
+  <h1>${t('🤖 BugEzy AI 客服手冊', '🤖 BugEzy AI Support Manual')}</h1>
+  <p class="lead">${t('把這份文件放到你的專案裡，AI 就會教你怎麼用 BugEzy——讀報告、排除故障、通通自己搞定。', 'Drop this file into your project and your AI will teach you how to use BugEzy — reading reports, troubleshooting, all on its own.')}</p>
+  <p class="lead">${t('等於讓你的 AI 當 24 小時 BugEzy 客服。', 'It turns your AI into a 24/7 BugEzy support agent.')}</p>
+
+  <div class="actions">
+    <button id="copySkill" class="btn" type="button" data-copy-text="${encodeURIComponent(SKILL_MD)}">${t('📋 複製全文', '📋 Copy all')}</button>
+    <a class="btn secondary" href="/skill/download">${t('⬇️ 下載 SKILL.md', '⬇️ Download SKILL.md')}</a>
+  </div>
+
+  <div class="install-box">
+    <h3>${t('📥 怎麼裝到你的 AI', '📥 How to install into your AI')}</h3>
+    <ol>
+      <li>${t('<b>Claude Desktop</b>：Settings（設定）→ Skills → Add（新增）→ 貼上或上傳 SKILL.md', '<b>Claude Desktop</b>: Settings → Skills → Add → paste or upload SKILL.md')}</li>
+      <li>${t('<b>Claude Code</b>：把檔案放到 <code>/mnt/skills/user/bugezy/SKILL.md</code>', '<b>Claude Code</b>: place the file at <code>/mnt/skills/user/bugezy/SKILL.md</code>')}</li>
+      <li>${t('<b>Cursor / VS Code / 其他 AI</b>：把 SKILL.md 放到專案根目錄，或直接複製全文貼給 AI', '<b>Cursor / VS Code / other AIs</b>: put SKILL.md in your project root, or just paste the full text to your AI')}</li>
+    </ol>
+    <p style="margin:10px 0 0;color:#8b8fa3;">${t('裝好之後，直接問 AI：「怎麼用 BugEzy？」或「幫我讀最新的 BugEzy 報告」。', 'Once installed, just ask your AI: "How do I use BugEzy?" or "Read my latest BugEzy report."')}</p>
+  </div>
+
+  <div class="md">${bodyHtml}</div>
+
+  <footer>
+    <div class="links">
+      <a href="/">${t('首頁', 'Home')}</a>
+      <a href="/install">${t('安裝指南', 'Install')}</a>
+      <a href="/features">${t('功能說明', 'Features')}</a>
+      <a href="/guide">${t('使用指南', 'Guide')}</a>
+      <a href="/faq">FAQ</a>
+      <a href="/skill">${t('🤖 AI 客服手冊', '🤖 AI Manual')}</a>
+      <a href="/skill">${t('🤖 AI 客服手冊', '🤖 AI Manual')}</a>
+    <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a>
+    </div>
+    <div style="margin-top:8px;">${t('聯絡', 'Contact')}：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
+    <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
+  </footer>
+</div>
+<script>
+(function () {
+  var btn = document.getElementById('copySkill');
+  if (!btn) return;
+  var DONE = ${JSON.stringify(t('✅ 已複製！', '✅ Copied!'))};
+  var LABEL = ${JSON.stringify(t('📋 複製全文', '📋 Copy all'))};
+  function getText() { try { return decodeURIComponent(btn.dataset.copyText || ''); } catch (e) { return btn.dataset.copyText || ''; } }
+  function flash() { btn.textContent = DONE; btn.classList.add('copied'); setTimeout(function () { btn.textContent = LABEL; btn.classList.remove('copied'); }, 2000); }
+  function fallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;padding:0;border:0;background:transparent;';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select(); ta.setSelectionRange(0, text.length);
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+  btn.addEventListener('click', function () {
+    var text = getText();
+    if (!text) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(flash, function () { fallbackCopy(text); flash(); });
+    } else { fallbackCopy(text); flash(); }
+  });
+})();
+</script>
+</body>
+</html>`;
+}
+
 function guidePage(lang: PageLang): string {
   const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
   return `<!DOCTYPE html>
@@ -1233,6 +1623,7 @@ function guidePage(lang: PageLang): string {
       <a href="/faq">FAQ</a>
       <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
       <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
+    <a href="/skill">${t('🤖 AI 客服手冊', '🤖 AI Manual')}</a>
     <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a>
     <a href="/reports">${t('📋 我的報告', '📋 My Reports')}</a>
     </div>
@@ -1353,6 +1744,7 @@ function faqPage(lang: PageLang): string {
       <a href="/guide">${t('使用指南', 'Guide')}</a>
       <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
       <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
+    <a href="/skill">${t('🤖 AI 客服手冊', '🤖 AI Manual')}</a>
     <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a>
     <a href="/reports">${t('📋 我的報告', '📋 My Reports')}</a>
     </div>
@@ -1625,6 +2017,7 @@ $ BUGEZY_TOKEN=&lt;${t('你的 token', 'your token')}&gt; npx bugezy-watch -- go
       <a href="/faq">FAQ</a>
       <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
       <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
+    <a href="/skill">${t('🤖 AI 客服手冊', '🤖 AI Manual')}</a>
     <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a>
     <a href="/reports">${t('📋 我的報告', '📋 My Reports')}</a>
     </div>
@@ -1850,6 +2243,7 @@ function featuresPage(lang: PageLang): string {
       <a href="/faq">FAQ</a>
       <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
       <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
+    <a href="/skill">${t('🤖 AI 客服手冊', '🤖 AI Manual')}</a>
     <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a>
     <a href="/reports">${t('📋 我的報告', '📋 My Reports')}</a>
     </div>
@@ -1935,6 +2329,7 @@ function changelogPage(lang: PageLang): string {
       <a href="/faq">FAQ</a>
       <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
       <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
+    <a href="/skill">${t('🤖 AI 客服手冊', '🤖 AI Manual')}</a>
     <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a>
     <a href="/reports">${t('📋 我的報告', '📋 My Reports')}</a>
     </div>
@@ -3618,10 +4013,25 @@ export default {
       res.headers.set('Cache-Control', 'no-store');
       return res;
     }
+    // PM-201：AI 客服手冊（SKILL.md）——檢視頁 + 下載檔案
+    if (request.method === 'GET' && path === '/skill') {
+      const res = html(skillPage(getLang(request)));
+      res.headers.set('Cache-Control', 'no-store'); // 依語言變動
+      return res;
+    }
+    if (request.method === 'GET' && path === '/skill/download') {
+      return new Response(SKILL_MD, {
+        headers: {
+          'Content-Type': 'text/markdown; charset=utf-8',
+          'Content-Disposition': 'attachment; filename="SKILL.md"',
+          'Cache-Control': 'public, max-age=3600',
+        },
+      });
+    }
     // PM-126：版本檢查（popup 亮燈用）+ 更新日誌頁
     if (request.method === 'GET' && path === '/api/version') {
       // 每次上新版到 Chrome Web Store 時，同步改 latest + deploy
-      return json({ latest: '1.1.1', changelog_url: 'https://bugezy.dev/changelog' });
+      return json({ latest: '1.1.2', changelog_url: 'https://bugezy.dev/changelog' });
     }
     if (request.method === 'GET' && path === '/changelog') {
       const res = html(changelogPage(getLang(request))); // PM-126/151

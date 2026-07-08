@@ -1,6 +1,6 @@
 # BugEzy 專案全貌與接手指南
 
-> 最後更新：2026-07-07（Day 22：Chrome Web Store 1.1.0 過審 →（收工）打包 1.1.1 送審 + manifest key 統一 ID + session token 移出 URL + 報告分享付費牆 + JSON 匯出付費 + MCP URL token + Whisper 麥克風修復/fallback + MCP 設定備註 + Whisper 無文字診斷 log + 編輯頁複製鈕 + 全站商店連結對接 + 版號 1.1.1 PM-187~200）
+> 最後更新：2026-07-08（Day 23：AI 客服手冊 SKILL.md + /skill 頁 + 首頁 AI Skill 專區 + CWS 1.1.2（name/description 改寫）+ 截圖流程統一到編輯報告頁（下一步→預覽→上傳）+ 截圖 Whisper 音量條 + 截圖語音併入補充說明 + 上傳卡住修復 + 截圖麥克風提示與錄製一致 PM-201~210）
 > 維護者：FOX（Claude Chat PM 角色）
 > 用途：新 Chat 對話開始時讀此檔，快速掌握全貌並接手開發
 
@@ -625,6 +625,27 @@ FOX = 創辦人 + 決策者 + 手動驗收
 - Extension（build 過、**未重上架**，`bugezy-1.1.1.zip` 已打包）：popup token 改 fragment + 「📋 複製 MCP 設定」+ 使用時機備註、JSON 匯出付費 overlay + 免責、offscreen `AudioContext.resume` + startRecording 回報 + Whisper 診斷 log、background `micFallback` + content fallback 即時字幕/橘色提示 + 轉錄 log、edit-report 分享複製鈕、鍵盤/麥克風互斥聯動、edit-report Token USD 單位、i18n、manifest `key` + version 1.1.1。
 - 判斷/修正（動手前先驗）：token URL-first 優先於 localStorage（避免舊 token 假過期）；`getReport` owner 早於付費檢查；MCP env 用 per-request 副本非 mutate 共用 env；offscreen suspended context 是「即時字幕正常、精準轉錄不動」的差異點；「一鍵複製空白」根因是點擊當下讀 DOM textContent（改 render 期編碼進 `data-copy-text`）；template literal 內 `\.` 會被吞成 `.` → regex 破損（改 `\\.`）；Whisper 無文字非程式 bug 而是全鏈路無 log 難診斷（PM-198 埋 log）；商店連結 URL 永久不變不需版本更新。
 - ⚠ 技術債 / FOX 待辦（Day 22）：① **extension 重上架 1.1.1**（Day 19~22 整套 + manifest key，`bugezy-1.1.1.zip` 已打包）；② **CLI `npm publish`**（PM-167/176/177）；③ **麥克風實機驗收**：精準轉錄選「允許這次使用」驗 fallback、選「允許這個網站使用」驗正常 Whisper + 音量條會動；④ **Whisper 無文字實機定位**（PM-198）：錄一段停止 → 開 background + offscreen DevTools Console 看哪行斷（size=0/hasAuth=false/401/403/Groq 空）→ 回報以精準修下一版；⑤ 沿用：付款後 token rotation、CSP 全站移 unsafe-inline、日韓越解鎖、user_id 遷移、Rate Limiting、rls-lockdown、報告刪除連帶清 R2 孤兒。
+
+---
+
+## §6r Day 23（2026-07-08，PM-201~210）— AI 客服手冊 + 首頁 AI Skill 專區 + CWS 1.1.2（截圖流程統一到編輯報告頁）
+
+> 主軸：讓 AI 當 24 小時客服（SKILL.md + /skill 頁）、首頁凸顯四大特色（含 AI Skill）、截圖流程改成跟錄製一樣走「編輯報告頁確認後上傳」，並打磨截圖體驗（音量條 / 語音歸屬 / 上傳卡住 / 麥克風提示）。
+
+- **PM-201 SKILL.md AI 客服手冊**：根目錄 `SKILL.md`（給 AI 讀：讀報告方法 / MCP 13 工具 / 六模式 / 故障排除 / 定價）；Worker 無 fs 故 server 內嵌 `SKILL_MD` 常數 → `GET /skill`（`renderMarkdown` 極簡 md→html + 一鍵複製 `data-copy-text` + Claude Desktop 安裝教學，中英）+ `GET /skill/download`（`attachment`）+ 全站 7 頁 footer 連結 + sitemap。`wrangler deploy a4879590`。
+- **PM-202 首頁 AI Skill 專區**：MCP 區塊後 `#skill` 卡片（四項清單 + 下載 SKILL.md `/skill/download` + 了解更多 `/skill`）；Hero 副標四大特色並列（六模式 × 13 MCP × 語音 × AI Skill）；捕捉能力後加 Skill 提示 + 下載連結。中英。`wrangler deploy b76c3bf1`。
+- **PM-203 版號 1.1.2**：manifest name「BugEzy — AI Bug Reporter | 語音除錯工具」+ description 精簡至 **114 字**（CWS 132 上限內；初版 186 超限已改）+ version 1.1.2 + `/api/version` latest。`wrangler deploy 9fe349df`；`bugezy-1.1.2.zip` 已打包。
+- **PM-204 截圖流程統一**：annotate「完成儲存」→「📤 下一步」，不直接上傳，改存 `STORAGE_KEY`（與錄製同入口）+ 清 `STATE_KEY` → 開 `edit-report.html`；edit-report `isScreenshot`（無 rrweb+有 screenshots）→ `showScreenshotPreview()` 截圖預覽取代 rrweb 播放器、其餘（語音/描述/Token/AI 校正/上傳+複製鈕）完全複用。`RecordingPayload` 加選填 `screenshots?`/`description?`/`allow_screenshot_images?`。
+- **PM-205 截圖 Whisper 綠色音量條**：`#liveCaptions` 內 5 條 `.vol-bar`；`startVolumeMeter(whisperStream)`（`AudioContext`+`AnalyserNode`+rAF，公式同 inject：`level>0.3` 綠、否則紅），`startWhisper` 開 `stopWhisper` 停。
+- **PM-208 截圖語音記錄改「截圖不適用」**（取代 PM-206/207/207b 的語音拆分嘗試）：annotate `voiceTranscript` 回 `[]`、`description = descInput.value.trim()`（含語音+手動），移除 `voiceAccumulated`/`isManuallyEdited`；edit-report 截圖時「語音記錄」顯示「📸 截圖模式：語音內容已包含在補充說明中 / …included in the description below」（`getUILang(LANG_KEY)` 中英）+ readOnly + 隱藏 AI 校正/精簡。
+- **PM-209 上傳卡「上傳中」修復**：`edit-report` `uploadBtn` `await sendMessage` 無 try/catch + `resp` 無防呆，截圖 payload 大 round-trip 久致訊息通道關閉 → `resp.ok` throw 中斷 → 卡住。修：成功 UI 抽 `showUploadSuccess(shareUrl)`（錄製/截圖共用）+ try/catch + `resp?.ok`，任何情況按鈕都復原。
+- **PM-210 截圖麥克風提示與錄製一致**：截圖按鈕改與錄製共用「麥克風目前關閉」提示（mic OFF+非鍵盤才彈）；`micPromptFor: 'record'|'screenshot'` + `runMicPromptAction()` 依來源導向 `doScreenshot`/`doStartRecording`（不再寫死錄製）；annotate 語音自動啟動加讀 `MIC_KEY`——mic OFF → 不自動錄（顯示「🔇 語音已關閉」，保留手動 🎤），讓「直接錄製（不錄語音）」對截圖生效。
+
+### 增量（Day 23）
+- Server（皆已 deploy，最新 `9fe349df`）：`SKILL_MD` + `renderMarkdown` + `skillPage` + `GET /skill` + `GET /skill/download` + footer/sitemap（PM-201）、首頁 `#skill` 專區 + Hero 四特色 + 捕捉提示（PM-202）、`/api/version` latest 1.1.2（PM-203）。
+- Extension（build 過、**未重上架**，`bugezy-1.1.2.zip` 已打包）：manifest name/description/version 1.1.2（PM-203）；annotate 下一步存 STORAGE_KEY + 音量條 + 語音歸補充說明 + MIC_KEY 語音 gate；edit-report `isScreenshot` 預覽 + 截圖語音提示 + 上傳成功抽函式 + try/catch；popup `micPromptFor` 截圖麥克風提示分派；types `RecordingPayload` 選填欄位；i18n `annotate-next`。
+- 判斷/修正（動手前先驗）：截圖存 `STORAGE_KEY`（非規格新 key）以符合「上傳邏輯不動」；報告類型判別用啟發式（無 rrweb+有 screenshots）不新增 server 欄位；截圖語音拆分（PM-206/207）越修越脆→ 收斂為「語音併補充說明 + 語音記錄標示不適用」（PM-208）；上傳卡住根因是 `resp` 未防呆的 throw；截圖麥克風/語音一致性靠 `MIC_KEY`（+鍵盤模式）而非只看鍵盤模式。
+- ⚠ 技術債 / FOX 待辦（Day 23）：① **extension 重上架 1.1.2**（`bugezy-1.1.2.zip`，涵蓋 Day 19~23）；② **截圖流程實機驗收**：下一步→編輯頁截圖預覽→上傳成功顯示連結不卡住、截圖麥克風提示三分支（開啟並錄製/直接錄製/mic 已開）、音量條跳動；③ 沿用 Day 22：CLI `npm publish`、Whisper 無文字實機定位（PM-198）、麥克風授權實機、token rotation、CSP、日韓越解鎖、user_id 遷移、Rate Limiting、rls-lockdown、報告刪除清 R2。
 
 ---
 

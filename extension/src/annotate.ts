@@ -9,15 +9,17 @@ import {
   API_BASE,
   KEYBOARD_MODE_KEY,
   LANG_KEY,
+  MIC_KEY,
   MIC_MODE_KEY,
   SESSION_KEY,
+  STATE_KEY,
+  STORAGE_KEY,
   TOOLBAR_EFFECT_KEY,
   USER_PLAN_KEY,
   blog,
-  type ControlMessage,
   type Session,
 } from './types';
-import { getAuthHeaders, getAuthHeaderOnly } from './auth';
+import { getAuthHeaderOnly } from './auth';
 import { t, getUILang, type UILang } from './i18n';
 import { getNetworkSnapshot } from './net'; // PM-156：網路環境快照
 
@@ -367,7 +369,7 @@ function createAnnotateRecognition(): SRInst | null {
         // PM-31 Bug4：append 到末端，但若 cursor 原本不在末端則保留原位（不干擾中間編輯）
         const cursorPos = descInput.selectionStart;
         const isAtEnd = cursorPos === descInput.value.length;
-        descInput.value += text; // 確定的文字 → 文字框
+        descInput.value += text; // 確定的文字 → 文字框（PM-208：語音直接進補充說明）
         if (!isAtEnd) {
           descInput.selectionStart = cursorPos;
           descInput.selectionEnd = cursorPos;
@@ -478,6 +480,65 @@ let useWhisper = false;
 let whisperRecorder: MediaRecorder | null = null;
 let whisperChunks: Blob[] = [];
 let whisperStream: MediaStream | null = null;
+// PM-208：截圖語音本來就即時 append 進 descInput（補充說明），存檔時 description 保留完整內容、
+// voiceTranscript 留空——不再獨立拆存語音（移除 PM-206/207 的 voiceAccumulated / isManuallyEdited）。
+// 編輯報告頁的「語音記錄」區改標示「截圖模式：語音已在補充說明」。
+
+// ── PM-205：Whisper 錄音音量條（AnalyserNode + rAF，5 條綠色跳動，與 popup/inject 視覺一致）──
+let volAudioCtx: AudioContext | null = null;
+let volAnalyser: AnalyserNode | null = null;
+let volRaf = 0;
+
+function updateVolBars(level: number) {
+  document.querySelectorAll<HTMLElement>('#volBars .vol-bar').forEach((b, i) => {
+    const threshold = (i + 1) / 5;
+    const h = level >= threshold ? 4 + 16 * level + Math.random() * 4 : 4;
+    b.style.height = `${Math.min(h, 20)}px`;
+    b.style.background = level > 0.3 ? '#3fb950' : '#ef4444'; // 講話綠、安靜紅
+  });
+}
+
+async function startVolumeMeter(stream: MediaStream) {
+  try {
+    volAudioCtx = new AudioContext();
+    // 麥克風擷取型 context 允許無 gesture resume（PM-192 offscreen 同理），確保 analyser 運轉
+    if (volAudioCtx.state === 'suspended') await volAudioCtx.resume().catch(() => {});
+    const source = volAudioCtx.createMediaStreamSource(stream);
+    volAnalyser = volAudioCtx.createAnalyser();
+    volAnalyser.fftSize = 256;
+    source.connect(volAnalyser);
+    const data = new Uint8Array(volAnalyser.frequencyBinCount);
+    document.getElementById('volBars')?.classList.remove('hidden');
+    const tick = () => {
+      if (!volAnalyser) return; // stopVolumeMeter 已清空 → 停迴圈
+      volAnalyser.getByteFrequencyData(data);
+      const avg = data.reduce((a, b) => a + b, 0) / data.length;
+      updateVolBars(Math.min(avg / 128, 1));
+      volRaf = requestAnimationFrame(tick);
+    };
+    volRaf = requestAnimationFrame(tick);
+  } catch (err) {
+    blog('音量條啟動失敗', err);
+  }
+}
+
+function stopVolumeMeter() {
+  if (volRaf) cancelAnimationFrame(volRaf);
+  volRaf = 0;
+  volAnalyser = null;
+  if (volAudioCtx) {
+    void volAudioCtx.close();
+    volAudioCtx = null;
+  }
+  const bars = document.getElementById('volBars');
+  if (bars) {
+    bars.classList.add('hidden');
+    bars.querySelectorAll<HTMLElement>('.vol-bar').forEach((b) => {
+      b.style.height = '4px';
+      b.style.background = '#ef4444';
+    });
+  }
+}
 
 function releaseWhisperStream() {
   whisperStream?.getTracks().forEach((tk) => tk.stop());
@@ -504,6 +565,7 @@ async function startWhisper() {
   voiceStatus.textContent = '';
   captionText.textContent = '🔴 Whisper 錄音中，講完按 ⏹ 轉錄…';
   liveCaptions.classList.remove('hidden');
+  void startVolumeMeter(whisperStream); // PM-205：綠色音量條跳動
 }
 
 async function stopWhisper() {
@@ -511,6 +573,7 @@ async function stopWhisper() {
   listening = false;
   voiceInputBtn.classList.remove('listening');
   voiceInputBtn.textContent = '🎤';
+  stopVolumeMeter(); // PM-205：停止音量條（停止錄音當下即隱藏）
   const rec = whisperRecorder;
   whisperRecorder = null;
   if (!rec || rec.state === 'inactive') {
@@ -582,16 +645,23 @@ voiceInputBtn.addEventListener('click', () => {
 
 // 載入後自動開始聽（延遲等 canvas 渲染 + 麥克風授權）
 // PM-49：鍵盤模式則不自動啟動語音。PM-147：付費 + Whisper toggle → 走 Whisper（不自動錄，按 🎤 才錄）。
-chrome.storage.local.get([KEYBOARD_MODE_KEY, USER_PLAN_KEY, MIC_MODE_KEY], (r) => {
+// PM-210：語音是否啟用與錄製流程一致——除鍵盤模式外，也要 MIC_KEY 開啟才自動錄語音
+//   （截圖麥克風提示選「直接錄製（不錄語音）」→ MIC_KEY 維持 off → 此處不自動啟動語音）。
+chrome.storage.local.get([KEYBOARD_MODE_KEY, USER_PLAN_KEY, MIC_MODE_KEY, MIC_KEY], (r) => {
   // PM-147：判斷語音引擎——付費（paid/cancelled/day_pass）+ popup Whisper toggle 才走 Whisper
   const plan = (r[USER_PLAN_KEY] as string) || 'free';
   const isPaid = plan === 'paid' || plan === 'cancelled' || plan === 'day_pass';
   const micMode = (r[MIC_MODE_KEY] as string) || 'whisper'; // 付費預設 whisper（與錄製流程 computeStartFlags 一致）
   useWhisper = isPaid && micMode === 'whisper';
+  const micOn = r[MIC_KEY] === true;
 
   if (r[KEYBOARD_MODE_KEY] === true) {
     voiceStatus.textContent = '🔇 鍵盤模式（語音已關閉）';
     setVoiceToggleUI(false); // PM-100：頁面本就鍵盤模式 → 切換鈕同步顯示 🎙️
+  } else if (!micOn) {
+    // PM-210：麥克風關閉（截圖「直接錄製不錄語音」）→ 不自動錄語音；仍可手動按 🎤 開啟
+    voiceStatus.textContent = '🔇 語音已關閉（可按 🎤 開啟）';
+    setVoiceToggleUI(false);
   } else if (useWhisper) {
     // Whisper 模式不自動錄音（避免整段長錄音爆量/超 25MB）——引導使用者手動按 🎤
     voiceStatus.textContent = '🎙️ 付費版 Whisper：按 🎤 錄音描述，講完按 ⏹ 轉錄';
@@ -619,9 +689,11 @@ saveBtn.addEventListener('click', async () => {
     rrwebEvents: [],
     consoleLogs: collected?.consoleLogs ?? [],
     networkErrors: collected?.networkErrors ?? [],
+    // PM-208：截圖報告不獨立存語音——語音已即時併入 description（補充說明）。voiceTranscript 留空，
+    // 編輯報告頁的「語音記錄」區改顯示「截圖模式：語音已在補充說明」提示。
     voiceTranscript: [],
     screenshots: [{ dataUrl: annotatedDataUrl, timestamp: Date.now() }],
-    description: descInput.value.trim(),
+    description: descInput.value.trim(), // 含語音 + 手動編輯的完整內容
     allow_screenshot_images: allowScreenshotImages,
     ...(session?.user_id ? { user_id: session.user_id } : {}),
     // PM-156：截圖標注也帶網路快照（annotate 是擴充頁，可直接用 navigator API）
@@ -635,29 +707,20 @@ saveBtn.addEventListener('click', async () => {
     },
   };
 
-  saveBtn.textContent = '⏳ 上傳中...';
+  // PM-204：截圖標注完不直接上傳——存進 STORAGE_KEY（與錄製報告同一入口）後導到編輯報告頁，
+  // 讓使用者檢視截圖預覽 + 補語音/描述 + 看 Token 估算 + AI 校正後再確認上傳（流程與錄製一致）。
+  saveBtn.textContent = '⏳ 處理中...';
   saveBtn.disabled = true;
   try {
-    const res = await fetch(`${API_BASE}/api/reports`, {
-      method: 'POST',
-      // PM-98/129：帶 session token，讓 server 端防呆能在漏帶 user_id 時從 header 補回
-      headers: await getAuthHeaders(),
-      body: JSON.stringify(payload),
-    });
-    const data = (await res.json()) as { report_id?: string; share_url?: string };
-    if (data.share_url && data.report_id) {
-      await chrome.runtime.sendMessage({
-        type: 'SCREENSHOT_UPLOADED',
-        shareUrl: data.share_url,
-        reportId: data.report_id,
-      } satisfies ControlMessage);
-      blog('截圖獨立上傳完成', data.share_url);
-    }
+    // 清掉上一場錄製的 STATE_KEY 摘要，避免編輯頁顯示到殘留的時長/計數
+    await chrome.storage.local.set({ [STORAGE_KEY]: payload });
+    await chrome.storage.local.remove(STATE_KEY);
+    if (key) await chrome.storage.local.remove(key); // 清截圖暫存底圖
+    blog('截圖標注完成 → 導向編輯報告頁');
+    chrome.tabs.create({ url: chrome.runtime.getURL('edit-report.html') });
   } catch (err) {
-    blog('截圖上傳失敗', err);
+    blog('截圖存暫存失敗', err);
   }
-
-  if (key) await chrome.storage.local.remove(key);
   window.close();
 });
 cancelBtn.addEventListener('click', async () => {

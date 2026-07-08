@@ -1,5 +1,25 @@
 # BugEzy Changelog
 
+## 2026-07-08
+
+Day 23（PM-201~210）。**AI 客服手冊（SKILL.md）+ 首頁 AI Skill 專區 + CWS 1.1.2 送審（含截圖流程統一到編輯報告頁）+ 截圖體驗打磨**。版號 `1.1.1`→`1.1.2`（`manifest.json` name/description 改寫 + server `/api/version`；`bugezy-1.1.2.zip` 待重上架）。
+
+- PM-210：**截圖模式麥克風提示流程與錄製一致**（`popup.ts`/`annotate.ts`）。截圖按鈕改與錄製共用「麥克風目前關閉」提示（mic OFF + 非鍵盤才彈）；新增 `micPromptFor: 'record'|'screenshot'` + `runMicPromptAction()`，提示的「開啟並錄製 / 直接錄製（不錄語音）」依來源導向 `doScreenshot()` 或 `doStartRecording()`（不再寫死錄製）；annotate 語音自動啟動加讀 `MIC_KEY`——mic OFF → 不自動錄（顯示「🔇 語音已關閉（可按 🎤 開啟）」，保留手動 🎤），讓「直接錄製（不錄語音）」對截圖真正生效。純 extension，`npm run build` ✅，待重上架。
+
+- PM-209：**截圖報告上傳成功後按鈕卡「上傳中...」修復**（`edit-report.ts`）。根因：`await sendMessage` 無 try/catch、`resp` 無防呆；截圖 payload 大、round-trip 久，訊息通道關閉致 `sendMessage` reject/回 undefined → `resp.ok` throw 中斷 handler → 按鈕永卡「⏳ 上傳中」。修法：成功 UI 抽 `showUploadSuccess(shareUrl)`（錄製/截圖共用）、`await` 包 try/catch、判斷改 `resp?.ok`——任何情況（成功/失敗/訊息遺失）按鈕都復原。純 extension，`npm run build` ✅，待重上架。
+
+- PM-208：**截圖報告語音記錄改「截圖不適用」**（`annotate.ts`/`edit-report.ts`）。收斂 PM-206/207/207b 的語音拆分（越修越複雜易錯）為簡單決策：annotate `voiceTranscript` 改回 `[]`、`description = descInput.value.trim()`（含語音+手動完整內容），移除 `voiceAccumulated`/`isManuallyEdited`（含 keydown listener）；edit-report 截圖報告時「語音記錄」區顯示「📸 截圖模式：語音內容已包含在補充說明中 / Screenshot mode: voice content is included in the description below」（`getUILang(LANG_KEY)` 中英）+ readOnly + 隱藏 AI 校正/精簡。純 extension，`npm run build` ✅，待重上架。（PM-206：截圖語音存入 voiceTranscript；PM-207/207b：語音/手動分離嘗試——均已被 PM-208 取代。）
+
+- PM-205：**截圖標注頁 Whisper 錄音綠色音量條**（`annotate.ts`/`annotate.html`）。`#liveCaptions`（Whisper 錄音提示浮層）內加 5 條 `.vol-bar`（規格同 popup/inject）；`startVolumeMeter(whisperStream)` 用 `AudioContext`+`AnalyserNode(fftSize:256)`+`requestAnimationFrame`，`level=min(avg/128,1)`，過門檻高度跳動、`level>0.3` 綠 `#3fb950` 否則紅（與 inject 同公式）；`startWhisper` 開、`stopWhisper` 停。純 extension，`npm run build` ✅，待重上架。
+
+- PM-204：**截圖流程統一——標注完導到編輯報告頁**（`annotate.ts`/`edit-report.ts`/`types.ts`）。截圖標注「完成儲存」改「📤 下一步」（`annotate-next` i18n），不再直接 `POST /api/reports`，改把截圖 payload 存進 `STORAGE_KEY`（與錄製同一入口）+ 清 `STATE_KEY` → 開 `edit-report.html`；移除 annotate 內上傳與 `SCREENSHOT_UPLOADED`。edit-report `init` 判 `isScreenshot`（無 rrweb + 有 screenshots）→ `showScreenshotPreview()` 用截圖 `<img>` 取代 rrweb 播放器、隱藏播放/標記控制、摘要改「截圖/Console/Network/頁面」；其餘（語音/描述/Token/AI 校正/上傳+複製鈕）完全複用。`RecordingPayload` 加選填 `screenshots?`/`description?`/`allow_screenshot_images?`。設計：改存既有 `STORAGE_KEY`（非規格的新 key）以符合「上傳邏輯不動」；類型判別用啟發式不新增 server 欄位。純 extension，`npm run build` ✅，待重上架。
+
+- PM-203：**manifest name/description/version 1.1.2 + `/api/version`**（`extension/manifest.json` + `server/index.ts`）。name→「BugEzy — AI Bug Reporter | 語音除錯工具」；description→精簡版「Voice-powered bug reporter with MCP AI — record bugs, AI analyzes and fixes. 6 modes, 13 tools. 語音 Bug 回報，AI 一鍵修復。」（**114 字元，符合 CWS 132 上限**；初版 186 字超限已依 FOX 指定精簡）；version `1.1.1`→`1.1.2`；`/api/version` latest 同步。`bugezy-1.1.2.zip` 已打包待重上架。server `wrangler deploy 9fe349df`（線上 `GET /api/version`→`{"latest":"1.1.2"}`）。
+
+- PM-202：**首頁 AI Skill 專區 + 四大特色 + 捕捉能力 Skill 提示**（`server/index.ts` homePage）。MCP 區塊後加 `#skill`「🤖 專屬 AI Skill — 讓 AI 當你的 24 小時客服」卡片（四項清單 + 「下載 SKILL.md →」`/skill/download` + 「了解更多 →」`/skill`）；Hero 副標改四大特色並列「六種錄製模式 × 13 個 MCP AI 工具 × 語音辨識 × AI Skill」；「能捕捉什麼」capture-grid 後加 Skill 提示 + 下載連結。中英。`wrangler deploy b76c3bf1`。
+
+- PM-201：**BugEzy SKILL.md — AI 客服手冊**（根目錄 `SKILL.md` + `server/index.ts`）。建立給 AI 讀的完整手冊（什麼是 BugEzy + 官網連結 / 讀報告方法 / MCP 13 工具表 / 六模式 / 故障排除 / 能捕捉什麼 / 定價）；Worker 無檔案系統故內嵌為 `SKILL_MD` 常數。新增 `GET /skill`（`skillPage`：極簡 Markdown→HTML 渲染器 `renderMarkdown` 排版全文 + 一鍵複製 `data-copy-text` + 下載鈕 + Claude Desktop 安裝步驟教學，中英）+ `GET /skill/download`（`text/markdown` + `Content-Disposition: attachment; filename="SKILL.md"`）；全站 7 頁 footer 加「🤖 AI 客服手冊」→ `/skill`；sitemap 加 `/skill`。踩雷：SKILL_MD 內大量反引號 template literal escape，首版誤 3 反斜線→ Python 一次修 50 處。`wrangler deploy a4879590`。
+
 ## 2026-07-07
 
 Day 22（PM-187~200）。**Chrome Web Store 1.1.0 過審 →（收工）打包 1.1.1 送審 + manifest key 統一 ID + 一連串資安/商業/體驗修復**。收工另更新版號 `1.1.0`→`1.1.1`（`extension/manifest.json` + server `/api/version` latest，`wrangler deploy 9de89e2f`，線上實測 `GET /api/version`→`{"latest":"1.1.1"}`；舊版用戶經 `/api/version` 收更新通知）。

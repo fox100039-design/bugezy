@@ -89,6 +89,10 @@ export interface RecordingPayload {
   markers?: TimeMarker[]; // PM-28：時間軸標記（選填，向後相容）
   networkSnapshot?: NetworkSnapshotBundle; // PM-156：網路環境快照（選填，向後相容）
   storageSnapshot?: StorageSnapshot; // PM-157：儲存空間快照（遮罩後，選填，向後相容）
+  // PM-204：截圖標注報告經編輯頁上傳時暫存於 STORAGE_KEY（截圖無 rrweb，有 screenshots）
+  screenshots?: Array<{ dataUrl: string; timestamp?: number }>;
+  description?: string; // PM-204：annotate 帶入的問題描述（編輯頁載入以免遺失）
+  allow_screenshot_images?: boolean; // PM-83：高畫質 AI 分析開關（截圖上傳沿用）
 }
 
 /** 上傳狀態 */

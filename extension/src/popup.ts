@@ -465,18 +465,26 @@ async function doStartRecording() {
 
 // PM-107：mic OFF + 非鍵盤模式 → 按錄製先提示（避免錄完才發現沒語音）。
 // 鍵盤模式 ON（使用者刻意）或 mic ON → 不提示，直接錄。
+// PM-210：截圖流程共用此提示——micPromptFor 記錄提示是為「錄製」或「截圖」，讓提示按鈕導向正確流程。
 const micPrompt = $('micPrompt');
+let micPromptFor: 'record' | 'screenshot' = 'record';
 function showMicPrompt() {
   micPrompt.style.display = 'flex';
 }
 function hideMicPrompt() {
   micPrompt.style.display = 'none';
 }
+// PM-210：提示按鈕統一分派——依 micPromptFor 進入錄製或截圖流程（避免截圖誤走錄製）。
+function runMicPromptAction() {
+  if (micPromptFor === 'screenshot') void doScreenshot();
+  else void doStartRecording();
+}
 startBtn.addEventListener('click', async () => {
   const store = await chrome.storage.local.get([MIC_KEY, KEYBOARD_MODE_KEY]);
   const micOn = store[MIC_KEY] === true;
   const kbOn = store[KEYBOARD_MODE_KEY] === true;
   if (!micOn && !kbOn) {
+    micPromptFor = 'record';
     showMicPrompt();
     return;
   }
@@ -493,18 +501,18 @@ $<HTMLButtonElement>('micPromptOn').addEventListener('click', async () => {
     await chrome.runtime.sendMessage({ type: 'REQUEST_MIC_PERMISSION' });
     return;
   }
-  // 已授權：開 mic + 同步 UI + 直接錄製
+  // 已授權：開 mic + 同步 UI + 進入對應流程（錄製或截圖）
   await chrome.storage.local.set({ [MIC_KEY]: true });
   micToggle.checked = true;
   updateMicUI();
   hideMicPrompt();
-  await doStartRecording();
+  runMicPromptAction(); // PM-210：錄製 → doStartRecording；截圖 → doScreenshot（語音啟用）
 });
 
-// PM-107：「直接錄製（不錄語音）」→ 不開 mic，直接錄
+// PM-107：「直接錄製（不錄語音）」→ 不開 mic，直接進入對應流程（PM-210：截圖則語音關閉）
 $<HTMLButtonElement>('micPromptSkip').addEventListener('click', () => {
   hideMicPrompt();
-  void doStartRecording();
+  runMicPromptAction();
 });
 
 stopBtn.addEventListener('click', async () => {
@@ -526,7 +534,7 @@ stopBtn.addEventListener('click', async () => {
 
 // 截圖標注：獨立入口（不需先錄製）。送 CAPTURE_SCREENSHOT → background 開標注分頁，
 // popup 會在新分頁取得焦點時自動關閉。
-screenshotBtn.addEventListener('click', async () => {
+async function doScreenshot() {
   screenshotBtn.disabled = true;
   try {
     await send('CAPTURE_SCREENSHOT');
@@ -534,6 +542,20 @@ screenshotBtn.addEventListener('click', async () => {
     console.error('[BugEzy popup]', err);
     screenshotBtn.disabled = false;
   }
+}
+// PM-210：截圖與錄製一致——mic OFF + 非鍵盤模式 → 先彈麥克風提示（標注頁有語音功能）；
+//   選「開啟並錄製」開 mic 後進截圖（語音啟用）、「直接錄製（不錄語音）」直接進截圖（語音關閉）。
+//   mic ON 或鍵盤模式 → 不提示，直接截圖。
+screenshotBtn.addEventListener('click', async () => {
+  const store = await chrome.storage.local.get([MIC_KEY, KEYBOARD_MODE_KEY]);
+  const micOn = store[MIC_KEY] === true;
+  const kbOn = store[KEYBOARD_MODE_KEY] === true;
+  if (!micOn && !kbOn) {
+    micPromptFor = 'screenshot';
+    showMicPrompt();
+    return;
+  }
+  await doScreenshot();
 });
 
 clearBtn.addEventListener('click', async () => {

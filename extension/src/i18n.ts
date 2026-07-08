@@ -209,6 +209,7 @@ const dict: Record<string, Record<UILang, string>> = {
   'annotate-clear': { zh: '🗑️ 清除全部', en: '🗑️ Clear All' },
   'annotate-cancel': { zh: '✗ 取消', en: '✗ Cancel' },
   'annotate-save': { zh: '✅ 完成儲存', en: '✅ Save' },
+  'annotate-next': { zh: '📤 下一步', en: '📤 Next' }, // PM-204：截圖標注完導到編輯報告頁
   'annotate-desc-label': { zh: '💬 問題描述（選填）', en: '💬 Description (optional)' },
   'annotate-desc-ph': { zh: '描述你看到的問題，或按右邊麥克風語音輸入...', en: 'Describe the issue, or tap the mic on the right to dictate...' },
   'annotate-listening': { zh: '🔴 聆聽中，邊畫邊說描述問題...', en: '🔴 Listening — describe while you draw...' },
