@@ -16,7 +16,30 @@ import {
   type TimeMarker,
 } from './types';
 import { getAuthHeaders } from './auth';
-import { getUILang } from './i18n';
+import { getUILang, t, type UILang } from './i18n';
+
+// PM-215：編輯報告頁 UI 語言 + 語音辨識語言跟隨 popup 的語言設定（LANG_KEY）。
+let uiLang: UILang = 'zh';
+let srLang = 'zh-TW'; // SpeechRecognition.lang（zh→zh-TW / yue→yue-Hant-HK / en→en-US）
+let reportLang = 'zh'; // PM-217：popup 原始語言碼（LANG_KEY 值）——傳給 /api/correct、/api/summarize 切 prompt
+const T = (key: string, params?: Record<string, string | number>): string => t(key, uiLang, params);
+// 錄製語言（LANG_KEY 存的 whisper 語言碼）→ Web Speech 的 BCP-47 lang
+function speechToSrLang(speechLang: string): string {
+  if (speechLang === 'en') return 'en-US';
+  if (speechLang === 'yue') return 'yue-Hant-HK';
+  return 'zh-TW'; // zh 及其餘一律繁中
+}
+// PM-215：套用 [data-i18n]/[data-i18n-ph] 靜態翻譯（mirror annotate.applyAnnotateTranslations）
+function applyEditTranslations() {
+  document.querySelectorAll<HTMLElement>('[data-i18n]').forEach((el) => {
+    const key = el.getAttribute('data-i18n');
+    if (key) el.textContent = t(key, uiLang);
+  });
+  document.querySelectorAll<HTMLElement>('[data-i18n-ph]').forEach((el) => {
+    const key = el.getAttribute('data-i18n-ph');
+    if (key) (el as HTMLTextAreaElement | HTMLInputElement).placeholder = t(key, uiLang);
+  });
+}
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -40,9 +63,14 @@ async function init() {
   const store = await chrome.storage.local.get([STORAGE_KEY, STATE_KEY, LANG_KEY]);
   const payload = store[STORAGE_KEY] as RecordingPayload | undefined;
   const state = store[STATE_KEY] as { summary?: RecordingSummary } | undefined;
-  const uiLang = getUILang((store[LANG_KEY] as string) || 'zh'); // PM-208：截圖語音提示中英
+  // PM-215：UI 語言 + 語音辨識語言跟隨 popup 設定（LANG_KEY）
+  const speechLang = (store[LANG_KEY] as string) || 'zh';
+  reportLang = speechLang; // PM-217：傳給 AI 校正/精簡 API
+  uiLang = getUILang(speechLang);
+  srLang = speechToSrLang(speechLang);
+  applyEditTranslations(); // 先套靜態 UI 翻譯（後續 JS 動態文字用 T()）
   if (!payload) {
-    summaryEl.textContent = '找不到報告資料';
+    summaryEl.textContent = T('er-no-report');
     return;
   }
 
@@ -56,25 +84,25 @@ async function init() {
   const dur = state?.summary?.durationMs ?? 0;
   const rows: Array<[string, string | number]> = isScreenshot
     ? [
-        ['截圖', payload.screenshots!.length],
+        [T('er-row-screenshot'), payload.screenshots!.length],
         ['Console', payload.consoleLogs.length],
         ['Network', payload.networkErrors.length],
-        ['頁面', payload.pageInfo.title || payload.pageInfo.url],
+        [T('er-row-page'), payload.pageInfo.title || payload.pageInfo.url],
       ]
     : [
-        ['DOM 事件', payload.rrwebEvents.length],
+        [T('er-row-dom'), payload.rrwebEvents.length],
         ['Console', payload.consoleLogs.length],
         ['Network', payload.networkErrors.length],
-        ['語音片段', payload.voiceTranscript.length],
-        ['時長', `${Math.round(dur / 1000)} 秒`],
-        ['頁面', payload.pageInfo.title || payload.pageInfo.url],
+        [T('er-row-voice'), payload.voiceTranscript.length],
+        [T('er-row-duration'), `${Math.round(dur / 1000)} ${T('er-sec')}`],
+        [T('er-row-page'), payload.pageInfo.title || payload.pageInfo.url],
       ];
   summaryEl.replaceChildren(
     ...rows.map(([k, v]) => {
       const d = document.createElement('div');
       const b = document.createElement('b');
       b.textContent = `${v}`;
-      d.append(`${k}：`, b);
+      d.append(`${k}${uiLang === 'en' ? ': ' : '：'}`, b);
       return d;
     }),
   );
@@ -84,10 +112,7 @@ async function init() {
 
   if (isScreenshot) {
     // PM-208：截圖報告的語音已併入補充說明 → 「語音記錄」區改標示（不顯示逐字稿），並隱藏 AI 校正/精簡
-    voiceText.value =
-      uiLang === 'en'
-        ? '📸 Screenshot mode: voice content is included in the description below.'
-        : '📸 截圖模式：語音內容已包含在補充說明中';
+    voiceText.value = T('er-screenshot-voice');
     voiceText.readOnly = true;
     voiceText.style.color = 'var(--muted)';
     correctBtn.style.display = 'none';
@@ -110,7 +135,7 @@ function showScreenshotPreview(dataUrl?: string) {
   const section = document.getElementById('markerSection');
   if (!section) return;
   const heading = section.querySelector('h2');
-  if (heading) heading.textContent = '📸 截圖預覽';
+  if (heading) heading.textContent = T('er-screenshot-preview');
   const controls = section.querySelector('.marker-controls') as HTMLElement | null;
   if (controls) controls.style.display = 'none';
   const list = document.getElementById('markerList');
@@ -119,7 +144,7 @@ function showScreenshotPreview(dataUrl?: string) {
   if (container && dataUrl) {
     const img = document.createElement('img');
     img.src = dataUrl;
-    img.alt = '截圖預覽';
+    img.alt = T('er-screenshot-preview');
     img.style.cssText = 'width:100%; display:block; border-radius:8px;';
     container.replaceChildren(img);
     container.style.background = 'transparent';
@@ -134,11 +159,11 @@ function renderTokenEstimate(payload: RecordingPayload) {
 
   const voiceTextStr = payload.voiceTranscript.map((s) => s.text).join('');
   const estimates = [
-    { label: '語音記錄', text: voiceTextStr, icon: '🎤' },
+    { label: T('er-tok-voice'), text: voiceTextStr, icon: '🎤' },
     { label: 'Console logs', text: JSON.stringify(payload.consoleLogs), icon: '🖥' },
     { label: 'Network errors', text: JSON.stringify(payload.networkErrors), icon: '🌐' },
-    { label: '補充說明', text: descInput.value || '', icon: '📝' },
-    { label: '時間軸標記', text: JSON.stringify(markers), icon: '📌' },
+    { label: T('er-tok-desc'), text: descInput.value || '', icon: '📝' },
+    { label: T('er-tok-markers'), text: JSON.stringify(markers), icon: '📌' },
   ];
 
   let totalTokens = 0;
@@ -154,7 +179,7 @@ function renderTokenEstimate(payload: RecordingPayload) {
   // rrweb 摘要（get_rrweb_summary 只回筆數，很小）
   const rrwebSummaryTokens = 30;
   totalTokens += rrwebSummaryTokens;
-  html += `<div class="token-row"><span class="label">📹 DOM 摘要</span><span>~${rrwebSummaryTokens} tokens</span></div>`;
+  html += `<div class="token-row"><span class="label">📹 ${T('er-tok-dom')}</span><span>~${rrwebSummaryTokens} tokens</span></div>`;
 
   // 總計 + 對比 Claude in Chrome
   const bugezyUSD = ((totalTokens * 8) / 1_000_000).toFixed(4);
@@ -163,8 +188,8 @@ function renderTokenEstimate(payload: RecordingPayload) {
   const savedPercent = chromeTokens > 0 ? Math.round((1 - totalTokens / chromeTokens) * 100) : 0;
 
   // PM-195：加 USD 單位，與最終報告頁（server）格式一致 `≈ USD $<amount>`
-  html += `<div class="token-row total"><span>AI 讀取總計</span><span>~${totalTokens.toLocaleString()} tokens ≈ USD $${bugezyUSD}</span></div>`;
-  html += `<div class="token-save">💡 同場景 Claude in Chrome：~${chromeTokens.toLocaleString()} tokens ≈ USD $${chromeUSD}<br>✅ BugEzy 為你省了 ${savedPercent}%</div>`;
+  html += `<div class="token-row total"><span>${T('er-tok-total')}</span><span>~${totalTokens.toLocaleString()} tokens ≈ USD $${bugezyUSD}</span></div>`;
+  html += `<div class="token-save">${T('er-tok-compare')}~${chromeTokens.toLocaleString()} tokens ≈ USD $${chromeUSD}<br>${T('er-tok-saved')} ${savedPercent}%</div>`;
 
   container.innerHTML = html;
 }
@@ -614,7 +639,7 @@ let autoRestartFails = 0;
 function createEditRecognition(): SRInst | null {
   if (!SR) return null;
   const rec = new SR();
-  rec.lang = 'zh-TW';
+  rec.lang = srLang; // PM-215：跟隨 popup 語言（zh-TW / yue-Hant-HK / en-US）
   rec.continuous = true;
   rec.interimResults = true;
 
@@ -635,7 +660,7 @@ function createEditRecognition(): SRInst | null {
         interim = res[0].transcript;
       }
     }
-    voiceStatus.textContent = interim ? `🔴 ${interim}` : '🔴 聆聽中...';
+    voiceStatus.textContent = interim ? `🔴 ${interim}` : T('er-listening');
   };
 
   rec.onend = () => {
@@ -657,10 +682,10 @@ function createEditRecognition(): SRInst | null {
               if (recognition) {
                 recognition.start();
                 autoRestartFails = 0;
-                voiceStatus.textContent = '🔴 語音已重啟...';
+                voiceStatus.textContent = T('er-restarted');
               }
             } catch {
-              voiceStatus.textContent = '⚠ 語音中斷，按 🎤 重新啟動';
+              voiceStatus.textContent = T('er-voice-interrupted');
               stopVoice();
             }
           })();
@@ -670,7 +695,7 @@ function createEditRecognition(): SRInst | null {
   };
 
   rec.onerror = (e: SRErr) => {
-    voiceStatus.textContent = `語音錯誤：${e.error}`;
+    voiceStatus.textContent = `${T('er-voice-error')}${e.error}`;
     if (e.error === 'not-allowed' || e.error === 'service-not-allowed') stopVoice();
   };
 
@@ -679,7 +704,7 @@ function createEditRecognition(): SRInst | null {
 
 voiceBtn.addEventListener('click', async () => {
   if (!SR) {
-    voiceStatus.textContent = '此瀏覽器不支援語音辨識';
+    voiceStatus.textContent = T('er-no-sr');
     return;
   }
   if (listening) {
@@ -692,7 +717,7 @@ voiceBtn.addEventListener('click', async () => {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     stream.getTracks().forEach((t) => t.stop());
   } catch {
-    voiceStatus.textContent = '❌ 麥克風無法存取';
+    voiceStatus.textContent = T('er-no-mic');
     return;
   }
 
@@ -703,7 +728,7 @@ voiceBtn.addEventListener('click', async () => {
     listening = true;
     voiceBtn.classList.add('listening');
     voiceBtn.textContent = '⏹';
-    voiceStatus.textContent = '🔴 聆聽中...';
+    voiceStatus.textContent = T('er-listening');
   }
 });
 
@@ -711,7 +736,7 @@ voiceBtn.addEventListener('click', async () => {
 chrome.storage.local.get(KEYBOARD_MODE_KEY, (r) => {
   if (r[KEYBOARD_MODE_KEY] === true) {
     voiceBtn.style.display = 'none';
-    voiceStatus.textContent = '🔇 鍵盤模式';
+    voiceStatus.textContent = T('er-keyboard');
   }
 });
 
@@ -721,28 +746,28 @@ correctBtn.addEventListener('click', async () => {
   if (!text) return;
 
   correctBtn.disabled = true;
-  correctBtn.textContent = '🔧 校正中...';
+  correctBtn.textContent = T('er-correcting');
   try {
     const res = await fetch(`${API_BASE}/api/correct`, {
       method: 'POST',
       headers: await getAuthHeaders(), // PM-135：帶 session token（需登入）
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, language: reportLang }), // PM-217：帶語言切 prompt
     });
     const data = (await res.json()) as { corrected?: string };
     if (data.corrected) {
       voiceText.value = data.corrected;
-      correctBtn.textContent = '✅ 已校正';
+      correctBtn.textContent = T('er-corrected');
     } else {
-      correctBtn.textContent = '❌ 校正失敗';
+      correctBtn.textContent = T('er-correct-fail');
     }
   } catch (err) {
     blog('AI 校正失敗', err);
-    correctBtn.textContent = '❌ 校正失敗';
+    correctBtn.textContent = T('er-correct-fail');
   }
   // 3 秒後恢復（校正可多次微調，不像 AI 精簡那樣永久鎖死）
   setTimeout(() => {
     correctBtn.disabled = false;
-    correctBtn.textContent = '🔧 AI 校正';
+    correctBtn.textContent = T('er-ai-correct');
   }, 3000);
 });
 
@@ -750,35 +775,35 @@ correctBtn.addEventListener('click', async () => {
 summarizeBtn.addEventListener('click', async () => {
   const text = voiceText.value.trim();
   if (!text || text.length < 10) {
-    voiceStatus.textContent = '語音記錄太短，無需精簡';
+    voiceStatus.textContent = T('er-too-short');
     return;
   }
   summarizeBtn.disabled = true;
-  summarizeBtn.textContent = '🤖 精簡中...';
+  summarizeBtn.textContent = T('er-summarizing');
   try {
     const res = await fetch(`${API_BASE}/api/summarize`, {
       method: 'POST',
       headers: await getAuthHeaders(), // PM-135：帶 session token（需登入）
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, language: reportLang }), // PM-217：帶語言切 prompt
     });
     const data = (await res.json()) as { summary?: string };
     if (data.summary) {
       voiceText.value = data.summary;
-      summarizeBtn.textContent = '✅ 已精簡（不可重複）';
+      summarizeBtn.textContent = T('er-summarized');
       summarizeBtn.classList.add('done');
       summarizeBtn.disabled = true; // 永久 disable，不可再按
       blog('AI 精簡完成 → 替換語音記錄');
       return; // 跳過 finally 的重新啟用
     } else {
-      summarizeBtn.textContent = '❌ 失敗';
+      summarizeBtn.textContent = T('er-fail');
     }
   } catch (err) {
     blog('AI 精簡失敗', err);
-    summarizeBtn.textContent = '❌ 失敗';
+    summarizeBtn.textContent = T('er-fail');
   }
   // 只有失敗才重新啟用（成功已 return）
   setTimeout(() => {
-    summarizeBtn.textContent = '🤖 AI 精簡';
+    summarizeBtn.textContent = T('er-ai-summarize');
     summarizeBtn.classList.remove('done');
     summarizeBtn.disabled = false;
   }, 3000);
@@ -789,7 +814,7 @@ summarizeBtn.addEventListener('click', async () => {
 async function showUploadSuccess(shareUrl: string) {
   blog('報告上傳完成', shareUrl);
   result.classList.remove('hidden');
-  result.replaceChildren('✅ 已上傳！分享連結：');
+  result.replaceChildren(T('er-uploaded'));
   const a = document.createElement('a');
   a.href = shareUrl;
   a.target = '_blank';
@@ -806,7 +831,7 @@ async function showUploadSuccess(shareUrl: string) {
   const copyBtn = document.createElement('button');
   copyBtn.type = 'button';
   copyBtn.textContent = '📋';
-  copyBtn.title = '複製連結';
+  copyBtn.title = T('er-copy-link');
   copyBtn.style.cssText =
     'margin-left:8px;background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:2px 8px;font-size:13px;cursor:pointer;vertical-align:middle;';
   copyBtn.addEventListener('click', () => {
@@ -824,8 +849,8 @@ async function showUploadSuccess(shareUrl: string) {
   });
   result.appendChild(copyInput);
   result.appendChild(copyBtn);
-  uploadBtn.textContent = '✅ 已上傳';
-  discardBtn.textContent = '關閉';
+  uploadBtn.textContent = T('er-upload-done');
+  discardBtn.textContent = T('er-close');
   await chrome.storage.local.remove(STORAGE_KEY); // 上傳後清本機 payload
 }
 
@@ -836,7 +861,7 @@ async function showUploadSuccess(shareUrl: string) {
 uploadBtn.addEventListener('click', async () => {
   stopVoice();
   uploadBtn.disabled = true;
-  uploadBtn.textContent = '⏳ 上傳中...';
+  uploadBtn.textContent = T('er-uploading');
   let resp: { ok: boolean; shareUrl?: string; error?: string } | undefined;
   try {
     resp = (await chrome.runtime.sendMessage({
@@ -852,9 +877,9 @@ uploadBtn.addEventListener('click', async () => {
     await showUploadSuccess(resp.shareUrl);
   } else {
     result.classList.remove('hidden');
-    result.textContent = `❌ 上傳失敗：${resp?.error ?? '未知錯誤，請重試'}`;
+    result.textContent = `${T('er-upload-fail')}${resp?.error ?? T('er-unknown-err')}`;
     uploadBtn.disabled = false;
-    uploadBtn.textContent = '✅ 上傳報告';
+    uploadBtn.textContent = T('er-upload');
   }
 });
 

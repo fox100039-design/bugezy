@@ -264,7 +264,7 @@ export type SupportedLang = 'zh' | 'yue' | 'ja' | 'ko' | 'en' | 'vi';
 /** Whisper language 代碼 → Web Speech API BCP-47 lang。 */
 export const SPEECH_LANG_MAP: Record<string, string> = {
   zh: 'zh-TW',
-  yue: 'zh-HK',
+  yue: 'yue-Hant-HK', // PM-218：粵語正確 BCP-47 代碼（原 zh-HK 是香港中文，講粵語辨識不到）
   ja: 'ja',
   ko: 'ko',
   en: 'en',

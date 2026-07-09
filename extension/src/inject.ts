@@ -476,8 +476,13 @@ function main() {
   // PM-70：統一語音狀態指示器（顯示在底部字幕區）。🟢 聽取中 / 🟡 重啟中 / 🔴 已停止
   type VoiceStatus = 'listening' | 'restarting' | 'stopped';
   function setVoiceStatus(state: VoiceStatus, note?: string) {
+    // PM-216：狀態文字改 i18n（跟隨 data-bugezy-lang）
     const base =
-      state === 'listening' ? '🟢 聽取中…' : state === 'restarting' ? '🟡 重啟中…' : '🔴 已停止';
+      state === 'listening'
+        ? it('caption-listening')
+        : state === 'restarting'
+          ? it('caption-restarting')
+          : it('caption-stopped');
     setCaptionText(note ? `${base} — ${note}` : base);
   }
 
@@ -554,7 +559,7 @@ function main() {
         autoRestartFails++;
         blog(`auto restart 失敗 (第 ${autoRestartFails} 次)`);
         if (autoRestartFails >= 3) {
-          setVoiceStatus('stopped', '按 🔄 重啟');
+          setVoiceStatus('stopped', it('caption-note-restart'));
           blog('auto restart 連續失敗 3 次，等待手動重啟');
         }
       }
@@ -567,11 +572,11 @@ function main() {
       if (err === 'not-allowed' || err === 'service-not-allowed') {
         // 權限被拒 → 停止自動重啟，提示使用者
         voiceActive = false;
-        setVoiceStatus('stopped', '麥克風被拒絕');
+        setVoiceStatus('stopped', it('caption-note-denied'));
       } else if (err === 'audio-capture') {
         // 麥克風裝置問題（被佔用/拔除）→ 提示，但不關 voiceActive，
         // 交給 onend 自動重啟 + 失敗計數收斂
-        setVoiceStatus('stopped', '麥克風無法擷取，請檢查裝置');
+        setVoiceStatus('stopped', it('caption-note-nocapture'));
       } else if (err === 'no-speech') {
         // 正常：靜默太久觸發，onend 會自動重啟，不更動狀態
         blog('no-speech（正常），等 onend 自動重啟');
@@ -613,7 +618,7 @@ function main() {
       blog('getUserMedia 刷新成功');
     } catch (err) {
       blog('getUserMedia 刷新失敗（麥克風可能被封鎖）', err);
-      setVoiceStatus('stopped', '麥克風無法存取');
+      setVoiceStatus('stopped', it('caption-note-noaccess'));
       return;
     }
 
@@ -630,7 +635,7 @@ function main() {
         blog('語音強制重啟成功');
       } catch (err) {
         blog('語音強制重啟失敗', err);
-        setVoiceStatus('stopped', '重啟失敗，請重新整理頁面');
+        setVoiceStatus('stopped', it('caption-note-restart-fail'));
       }
     }
   }

@@ -302,6 +302,7 @@ const CSP_VALUE =
   'form-action ' +
   "'self' https://payment.ecpay.com.tw https://payment-stage.ecpay.com.tw; " +
   "base-uri 'self'; " +
+  "frame-ancestors 'none'; " + // PM-219 修復6：禁止被任意網站 iframe 嵌入（防點擊劫持）
   "object-src 'none';";
 
 // PM-166（Fable5）：報告頁渲染使用者資料（XSS 主要標的），改嚴格 CSP——script-src 拿掉 'unsafe-inline' 改 'self'
@@ -391,6 +392,94 @@ function robotsTxt(): Response {
     `Sitemap: https://bugezy.dev/sitemap.xml\n`;
   return new Response(body, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
 }
+
+// PM-211：Open Graph + Twitter Card meta（社群分享 FB/LINE/Threads/X 預覽卡片）。
+// 各頁 title/description 依規格帶入；og:image 暫用品牌 icon-128（由 GET /icon-128.png 提供，見下）。
+function ogMeta(path: string, title: string, description: string): string {
+  const tt = title.replace(/"/g, '&quot;');
+  const dd = description.replace(/"/g, '&quot;');
+  const url = `https://bugezy.dev${path}`;
+  return `<meta property="og:type" content="website">
+  <meta property="og:site_name" content="BugEzy">
+  <meta property="og:title" content="${tt}">
+  <meta property="og:description" content="${dd}">
+  <meta property="og:url" content="${url}">
+  <meta property="og:image" content="https://bugezy.dev/icon-128.png">
+  <meta property="og:image:width" content="128">
+  <meta property="og:image:height" content="128">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="${tt}">
+  <meta name="twitter:description" content="${dd}">
+  <meta name="twitter:image" content="https://bugezy.dev/icon-128.png">`;
+}
+
+// PM-211：og:image 用的品牌 icon（128×128 PNG，內嵌 base64 = extension/icons/icon-128.png），
+// 由 GET /icon-128.png 提供，避免 OG image 指向 404。之後可換 1200×630 正式分享圖。
+const ICON_128_B64 =
+  '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';
+function iconPng(): Response {
+  const bin = atob(ICON_128_B64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Response(bytes, {
+    headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=604800' },
+  });
+}
+
+// PM-212：JSON-LD 結構化資料（Google rich snippets）。放在 <script type="application/ld+json">，
+// 內容為靜態（無使用者資料）；仍把 `<` 轉義為 < 防 `</script>` 提前結束（穩健做法）。
+function jsonLd(obj: unknown): string {
+  return `<script type="application/ld+json">${JSON.stringify(obj).replace(/</g, '\\u003c')}</script>`;
+}
+// 首頁：SoftwareApplication（產品/價格）+ Organization（品牌/logo）
+const SOFTWARE_APP_LD = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'BugEzy',
+  description:
+    'Voice-powered bug reporting Chrome extension with MCP integration. Captures console logs, network errors, DOM traces, and developer voice descriptions.',
+  applicationCategory: 'DeveloperApplication',
+  operatingSystem: 'Chrome, Windows, macOS, Linux',
+  url: 'https://bugezy.dev',
+  downloadUrl:
+    'https://chromewebstore.google.com/detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj',
+  softwareVersion: '1.1.2',
+  author: { '@type': 'Organization', name: 'BugEzy', url: 'https://bugezy.dev' },
+  offers: [
+    {
+      '@type': 'Offer',
+      name: 'Free Plan',
+      price: '0',
+      priceCurrency: 'TWD',
+      description: '10 recordings, 5 rewinds, 20 MCP calls per month',
+    },
+    {
+      '@type': 'Offer',
+      name: 'Monthly Plan',
+      price: '80',
+      priceCurrency: 'TWD',
+      description: 'Unlimited recordings, rewinds, and MCP calls',
+    },
+    {
+      '@type': 'Offer',
+      name: 'Day Pass',
+      price: '20',
+      priceCurrency: 'TWD',
+      description: '24-hour full access',
+    },
+  ],
+};
+const ORGANIZATION_LD = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: 'BugEzy',
+  url: 'https://bugezy.dev',
+  logo: 'https://bugezy.dev/icon-128.png',
+  sameAs: ['https://github.com/fox100039-design/bugezy'],
+};
+// PM-213：/faq 頁的 FAQPage JSON-LD 改由 faqPage 依 lang 動態產生（與頁面可見 Q&A 逐字一致，
+// Google 要求 FAQ markup 文字須為頁面可見內容）；原 /skill 的 SKILL_FAQ_LD 已移除（skill 非 FAQ 頁）。
 
 // ── PM-72：綠界 ECPay CheckMacValue（依官方 AI Skill ECPay-API-Skill guides/13）──
 // AIO 金流用 SHA256；TypeScript 的 encodeURIComponent 需額外把 %20→+、~→%7e、'→%27，
@@ -483,6 +572,17 @@ function isActiveUser(u: { plan?: string | null; day_pass_expires_at?: string | 
   return false;
 }
 
+// PM-219 修復2：ECPay callback 的 users.update 統一走此 helper——檢查 error，失敗回 false，
+//   讓呼叫端回 500 使綠界重送（避免「已收款/已扣款但 users 未更新」的孤兒態被冪等短路永久卡住）。
+async function updateUserPlan(env: Env, userId: string, patch: Record<string, unknown>): Promise<boolean> {
+  const { error } = await supa(env).from('users').update(patch).eq('user_id', userId);
+  if (error) {
+    console.error('ECPay users.update failed:', error.message, userId); // 原始錯誤只記 log
+    return false;
+  }
+  return true;
+}
+
 // PM-144：以 user_id 查 users 表判斷是否為有效付費用戶（terminal-logs 付費限定用）。
 async function isActiveUserId(userId: string, env: Env): Promise<boolean> {
   const { data } = await supa(env)
@@ -541,10 +641,9 @@ Full guide: https://bugezy.dev/install`,
   <title>${t('BugEzy — 開發者 Bug 報告工具，AI 幫你修', 'BugEzy — Bug Reporter for Developers, AI fixes your bugs')}</title>
   <meta name="description" content="${t('亞洲最平價的 MCP 語音除錯工具。錄製 Bug、AI 自動分析、一鍵報告。支援 Claude、Cursor、Windsurf 等 7 大 AI 工具。月費 NT$80 起。', 'The most affordable MCP voice debugging tool in Asia. Record bugs, AI auto-analysis, one-click reports. Works with Claude, Cursor, Windsurf and 7 major AI tools. From NT$80/mo.')}">
   <meta name="keywords" content="BugEzy, bug reporter, MCP, AI debugging, Chrome extension, 語音除錯, bug tracking">
-  <meta property="og:title" content="${t('BugEzy — AI 幫你修 Bug', 'BugEzy — AI fixes your bugs')}">
-  <meta property="og:description" content="${t('錄製 Bug、AI 自動分析、一鍵報告。亞洲最平價 MCP 語音除錯工具。', 'Record bugs, AI auto-analysis, one-click reports. The most affordable MCP voice debugging tool in Asia.')}">
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="https://bugezy.dev">
+  ${ogMeta('', 'BugEzy — Voice-Powered Bug Reporting for Developers', 'Capture bugs with voice, console logs, network errors, and DOM traces. Affordable MCP debugging tool. Chrome Extension + Python CLI. NT$80/mo.')}
+  ${jsonLd(SOFTWARE_APP_LD)}
+  ${jsonLd(ORGANIZATION_LD)}
   <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
   <link rel="canonical" href="https://bugezy.dev">
   <style>
@@ -917,6 +1016,7 @@ function privacyPage(lang: PageLang): string {
 <meta name="description" content="${t('BugEzy 隱私政策：我們收集什麼資料、如何使用與保護。', 'BugEzy privacy policy — what data we collect, how we use it, and how we protect your information.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
 <link rel="canonical" href="https://bugezy.dev/privacy">
+${ogMeta('/privacy', 'Privacy Policy — BugEzy', 'How BugEzy handles your data.')}
 <style>
   * { box-sizing: border-box; }
   .lang-switch { position:fixed; top:14px; right:16px; z-index:10; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:5px 12px; font-size:13px; color:#c4b5fd; text-decoration:none; }
@@ -1325,6 +1425,7 @@ function skillPage(lang: PageLang): string {
 <meta name="description" content="${t('把 BugEzy AI 客服手冊放進你的專案，AI 就會教你怎麼用 BugEzy、幫你讀報告、排除故障。', 'Add the BugEzy AI support manual to your project and your AI will teach you how to use BugEzy, read reports, and troubleshoot.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
 <link rel="canonical" href="https://bugezy.dev/skill">
+${ogMeta('/skill', 'AI Customer Service Guide — BugEzy SKILL.md', 'BugEzy MCP tool documentation for AI assistants. 13 tools including get_timeline.')}
 <style>
   * { box-sizing: border-box; }
   .lang-switch { position:fixed; top:14px; right:16px; z-index:10; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:5px 12px; font-size:13px; color:#c4b5fd; text-decoration:none; }
@@ -1447,6 +1548,7 @@ function guidePage(lang: PageLang): string {
 <meta name="description" content="${t('BugEzy 使用指南：安裝登入、六種錄製模式、編輯上傳、讓 AI 透過 MCP 讀報告修 Bug。', 'Learn how to use BugEzy to record bugs, annotate screenshots, and connect with AI via MCP.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
 <link rel="canonical" href="https://bugezy.dev/guide">
+${ogMeta('/guide', 'User Guide — BugEzy', 'Step-by-step guide to using BugEzy for bug reporting.')}
 <style>
   * { box-sizing: border-box; }
   .lang-switch { position:fixed; top:14px; right:16px; z-index:10; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:5px 12px; font-size:13px; color:#c4b5fd; text-decoration:none; }
@@ -1639,6 +1741,33 @@ function guidePage(lang: PageLang): string {
 // PM-152：/faq 改為函式（依 lang 中英切換）。🔴 英文版禁止提及任何競品名稱（延續 PM-130 去競品）。
 function faqPage(lang: PageLang): string {
   const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
+  // PM-213：FAQPage JSON-LD ——問題/答案文字與下方可見手風琴逐字一致（Google 要求 FAQ markup 為頁面可見內容）。
+  //   依 lang 動態產生：zh 頁配 zh 文字、en 頁配 en 文字，兩者都 match 各自可見內容。
+  const faqQA: Array<[string, string]> = [
+    [t('BugEzy 是什麼？', 'What is BugEzy?'), t('BugEzy 是一款 Chrome 擴充功能，讓開發者用語音 + 錄製的方式記錄 Bug，AI 透過 MCP 自動讀取報告並提供修復建議。省下 95% 的 debug 溝通時間。', 'BugEzy is a Chrome extension that lets developers capture bugs by voice + recording. AI reads the report automatically via MCP and suggests fixes — saving 95% of debugging communication time.')],
+    [t('BugEzy 最大的優勢是什麼？', 'What makes BugEzy special?'), t('專為亞洲開發者設計：中文/粵語/日韓語音支援、NT$80 超平價月費、MCP 整合讓 AI 直接讀報告。獨家功能：即時監控、30 秒回溯、Whisper 精準語音、終端機 CLI、Token 透明度。', 'Built for Asian developers: Chinese / Cantonese / Japanese / Korean voice support, an affordable NT$80/mo plan, and MCP integration so AI reads reports directly. Signature features: live monitor, 30-second rewind, Whisper precise voice, terminal CLI, and token transparency.')],
+    [t('支援哪些 AI 工具？', 'Which AI tools are supported?'), t('任何支援 MCP 的 AI 工具都能用，包括 Claude Desktop、Claude Code、Cursor、VS Code + Copilot、Zed、Windsurf、Codex、Replit 等。只需要一行 URL：https://bugezy.dev/mcp', 'Any MCP-capable AI tool works, including Claude Desktop, Claude Code, Cursor, VS Code, Zed, Windsurf, Google Antigravity, Gemini CLI, and more. Just one URL: https://bugezy.dev/mcp')],
+    [t('BugEzy 會錄到我的密碼嗎？', 'Will BugEzy record my passwords?'), t('BugEzy 錄製的是 DOM 結構變化，不是螢幕截圖。密碼輸入框（type="password"）的內容會被 rrweb 自動遮蔽，不會錄到實際密碼。', 'BugEzy records DOM structure changes, not screen video. Password fields (type="password") are automatically masked by rrweb, so actual passwords are never captured.')],
+    [t('我的報告誰能看到？', 'Who can see my reports?'), t('報告連結採用隨機加密 ID（UUID），無法被猜測或搜尋，只有擁有連結的人才能查看報告內容。若你將連結分享給同事或 AI 工具，他們就能查看；未分享的報告連結不會出現在任何公開列表中。建議不要把報告連結貼在公開場合（如公開 issue、論壇），避免非預期的存取。', 'Each report has a random encrypted ID (UUID) that cannot be guessed or searched — only people with the report link can view its content. If you share the link with colleagues or AI tools, they can access the report; unshared report links never appear in any public listing. Tip: avoid posting report links in public places (issues, forums) to prevent unintended access.')],
+    [t('資料存在哪裡？', 'Where is my data stored?'), t('報告存在 Cloudflare R2（全球 CDN），使用者資料存在 Supabase（PostgreSQL）。所有傳輸都經過 HTTPS 加密。', 'Reports are stored on Cloudflare R2 (global CDN); user data on Supabase (PostgreSQL). All transfers are encrypted over HTTPS.')],
+    [t('免費版有什麼限制？', 'What are the free plan limits?'), t('免費版每月可錄製 10 次、回溯 5 次、MCP AI 讀取 20 次。截圖標注和即時監控無限使用。報告保留 7 天。', 'The free plan includes 10 recordings, 5 rewinds, and 20 MCP AI reads per month. Screenshot annotation and live monitor are unlimited. Reports are kept for 7 days.')],
+    [t('付費版多少錢？', 'How much is Premium?'), t('NT$80/月（約 $3 USD），解鎖全功能無限次使用，報告保留 90 天，加上終端機 CLI、Whisper 精準語音等進階功能。', 'NT$80/mo (about US$3) unlocks unlimited use of all features, 90-day report retention, plus advanced features like terminal CLI and Whisper precise voice.')],
+    [t('如何升級付費版？', 'How to upgrade to Premium?'), t('在 BugEzy popup 點「升級」按鈕，透過信用卡或 ATM 付款。', 'Click "Upgrade" in the BugEzy popup and pay by credit card or ATM.')],
+    [t('可以取消訂閱嗎？', 'Can I cancel my subscription?'), t('可以，隨時取消。取消後當月剩餘天數仍可使用付費功能，下個月恢復為免費版。', 'Yes, anytime. After cancelling you keep premium features for the rest of the billing period, then revert to the free plan.')],
+    [t('哪些瀏覽器支援？', 'Which browsers are supported?'), t('目前支援 Chrome 和所有 Chromium 瀏覽器（Edge、Brave、Arc 等）。', 'Chrome and all Chromium-based browsers (Edge, Brave, Arc, etc.).')],
+    [t('會影響網頁效能嗎？', 'Does it affect page performance?'), t('影響極小。BugEzy 只在你主動錄製時才記錄 DOM 變化，即時監控模式只攔截 Console error 和 Network error，不錄 DOM。', 'Minimal. BugEzy only records DOM changes while you are actively recording; live monitor mode only captures Console and Network errors, not the DOM.')],
+    [t('MCP 是什麼？', 'What is MCP?'), t('Model Context Protocol（模型上下文協議），是 Anthropic 推出的開放標準，讓 AI 工具可以連接外部服務。BugEzy 的 MCP 讓 AI 直接讀取你的 Bug 報告，不需要複製貼上。', 'Model Context Protocol — an open standard from Anthropic that lets AI tools connect to external services. BugEzy MCP lets AI read your bug reports directly, with no copy-paste.')],
+    [t('Token 是什麼？為什麼 BugEzy 能省 Token？', 'What are tokens, and how does BugEzy save them?'), t('Token 是 AI 處理文字的計量單位，等於你的 AI 使用費用。BugEzy 用結構化文字（而非截圖）傳送報告給 AI，同樣的 Bug 資訊只需要 1/20 的 Token。每次 MCP AI 讀取都會顯示 Token 估算，讓你看到省了多少。', 'Tokens are the unit AI uses to process text — effectively your AI cost. BugEzy sends reports as structured text (not screenshots), so the same bug info takes 1/20 the tokens. Every MCP AI read shows a token estimate so you can see the savings.')],
+  ];
+  const faqLd = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faqQA.map(([q, a]) => ({
+      '@type': 'Question',
+      name: q,
+      acceptedAnswer: { '@type': 'Answer', text: a },
+    })),
+  };
   return `<!DOCTYPE html>
 <html lang="${lang === 'zh' ? 'zh-Hant' : 'en'}">
 <head>
@@ -1648,6 +1777,8 @@ function faqPage(lang: PageLang): string {
 <meta name="description" content="${t('BugEzy 常見問題：安裝、錄製、語音辨識、MCP 設定、付費方案等問答。', 'Frequently asked questions about BugEzy — pricing, AI tool support, data security, and more.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
 <link rel="canonical" href="https://bugezy.dev/faq">
+${ogMeta('/faq', 'FAQ — BugEzy', 'Frequently asked questions about BugEzy.')}
+${jsonLd(faqLd)}
 <style>
   * { box-sizing: border-box; }
   .lang-switch { position:fixed; top:14px; right:16px; z-index:10; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:5px 12px; font-size:13px; color:#c4b5fd; text-decoration:none; }
@@ -1819,6 +1950,7 @@ Full guide: https://bugezy.dev/install`,
 <meta name="description" content="${t('安裝 BugEzy Chrome 擴充功能，設定 MCP 連線，讓 AI 直接讀取你的 Bug 報告。支援 Claude、Cursor、Windsurf、Google Antigravity、Gemini CLI。', 'Install the BugEzy Chrome extension and set up MCP so AI can read your bug reports directly. Works with Claude, Cursor, Windsurf, Google Antigravity, Gemini CLI.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
 <link rel="canonical" href="https://bugezy.dev/install">
+${ogMeta('/install', 'Install BugEzy — Setup Guide', 'Install BugEzy Chrome Extension and connect MCP in 2 minutes.')}
 <style>
   * { box-sizing: border-box; }
   .lang-switch { position:fixed; top:14px; right:16px; z-index:10; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:5px 12px; font-size:13px; color:#c4b5fd; text-decoration:none; }
@@ -2108,6 +2240,7 @@ function featuresPage(lang: PageLang): string {
 <meta name="description" content="${t('BugEzy 六種除錯模式：錄製、回溯 30 秒、截圖標注、即時監控、終端機 CLI、MCP AI 讀取。Whisper 精準語音轉錄。', 'BugEzy offers six debugging modes: Record, Rewind, Screenshot, Live Monitor, Terminal CLI, and MCP AI. Whisper voice transcription for premium users.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
 <link rel="canonical" href="https://bugezy.dev/features">
+${ogMeta('/features', 'Features — BugEzy', 'Voice recording, DOM replay, console capture, network errors, MCP integration, and more.')}
 <style>
   * { box-sizing: border-box; }
   .lang-switch { position:fixed; top:14px; right:16px; z-index:10; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:5px 12px; font-size:13px; color:#c4b5fd; text-decoration:none; }
@@ -2268,6 +2401,7 @@ function changelogPage(lang: PageLang): string {
 <meta name="description" content="${t('BugEzy 每次更新做了什麼，都記在這裡。', 'What changed in each BugEzy update, all in one place.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
 <link rel="canonical" href="https://bugezy.dev/changelog">
+${ogMeta('/changelog', 'Changelog — BugEzy', 'Latest updates and release notes.')}
 <style>
   * { box-sizing: border-box; }
   .lang-switch { position:fixed; top:14px; right:16px; z-index:10; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:5px 12px; font-size:13px; color:#c4b5fd; text-decoration:none; }
@@ -2352,6 +2486,7 @@ function feedbackPage(lang: PageLang): string {
 <meta name="description" content="${t('回報 BugEzy 的問題或提出功能建議。', 'Report bugs or suggest features for BugEzy.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
 <link rel="canonical" href="https://bugezy.dev/feedback">
+${ogMeta('/feedback', 'Feedback — BugEzy', 'Share your feedback and help improve BugEzy.')}
 <style>
   * { box-sizing: border-box; }
   .lang-switch { position:fixed; top:14px; right:16px; z-index:10; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:5px 12px; font-size:13px; color:#c4b5fd; text-decoration:none; }
@@ -2483,6 +2618,7 @@ function reportsShell(lang: PageLang, bodyHtml: string, langSwitchHref: string):
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex, nofollow" />
 <title>${t('我的報告 · BugEzy', 'My Reports · BugEzy')}</title>
+${ogMeta('/reports', 'My Bug Reports — BugEzy', 'View and manage your captured bug reports.')}
 <style>
   * { box-sizing: border-box; }
   body { margin:0; padding:0; background:#0f0f1a; color:#e8e8f0; font-family:system-ui,-apple-system,"Segoe UI","Microsoft JhengHei",sans-serif; line-height:1.6; font-size:15px; }
@@ -3020,7 +3156,7 @@ const REPORT_PAGE_JS = `
       html += '<h1>' + esc(r.title || t('（無標題）', '(untitled)')) + '</h1>';
       html += '<div class="meta">';
       html += '<div>' + t('URL：', 'URL: ') + '<a href="'+esc(r.url)+'" target="_blank">'+esc(r.url)+'</a></div>';
-      html += '<div>'+esc(r.browser||'')+(r.screen_size ? ' ｜ '+r.screen_size : '')+'</div>';
+      html += '<div>'+esc(r.browser||'')+(r.screen_size ? ' ｜ '+esc(r.screen_size) : '')+'</div>'; // PM-219 修復5：screen_size 補 esc
       html += '<div>'+fmtDate(r.created_at)+'</div>';
       html += '</div></div>';
 
@@ -4031,7 +4167,7 @@ export default {
     // PM-126：版本檢查（popup 亮燈用）+ 更新日誌頁
     if (request.method === 'GET' && path === '/api/version') {
       // 每次上新版到 Chrome Web Store 時，同步改 latest + deploy
-      return json({ latest: '1.1.2', changelog_url: 'https://bugezy.dev/changelog' });
+      return json({ latest: '1.1.3', changelog_url: 'https://bugezy.dev/changelog' });
     }
     if (request.method === 'GET' && path === '/changelog') {
       const res = html(changelogPage(getLang(request))); // PM-126/151
@@ -4063,6 +4199,8 @@ export default {
     // PM-136：SEO — sitemap + robots（讓 Google/Bing 收錄 bugezy.dev）
     if (request.method === 'GET' && path === '/sitemap.xml') return sitemapXml();
     if (request.method === 'GET' && path === '/robots.txt') return robotsTxt();
+    // PM-211：OG/Twitter Card 分享圖（品牌 icon 128×128）
+    if (request.method === 'GET' && path === '/icon-128.png') return iconPng();
 
     // PM-166：報告頁 client 邏輯外部檔（CSP script-src 'self' 才能載入）。快取 1 天。
     if (request.method === 'GET' && path === '/report-page.js') return javascript(REPORT_PAGE_JS);
@@ -4147,6 +4285,9 @@ export default {
       }
       // PM-56：當月 MCP 使用量統計
       if (request.method === 'GET' && path === '/api/usage/monthly') {
+        // PM-219 修復4：加認證 gate（原本無認證，任何人可白嫖全站用量彙總 DB 查詢）
+        const usageUserId = await getAuthUserId(request, env);
+        if (!usageUserId) return json({ error: 'unauthorized' }, 401);
         return json(await getMonthlyUsage(env));
       }
       if (request.method === 'POST' && path === '/api/summarize') {
@@ -4273,7 +4414,9 @@ async function createReport(request: Request, env: Env, origin: string): Promise
   // PM-98 防呆：報告 owner 綁定用 user_id。若上傳端（早期截圖流程）漏帶 payload.user_id，
   // 退而從 Authorization: Bearer <session_token> 補回，避免報告變孤兒（list_reports 依 user_id 過濾查不到）。
   const authUserId = await getAuthUserId(request, env); // 認證身分（session token）
-  if (!payload.user_id && authUserId) payload.user_id = authUserId;
+  // PM-219 修復1：user_id 一律以「認證身分」為準，絕不信任 client 傳的 payload.user_id
+  //   （原本只在缺值時補；client 可傳他人 user_id 把報告冒名掛進他人列表）。匿名上傳 → undefined（不帶 user_id 欄）。
+  payload.user_id = authUserId ?? undefined;
 
   // PM-165：server 端用量檢查（最後防線）——免費用戶可能改 extension JS 跳過 bumpUsage，
   // 這裡以「認證身分」再擋一次。無 rrweb（截圖/監控）不受限；未登入報告放行（匿名上傳場景）。
@@ -4533,19 +4676,26 @@ async function summarizeText(request: Request, env: Env): Promise<Response> {
   const userId = await getAuthUserId(request, env);
   if (!userId) return json({ error: '請先登入' }, 401);
 
-  const { text } = (await request.json().catch(() => ({}))) as { text?: string };
+  // PM-217：帶 language（popup 語言）→ 英文用戶用英文 prompt，zh/yue/未帶維持繁中
+  const { text, language } = (await request.json().catch(() => ({}))) as {
+    text?: string;
+    language?: string;
+  };
   if (!text || text.length < 10) {
     return json({ summary: text ?? '' });
   }
+  const isEn = language === 'en';
+  const sysContent = isEn
+    ? "You are a bug report summarizer. Condense the user's voice description into 2-5 key points. Keep critical info (what element, what problem, expected behavior). Remove repetition and filler. Output in English, bullet points."
+    : '你是 Bug 報告精簡助手。把使用者的語音描述精簡成 2-5 個重點。保留關鍵資訊（什麼元素、什麼問題、預期行為），去除重複和口語贅詞。用繁體中文，條列式輸出。';
+  const userContent = isEn
+    ? `Please summarize the following voice log:\n\n${text}`
+    : `請精簡以下語音記錄：\n\n${text}`;
   try {
     const result = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
       messages: [
-        {
-          role: 'system',
-          content:
-            '你是 Bug 報告精簡助手。把使用者的語音描述精簡成 2-5 個重點。保留關鍵資訊（什麼元素、什麼問題、預期行為），去除重複和口語贅詞。用繁體中文，條列式輸出。',
-        },
-        { role: 'user', content: `請精簡以下語音記錄：\n\n${text}` },
+        { role: 'system', content: sysContent },
+        { role: 'user', content: userContent },
       ],
       max_tokens: 300,
     });
@@ -4567,16 +4717,28 @@ async function correctText(request: Request, env: Env): Promise<Response> {
   const userId = await getAuthUserId(request, env);
   if (!userId) return json({ error: '請先登入' }, 401);
 
-  const { text } = (await request.json().catch(() => ({}))) as { text?: string };
+  // PM-217：帶 language（popup 語言）→ 英文用戶用英文 prompt，zh/yue/未帶維持繁中
+  const { text, language } = (await request.json().catch(() => ({}))) as {
+    text?: string;
+    language?: string;
+  };
   if (!text?.trim()) {
     return json({ error: '沒有文字可校正' }, 400);
   }
-  try {
-    const result = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
-      messages: [
-        {
-          role: 'system',
-          content: `你是繁體中文語音轉文字的校對專家。輸入一定是中文語音辨識的原始結果，可能有同音錯字與口語贅字。請只做「校正」，輸出校正後的中文文字。
+  const isEn = language === 'en';
+  const sysContent = isEn
+    ? `You are a speech-to-text proofreading expert. The input is raw speech recognition output in English. Please only correct it.
+
+Rules:
+1. Fix misheard words and homophones
+2. Remove filler words (um, uh, like, you know, so basically)
+3. Keep technical terms as-is (console error, TypeError, 404, undefined, null, fetch, API)
+4. Add proper punctuation and capitalization
+5. Preserve original meaning and order, do not rewrite or summarize
+6. If the original is already correct, return as-is
+
+Only return the corrected text, no explanation.`
+    : `你是繁體中文語音轉文字的校對專家。輸入一定是中文語音辨識的原始結果，可能有同音錯字與口語贅字。請只做「校正」，輸出校正後的中文文字。
 
 規則：
 1. 修正同音錯字（例：噴五白 → 噴 500、台破 → TypeError）
@@ -4592,9 +4754,15 @@ async function correctText(request: Request, env: Env): Promise<Response> {
 輸入：我按下搜尋按鈕之後那個頁面就出現台破的錯誤然後狀態碼是四零四
 輸出：我按下搜尋按鈕之後，頁面就出現 TypeError 的錯誤，狀態碼是 404。
 
-只回傳校正後的文字，不加任何說明或前綴。`,
-        },
-        { role: 'user', content: `請校正以下語音辨識文字：\n${text}` },
+只回傳校正後的文字，不加任何說明或前綴。`;
+  const userContent = isEn
+    ? `Please correct the following speech recognition text:\n${text}`
+    : `請校正以下語音辨識文字：\n${text}`;
+  try {
+    const result = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
+      messages: [
+        { role: 'system', content: sysContent },
+        { role: 'user', content: userContent },
       ],
       // Qwen3 是推理模型，會先輸出 <think> 推理再給答案，max_tokens 需給足以免答案被截斷
       max_tokens: 2048,
@@ -4663,6 +4831,11 @@ async function handleTranscribe(request: Request, env: Env): Promise<Response> {
   groqForm.append('model', 'whisper-large-v3-turbo');
   groqForm.append('language', finalLang); // PM-137：使用者選的語言（預設 zh）
   groqForm.append('response_format', 'verbose_json');
+  // PM-214：Groq Whisper 的 language 只控制辨識語言、不控制簡/繁輸出。台灣市場統一繁體——
+  //   對中文與粵語加 prompt 引導繁體中文輸出（不影響辨識準確度；en 與日韓越不需要）。
+  if (finalLang === 'zh' || finalLang === 'yue') {
+    groqForm.append('prompt', '以下是繁體中文的語音轉錄內容。');
+  }
 
   try {
     const groqRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
@@ -4954,8 +5127,19 @@ async function ecpayCallback(request: Request, env: Env): Promise<Response> {
   }
 
   const tradeNo = params.MerchantTradeNo ?? '';
-  // PM-145：冪等——已成功入帳的重送直接回 1|OK（不重複展延到期日）
+  // PM-145：冪等——已成功入帳的重送不重複展延到期日。
+  // PM-219 修復2b：但若前次 users.update 失敗成孤兒（已收款未升級）→ 冪等重送順手自癒（重放升級狀態）。
+  //   用 isActiveUserId 當守門：已 active（健康）→ 不動不展延；仍非 active（孤兒）→ 重放。RtnCode=1 才升級。
   if (tradeNo && (await paymentAlreadyPaid(env, tradeNo))) {
+    const uid = params.CustomField1 ?? '';
+    if (params.RtnCode === '1' && uid && !(await isActiveUserId(uid, env))) {
+      const healed = await updateUserPlan(env, uid, {
+        plan: 'paid',
+        ecpay_trade_no: tradeNo,
+        plan_expires_at: oneMonthLaterISO(),
+      });
+      if (!healed) return new Response('0|ErrorMessage=User upgrade failed', { status: 500 });
+    }
     return new Response('1|OK', { status: 200 });
   }
   // PM-145：金額比對（月費固定 80）——被竄改則不授權，仍回 1|OK 讓綠界停止重送
@@ -4985,14 +5169,13 @@ async function ecpayCallback(request: Request, env: Env): Promise<Response> {
       return new Response('0|ErrorMessage=Payment record failed', { status: 500 });
     }
     if (userId) {
-      await supa(env)
-        .from('users')
-        .update({
-          plan: 'paid',
-          ecpay_trade_no: tradeNo,
-          plan_expires_at: oneMonthLaterISO(),
-        })
-        .eq('user_id', userId);
+      // PM-219 修復2a：users.update 檢查 error，失敗回 500 讓綠界重送（原本吞掉→孤兒態）
+      const upgraded = await updateUserPlan(env, userId, {
+        plan: 'paid',
+        ecpay_trade_no: tradeNo,
+        plan_expires_at: oneMonthLaterISO(),
+      });
+      if (!upgraded) return new Response('0|ErrorMessage=User upgrade failed', { status: 500 });
     }
   } else {
     // 付款失敗：不升級，僅記錄（best-effort；失敗未升級無冪等風險，寫入失敗不阻斷）
@@ -5113,8 +5296,17 @@ async function handleDayPassCallback(request: Request, env: Env): Promise<Respon
   }
 
   const tradeNo = params.MerchantTradeNo ?? '';
-  // PM-145：冪等——已成功入帳的重送直接回 1|OK（不重複 +24h）
+  // PM-145：冪等——已成功入帳的重送不重複 +24h。
+  // PM-219 修復2b：孤兒自癒——前次 users.update 失敗（已收款未開通）→ 冪等重送重放（isActiveUserId 守門避免重複 +24h）。
   if (tradeNo && (await paymentAlreadyPaid(env, tradeNo))) {
+    const uid = params.CustomField1 ?? '';
+    if (params.RtnCode === '1' && uid && !(await isActiveUserId(uid, env))) {
+      const healed = await updateUserPlan(env, uid, {
+        plan: 'day_pass',
+        day_pass_expires_at: dayPassExpiryISO(),
+      });
+      if (!healed) return new Response('0|ErrorMessage=User upgrade failed', { status: 500 });
+    }
     return new Response('1|OK', { status: 200 });
   }
   // PM-145：金額比對（日票固定 20）
@@ -5142,10 +5334,12 @@ async function handleDayPassCallback(request: Request, env: Env): Promise<Respon
       return new Response('0|ErrorMessage=Payment record failed', { status: 500 });
     }
     if (userId) {
-      await supa(env)
-        .from('users')
-        .update({ plan: 'day_pass', day_pass_expires_at: dayPassExpiryISO() })
-        .eq('user_id', userId);
+      // PM-219 修復2a：users.update 檢查 error，失敗回 500 讓綠界重送
+      const opened = await updateUserPlan(env, userId, {
+        plan: 'day_pass',
+        day_pass_expires_at: dayPassExpiryISO(),
+      });
+      if (!opened) return new Response('0|ErrorMessage=User upgrade failed', { status: 500 });
     }
   } else {
     await recordPayment(env, {
@@ -5200,6 +5394,17 @@ async function ecpayPeriodCallback(request: Request, env: Env): Promise<Response
     params.Gwsr || params.TotalSuccessTimes || params.ProcessDate || 'p'
   }`;
   if (await paymentAlreadyPaid(env, periodKey)) {
+    // PM-219 修復2b：本期已記錄但前次 users.update 失敗成孤兒（已扣款未展延）→ 冪等重送重放升級
+    //   （isActiveUserId 守門：已 active 不重複展延）。RtnCode=1 才升級。
+    const uid = params.CustomField1 ?? '';
+    if (params.RtnCode === '1' && uid && !(await isActiveUserId(uid, env))) {
+      const healed = await updateUserPlan(env, uid, {
+        plan: 'paid',
+        plan_expires_at: oneMonthLaterISO(),
+        last_login_at: new Date().toISOString(),
+      });
+      if (!healed) return new Response('0|ErrorMessage=User upgrade failed', { status: 500 });
+    }
     return new Response('1|OK', { status: 200 });
   }
   // PM-145：金額比對（定期定額每期 80，欄位為 Amount）。缺欄位（=0）不擋，避免誤殺續扣；
@@ -5230,17 +5435,16 @@ async function ecpayPeriodCallback(request: Request, env: Env): Promise<Response
   if (userId) {
     if (isSuccess) {
       // 本期扣款成功 → 維持 paid + 展延到期日（PM-73），順手更新最近活躍時間
-      await supa(env)
-        .from('users')
-        .update({
-          plan: 'paid',
-          plan_expires_at: oneMonthLaterISO(),
-          last_login_at: new Date().toISOString(),
-        })
-        .eq('user_id', userId);
+      // PM-219 修復2a：檢查 error，失敗回 500 讓綠界重送（原本吞掉→已扣款未展延孤兒）
+      const renewed = await updateUserPlan(env, userId, {
+        plan: 'paid',
+        plan_expires_at: oneMonthLaterISO(),
+        last_login_at: new Date().toISOString(),
+      });
+      if (!renewed) return new Response('0|ErrorMessage=User upgrade failed', { status: 500 });
     } else {
-      // 本期扣款失敗 → 降級為 free
-      await supa(env).from('users').update({ plan: 'free' }).eq('user_id', userId);
+      // 本期扣款失敗 → 降級為 free（best-effort；失敗不阻斷回應）
+      await updateUserPlan(env, userId, { plan: 'free' });
     }
   }
 
@@ -5614,15 +5818,11 @@ function createMcpServer(env: Env): McpServer {
       }
       if (!user) return txtWithTokens([], 'list_reports'); // 查無此 email → 回空
 
-      // PM-142（P1-1）/165/190：嚴格驗證 token 屬於此 user——查 sessions 表比對 user_id，
-      // 防止「知道某人 email 就能列他報告」。token 來自 URL 或參數（見上方優先序）。
+      // PM-142（P1-1）/165/190：嚴格驗證 token 屬於此 user，防止「知道某人 email 就能列他報告」。
+      // PM-219 修復3：改用 verifySessionByToken（含 expires_at 到期檢查 + 過期即刪），取代 inline 查表（原本不檢查到期）。
       {
-        const { data: session } = await supabase()
-          .from('sessions')
-          .select('user_id')
-          .eq('session_token', token)
-          .maybeSingle();
-        if (!session || (session as { user_id: string }).user_id !== (user as { user_id: string }).user_id) {
+        const tokenUserId = await verifySessionByToken(token, env);
+        if (!tokenUserId || tokenUserId !== (user as { user_id: string }).user_id) {
           return txt('session_token 驗證失敗，請確認 token 正確。');
         }
       }
@@ -5806,14 +6006,12 @@ function createMcpServer(env: Env): McpServer {
 
   // PM-162（Fable5 #2）：有帶 session_token 就嚴格驗證它屬於該 user（比對 sessions 表）。
   // 回 true = 通過驗證 或 未帶 token（optional，向下相容，比照 PM-142 list_reports）。
+  // PM-219 修復3：改用 verifySessionByToken（含 expires_at 到期檢查 + 過期即刪），取代 inline 查表
+  //   （原本不檢查到期 → 過期 token 最長殘留 24hr）。get_live_errors + get_terminal_logs 共用此 helper。
   const sessionMatchesUser = async (sessionToken: string | undefined, userId: string): Promise<boolean> => {
     if (!sessionToken) return true;
-    const { data: session } = await supabase()
-      .from('sessions')
-      .select('user_id')
-      .eq('session_token', sessionToken)
-      .maybeSingle();
-    return !!session && (session as { user_id: string }).user_id === userId;
+    const tokenUserId = await verifySessionByToken(sessionToken, env);
+    return tokenUserId === userId;
   };
 
   // Tool 9（PM-51）: get_live_errors — 不需錄製，讀當前頁面即時 console/network errors

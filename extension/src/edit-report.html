@@ -129,15 +129,15 @@
       <div class="brand">
         <span class="brand-icon">🐛</span>
         <span class="brand-name">BugEzy</span>
-        <span class="brand-tag">報告編輯</span>
+        <span class="brand-tag" data-i18n="er-tag">報告編輯</span>
       </div>
 
-      <h2>📊 錄製摘要</h2>
+      <h2 data-i18n="er-summary-h">📊 錄製摘要</h2>
       <div class="card summary-grid" id="summary"></div>
 
       <!-- 時間軸標記區（PM-28） -->
       <div id="markerSection">
-        <h2>📌 時間軸標記</h2>
+        <h2 data-i18n="er-marker-h">📌 時間軸標記</h2>
         <div class="marker-player">
           <div id="miniPlayer" class="mini-player-container"></div>
           <div class="marker-controls">
@@ -147,39 +147,39 @@
             <button id="zoomBtn" class="btn btn-sm" title="放大/縮小">🔍 2x</button>
             <label id="cleanToggle" class="toggle-label" title="切換乾淨/原始畫面">
               <input type="checkbox" id="cleanMode" checked />
-              <span>🧹 乾淨模式</span>
+              <span data-i18n="er-clean">🧹 乾淨模式</span>
             </label>
-            <button id="addMarkerBtn" class="btn btn-sm btn-accent">📌 標記此刻</button>
+            <button id="addMarkerBtn" class="btn btn-sm btn-accent" data-i18n="er-mark">📌 標記此刻</button>
           </div>
         </div>
         <div id="markerList" class="marker-list"></div>
       </div>
 
       <div class="transcript-header">
-        <h2>🎤 語音記錄（自動辨識）</h2>
+        <h2 data-i18n="er-voice-h">🎤 語音記錄（自動辨識）</h2>
         <div class="ai-actions">
-          <button id="correctBtn" class="ai-btn">🔧 AI 校正</button>
-          <button id="summarizeBtn" class="ai-btn">🤖 AI 精簡</button>
+          <button id="correctBtn" class="ai-btn" data-i18n="er-ai-correct">🔧 AI 校正</button>
+          <button id="summarizeBtn" class="ai-btn" data-i18n="er-ai-summarize">🤖 AI 精簡</button>
         </div>
       </div>
-      <textarea id="voiceText" rows="3" placeholder="（這次錄製沒有語音）"></textarea>
+      <textarea id="voiceText" rows="3" placeholder="（這次錄製沒有語音）" data-i18n-ph="er-voice-ph"></textarea>
 
-      <h2>💬 補充說明（選填）</h2>
+      <h2 data-i18n="er-desc-h">💬 補充說明（選填）</h2>
       <div class="desc-row">
-        <textarea id="descInput" rows="3" placeholder="打字或按右邊麥克風語音補充..."></textarea>
+        <textarea id="descInput" rows="3" placeholder="打字或按右邊麥克風語音補充..." data-i18n-ph="er-desc-ph"></textarea>
         <button id="voiceBtn" class="voice-btn" title="語音輸入">🎤</button>
       </div>
       <div id="voiceStatus" class="voice-status"></div>
 
       <!-- Token 估算（PM-55） -->
       <div id="tokenEstimate" class="token-panel">
-        <h2>📊 Token 估算</h2>
+        <h2 data-i18n="er-token-h">📊 Token 估算</h2>
         <div id="tokenBreakdown"></div>
       </div>
 
       <div class="actions">
-        <button id="discardBtn" class="action discard">✗ 捨棄報告</button>
-        <button id="uploadBtn" class="action upload">✅ 上傳報告</button>
+        <button id="discardBtn" class="action discard" data-i18n="er-discard">✗ 捨棄報告</button>
+        <button id="uploadBtn" class="action upload" data-i18n="er-upload">✅ 上傳報告</button>
       </div>
 
       <div id="result" class="hidden"></div>

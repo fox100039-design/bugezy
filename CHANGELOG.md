@@ -1,5 +1,17 @@
 # BugEzy Changelog
 
+## 2026-07-09
+
+Day 24（PM-211~220）。**SEO 深度優化（OG/Twitter Card + JSON-LD）+ 國際化 5 修 + Fable5 第四輪安全 6 修 + extension v1.1.3**。server 多次 deploy（`45803196`→…→`4756a5a2`）；`bugezy-1.1.3.zip` 待重上架。
+
+- **SEO（PM-211~213）**：全站 10 對外頁 `<head>` 加 **Open Graph + Twitter Card**（`ogMeta()` helper，title/description 依規格英文、`&quot;` 轉義；FB/LINE/Threads/X 分享預覽卡）+ 新增 `GET /icon-128.png`（內嵌 base64 品牌 icon，讓 og:image 不 404）（PM-211，`45803196`）。首頁加 **JSON-LD SoftwareApplication**（含三 Offer：Free 0/Monthly 80/Day Pass 20 TWD）**+ Organization**；`jsonLd()` helper（`<`→`<` 防提前結束）（PM-212，`108b6481`）。**FAQPage JSON-LD** 從 /skill 移到 **/faq**——因 Google 要求 markup 須為頁面可見內容，改由 `faqPage` 依 lang 動態產生，14 題 Q&A 與可見手風琴逐字一致（PM-213，`d190af1f`）。
+
+- **國際化（PM-214~218）**：**Whisper 繁體輸出**——`/api/transcribe` 對 zh/yue 加 `prompt: '以下是繁體中文的語音轉錄內容。'` 引導繁體（Groq language 只控辨識不控簡繁）（PM-214，`2f2cb33f`）。**edit-report 語言跟隨 popup**（extension）——`createEditRecognition` 的 SR lang 由寫死 `zh-TW` 改 `speechToSrLang(LANG_KEY)`（zh-TW/yue-Hant-HK/en-US）+ 全頁 UI i18n（`er-*` 鍵、`applyEditTranslations` + `T()` 動態文字）（PM-215）。**麥克風授權頁 + 即時字幕浮動條 i18n**（extension）——inject `setVoiceStatus`（🟢 聽取中…等）改 `it()`、`mic-permission.html/ts` 讀 LANG_KEY 套 `mperm-*`（PM-216）。**AI 修正/精簡英文 prompt**——`/api/correct`、`/api/summarize` 依 body `language` 切英文 prompt；extension 帶 `language: reportLang`（PM-217，`41bbb963`）。**粵語即時字幕代碼**——`SPEECH_LANG_MAP.yue` `zh-HK`→**`yue-Hant-HK`**（原是香港中文，講粵語辨識不到）（PM-218）。
+
+- **安全 Fable5 第四輪（PM-219，`bc1c9165`）**：①createReport `payload.user_id` 一律以認證身分覆蓋（`authUserId ?? undefined`），不信任 client 冒名綁定；②ECPay 三 callback 孤兒態——`updateUserPlan` helper 檢查 `users.update` error 失敗回 500 讓綠界重送 + 冪等短路加孤兒自癒（`isActiveUserId` 守門防重複展延）；③MCP list_reports/get_live_errors/get_terminal_logs 的 inline sessions 查表改 `verifySessionByToken`（含到期檢查）；④`/api/usage/monthly` 加 `getAuthUserId` gate（401）；⑤report-page.js `screen_size` 補 `esc()`；⑥`CSP_VALUE` 補 `frame-ancestors 'none'`（防點擊劫持）。
+
+- **PM-220 extension v1.1.3**：`manifest.json` + `/api/version` latest → 1.1.3（`4756a5a2`）；`npm run build` clean → `bugezy-1.1.3.zip`（33 檔，含 PM-215~218）待 FOX 重上架 Chrome Web Store。
+
 ## 2026-07-08
 
 Day 23（PM-201~210）。**AI 客服手冊（SKILL.md）+ 首頁 AI Skill 專區 + CWS 1.1.2 送審（含截圖流程統一到編輯報告頁）+ 截圖體驗打磨**。版號 `1.1.1`→`1.1.2`（`manifest.json` name/description 改寫 + server `/api/version`；`bugezy-1.1.2.zip` 待重上架）。
