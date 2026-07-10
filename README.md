@@ -1,24 +1,98 @@
-# BugEzy
+# 🐛 BugEzy — Voice-Powered Bug Reporting for Developers
 
-> 亞洲專屬平價 MCP 語音除錯工具
-> 發起人：FOX ｜ 初版：2026-06-16 ｜ 規格：[`docs/BugEzy_產品規格書_v0.2.md`](docs/BugEzy_產品規格書_v0.2.md)
+> Capture bugs by talking. Let AI fix them.
 
-開發者用中文語音錄 Bug，自動產出 **DOM 軌跡 + 網路錯誤 + Console Log + 中文字幕** 的完整報告，一鍵分享給隊友或 AI 助手直接修復。
+BugEzy is a Chrome extension + MCP server that lets developers report bugs using voice. It captures console logs, network errors, DOM traces, and your voice description automatically — so AI can find the root cause and give you the fix.
 
-## 核心差異（vs Jam）
-- 中日韓越混雜語音原生支援（本地 Web Speech API 優先 → 雲端降級）
-- NT$80/月（便宜 82%）
-- rrweb DOM 軌跡（儲存趨近零，不存真影片）
-- MCP **Pull** 模式（按需查詢，省 token）
+🌐 [bugezy.dev](https://bugezy.dev) · 🧩 [Chrome Web Store](https://chromewebstore.google.com/detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj) · 📖 [SKILL.md (AI Guide)](https://bugezy.dev/skill)
 
-## 專案結構（monorepo）
-| 目錄 | 用途 |
-|------|------|
-| `extension/` | Chrome 擴充（Manifest V3）— 錄製 DOM/網路/Console + 語音 |
-| `server/` | Cloudflare Workers API — 報告儲存與分享 |
-| `web/` | React 報告頁 — 播放 rrweb 軌跡 + 字幕 |
-| `mcp-server/` | MCP Server — AI 助手按需 Pull 報告資料 |
-| `docs/` | 規格與設計文件 |
+## How It Works
 
-## 狀態
-延伸專案（原隸屬 `lottoshare_tools`），2026-06-16 獨立為 `C:\dev\bugezy`。
+1. **🎙️ Hit Record** — Open BugEzy popup, hit record. Talk about the bug while operating.
+2. **📋 Auto-organized** — BugEzy captures screen replay, console logs, network errors, and action timeline into a structured report.
+3. **🤖 AI Fixes It** — Hand the report to any MCP-compatible AI assistant. AI finds root causes and gives you the fix.
+
+## MCP Server (13 Tools)
+
+Connect your AI assistant to BugEzy:
+
+**MCP Endpoint:** `https://bugezy.dev/mcp` (Streamable HTTP)
+
+| Tool | Description |
+|------|-------------|
+| `get_report_overview` | Report metadata + AI bug navigation summary |
+| `get_timeline` | Complete event timeline (console + network + voice + markers) |
+| `get_console_logs` | Console logs (warn/error) |
+| `get_network_errors` | Network errors (4xx/5xx) |
+| `get_voice_transcript` | Developer voice transcript |
+| `get_screenshots` | Report screenshots |
+| `get_rrweb_summary` | DOM trace summary |
+| `get_rrweb_events` | Full DOM events |
+| `get_page_info` | Page info (URL/title/browser/resolution) |
+| `get_metadata` | Custom metadata via SDK |
+| `list_reports` | List user's bug reports |
+| `get_live_errors` | Live console/network errors |
+| `get_terminal_logs` | Terminal error logs |
+
+### MCP Config (Claude Desktop / Cursor / Windsurf)
+
+```json
+{
+  "mcpServers": {
+    "bugezy": {
+      "url": "https://bugezy.dev/mcp"
+    }
+  }
+}
+```
+
+## Features
+
+- **Voice Input** — Chinese, Cantonese, English (Japanese, Korean, Vietnamese coming soon)
+- **Dual Voice Engine** — Web Speech API (free) + Groq Whisper (paid, high accuracy)
+- **6 Recording Modes** — Record, Rewind 30s, Screenshot, Keyboard, Monitor, CLI
+- **Bug Capture 10/10** — Console, Network, Resource errors, Web Vitals, DOM replay, Storage, Voice, Screenshots
+- **Privacy First** — Sensitive data auto-masked (PII, JWT, API keys, credit cards)
+- **AI Auto-correction** — Voice transcript cleanup + summarization
+- **Save 93% Tokens** — Structured MCP data vs raw screenshots
+
+## Python / Node CLI
+
+```bash
+npm install -g bugezy-watch
+```
+
+Captures Python tracebacks, Node.js errors, environment snapshots, and PII-masked terminal logs.
+
+## Pricing
+
+| Plan | Price | Includes |
+|------|-------|----------|
+| Free | $0 | 10 recordings, 5 rewinds, 20 MCP calls/month |
+| Monthly | NT$80/mo (~$2.50) | Unlimited everything |
+| Day Pass | NT$20 (~$0.65) | 24-hour full access |
+
+## Security
+
+- Fable5 4-round audit: 9.5+/10
+- Supabase RLS on all 6 tables
+- CSP with frame-ancestors
+- Session token fragment-based (never in URL query string)
+- ECPay payment with idempotent callback
+
+## Tech Stack
+
+Chrome Extension (TypeScript) · Cloudflare Workers · Supabase · R2 · Groq Whisper · ECPay
+
+## Links
+
+- 🌐 Website: [bugezy.dev](https://bugezy.dev)
+- 🧩 Chrome Web Store: [Install](https://chromewebstore.google.com/detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj)
+- 📖 AI Guide: [SKILL.md](https://bugezy.dev/skill)
+- 📋 Features: [bugezy.dev/features](https://bugezy.dev/features)
+- 📝 Changelog: [bugezy.dev/changelog](https://bugezy.dev/changelog)
+- ❓ FAQ: [bugezy.dev/faq](https://bugezy.dev/faq)
+
+## License
+
+Proprietary — © 2026 BugEzy
