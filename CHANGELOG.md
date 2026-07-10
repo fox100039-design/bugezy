@@ -1,5 +1,19 @@
 # BugEzy Changelog
 
+## 2026-07-10
+
+Day 25（PM-222~227）。**官網小白友善重構 + /features 專業版完整頁 + README 產品級大改 + SKILL.md v1.1.3**。純內容/文檔層（extension 未動，仍為 v1.1.3）；server deploy `2bcb0639`→`885938c3`→`790dc8d9`→`42b7a89a`。
+
+- **PM-222 官網首頁小白友善重構（漸進式揭露 + 6 張截圖）**（`server/index.ts` homePage）。朋友反饋「太專業、小白看不懂」→ 首頁改成「概念吸引 → 有興趣再看細節」。`homePage()` 完全重寫為 **7 區塊**（中英雙語）：①Hero（「遇到 Bug，說不清楚？」/「Can't explain the bug?」+ CTA 直連 Chrome Web Store 商店頁 + 「免費版每月 10 次錄製 · 不需信用卡」，**不放截圖保持乾淨**）②三步驟（🎙️按下錄製／📋自動整理／🤖 AI 幫你修）③截圖展示（4 組**圖左文右↔圖右文左交替**：`ss-recording`/`ss-report-top`/`ss-report-bottom`/`ss-ai-fix`）④賣點 6 格（語音/一鍵錄製/13 MCP/省 93%/隱私/免費起）⑤語言（`ss-languages` + 3 active badge 中/粵/英 + 3 灰 coming-soon 日/韓/越）⑥CTA 收尾（`ss-store` 商店預覽 + CWS/GitHub/指南/隱私連結）⑦footer（保留綠界要求的聯絡資訊 + v1.1.3 版號）。**截圖 serve**：6 張存 R2（`wrangler r2 object put` → `public/screenshots/*.png`）+ 新增 `GET /screenshots/:name.png`（白名單檔名正則防路徑穿越 → `env.R2.get` → `image/png` + 快取 1 天）——不內嵌 base64 以免 Worker bundle 爆量（6 張共 948KB）。head 保留 ogMeta + JSON-LD + canonical；`@media(max-width:720px)` 三欄/賣點→單欄、截圖行堆疊。舊的六模式/捕捉/框架/MCP/AI-install 區塊移除（內容移往 /features）。
+
+- **PM-223 /features 升級為完整技術規格頁**（`server/index.ts` featuresPage）。承接 PM-222 移出的專業內容，重寫為 **9 區塊**（中英雙語）：①頁首（「BugEzy 完整功能介紹」/「Full Feature Overview」+「給進階開發者、AI 助手、技術評估者」）②六種錄製模式（3×2 mode-grid：錄製/回溯 30s/截圖/鍵盤/監控/CLI）③Bug 捕捉能力 10/10（Console/Network/資源載入/Web Vitals/DOM rrweb/Storage PII/語音/截圖馬賽克）④**MCP 整合 13 Tools**（每個 `<code>` + 一句話 + `MCP 連接：https://bugezy.dev/mcp`）⑤語音引擎（Web Speech 免費 / Groq Whisper 付費 / AI 校正+精簡 + 3 active/3 soon 語言 badge）⑥Python/Node CLI（`npm install -g bugezy-watch` + 結構化解析/環境快照/PII 遮罩）⑦安全與隱私（Fable5 9.5+/RLS/CSP frame-ancestors/PII/session fragment）⑧定價三卡 ⑨頁尾 CTA。新增 `.mode-grid`/`.clist`/`.tool`/`.badge2`/`.plan3` CSS（手機單欄）；首頁 §4 賣點加「查看完整功能 →」導流 /features。
+
+- **PM-224 /changelog 補 v1.1.3**（`server/index.ts` changelogPage）。最上方（v1.1.0 之前）新增 **v1.1.3 — 2026-07-09** entry，中英雙語分 3 組：🌐 SEO 深度優化（全站 OG/Twitter Card、首頁 JSON-LD 過 Google Rich Results、/faq FAQPage 14 題、/icon-128.png）／🌍 國際化修復 5 項（Whisper 繁體、edit-report 語音語言+UI i18n、授權頁+字幕條 i18n、AI prompt 依語言、粵語 `yue-Hant-HK`）／🔒 安全修復 6 項（user_id 強制覆蓋、ECPay 孤兒自癒、MCP 過期 token、usage 認證、screen_size esc、CSP frame-ancestors）。
+
+- **PM-225 GitHub README 產品級大改**（`README.md`）。由早期中文 monorepo 開發筆記**整份改寫**為國際標準開源產品 README（英文，給外部開發者/MCP 目錄/Google 爬蟲看）：標題 + tagline「Capture bugs by talking. Let AI fix them.」+ 連結列 → How It Works（3 步）→ **MCP Server 13 Tools 表格** + endpoint + Claude/Cursor/Windsurf 的 JSON config → Features 7 項 → Python/Node CLI → Pricing 表 → Security 5 項 → Tech Stack → Links → License。commit `dea35db`。
+
+- **PM-226 SKILL.md v1.1.3 更新 + /skill 同步**（`SKILL.md` + `server/index.ts` `SKILL_MD`）。①頂部加「最新版本：v1.1.3（2026-07-09）」②新增「語音功能與語言」區塊（支援語言 active/coming-soon、兩種引擎、Whisper zh/yue 強制繁體、粵語 `yue-Hant-HK`、AI 校正/精簡依語言切 prompt、編輯報告頁多語）③新增「安全與隱私」區塊（Fable5 9.5+/session fragment/報告分享付費牆/CSP frame-ancestors/RLS 全 6 表/PII 遮罩）④**MCP 工具表修正**：移除實際不存在的 `get_metadata`、補上真實的 `get_page_info`、`get_usage_stats` 註明需登入——以 `grep server.tool` 核對 server 實際註冊的 13 個 tool。**server 同步**：Python 腳本讀更新後 SKILL.md → escape 反引號/`${` → 重新生成 `SKILL_MD` 常數（避免 PM-201 手動 escape 之痛），`/skill` + `/skill/download` 單一來源一致。
+
 ## 2026-07-09
 
 Day 24（PM-211~220）。**SEO 深度優化（OG/Twitter Card + JSON-LD）+ 國際化 5 修 + Fable5 第四輪安全 6 修 + extension v1.1.3**。server 多次 deploy（`45803196`→…→`4756a5a2`）；`bugezy-1.1.3.zip` 待重上架。
