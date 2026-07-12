@@ -4074,6 +4074,14 @@ export default {
     if (request.method === 'GET' && path === '/robots.txt') return robotsTxt();
     // PM-211：OG/Twitter Card 分享圖（品牌 icon 128×128）
     if (request.method === 'GET' && path === '/icon-128.png') return iconPng();
+    // PM-228：Official MCP Registry 的 HTTP 域名驗證——證明 bugezy.dev 擁有權（namespace dev.bugezy/*）。
+    //   內容為 Ed25519 公鑰（可公開），對應私鑰僅本機持有、不進 repo。
+    if (request.method === 'GET' && path === '/.well-known/mcp-registry-auth') {
+      return new Response(
+        'v=MCPv1; k=ed25519; p=yhzcLU4h8ci9whJBdvf7ReUCYBDBrhnbE75yfhiaEtU=',
+        { headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' } },
+      );
+    }
     // PM-222：首頁截圖（存 R2，白名單檔名防路徑穿越）。FOX 放 server/public/screenshots/，以 wrangler r2 object put 上傳。
     if (request.method === 'GET' && path.startsWith('/screenshots/')) {
       const name = path.slice('/screenshots/'.length);
