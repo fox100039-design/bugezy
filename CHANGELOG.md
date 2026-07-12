@@ -1,5 +1,12 @@
 # BugEzy Changelog
 
+## 2026-07-12
+
+Day 26（PM-228~229）。**Official MCP Registry 發布 + 目錄收錄 + 行銷上線**。純發布/行銷層（產品程式未動；server 僅加一條驗證路由）。
+
+- **PM-228 Official MCP Registry 發布**（`server/server.json` + `server/index.ts`）。BugEzy 正式登錄官方 MCP Registry（PulseMCP 等目錄的上游源）：`dev.bugezy/bugezy` v1.1.3，remote streamable-http `https://bugezy.dev/mcp`，status active（API 實查 `registry.modelcontextprotocol.io/v0/servers?search=bugezy` 確認）。**驗證途徑**：GitHub Actions OIDC 因本機 PAT 無 `workflow` scope 被擋 → 改用 **HTTP 域名驗證**（namespace = bugezy.dev 反向 DNS `dev.bugezy`，品牌更佳且可自主完成）：Ed25519 金鑰對 + Worker 新增 `GET /.well-known/mcp-registry-auth` serve 公鑰（`v=MCPv1; k=ed25519; p=…`）→ `mcp-publisher login http` → `publish`（description 縮至 ≤100 字過 422 校驗）。私鑰/CLI binary/token 用完即刪不進 repo，公鑰路由留在 Worker（deploy `cb2a8400`）。
+- **目錄收錄 + 行銷（FOX 執行）**：Glama MCP 目錄登錄（7 分鐘過審）；awesome-mcp-servers PR #9919 提交（含 Glama badge）；Facebook 粉絲專頁建立 + 第一則付費廣告上線（8 天 $42 USD）。
+
 ## 2026-07-10
 
 Day 25（PM-222~227）。**官網小白友善重構 + /features 專業版完整頁 + README 產品級大改 + SKILL.md v1.1.3**。純內容/文檔層（extension 未動，仍為 v1.1.3）；server deploy `2bcb0639`→`885938c3`→`790dc8d9`→`42b7a89a`。
