@@ -1,5 +1,21 @@
 # BugEzy Changelog
 
+## 2026-07-15
+
+Day 29（PM-232~236）。**四語擴展達成七語全覆蓋**：簡體中文 zh-CN + 日語 ja + 韓語 ko + 越南語 vi。Extension 每語補完整 UI 翻譯、Server 官網（首頁 + 完整功能頁）補對應翻譯、Whisper/AI 校正/精簡各語 prompt、`Accept-Language` 自動偵測。extension 四次 `npm run build`（dist 更新待 FOX 重上架，仍 v1.1.3）；server deploy `02720582`→`ce1fe70c`→`9728f239`→`7fb7078a`。
+
+- **PM-232 簡體中文 zh-CN**（`extension/src/t2s.ts` 新增 + `i18n.ts` + `server/src/index.ts`）。不手寫 150+ 條字串，改用**執行期繁→簡轉換器** `toSimplified()`——opencc 對專案實際漢字產生 414 字對照表 + 6 條大陸用語詞彙覆蓋（設定→设置、進階→高级、擴充→扩展、程式→程序、檔案→文件、擴充功能→扩展程序），Extension + Server 共用同表。Extension：`UILang`/`SupportedLang`/`SPEECH_LANG_MAP` 加 zh-CN、`t()` 對 zh-CN 走 `toSimplified(entry.zh)`、popup 下拉加「🇨🇳 简体中文」。Server：`PageLang` 加 zh-CN、`detectLang`（`zh-cn`/`zh-hans`→簡體）、新增 `makeT(lang)` 工廠取代全站 13 處 `t()`、`htmlLang()`（`<html lang>` 依語言）、Whisper 簡體 prompt + 輸出再過 `toSimplified()` 保險、AI 校正/精簡簡體 prompt。
+
+- **PM-233 日語 ja**（`extension/src/i18n.ts` + `server/src/index.ts`）。日語為手譯（敬體 です/ます，技術術語保留英文）。Extension：dict 全 ~140 條 key 補 `ja` 欄位、`t()` 加 ja 分支、`DEFAULT_PROMPTS` 加 ja、popup 解鎖「🇯🇵 日本語」、`speechToSrLang` 加 ja。Server：官網用「繁體原文→日文」查表 **`JA_MAP`**（136 條，`makeT('ja')` 以既有 `t()` 第一參數查表、缺則 fallback 英文，**零改動頁面主體**）涵蓋首頁 + 完整功能頁；`detectLang` `\bja\b`→ja；`htmlLang('ja')`；Whisper `ALLOWED_LANGS` 解鎖 ja + 日語 prompt；AI 校正/精簡日語 prompt。
+
+- **PM-234 韓語 ko**（同 PM-233 模式）。합니다체。Extension dict 補 `ko`（~140 條）；Server 新增 **`KO_MAP`**（136 條，key 集與 JA_MAP 一致）；`detectLang` `\bko\b`→ko；Whisper 解鎖 ko + 韓語 prompt；AI 校正/精簡韓語 prompt。
+
+- **PM-235 越南語 vi**（同模式，達成七語）。越南語聲調符號 UTF-8。Extension dict 補 `vi`（~140 條）；Server 新增 **`VI_MAP`**（136 條）；`detectLang` `\bvi\b`→vi；Whisper 解鎖 vi + 越南語 prompt；AI 校正/精簡越南語 prompt。**七語全覆蓋達成**：繁體中文 / 粵語 / English / 简体中文 / 日本語 / 한국어 / Tiếng Việt。
+
+- **PM-236 Day 29 收工**：CHANGELOG + ARCHITECTURE + git push。
+
+**驗收共通**：`?lang=` 手動切換 + `Accept-Language` 自動偵測皆通過；`<html lang>` 六語全對（zh-Hant/zh-Hans/ja/ko/vi/en）；日/韓/越判定優先於 zh 且不誤傷中文用戶；覆蓋率腳本確認官網翻譯無遺漏（僅 `EN` 切換 label 與 zh===en 技術字串刻意 fallback 英文）。
+
 ## 2026-07-12
 
 Day 26（PM-228~229）。**Official MCP Registry 發布 + 目錄收錄 + 行銷上線**。純發布/行銷層（產品程式未動；server 僅加一條驗證路由）。

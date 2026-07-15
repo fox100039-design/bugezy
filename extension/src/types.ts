@@ -260,10 +260,11 @@ export const SESSION_TOKEN_KEY = 'bugezy:session-token';
 
 /** PM-137：語音辨識語言（Whisper `language` 代碼；Web Speech 用 LANG_MAP 轉 BCP-47）。預設 zh。 */
 export const LANG_KEY = 'bugezy:language';
-export type SupportedLang = 'zh' | 'yue' | 'ja' | 'ko' | 'en' | 'vi';
+export type SupportedLang = 'zh' | 'zh-CN' | 'yue' | 'ja' | 'ko' | 'en' | 'vi';
 /** Whisper language 代碼 → Web Speech API BCP-47 lang。 */
 export const SPEECH_LANG_MAP: Record<string, string> = {
   zh: 'zh-TW',
+  'zh-CN': 'zh-CN', // PM-232：簡體中文（Web Speech API 簡中辨識）
   yue: 'yue-Hant-HK', // PM-218：粵語正確 BCP-47 代碼（原 zh-HK 是香港中文，講粵語辨識不到）
   ja: 'ja',
   ko: 'ko',

@@ -27,6 +27,10 @@ const T = (key: string, params?: Record<string, string | number>): string => t(k
 function speechToSrLang(speechLang: string): string {
   if (speechLang === 'en') return 'en-US';
   if (speechLang === 'yue') return 'yue-Hant-HK';
+  if (speechLang === 'zh-CN') return 'zh-CN'; // PM-232：簡體中文語音辨識
+  if (speechLang === 'ja') return 'ja'; // PM-233：日語語音辨識
+  if (speechLang === 'ko') return 'ko'; // PM-234：韓語語音辨識
+  if (speechLang === 'vi') return 'vi'; // PM-235：越南語語音辨識
   return 'zh-TW'; // zh 及其餘一律繁中
 }
 // PM-215：套用 [data-i18n]/[data-i18n-ph] 靜態翻譯（mirror annotate.applyAnnotateTranslations）

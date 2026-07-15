@@ -21,7 +21,7 @@ import {
   type StateResponse,
 } from './types';
 import { getAuthHeaders, applyRotatedToken } from './auth';
-import { t, getUILang, DEFAULT_PROMPTS, type UILang, type PromptItem } from './i18n';
+import { t, getUILang, getDefaultPrompts, type UILang, type PromptItem } from './i18n';
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -180,7 +180,7 @@ langSelect.addEventListener('change', () => {
   void chrome.storage.local.get(PROMPTS_CUSTOMIZED_KEY).then((store) => {
     const isCustomized = store[PROMPTS_CUSTOMIZED_KEY] === true;
     if (!isCustomized) {
-      prompts = [...DEFAULT_PROMPTS[newUILang]];
+      prompts = [...getDefaultPrompts(newUILang)];
       void chrome.storage.local.set({ [PROMPTS_KEY]: prompts });
       promptCurrent = 0;
       renderPrompt();
@@ -1124,7 +1124,7 @@ function renderPrompt() {
 
 // PM-115 向下相容：舊版存的是 string[]，自動轉成 PromptItem[]（依序分配預設顏色）。
 function normalizePrompts(raw: unknown): PromptItem[] {
-  if (!Array.isArray(raw) || raw.length === 0) return [...DEFAULT_PROMPTS[currentUILang]];
+  if (!Array.isArray(raw) || raw.length === 0) return [...getDefaultPrompts(currentUILang)];
   return raw.map((entry, i) => {
     if (typeof entry === 'string') {
       return { text: entry, color: DEFAULT_COLORS[i % DEFAULT_COLORS.length] };

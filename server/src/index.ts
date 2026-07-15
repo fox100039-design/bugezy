@@ -333,17 +333,557 @@ function javascript(body: string): Response {
 }
 
 // ── PM-150：對外頁面語言（首頁 + /install）——Accept-Language 自動偵測 + ?lang= 手動覆蓋 ──
-type PageLang = 'zh' | 'en';
+type PageLang = 'zh' | 'en' | 'zh-CN' | 'ja' | 'ko' | 'vi';
 function detectLang(request: Request): PageLang {
-  const accept = request.headers.get('Accept-Language') || '';
-  // 中文系（zh-TW/zh-HK/zh-CN/zh）→ 中文；其餘一律英文
-  return /zh/i.test(accept.split(',')[0] || '') ? 'zh' : 'en';
+  const accept = (request.headers.get('Accept-Language') || '').toLowerCase();
+  // PM-233/234/235：日語（ja）、韓語（ko）、越南語（vi）優先判定（其 header 不含 zh，安全）。
+  if (/\bja\b/.test(accept)) return 'ja';
+  if (/\bko\b/.test(accept)) return 'ko';
+  if (/\bvi\b/.test(accept)) return 'vi';
+  // PM-232：簡體（zh-cn / zh-hans）→ 簡中；PM-231：其餘含 zh（zh-tw/zh-hant/zh-hk/zh…不限第一順位）→ 繁中；否則英文。
+  if (/zh-cn|zh-hans/.test(accept)) return 'zh-CN';
+  if (/zh/.test(accept)) return 'zh';
+  return 'en';
 }
 function getLang(request: Request): PageLang {
   const param = new URL(request.url).searchParams.get('lang');
-  if (param === 'en' || param === 'zh') return param; // 手動覆蓋優先
+  if (param === 'en' || param === 'zh' || param === 'zh-CN' || param === 'ja' || param === 'ko' || param === 'vi') return param; // 手動覆蓋優先
   return detectLang(request);
 }
+// PM-232~235：<html lang> 屬性——zh→zh-Hant、zh-CN→zh-Hans、ja→ja、ko→ko、vi→vi、en→en（BCP-47，利 SEO/螢幕閱讀器）。
+function htmlLang(lang: PageLang): string {
+  if (lang === 'zh') return 'zh-Hant';
+  if (lang === 'zh-CN') return 'zh-Hans';
+  if (lang === 'ja') return 'ja';
+  if (lang === 'ko') return 'ko';
+  if (lang === 'vi') return 'vi';
+  return 'en';
+}
+// PM-232：頁面 t() 工廠——zh-CN 由繁體即時轉簡體（makeT）；ja/ko/vi 由 JA_MAP/KO_MAP/VI_MAP 以繁體字串查表（缺則 fallback 英文）；其餘 zh/en 直接取值。
+function makeT(lang: PageLang): (zh: string, en: string) => string {
+  if (lang === 'zh-CN') return (zh: string) => toSimplified(zh);
+  if (lang === 'zh') return (zh: string) => zh;
+  if (lang === 'ja') return (zh: string, en: string) => JA_MAP[zh] ?? en; // PM-233
+  if (lang === 'ko') return (zh: string, en: string) => KO_MAP[zh] ?? en; // PM-234
+  if (lang === 'vi') return (zh: string, en: string) => VI_MAP[zh] ?? en; // PM-235
+  return (_zh: string, en: string) => en;
+}
+
+// PM-232：繁體 → 簡體轉換（與 extension/src/t2s.ts 同表）。詞彙先於字元（Mainland 用語）。
+const T2S_TERMS: Array<[string, string]> = [
+  ['擴充功能', '扩展程序'],
+  ['擴充', '扩展'],
+  ['設定', '设置'],
+  ['進階', '高级'],
+  ['程式', '程序'],
+  ['檔案', '文件'],
+];
+const T2S_CHARS: Record<string, string> = {"丟":"丢","並":"并","乾":"干","亂":"乱","亞":"亚","佈":"布","佔":"占","併":"并","來":"来","個":"个","們":"们","側":"侧","偵":"侦","偽":"伪","備":"备","傳":"传","僅":"仅","價":"价","優":"优","儲":"储","兒":"儿","內":"内","兩":"两","冊":"册","冪":"幂","別":"别","刪":"删","則":"则","剛":"刚","劃":"划","動":"动","務":"务","勝":"胜","勢":"势","匯":"汇","區":"区","協":"协","卻":"却","參":"参","員":"员","問":"问","啟":"启","單":"单","嗎":"吗","嘗":"尝","噴":"喷","嚴":"严","國":"国","圍":"围","圓":"圆","圖":"图","團":"团","執":"执","報":"报","場":"场","塊":"块","塗":"涂","壇":"坛","壞":"坏","夠":"够","夾":"夹","學":"学","實":"实","審":"审","寫":"写","寬":"宽","將":"将","專":"专","尋":"寻","對":"对","導":"导","層":"层","屬":"属","師":"师","帳":"帐","帶":"带","幀":"帧","幫":"帮","幾":"几","庫":"库","廠":"厂","廣":"广","廳":"厅","張":"张","強":"强","彈":"弹","彙":"汇","後":"后","徑":"径","從":"从","復":"复","徹":"彻","恆":"恒","態":"态","慣":"惯","憑":"凭","應":"应","戶":"户","拋":"抛","捨":"舍","捲":"卷","掃":"扫","掛":"挂","採":"采","換":"换","損":"损","搶":"抢","撐":"撑","擁":"拥","擇":"择","擊":"击","擋":"挡","擔":"担","據":"据","擬":"拟","擴":"扩","擷":"撷","擾":"扰","攔":"拦","敗":"败","數":"数","斂":"敛","斷":"断","於":"于","時":"时","暫":"暂","書":"书","會":"会","條":"条","棄":"弃","業":"业","極":"极","構":"构","標":"标","樣":"样","橋":"桥","機":"机","橫":"横","檔":"档","檢":"检","檻":"槛","欄":"栏","權":"权","歷":"历","歸":"归","殘":"残","殺":"杀","汙":"污","決":"决","沒":"没","況":"况","洩":"泄","淨":"净","測":"测","準":"准","溝":"沟","滿":"满","漸":"渐","濃":"浓","濫":"滥","濾":"滤","瀏":"浏","灣":"湾","為":"为","無":"无","燈":"灯","爭":"争","牆":"墙","狀":"状","獨":"独","現":"现","環":"环","產":"产","畫":"画","異":"异","當":"当","疊":"叠","癒":"愈","發":"发","盡":"尽","監":"监","盤":"盘","確":"确","碼":"码","禦":"御","種":"种","稱":"称","積":"积","穩":"稳","竄":"窜","競":"竞","筆":"笔","節":"节","範":"范","簡":"简","簽":"签","籤":"签","粵":"粤","紀":"纪","約":"约","紅":"红","納":"纳","純":"纯","級":"级","細":"细","紹":"绍","終":"终","組":"组","結":"结","絕":"绝","絡":"络","給":"给","統":"统","綁":"绑","經":"经","綠":"绿","維":"维","網":"网","綴":"缀","緊":"紧","緒":"绪","線":"线","緣":"缘","編":"编","緩":"缓","縫":"缝","縮":"缩","縱":"纵","總":"总","繞":"绕","繪":"绘","繼":"继","續":"续","義":"义","聯":"联","聲":"声","職":"职","聽":"听","脈":"脉","脫":"脱","脹":"胀","腦":"脑","臨":"临","與":"与","舉":"举","舊":"旧","蓋":"盖","薦":"荐","藍":"蓝","處":"处","虛":"虚","號":"号","螢":"萤","術":"术","衝":"冲","補":"补","裝":"装","裡":"里","製":"制","複":"复","見":"见","規":"规","視":"视","覺":"觉","覽":"览","觸":"触","訂":"订","計":"计","訊":"讯","記":"记","訪":"访","設":"设","許":"许","訴":"诉","診":"诊","註":"注","評":"评","詞":"词","詢":"询","試":"试","話":"话","該":"该","詳":"详","誌":"志","認":"认","語":"语","誤":"误","說":"说","誰":"谁","調":"调","請":"请","論":"论","講":"讲","謝":"谢","謹":"谨","證":"证","識":"识","譯":"译","議":"议","護":"护","讀":"读","變":"变","讓":"让","負":"负","責":"责","貴":"贵","買":"买","費":"费","貼":"贴","資":"资","賣":"卖","賦":"赋","質":"质","賴":"赖","購":"购","賽":"赛","贅":"赘","跡":"迹","蹤":"踪","躍":"跃","軌":"轨","軸":"轴","較":"较","載":"载","輕":"轻","輪":"轮","輯":"辑","輸":"输","轉":"转","辦":"办","迴":"回","這":"这","連":"连","週":"周","進":"进","運":"运","過":"过","達":"达","遞":"递","遠":"远","適":"适","遲":"迟","選":"选","遺":"遗","還":"还","邊":"边","邏":"逻","釋":"释","釘":"钉","鈕":"钮","銷":"销","錄":"录","錢":"钱","錯":"错","鍵":"键","鎖":"锁","鏈":"链","鏡":"镜","鐘":"钟","鑰":"钥","長":"长","門":"门","閃":"闪","閉":"闭","開":"开","閒":"闲","間":"间","閱":"阅","關":"关","陣":"阵","隊":"队","階":"阶","際":"际","隨":"随","險":"险","隱":"隐","雖":"虽","雙":"双","雜":"杂","離":"离","雲":"云","電":"电","靜":"静","韓":"韩","響":"响","頁":"页","頂":"顶","項":"项","順":"顺","須":"须","預":"预","頓":"顿","頭":"头","頻":"频","題":"题","額":"额","顏":"颜","類":"类","顯":"显","風":"风","餘":"余","饋":"馈","馬":"马","駐":"驻","驅":"驱","驗":"验","驟":"骤","體":"体","鮮":"鲜","麥":"麦","麵":"面","麼":"么","點":"点","齊":"齐"};
+function toSimplified(s: string): string {
+  let out = s;
+  for (const [tw, cn] of T2S_TERMS) {
+    if (out.indexOf(tw) !== -1) out = out.split(tw).join(cn);
+  }
+  let res = '';
+  for (const ch of out) res += T2S_CHARS[ch] ?? ch;
+  return res;
+}
+
+// PM-233：日語頁面翻譯表（繁體 zh 原文 → 日文）。makeT('ja') 以 t() 的第一參數（繁體）查此表，
+// 未收錄者 fallback 英文。涵蓋首頁（homePage）+ 完整功能頁（featuresPage）的所有可見字串。
+// 敬體（です/ます）；技術術語保留英文（Bug/Console/Network/DOM/MCP/Token/Whisper/CLI/API/JWT/PII…）。
+const JA_MAP: Record<string, string> = {
+  // ── 共用 / SEO ──
+  'BugEzy — 開發者 Bug 報告工具，AI 幫你修': 'BugEzy — 開発者向け Bug レポートツール、AI が修正',
+  '亞洲最平價的 MCP 語音除錯工具。錄製 Bug、AI 自動分析、一鍵報告。支援 Claude、Cursor、Windsurf 等 7 大 AI 工具。月費 NT$80 起。':
+    'アジア最安の MCP 音声デバッグツール。Bug を録画し、AI が自動分析、ワンクリックでレポート。Claude、Cursor、Windsurf など 7 大 AI ツールに対応。月額 NT$80 から。',
+  '語音除錯': '音声デバッグ',
+  // ── 首頁 Hero ──
+  '遇到 Bug，說不清楚？': 'Bug をうまく説明できない？',
+  '按一下錄製，用說的就好。BugEzy 自動收集畫面、操作、錯誤訊息，讓 AI 幫你修。':
+    'ワンクリックで録画、あとは話すだけ。BugEzy が画面・操作・エラーメッセージを自動で収集し、AI が修正します。',
+  '🔧 免費安裝 Chrome 擴充功能': '🔧 Chrome 拡張機能を無料インストール',
+  '免費版每月 10 次錄製 · 不需信用卡': '無料版は毎月 10 回の録画 · クレジットカード不要',
+  // ── 三步驟 ──
+  '簡單三步，不用教': '簡単 3 ステップ、説明不要',
+  '按下錄製': '録画開始',
+  '打開 BugEzy，按一下就開始。邊操作邊說出你遇到的問題。':
+    'BugEzy を開いてワンクリックで開始。操作しながら問題を話してください。',
+  '自動整理': '自動整理',
+  'BugEzy 自動收集畫面錄影、錯誤訊息、操作軌跡，整理成一份報告。':
+    'BugEzy が画面録画・エラーメッセージ・操作履歴を自動で収集し、1 つのレポートにまとめます。',
+  'AI 幫你修': 'AI が修正',
+  '把報告交給 AI，它直接告訴你哪裡壞了、怎麼修。':
+    'レポートを AI に渡すだけで、どこが壊れているか、どう直すかを教えてくれます。',
+  // ── 截圖展示 ──
+  '眼見為憑': '実際に見てみる',
+  '錄製中': '録画中',
+  '錄製超簡單': '録画はとても簡単',
+  '打開瀏覽器，按下錄製，邊操作邊用嘴巴講。你的聲音會即時變成文字。':
+    'ブラウザを開いて録画を開始し、操作しながら話すだけ。あなたの声がリアルタイムで文字になります。',
+  '報告': 'レポート',
+  '報告自動整理': 'レポートを自動整理',
+  '錄完後，BugEzy 自動產出完整報告 — 畫面回放、語音記錄、操作軌跡，全部幫你整理好。':
+    '録画後、BugEzy が完全なレポートを自動生成 — 画面リプレイ、音声記録、操作履歴をすべて整理します。',
+  'AI 校正與 Token': 'AI 校正とトークン',
+  'AI 校正 + 省 93% 費用': 'AI 校正 + 費用 93% 節約',
+  'AI 自動校正語音辨識的錯字，還幫你精簡重點。比起直接丟截圖給 AI，省下 93% 的費用。':
+    'AI が音声認識の誤字を自動校正し、要点も要約します。スクリーンショットを直接 AI に送るより、費用を 93% 節約できます。',
+  'AI 修復': 'AI 修正',
+  'AI 直接幫你修 Bug': 'AI が Bug を直接修正',
+  '把報告交給 AI，一句「幫我找出問題」，AI 就自動分析、找出根因、給你修復程式碼。不用再截圖、複製貼上、來回解釋。':
+    'レポートを AI に渡して「問題を見つけて」と一言。AI が自動で分析し、根本原因を特定し、修正コードを提示します。もうスクリーンショットやコピペ、何度も説明する必要はありません。',
+  // ── 賣點 ──
+  '為什麼選 BugEzy': 'なぜ BugEzy なのか',
+  '用說的就好 — 支援中文、粵語、英文': '話すだけ — 中国語・広東語・英語に対応',
+  '一鍵錄製 — 畫面 + 聲音 + 操作同步捕捉': 'ワンクリック録画 — 画面 + 音声 + 操作を同時にキャプチャ',
+  'AI 自動分析 — 13 種 MCP 工具': 'AI 自動分析 — 13 種類の MCP ツール',
+  '省 93% 費用 — 比截圖丟 AI 便宜': '費用 93% 節約 — スクリーンショットを送るより安い',
+  '隱私保護 — 敏感資料自動打碼': 'プライバシー保護 — 機密データを自動マスク',
+  '免費開始 — 月費只要 NT$80': '無料で開始 — 月額わずか NT$80',
+  '錄一次，所有 AI 讀 — 多工具同步連線': '一度録画すればすべての AI が読める — マルチツール同期',
+  '查看完整功能 →': '全機能を見る →',
+  // ── 語言區 ──
+  '用你的母語說': '母国語で話そう',
+  '支援三種語言語音輸入，更多語言即將開放': '3 言語の音声入力に対応、さらに多くの言語が近日対応',
+  '語言選擇': '言語選択',
+  '繁體中文': '繁体字中国語',
+  '粵語': '広東語',
+  // ── CTA / Footer ──
+  '還在用截圖跟 AI 解釋 Bug？試試用說的。': 'まだスクリーンショットで AI に Bug を説明していますか？話すだけを試してみてください。',
+  '🔧 免費安裝': '🔧 無料インストール',
+  '使用指南': '使い方ガイド',
+  '隱私政策': 'プライバシーポリシー',
+  '聯絡我們': 'お問い合わせ',
+  '電話': '電話',
+  '服務時間：週一至週五 09:00-18:00': '営業時間：月〜金 09:00-18:00（UTC+8）',
+  '安裝指南': 'インストールガイド',
+  '功能說明': '機能紹介',
+  '常見問題': 'よくある質問',
+  '更新日誌': '更新履歴',
+  '🤖 AI 客服手冊': '🤖 AI サポートマニュアル',
+  '📬 問題回報': '📬 フィードバック',
+  '📋 我的報告': '📋 マイレポート',
+  '亞洲平價 MCP 語音除錯工具': 'アジアの手頃な MCP 音声デバッグツール',
+  // ── featuresPage ──
+  'BugEzy 功能 — 六種錄製模式、Whisper 語音、即時監控': 'BugEzy 機能 — 6 種類の録画モード、Whisper 音声、リアルタイム監視',
+  'BugEzy 六種除錯模式：錄製、回溯 30 秒、截圖標注、即時監控、終端機 CLI、MCP AI 讀取。Whisper 精準語音轉錄。':
+    'BugEzy の 6 種類のデバッグモード：録画、30 秒巻き戻し、スクリーンショット注釈、リアルタイム監視、Terminal CLI、MCP AI 読み取り。Whisper による高精度な音声文字起こし。',
+  'BugEzy 完整功能介紹': 'BugEzy 全機能のご紹介',
+  '給進階開發者、AI 助手、技術評估者的完整產品規格': '上級開発者・AI アシスタント・技術評価者のための完全な製品仕様',
+  '🎬 六種錄製模式': '🎬 6 種類の録画モード',
+  '錄製': '録画',
+  'DOM 軌跡 + Console + Network + 語音': 'DOM 履歴 + Console + Network + 音声',
+  '回溯 30 秒': '30 秒巻き戻し',
+  'Bug 已發生？一鍵抓回最近 30 秒': 'Bug が起きた後？ワンクリックで直近 30 秒を取得',
+  '截圖標注': 'スクリーンショット注釈',
+  '全頁/區域/自由 + 馬賽克筆刷': '全ページ/範囲/フリーフォーム + モザイクブラシ',
+  '鍵盤模式': 'キーボードモード',
+  '吵雜環境純文字，不錄語音': '騒がしい環境ではテキストのみ、音声なし',
+  '即時監控': 'リアルタイム監視',
+  '背景持續監控，有錯自動通知': 'バックグラウンドで常時監視し、エラーを自動通知',
+  'Python/Node 後端錯誤攔截': 'Python/Node バックエンドのエラーを捕捉',
+  '🔍 Bug 捕捉能力（10/10）': '🔍 Bug 捕捉能力（10/10）',
+  '資源載入失敗 — img / script / css / 字型 404': 'リソース読み込み失敗 — img / script / css / フォント 404',
+  'Web Vitals — CLS / FID / LCP 超標警告': 'Web Vitals — CLS / FID / LCP しきい値超過の警告',
+  'DOM 軌跡 — rrweb 錄製 + 回放': 'DOM 履歴 — rrweb 録画 + リプレイ',
+  'Storage 快照 — localStorage / sessionStorage / Cookie（PII 自動遮罩）':
+    'Storage スナップショット — localStorage / sessionStorage / Cookie（PII 自動マスク）',
+  '語音記錄 — 即時字幕 + Whisper 精準轉錄': '音声記録 — リアルタイム字幕 + Whisper 高精度文字起こし',
+  '截圖 — 敏感欄位自動馬賽克': 'スクリーンショット — 機密欄を自動モザイク',
+  '🤖 MCP 整合（13 Tools）': '🤖 MCP 統合（13 Tools）',
+  '報告概覽 + AI Bug 導航摘要': 'レポート概要 + AI Bug ナビゲーター',
+  '⭐ 完整時間軸（Console/Network/語音/環境一次看完）': '⭐ 完全なタイムライン（Console/Network/音声/環境を一度に確認）',
+  'Console error/warn 記錄': 'Console error/warn の記録',
+  'Network 4xx/5xx 失敗': 'Network 4xx/5xx の失敗',
+  '語音轉錄文字': '音声文字起こしテキスト',
+  '截圖（高 Token）': 'スクリーンショット（高 Token）',
+  'DOM 摘要（輕量）': 'DOM サマリー（軽量）',
+  'DOM 錄影事件（高 Token）': 'DOM リプレイイベント（高 Token）',
+  '頁面資訊': 'ページ情報',
+  '報告 metadata': 'レポート metadata',
+  '列出報告（需 session_token）': 'レポート一覧（session_token が必要）',
+  '即時監控錯誤（需 session_token）': 'リアルタイム監視のエラー（session_token が必要）',
+  'Terminal CLI 錯誤（付費）': 'Terminal CLI のエラー（有料）',
+  'MCP 連接：': 'MCP エンドポイント：',
+  '🎙️ 語音引擎': '🎙️ 音声エンジン',
+  '即時字幕：': 'リアルタイム字幕：',
+  'Web Speech API（免費版）': 'Web Speech API（無料版）',
+  '精準轉錄：': '高精度文字起こし：',
+  'Groq Whisper（付費版）': 'Groq Whisper（有料版）',
+  'AI 校正 + 精簡：': 'AI 校正 + 要約：',
+  '自動修錯字、濃縮重點': '誤字を自動修正し、要点を凝縮',
+  '支援語言：': '対応言語：',
+  '安裝：': 'インストール：',
+  '結構化解析：': '構造化解析：',
+  'Python traceback + Node.js 錯誤 → type / message / file / line':
+    'Python traceback + Node.js エラー → type / message / file / line',
+  '環境快照：': '環境スナップショット：',
+  '語言 / 版本 / OS / 套件': '言語 / バージョン / OS / パッケージ',
+  'PII 遮罩：': 'PII マスク：',
+  'DB URI / API Key / JWT / 密碼 自動遮罩': 'DB URI / API Key / JWT / パスワードを自動マスク',
+  '🔒 安全與隱私': '🔒 セキュリティとプライバシー',
+  'Fable5 四輪稽核 9.5+/10': 'Fable5 による 4 ラウンド監査 9.5+/10',
+  'Supabase RLS 全表啟用': 'Supabase RLS を全テーブルで有効化',
+  'CSP + frame-ancestors 防點擊劫持': 'CSP + frame-ancestors（クリックジャッキング対策）',
+  'PII 自動遮罩 — JWT / Bearer / 手機 / 身分證 / 信用卡': 'PII 自動マスク — JWT / Bearer / 携帯番号 / 身分証 / クレジットカード',
+  'Session token 走 URL fragment，不經 query string': 'Session token は URL fragment 経由、query string は不使用',
+  '🔗 MCP 工作流 — 錄一次，所有 AI 都能讀': '🔗 MCP ワークフロー — 一度録画すればすべての AI が読める',
+  '🤖 一個 AI 搞定': '🤖 単一エージェント',
+  '用 Claude Desktop、Cursor 或 Windsurf，連上 BugEzy MCP，直接讀報告修 Bug。一個 AI 從頭做到尾。':
+    'Claude Desktop、Cursor、Windsurf を BugEzy MCP に接続し、レポートを読んで Bug を修正。1 つの AI で最初から最後まで完結。',
+  '🤝 兩個 AI 分工': '🤝 2 つの AI で分担',
+  'Claude Chat 讀報告做分析和策略規劃，Claude Code 讀同一份報告寫修復程式碼。PM 和工程師各司其職，讀的是同一份 Bug 報告。':
+    'Claude Chat がレポートを読んで分析と計画を担当し、Claude Code が同じレポートを読んで修正コードを書く。PM とエンジニアの役割分担で、読むのは同じ Bug レポート。',
+  '🔗 多工具同步': '🔗 マルチツール同期',
+  'Zed、Cursor、Claude Desktop 同時連線 BugEzy MCP，都讀同一份報告。團隊成員用不同工具，看到的是同一份 Bug 資料。':
+    'Zed、Cursor、Claude Desktop が同時に BugEzy MCP に接続し、同じレポートを読む。チームメンバーが異なるツールを使っても、見るのは同じ Bug データ。',
+  '一行連線，任何 MCP 工具都能用': '1 行で接続、あらゆる MCP クライアントで利用可能',
+  '支援 Claude Desktop · Claude Code · Cursor · Windsurf · Zed · 任何 MCP 相容工具':
+    'Claude Desktop · Claude Code · Cursor · Windsurf · Zed · あらゆる MCP 対応クライアントに対応',
+  '💰 定價': '💰 料金',
+  '免費': '無料',
+  '每月 10 錄製 / 5 回溯 / 20 MCP': '毎月 録画 10 / 巻き戻し 5 / MCP 20',
+  '月費': '月額',
+  ' /月': ' /月',
+  '全功能無限': '全機能無制限',
+  '日票': 'デイパス',
+  '24 小時無限': '24 時間無制限',
+  '準備好了？': '準備はいいですか？',
+  '回首頁': 'ホームへ',
+  '首頁': 'ホーム',
+  '聯絡': 'お問い合わせ',
+};
+
+// PM-234：韓語頁面翻譯表（繁體 zh 原文 → 韓文）。makeT('ko') 以 t() 第一參數查表，未收錄 fallback 英文。
+// 涵蓋 homePage + featuresPage 全部可見字串。합니다체；技術術語保留英文。
+const KO_MAP: Record<string, string> = {
+  // ── 共用 / SEO ──
+  'BugEzy — 開發者 Bug 報告工具，AI 幫你修': 'BugEzy — 개발자용 Bug 리포트 도구, AI가 수정',
+  '亞洲最平價的 MCP 語音除錯工具。錄製 Bug、AI 自動分析、一鍵報告。支援 Claude、Cursor、Windsurf 等 7 大 AI 工具。月費 NT$80 起。':
+    '아시아 최저가 MCP 음성 디버깅 도구. Bug를 녹화하고 AI가 자동 분석, 원클릭 리포트. Claude, Cursor, Windsurf 등 7대 AI 도구 지원. 월 NT$80부터.',
+  '語音除錯': '음성 디버깅',
+  // ── 首頁 Hero ──
+  '遇到 Bug，說不清楚？': 'Bug를 제대로 설명하기 어렵나요?',
+  '按一下錄製，用說的就好。BugEzy 自動收集畫面、操作、錯誤訊息，讓 AI 幫你修。':
+    '원클릭으로 녹화하고 말하기만 하면 됩니다. BugEzy가 화면·조작·오류 메시지를 자동으로 수집하여 AI가 수정합니다.',
+  '🔧 免費安裝 Chrome 擴充功能': '🔧 Chrome 확장 프로그램 무료 설치',
+  '免費版每月 10 次錄製 · 不需信用卡': '무료 버전은 매월 녹화 10회 · 신용카드 불필요',
+  // ── 三步驟 ──
+  '簡單三步，不用教': '간단한 3단계, 설명 불필요',
+  '按下錄製': '녹화 시작',
+  '打開 BugEzy，按一下就開始。邊操作邊說出你遇到的問題。':
+    'BugEzy를 열고 원클릭으로 시작. 조작하면서 겪은 문제를 말하세요.',
+  '自動整理': '자동 정리',
+  'BugEzy 自動收集畫面錄影、錯誤訊息、操作軌跡，整理成一份報告。':
+    'BugEzy가 화면 녹화·오류 메시지·조작 기록을 자동으로 수집하여 하나의 리포트로 정리합니다.',
+  'AI 幫你修': 'AI가 수정',
+  '把報告交給 AI，它直接告訴你哪裡壞了、怎麼修。':
+    '리포트를 AI에 넘기면 어디가 잘못됐는지, 어떻게 고치는지 바로 알려줍니다.',
+  // ── 截圖展示 ──
+  '眼見為憑': '직접 확인해 보세요',
+  '錄製中': '녹화 중',
+  '錄製超簡單': '녹화는 아주 간단',
+  '打開瀏覽器，按下錄製，邊操作邊用嘴巴講。你的聲音會即時變成文字。':
+    '브라우저를 열고 녹화를 시작한 뒤 조작하면서 말하기만 하세요. 목소리가 실시간으로 텍스트가 됩니다.',
+  '報告': '리포트',
+  '報告自動整理': '리포트 자동 정리',
+  '錄完後，BugEzy 自動產出完整報告 — 畫面回放、語音記錄、操作軌跡，全部幫你整理好。':
+    '녹화 후 BugEzy가 완전한 리포트를 자동 생성 — 화면 리플레이, 음성 기록, 조작 기록을 모두 정리합니다.',
+  'AI 校正與 Token': 'AI 교정과 토큰',
+  'AI 校正 + 省 93% 費用': 'AI 교정 + 비용 93% 절감',
+  'AI 自動校正語音辨識的錯字，還幫你精簡重點。比起直接丟截圖給 AI，省下 93% 的費用。':
+    'AI가 음성 인식의 오타를 자동 교정하고 요점도 요약합니다. 스크린샷을 직접 AI에 보내는 것보다 비용을 93% 절감합니다.',
+  'AI 修復': 'AI 수정',
+  'AI 直接幫你修 Bug': 'AI가 Bug를 직접 수정',
+  '把報告交給 AI，一句「幫我找出問題」，AI 就自動分析、找出根因、給你修復程式碼。不用再截圖、複製貼上、來回解釋。':
+    '리포트를 AI에 넘기고 "문제를 찾아줘" 한마디면 AI가 자동으로 분석하고 근본 원인을 찾아 수정 코드를 제시합니다. 더 이상 스크린샷·복붙·반복 설명이 필요 없습니다.',
+  // ── 賣點 ──
+  '為什麼選 BugEzy': '왜 BugEzy인가',
+  '用說的就好 — 支援中文、粵語、英文': '말하기만 하면 됩니다 — 중국어·광둥어·영어 지원',
+  '一鍵錄製 — 畫面 + 聲音 + 操作同步捕捉': '원클릭 녹화 — 화면 + 음성 + 조작 동시 캡처',
+  'AI 自動分析 — 13 種 MCP 工具': 'AI 자동 분석 — 13종 MCP 도구',
+  '省 93% 費用 — 比截圖丟 AI 便宜': '비용 93% 절감 — 스크린샷을 보내는 것보다 저렴',
+  '隱私保護 — 敏感資料自動打碼': '개인정보 보호 — 민감 데이터 자동 마스킹',
+  '免費開始 — 月費只要 NT$80': '무료로 시작 — 월 NT$80',
+  '錄一次，所有 AI 讀 — 多工具同步連線': '한 번 녹화하면 모든 AI가 읽음 — 멀티 도구 동기화',
+  '查看完整功能 →': '전체 기능 보기 →',
+  // ── 語言區 ──
+  '用你的母語說': '모국어로 말하세요',
+  '支援三種語言語音輸入，更多語言即將開放': '3개 언어 음성 입력 지원, 더 많은 언어 곧 지원',
+  '語言選擇': '언어 선택',
+  '繁體中文': '번체 중국어',
+  '粵語': '광둥어',
+  // ── CTA / Footer ──
+  '還在用截圖跟 AI 解釋 Bug？試試用說的。': '아직도 스크린샷으로 AI에 Bug를 설명하나요? 말하기만 해보세요.',
+  '🔧 免費安裝': '🔧 무료 설치',
+  '使用指南': '사용 가이드',
+  '隱私政策': '개인정보 처리방침',
+  '聯絡我們': '문의하기',
+  '電話': '전화',
+  '服務時間：週一至週五 09:00-18:00': '운영 시간: 월~금 09:00-18:00 (UTC+8)',
+  '安裝指南': '설치 가이드',
+  '功能說明': '기능 소개',
+  '常見問題': '자주 묻는 질문',
+  '更新日誌': '업데이트 로그',
+  '🤖 AI 客服手冊': '🤖 AI 지원 매뉴얼',
+  '📬 問題回報': '📬 피드백',
+  '📋 我的報告': '📋 내 리포트',
+  '亞洲平價 MCP 語音除錯工具': '아시아의 합리적인 MCP 음성 디버깅 도구',
+  // ── featuresPage ──
+  'BugEzy 功能 — 六種錄製模式、Whisper 語音、即時監控': 'BugEzy 기능 — 6종 녹화 모드, Whisper 음성, 실시간 모니터링',
+  'BugEzy 六種除錯模式：錄製、回溯 30 秒、截圖標注、即時監控、終端機 CLI、MCP AI 讀取。Whisper 精準語音轉錄。':
+    'BugEzy의 6종 디버깅 모드: 녹화, 30초 되감기, 스크린샷 주석, 실시간 모니터링, Terminal CLI, MCP AI 읽기. Whisper 고정밀 음성 변환.',
+  'BugEzy 完整功能介紹': 'BugEzy 전체 기능 소개',
+  '給進階開發者、AI 助手、技術評估者的完整產品規格': '고급 개발자·AI 어시스턴트·기술 평가자를 위한 완전한 제품 사양',
+  '🎬 六種錄製模式': '🎬 6종 녹화 모드',
+  '錄製': '녹화',
+  'DOM 軌跡 + Console + Network + 語音': 'DOM 기록 + Console + Network + 음성',
+  '回溯 30 秒': '30초 되감기',
+  'Bug 已發生？一鍵抓回最近 30 秒': 'Bug가 발생한 후? 원클릭으로 최근 30초 캡처',
+  '截圖標注': '스크린샷 주석',
+  '全頁/區域/自由 + 馬賽克筆刷': '전체 페이지/영역/자유형 + 모자이크 브러시',
+  '鍵盤模式': '키보드 모드',
+  '吵雜環境純文字，不錄語音': '시끄러운 환경에서 텍스트만, 음성 없음',
+  '即時監控': '실시간 모니터링',
+  '背景持續監控，有錯自動通知': '백그라운드에서 상시 모니터링, 오류 시 자동 알림',
+  'Python/Node 後端錯誤攔截': 'Python/Node 백엔드 오류 캡처',
+  '🔍 Bug 捕捉能力（10/10）': '🔍 Bug 캡처 능력 (10/10)',
+  '資源載入失敗 — img / script / css / 字型 404': '리소스 로드 실패 — img / script / css / 폰트 404',
+  'Web Vitals — CLS / FID / LCP 超標警告': 'Web Vitals — CLS / FID / LCP 임계값 초과 경고',
+  'DOM 軌跡 — rrweb 錄製 + 回放': 'DOM 기록 — rrweb 녹화 + 리플레이',
+  'Storage 快照 — localStorage / sessionStorage / Cookie（PII 自動遮罩）':
+    'Storage 스냅샷 — localStorage / sessionStorage / Cookie (PII 자동 마스킹)',
+  '語音記錄 — 即時字幕 + Whisper 精準轉錄': '음성 기록 — 실시간 자막 + Whisper 고정밀 변환',
+  '截圖 — 敏感欄位自動馬賽克': '스크린샷 — 민감 필드 자동 모자이크',
+  '🤖 MCP 整合（13 Tools）': '🤖 MCP 통합 (13 Tools)',
+  '報告概覽 + AI Bug 導航摘要': '리포트 개요 + AI Bug 내비게이터',
+  '⭐ 完整時間軸（Console/Network/語音/環境一次看完）': '⭐ 완전한 타임라인 (Console/Network/음성/환경을 한 번에 확인)',
+  'Console error/warn 記錄': 'Console error/warn 기록',
+  'Network 4xx/5xx 失敗': 'Network 4xx/5xx 실패',
+  '語音轉錄文字': '음성 변환 텍스트',
+  '截圖（高 Token）': '스크린샷 (높은 Token)',
+  'DOM 摘要（輕量）': 'DOM 요약 (경량)',
+  'DOM 錄影事件（高 Token）': 'DOM 리플레이 이벤트 (높은 Token)',
+  '頁面資訊': '페이지 정보',
+  '報告 metadata': '리포트 metadata',
+  '列出報告（需 session_token）': '리포트 목록 (session_token 필요)',
+  '即時監控錯誤（需 session_token）': '실시간 모니터링 오류 (session_token 필요)',
+  'Terminal CLI 錯誤（付費）': 'Terminal CLI 오류 (유료)',
+  'MCP 連接：': 'MCP 엔드포인트: ',
+  '🎙️ 語音引擎': '🎙️ 음성 엔진',
+  '即時字幕：': '실시간 자막: ',
+  'Web Speech API（免費版）': 'Web Speech API (무료 버전)',
+  '精準轉錄：': '고정밀 변환: ',
+  'Groq Whisper（付費版）': 'Groq Whisper (유료 버전)',
+  'AI 校正 + 精簡：': 'AI 교정 + 요약: ',
+  '自動修錯字、濃縮重點': '오타를 자동 수정하고 요점을 압축',
+  '支援語言：': '지원 언어: ',
+  '安裝：': '설치: ',
+  '結構化解析：': '구조화 파싱: ',
+  'Python traceback + Node.js 錯誤 → type / message / file / line':
+    'Python traceback + Node.js 오류 → type / message / file / line',
+  '環境快照：': '환경 스냅샷: ',
+  '語言 / 版本 / OS / 套件': '언어 / 버전 / OS / 패키지',
+  'PII 遮罩：': 'PII 마스킹: ',
+  'DB URI / API Key / JWT / 密碼 自動遮罩': 'DB URI / API Key / JWT / 비밀번호 자동 마스킹',
+  '🔒 安全與隱私': '🔒 보안과 개인정보',
+  'Fable5 四輪稽核 9.5+/10': 'Fable5 4라운드 감사 9.5+/10',
+  'Supabase RLS 全表啟用': 'Supabase RLS 전체 테이블 활성화',
+  'CSP + frame-ancestors 防點擊劫持': 'CSP + frame-ancestors (클릭재킹 방지)',
+  'PII 自動遮罩 — JWT / Bearer / 手機 / 身分證 / 信用卡': 'PII 자동 마스킹 — JWT / Bearer / 휴대폰 / 신분증 / 신용카드',
+  'Session token 走 URL fragment，不經 query string': 'Session token은 URL fragment 경유, query string 미사용',
+  '🔗 MCP 工作流 — 錄一次，所有 AI 都能讀': '🔗 MCP 워크플로 — 한 번 녹화하면 모든 AI가 읽음',
+  '🤖 一個 AI 搞定': '🤖 단일 에이전트',
+  '用 Claude Desktop、Cursor 或 Windsurf，連上 BugEzy MCP，直接讀報告修 Bug。一個 AI 從頭做到尾。':
+    'Claude Desktop, Cursor 또는 Windsurf를 BugEzy MCP에 연결하여 리포트를 읽고 Bug를 수정. 하나의 AI로 처음부터 끝까지 완결.',
+  '🤝 兩個 AI 分工': '🤝 두 AI 분담',
+  'Claude Chat 讀報告做分析和策略規劃，Claude Code 讀同一份報告寫修復程式碼。PM 和工程師各司其職，讀的是同一份 Bug 報告。':
+    'Claude Chat가 리포트를 읽고 분석과 계획을 담당하고, Claude Code가 같은 리포트를 읽고 수정 코드를 작성. PM과 엔지니어의 역할 분담, 읽는 것은 동일한 Bug 리포트.',
+  '🔗 多工具同步': '🔗 멀티 도구 동기화',
+  'Zed、Cursor、Claude Desktop 同時連線 BugEzy MCP，都讀同一份報告。團隊成員用不同工具，看到的是同一份 Bug 資料。':
+    'Zed, Cursor, Claude Desktop이 동시에 BugEzy MCP에 연결하여 같은 리포트를 읽음. 팀원이 다른 도구를 써도 보는 것은 동일한 Bug 데이터.',
+  '一行連線，任何 MCP 工具都能用': '한 줄로 연결, 모든 MCP 클라이언트에서 사용 가능',
+  '支援 Claude Desktop · Claude Code · Cursor · Windsurf · Zed · 任何 MCP 相容工具':
+    'Claude Desktop · Claude Code · Cursor · Windsurf · Zed · 모든 MCP 호환 클라이언트 지원',
+  '💰 定價': '💰 요금',
+  '免費': '무료',
+  '每月 10 錄製 / 5 回溯 / 20 MCP': '매월 녹화 10 / 되감기 5 / MCP 20',
+  '月費': '월정액',
+  ' /月': ' /월',
+  '全功能無限': '전체 기능 무제한',
+  '日票': '데이 패스',
+  '24 小時無限': '24시간 무제한',
+  '準備好了？': '준비되셨나요?',
+  '回首頁': '홈으로',
+  '首頁': '홈',
+  '聯絡': '문의하기',
+};
+
+// PM-235：越南語頁面翻譯表（繁體 zh 原文 → 越南文）。makeT('vi') 以 t() 第一參數查表，未收錄 fallback 英文。
+// 涵蓋 homePage + featuresPage 全部可見字串。技術術語保留英文；越南語含聲調符號，UTF-8。
+const VI_MAP: Record<string, string> = {
+  // ── 共用 / SEO ──
+  'BugEzy — 開發者 Bug 報告工具，AI 幫你修': 'BugEzy — Công cụ báo lỗi Bug cho lập trình viên, AI sửa giúp bạn',
+  '亞洲最平價的 MCP 語音除錯工具。錄製 Bug、AI 自動分析、一鍵報告。支援 Claude、Cursor、Windsurf 等 7 大 AI 工具。月費 NT$80 起。':
+    'Công cụ gỡ lỗi bằng giọng nói MCP rẻ nhất châu Á. Ghi lại Bug, AI tự động phân tích, báo cáo một chạm. Hỗ trợ Claude, Cursor, Windsurf và 7 công cụ AI lớn. Từ NT$80/tháng.',
+  '語音除錯': 'gỡ lỗi bằng giọng nói',
+  // ── 首頁 Hero ──
+  '遇到 Bug，說不清楚？': 'Gặp Bug mà khó diễn tả?',
+  '按一下錄製，用說的就好。BugEzy 自動收集畫面、操作、錯誤訊息，讓 AI 幫你修。':
+    'Chỉ cần nhấp ghi hình và nói. BugEzy tự động thu thập màn hình, thao tác, thông báo lỗi để AI sửa giúp bạn.',
+  '🔧 免費安裝 Chrome 擴充功能': '🔧 Cài đặt tiện ích Chrome miễn phí',
+  '免費版每月 10 次錄製 · 不需信用卡': 'Bản miễn phí 10 lần ghi hình mỗi tháng · Không cần thẻ tín dụng',
+  // ── 三步驟 ──
+  '簡單三步，不用教': 'Ba bước đơn giản, không cần hướng dẫn',
+  '按下錄製': 'Nhấn ghi hình',
+  '打開 BugEzy，按一下就開始。邊操作邊說出你遇到的問題。':
+    'Mở BugEzy, nhấp một cái là bắt đầu. Vừa thao tác vừa nói ra vấn đề bạn gặp.',
+  '自動整理': 'Tự động sắp xếp',
+  'BugEzy 自動收集畫面錄影、錯誤訊息、操作軌跡，整理成一份報告。':
+    'BugEzy tự động thu thập video màn hình, thông báo lỗi, dấu vết thao tác và tổng hợp thành một báo cáo.',
+  'AI 幫你修': 'AI sửa giúp bạn',
+  '把報告交給 AI，它直接告訴你哪裡壞了、怎麼修。':
+    'Đưa báo cáo cho AI, nó sẽ nói ngay chỗ nào hỏng và cách sửa.',
+  // ── 截圖展示 ──
+  '眼見為憑': 'Trăm nghe không bằng một thấy',
+  '錄製中': 'Đang ghi hình',
+  '錄製超簡單': 'Ghi hình cực kỳ đơn giản',
+  '打開瀏覽器，按下錄製，邊操作邊用嘴巴講。你的聲音會即時變成文字。':
+    'Mở trình duyệt, nhấn ghi hình, vừa thao tác vừa nói. Giọng nói của bạn được chuyển thành văn bản ngay lập tức.',
+  '報告': 'Báo cáo',
+  '報告自動整理': 'Báo cáo tự động sắp xếp',
+  '錄完後，BugEzy 自動產出完整報告 — 畫面回放、語音記錄、操作軌跡，全部幫你整理好。':
+    'Sau khi ghi xong, BugEzy tự động tạo báo cáo đầy đủ — phát lại màn hình, ghi âm giọng nói, dấu vết thao tác, tất cả được sắp xếp cho bạn.',
+  'AI 校正與 Token': 'AI hiệu chỉnh và Token',
+  'AI 校正 + 省 93% 費用': 'AI hiệu chỉnh + tiết kiệm 93% chi phí',
+  'AI 自動校正語音辨識的錯字，還幫你精簡重點。比起直接丟截圖給 AI，省下 93% 的費用。':
+    'AI tự động sửa lỗi chính tả của nhận dạng giọng nói và tóm tắt các điểm chính. So với gửi ảnh chụp trực tiếp cho AI, tiết kiệm 93% chi phí.',
+  'AI 修復': 'AI sửa lỗi',
+  'AI 直接幫你修 Bug': 'AI sửa Bug trực tiếp cho bạn',
+  '把報告交給 AI，一句「幫我找出問題」，AI 就自動分析、找出根因、給你修復程式碼。不用再截圖、複製貼上、來回解釋。':
+    'Đưa báo cáo cho AI, chỉ một câu "tìm vấn đề giúp tôi", AI sẽ tự động phân tích, tìm nguyên nhân gốc và đưa mã sửa lỗi. Không còn phải chụp màn hình, sao chép dán hay giải thích qua lại.',
+  // ── 賣點 ──
+  '為什麼選 BugEzy': 'Tại sao chọn BugEzy',
+  '用說的就好 — 支援中文、粵語、英文': 'Chỉ cần nói — hỗ trợ tiếng Trung, tiếng Quảng Đông, tiếng Anh',
+  '一鍵錄製 — 畫面 + 聲音 + 操作同步捕捉': 'Ghi hình một chạm — chụp đồng thời màn hình + âm thanh + thao tác',
+  'AI 自動分析 — 13 種 MCP 工具': 'AI tự động phân tích — 13 công cụ MCP',
+  '省 93% 費用 — 比截圖丟 AI 便宜': 'Tiết kiệm 93% chi phí — rẻ hơn gửi ảnh chụp cho AI',
+  '隱私保護 — 敏感資料自動打碼': 'Bảo vệ riêng tư — dữ liệu nhạy cảm tự động che',
+  '免費開始 — 月費只要 NT$80': 'Bắt đầu miễn phí — chỉ NT$80/tháng',
+  '錄一次，所有 AI 讀 — 多工具同步連線': 'Ghi một lần, mọi AI đều đọc — đồng bộ nhiều công cụ',
+  '查看完整功能 →': 'Xem đầy đủ tính năng →',
+  // ── 語言區 ──
+  '用你的母語說': 'Nói bằng tiếng mẹ đẻ của bạn',
+  '支援三種語言語音輸入，更多語言即將開放': 'Hỗ trợ nhập giọng nói 3 ngôn ngữ, nhiều ngôn ngữ khác sắp có',
+  '語言選擇': 'Chọn ngôn ngữ',
+  '繁體中文': 'Tiếng Trung phồn thể',
+  '粵語': 'Tiếng Quảng Đông',
+  // ── CTA / Footer ──
+  '還在用截圖跟 AI 解釋 Bug？試試用說的。': 'Vẫn dùng ảnh chụp để giải thích Bug cho AI? Hãy thử chỉ nói thôi.',
+  '🔧 免費安裝': '🔧 Cài đặt miễn phí',
+  '使用指南': 'Hướng dẫn sử dụng',
+  '隱私政策': 'Chính sách riêng tư',
+  '聯絡我們': 'Liên hệ chúng tôi',
+  '電話': 'Điện thoại',
+  '服務時間：週一至週五 09:00-18:00': 'Giờ làm việc: Thứ Hai đến Thứ Sáu 09:00-18:00 (UTC+8)',
+  '安裝指南': 'Hướng dẫn cài đặt',
+  '功能說明': 'Giới thiệu tính năng',
+  '常見問題': 'Câu hỏi thường gặp',
+  '更新日誌': 'Nhật ký cập nhật',
+  '🤖 AI 客服手冊': '🤖 Sổ tay hỗ trợ AI',
+  '📬 問題回報': '📬 Phản hồi',
+  '📋 我的報告': '📋 Báo cáo của tôi',
+  '亞洲平價 MCP 語音除錯工具': 'Công cụ gỡ lỗi bằng giọng nói MCP giá hợp lý cho châu Á',
+  // ── featuresPage ──
+  'BugEzy 功能 — 六種錄製模式、Whisper 語音、即時監控': 'Tính năng BugEzy — 6 chế độ ghi hình, giọng nói Whisper, giám sát trực tiếp',
+  'BugEzy 六種除錯模式：錄製、回溯 30 秒、截圖標注、即時監控、終端機 CLI、MCP AI 讀取。Whisper 精準語音轉錄。':
+    '6 chế độ gỡ lỗi của BugEzy: Ghi hình, tua lại 30 giây, chú thích ảnh chụp, giám sát trực tiếp, Terminal CLI, MCP AI đọc. Chuyển đổi giọng nói chính xác bằng Whisper.',
+  'BugEzy 完整功能介紹': 'Giới thiệu đầy đủ tính năng BugEzy',
+  '給進階開發者、AI 助手、技術評估者的完整產品規格': 'Thông số sản phẩm đầy đủ cho lập trình viên nâng cao, trợ lý AI và người đánh giá kỹ thuật',
+  '🎬 六種錄製模式': '🎬 6 chế độ ghi hình',
+  '錄製': 'Ghi hình',
+  'DOM 軌跡 + Console + Network + 語音': 'Dấu vết DOM + Console + Network + giọng nói',
+  '回溯 30 秒': 'Tua lại 30 giây',
+  'Bug 已發生？一鍵抓回最近 30 秒': 'Bug đã xảy ra? Một chạm bắt lại 30 giây gần nhất',
+  '截圖標注': 'Chú thích ảnh chụp',
+  '全頁/區域/自由 + 馬賽克筆刷': 'Toàn trang/vùng/tự do + cọ mosaic',
+  '鍵盤模式': 'Chế độ bàn phím',
+  '吵雜環境純文字，不錄語音': 'Chỉ văn bản trong môi trường ồn ào, không ghi giọng nói',
+  '即時監控': 'Giám sát trực tiếp',
+  '背景持續監控，有錯自動通知': 'Giám sát liên tục ở nền, tự động thông báo khi có lỗi',
+  'Python/Node 後端錯誤攔截': 'Bắt lỗi backend Python/Node',
+  '🔍 Bug 捕捉能力（10/10）': '🔍 Khả năng bắt Bug (10/10)',
+  '資源載入失敗 — img / script / css / 字型 404': 'Lỗi tải tài nguyên — img / script / css / font 404',
+  'Web Vitals — CLS / FID / LCP 超標警告': 'Web Vitals — cảnh báo vượt ngưỡng CLS / FID / LCP',
+  'DOM 軌跡 — rrweb 錄製 + 回放': 'Dấu vết DOM — rrweb ghi + phát lại',
+  'Storage 快照 — localStorage / sessionStorage / Cookie（PII 自動遮罩）':
+    'Ảnh chụp Storage — localStorage / sessionStorage / Cookie (PII tự động che)',
+  '語音記錄 — 即時字幕 + Whisper 精準轉錄': 'Ghi âm — phụ đề trực tiếp + Whisper chuyển đổi chính xác',
+  '截圖 — 敏感欄位自動馬賽克': 'Ảnh chụp — trường nhạy cảm tự động mosaic',
+  '🤖 MCP 整合（13 Tools）': '🤖 Tích hợp MCP (13 Tools)',
+  '報告概覽 + AI Bug 導航摘要': 'Tổng quan báo cáo + điều hướng Bug bằng AI',
+  '⭐ 完整時間軸（Console/Network/語音/環境一次看完）': '⭐ Dòng thời gian đầy đủ (Console/Network/giọng nói/môi trường xem một lần)',
+  'Console error/warn 記錄': 'Bản ghi Console error/warn',
+  'Network 4xx/5xx 失敗': 'Lỗi Network 4xx/5xx',
+  '語音轉錄文字': 'Văn bản chuyển đổi giọng nói',
+  '截圖（高 Token）': 'Ảnh chụp (Token cao)',
+  'DOM 摘要（輕量）': 'Tóm tắt DOM (nhẹ)',
+  'DOM 錄影事件（高 Token）': 'Sự kiện phát lại DOM (Token cao)',
+  '頁面資訊': 'Thông tin trang',
+  '報告 metadata': 'metadata báo cáo',
+  '列出報告（需 session_token）': 'Liệt kê báo cáo (cần session_token)',
+  '即時監控錯誤（需 session_token）': 'Lỗi giám sát trực tiếp (cần session_token)',
+  'Terminal CLI 錯誤（付費）': 'Lỗi Terminal CLI (trả phí)',
+  'MCP 連接：': 'Điểm cuối MCP: ',
+  '🎙️ 語音引擎': '🎙️ Công cụ giọng nói',
+  '即時字幕：': 'Phụ đề trực tiếp: ',
+  'Web Speech API（免費版）': 'Web Speech API (bản miễn phí)',
+  '精準轉錄：': 'Chuyển đổi chính xác: ',
+  'Groq Whisper（付費版）': 'Groq Whisper (bản trả phí)',
+  'AI 校正 + 精簡：': 'AI hiệu chỉnh + tóm tắt: ',
+  '自動修錯字、濃縮重點': 'Tự động sửa lỗi chính tả, cô đọng điểm chính',
+  '支援語言：': 'Ngôn ngữ hỗ trợ: ',
+  '安裝：': 'Cài đặt: ',
+  '結構化解析：': 'Phân tích có cấu trúc: ',
+  'Python traceback + Node.js 錯誤 → type / message / file / line':
+    'Python traceback + lỗi Node.js → type / message / file / line',
+  '環境快照：': 'Ảnh chụp môi trường: ',
+  '語言 / 版本 / OS / 套件': 'Ngôn ngữ / phiên bản / OS / gói',
+  'PII 遮罩：': 'Che PII: ',
+  'DB URI / API Key / JWT / 密碼 自動遮罩': 'DB URI / API Key / JWT / mật khẩu tự động che',
+  '🔒 安全與隱私': '🔒 Bảo mật và riêng tư',
+  'Fable5 四輪稽核 9.5+/10': 'Kiểm toán 4 vòng Fable5 9.5+/10',
+  'Supabase RLS 全表啟用': 'Bật Supabase RLS trên toàn bộ bảng',
+  'CSP + frame-ancestors 防點擊劫持': 'CSP + frame-ancestors (chống clickjacking)',
+  'PII 自動遮罩 — JWT / Bearer / 手機 / 身分證 / 信用卡': 'Tự động che PII — JWT / Bearer / số điện thoại / CMND / thẻ tín dụng',
+  'Session token 走 URL fragment，不經 query string': 'Session token qua URL fragment, không dùng query string',
+  '🔗 MCP 工作流 — 錄一次，所有 AI 都能讀': '🔗 Quy trình MCP — ghi một lần, mọi AI đều đọc được',
+  '🤖 一個 AI 搞定': '🤖 Một AI duy nhất',
+  '用 Claude Desktop、Cursor 或 Windsurf，連上 BugEzy MCP，直接讀報告修 Bug。一個 AI 從頭做到尾。':
+    'Kết nối Claude Desktop, Cursor hoặc Windsurf với BugEzy MCP, đọc báo cáo và sửa Bug ngay. Một AI làm từ đầu đến cuối.',
+  '🤝 兩個 AI 分工': '🤝 Hai AI phân công',
+  'Claude Chat 讀報告做分析和策略規劃，Claude Code 讀同一份報告寫修復程式碼。PM 和工程師各司其職，讀的是同一份 Bug 報告。':
+    'Claude Chat đọc báo cáo để phân tích và lập kế hoạch, Claude Code đọc cùng báo cáo để viết mã sửa lỗi. Vai trò PM và kỹ sư, cùng đọc một báo cáo Bug.',
+  '🔗 多工具同步': '🔗 Đồng bộ nhiều công cụ',
+  'Zed、Cursor、Claude Desktop 同時連線 BugEzy MCP，都讀同一份報告。團隊成員用不同工具，看到的是同一份 Bug 資料。':
+    'Zed, Cursor, Claude Desktop cùng kết nối BugEzy MCP, đều đọc cùng một báo cáo. Thành viên nhóm dùng công cụ khác nhau nhưng xem cùng dữ liệu Bug.',
+  '一行連線，任何 MCP 工具都能用': 'Một dòng để kết nối, dùng được với mọi client MCP',
+  '支援 Claude Desktop · Claude Code · Cursor · Windsurf · Zed · 任何 MCP 相容工具':
+    'Hỗ trợ Claude Desktop · Claude Code · Cursor · Windsurf · Zed · mọi client tương thích MCP',
+  '💰 定價': '💰 Bảng giá',
+  '免費': 'Miễn phí',
+  '每月 10 錄製 / 5 回溯 / 20 MCP': 'Mỗi tháng 10 ghi hình / 5 tua lại / 20 MCP',
+  '月費': 'Hàng tháng',
+  ' /月': ' /tháng',
+  '全功能無限': 'Toàn bộ tính năng không giới hạn',
+  '日票': 'Vé ngày',
+  '24 小時無限': '24 giờ không giới hạn',
+  '準備好了？': 'Sẵn sàng chưa?',
+  '回首頁': 'Về trang chủ',
+  '首頁': 'Trang chủ',
+  '聯絡': 'Liên hệ',
+};
 
 // ── PM-172：付費資格用 Cloudflare IP 國家碼判斷（零成本、準確、無法偽造），取代 PM-171 的語言判斷。──
 // 綠界目前只收台灣卡 → 只有 TW 開放付費；其餘顯示 coming soon。未來特約通過改白名單即可（見 §5）。
@@ -598,16 +1138,16 @@ async function isActiveUserId(userId: string, env: Env): Promise<boolean> {
 // PM-222：小白友善重構——漸進式揭露（Hero 講人話 → 三步驟 → 截圖展示 → 賣點 → 語言 → CTA）。
 //   技術細節（六模式/MCP/rrweb/框架）移到 /features。截圖存 R2，經 GET /screenshots/*.png serve。
 function homePage(lang: PageLang, _request: Request): string {
-  const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
+  const t = makeT(lang); // PM-232：zh/en/zh-CN 三語（zh-CN 由繁體轉簡體）
   const CWS = 'https://chromewebstore.google.com/detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj';
   return `<!DOCTYPE html>
-<html lang="${lang === 'zh' ? 'zh-TW' : 'en'}">
+<html lang="${htmlLang(lang)}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>${t('BugEzy — 開發者 Bug 報告工具，AI 幫你修', 'BugEzy — Bug Reporter for Developers, AI fixes your bugs')}</title>
   <meta name="description" content="${t('亞洲最平價的 MCP 語音除錯工具。錄製 Bug、AI 自動分析、一鍵報告。支援 Claude、Cursor、Windsurf 等 7 大 AI 工具。月費 NT$80 起。', 'The most affordable MCP voice debugging tool in Asia. Record bugs, AI auto-analysis, one-click reports. Works with Claude, Cursor, Windsurf and 7 major AI tools. From NT$80/mo.')}">
-  <meta name="keywords" content="BugEzy, bug reporter, MCP, AI debugging, Chrome extension, 語音除錯, bug tracking">
+  <meta name="keywords" content="BugEzy, bug reporter, MCP, AI debugging, Chrome extension, ${t('語音除錯', 'voice debugging')}, bug tracking">
   ${ogMeta('', 'BugEzy — Voice-Powered Bug Reporting for Developers', 'Capture bugs with voice, console logs, network errors, and DOM traces. Affordable MCP debugging tool. Chrome Extension + Python CLI. NT$80/mo.')}
   ${jsonLd(SOFTWARE_APP_LD)}
   ${jsonLd(ORGANIZATION_LD)}
@@ -732,6 +1272,7 @@ function homePage(lang: PageLang, _request: Request): string {
       <div class="point"><span class="pico">💰</span><span class="ptxt">${t('省 93% 費用 — 比截圖丟 AI 便宜', 'Save 93% — cheaper than sending screenshots')}</span></div>
       <div class="point"><span class="pico">🔒</span><span class="ptxt">${t('隱私保護 — 敏感資料自動打碼', 'Privacy first — sensitive data auto-masked')}</span></div>
       <div class="point"><span class="pico">🆓</span><span class="ptxt">${t('免費開始 — 月費只要 NT$80', 'Start free — paid plan just NT$80/mo')}</span></div>
+      <div class="point"><span class="pico">🔗</span><span class="ptxt">${t('錄一次，所有 AI 讀 — 多工具同步連線', 'Record once, every AI reads — multi-tool sync')}</span></div>
     </div>
     <p style="text-align:center;margin-top:24px;"><a href="/features" style="font-weight:600;">${t('查看完整功能 →', 'See full features →')}</a></p>
   </section>
@@ -785,9 +1326,9 @@ function homePage(lang: PageLang, _request: Request): string {
 // 中英雙語，深色主題與首頁/報告頁統一（#0f0f1a / #7c3aed / #a78bfa），一頁式無 JS、RWD。
 // PM-152：/privacy 改為函式（依 lang 只顯示對應語言區塊；原本中英雙語堆疊 → 改語言切換）。
 function privacyPage(lang: PageLang): string {
-  const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
+  const t = makeT(lang); // PM-232：zh/en/zh-CN 三語（zh-CN 由繁體轉簡體）
   return `<!DOCTYPE html>
-<html lang="${lang === 'zh' ? 'zh-Hant' : 'en'}">
+<html lang="${htmlLang(lang)}">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -1225,10 +1766,10 @@ function renderMarkdown(md: string): string {
 
 // PM-201：/skill AI 客服手冊檢視頁（渲染 SKILL.md + 一鍵複製 + 下載 + Claude Desktop 安裝步驟）。
 function skillPage(lang: PageLang): string {
-  const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
+  const t = makeT(lang); // PM-232：zh/en/zh-CN 三語（zh-CN 由繁體轉簡體）
   const bodyHtml = renderMarkdown(SKILL_MD);
   return `<!DOCTYPE html>
-<html lang="${lang === 'zh' ? 'zh-Hant' : 'en'}">
+<html lang="${htmlLang(lang)}">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -1349,9 +1890,9 @@ ${ogMeta('/skill', 'AI Customer Service Guide — BugEzy SKILL.md', 'BugEzy MCP 
 }
 
 function guidePage(lang: PageLang): string {
-  const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
+  const t = makeT(lang); // PM-232：zh/en/zh-CN 三語（zh-CN 由繁體轉簡體）
   return `<!DOCTYPE html>
-<html lang="${lang === 'zh' ? 'zh-Hant' : 'en'}">
+<html lang="${htmlLang(lang)}">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -1551,7 +2092,7 @@ ${ogMeta('/guide', 'User Guide — BugEzy', 'Step-by-step guide to using BugEzy 
 // ── PM-66：FAQ 頁（四大類問答，手風琴點擊展開/收合，單一展開）──
 // PM-152：/faq 改為函式（依 lang 中英切換）。🔴 英文版禁止提及任何競品名稱（延續 PM-130 去競品）。
 function faqPage(lang: PageLang): string {
-  const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
+  const t = makeT(lang); // PM-232：zh/en/zh-CN 三語（zh-CN 由繁體轉簡體）
   // PM-213：FAQPage JSON-LD ——問題/答案文字與下方可見手風琴逐字一致（Google 要求 FAQ markup 為頁面可見內容）。
   //   依 lang 動態產生：zh 頁配 zh 文字、en 頁配 en 文字，兩者都 match 各自可見內容。
   const faqQA: Array<[string, string]> = [
@@ -1580,7 +2121,7 @@ function faqPage(lang: PageLang): string {
     })),
   };
   return `<!DOCTYPE html>
-<html lang="${lang === 'zh' ? 'zh-Hant' : 'en'}">
+<html lang="${htmlLang(lang)}">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -1715,7 +2256,7 @@ document.querySelectorAll('.faq-q').forEach(function (q) {
 // ── PM-96：安裝指南頁（GET /install）— 從零到能用的完整五步流程 + MCP 設定 ──
 // PM-150：/install 改為函式（依 lang 中英切換）。
 function installPage(lang: PageLang): string {
-  const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
+  const t = makeT(lang); // PM-232：zh/en/zh-CN 三語（zh-CN 由繁體轉簡體）
   // PM-192（三修）：安裝指令抽成變數，供 <pre> 顯示與按鈕 data-copy-text 共用——複製改從 attribute 讀，
   //   徹底不受 DOM textContent（PM-190 .mcp-cfg 改寫、空白、瀏覽器差異）影響。
   const aiPrompt = t(
@@ -1753,7 +2294,7 @@ Once installed, whenever I record a bug with BugEzy, you can read my report via 
 Full guide: https://bugezy.dev/install`,
   );
   return `<!DOCTYPE html>
-<html lang="${lang === 'zh' ? 'zh-Hant' : 'en'}">
+<html lang="${htmlLang(lang)}">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -2041,9 +2582,9 @@ $ BUGEZY_TOKEN=&lt;${t('你的 token', 'your token')}&gt; npx bugezy-watch -- go
 // ── PM-96：功能說明頁（GET /features）— 六種模式 + 語音 + 高畫質 AI 的操作說明 ──
 // PM-151：/features 改為函式（依 lang 中英切換，延續 PM-150 模式）。
 function featuresPage(lang: PageLang): string {
-  const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
+  const t = makeT(lang); // PM-232：zh/en/zh-CN 三語（zh-CN 由繁體轉簡體）
   return `<!DOCTYPE html>
-<html lang="${lang === 'zh' ? 'zh-Hant' : 'en'}">
+<html lang="${htmlLang(lang)}">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -2111,7 +2652,16 @@ ${ogMeta('/features', 'Features — BugEzy', 'Voice recording, DOM replay, conso
   .plan3 .pn { color:#a78bfa; font-weight:700; font-size:14px; }
   .plan3 .pp { color:#fff; font-size:24px; font-weight:800; margin:6px 0; }
   .plan3 .pd { color:#aaa; font-size:12px; }
-  @media (max-width: 640px) { .wrap { padding: 32px 16px 60px; } h1 { font-size: 24px; } .mode-grid, .plan3 { grid-template-columns:1fr; } }
+  /* PM-230：MCP 工作流三欄 + 連線設定框 */
+  .wf-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:6px; }
+  .wf-card { background:#15152a; border:1px solid #2a2a3e; border-radius:12px; padding:18px; }
+  .wf-card h3 { font-size:16px; color:#fff; margin:0 0 8px; }
+  .wf-card p { font-size:13px; color:#b8b8c8; margin:0; line-height:1.6; }
+  .wf-config { margin-top:16px; background:#15152a; border:1px solid #7c3aed; border-radius:12px; padding:16px 18px; }
+  .wf-config .wc-title { color:#a78bfa; font-weight:600; font-size:14px; margin:0 0 8px; }
+  .wf-config pre { margin:0; padding:12px 14px; background:#0f0f1a; border-radius:8px; overflow-x:auto; color:#7ee0c5; font-family:ui-monospace,monospace; font-size:13px; }
+  .wf-config .wc-note { color:#8b8fa3; font-size:12px; margin:10px 0 0; }
+  @media (max-width: 640px) { .wrap { padding: 32px 16px 60px; } h1 { font-size: 24px; } .mode-grid, .plan3, .wf-grid { grid-template-columns:1fr; } }
 </style>
 </head>
 <body>
@@ -2202,6 +2752,35 @@ ${ogMeta('/features', 'Features — BugEzy', 'Voice recording, DOM replay, conso
   </div>
 
   <div class="feat">
+    <h2>${t('🔗 MCP 工作流 — 錄一次，所有 AI 都能讀', '🔗 MCP Workflows — Record Once, Every AI Can Read')}</h2>
+    <div class="wf-grid">
+      <div class="wf-card">
+        <h3>${t('🤖 一個 AI 搞定', '🤖 Single Agent')}</h3>
+        <p>${t('用 Claude Desktop、Cursor 或 Windsurf，連上 BugEzy MCP，直接讀報告修 Bug。一個 AI 從頭做到尾。', 'Connect Claude Desktop, Cursor, or Windsurf to BugEzy MCP. One AI reads the report and fixes the bug end-to-end.')}</p>
+      </div>
+      <div class="wf-card">
+        <h3>${t('🤝 兩個 AI 分工', '🤝 Dual Agent')}</h3>
+        <p>${t('Claude Chat 讀報告做分析和策略規劃，Claude Code 讀同一份報告寫修復程式碼。PM 和工程師各司其職，讀的是同一份 Bug 報告。', 'Claude Chat reads the report for analysis and planning. Claude Code reads the same report to write the fix. PM and engineer roles, same bug report.')}</p>
+      </div>
+      <div class="wf-card">
+        <h3>${t('🔗 多工具同步', '🔗 Multi-Tool Sync')}</h3>
+        <p>${t('Zed、Cursor、Claude Desktop 同時連線 BugEzy MCP，都讀同一份報告。團隊成員用不同工具，看到的是同一份 Bug 資料。', 'Zed, Cursor, Claude Desktop — all connected to BugEzy MCP at the same time, all reading the same report. Different tools, same bug data.')}</p>
+      </div>
+    </div>
+    <div class="wf-config">
+      <p class="wc-title">${t('一行連線，任何 MCP 工具都能用', 'One line to connect, works with any MCP client')}</p>
+      <pre>{
+  "mcpServers": {
+    "bugezy": {
+      "url": "https://bugezy.dev/mcp"
+    }
+  }
+}</pre>
+      <p class="wc-note">${t('支援 Claude Desktop · Claude Code · Cursor · Windsurf · Zed · 任何 MCP 相容工具', 'Works with Claude Desktop · Claude Code · Cursor · Windsurf · Zed · Any MCP-compatible client')}</p>
+    </div>
+  </div>
+
+  <div class="feat">
     <h2>${t('💰 定價', '💰 Pricing')}</h2>
     <div class="plan3">
       <div class="pc"><div class="pn">${t('免費', 'Free')}</div><div class="pp">NT$0</div><div class="pd">${t('每月 10 錄製 / 5 回溯 / 20 MCP', '10 rec / 5 rewind / 20 MCP per mo')}</div></div>
@@ -2238,9 +2817,9 @@ ${ogMeta('/features', 'Features — BugEzy', 'Voice recording, DOM replay, conso
 // ── PM-126：更新日誌頁（GET /changelog）——深色主題與其他頁一致 ──
 // PM-151：/changelog 改為函式（依 lang 中英切換）。版號/日期不翻，只翻功能描述。
 function changelogPage(lang: PageLang): string {
-  const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
+  const t = makeT(lang); // PM-232：zh/en/zh-CN 三語（zh-CN 由繁體轉簡體）
   return `<!DOCTYPE html>
-<html lang="${lang === 'zh' ? 'zh-Hant' : 'en'}">
+<html lang="${htmlLang(lang)}">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -2349,9 +2928,9 @@ ${ogMeta('/changelog', 'Changelog — BugEzy', 'Latest updates and release notes
 
 // ── PM-174：問題回報頁（GET /feedback）+ POST /api/feedback（存 Supabase feedback 表，不需登入）──
 function feedbackPage(lang: PageLang): string {
-  const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
+  const t = makeT(lang); // PM-232：zh/en/zh-CN 三語（zh-CN 由繁體轉簡體）
   return `<!DOCTYPE html>
-<html lang="${lang === 'zh' ? 'zh-Hant' : 'en'}">
+<html lang="${htmlLang(lang)}">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -2483,9 +3062,9 @@ async function handleFeedback(request: Request, env: Env): Promise<Response> {
 
 // ── PM-184：「我的報告」列表頁（GET /reports?token=…）——需 session token 驗證，server 端渲染，私人頁（noindex + no-store）──
 function reportsShell(lang: PageLang, bodyHtml: string, langSwitchHref: string): Response {
-  const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
+  const t = makeT(lang); // PM-232：zh/en/zh-CN 三語（zh-CN 由繁體轉簡體）
   const page = `<!DOCTYPE html>
-<html lang="${lang === 'zh' ? 'zh-Hant' : 'en'}">
+<html lang="${htmlLang(lang)}">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -2540,7 +3119,7 @@ ${ogMeta('/reports', 'My Bug Reports — BugEzy', 'View and manage your captured
 //   header 打 GET /api/my-reports 取資料、client 端渲染表格。無 token → 顯示登入提示。
 async function reportsPage(request: Request, env: Env): Promise<Response> {
   const lang = getLang(request);
-  const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
+  const t = makeT(lang); // PM-232：zh/en/zh-CN 三語（zh-CN 由繁體轉簡體）
   // 語言切換只帶 lang，絕不帶 token
   const switchHref = `?lang=${lang === 'zh' ? 'en' : 'zh'}`;
 
@@ -2822,9 +3401,9 @@ async function deleteReportsApi(request: Request, env: Env): Promise<Response> {
 // PM-168：報告頁多語系（getLang 偵測 + data-bugezy-lang 傳給 report-page.js）。
 // UI 標籤翻譯；報告內容（console/network/voice 等使用者原始資料）不翻。
 function reportPageHtml(lang: PageLang): string {
-  const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
+  const t = makeT(lang); // PM-232：zh/en/zh-CN 三語（zh-CN 由繁體轉簡體）
   return `<!DOCTYPE html>
-<html lang="${lang === 'zh' ? 'zh-Hant' : 'en'}" data-bugezy-lang="${lang}">
+<html lang="${htmlLang(lang)}" data-bugezy-lang="${lang}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -3596,9 +4175,9 @@ ${inner}
 
 // PM-180：官方測試頁——涵蓋 PM-153~179 全部捕捉能力 + Python CLI 指引；中英雙語（getLang）。
 function testPage1(lang: PageLang): string {
-  const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
+  const t = makeT(lang); // PM-232：zh/en/zh-CN 三語（zh-CN 由繁體轉簡體）
   return `<!DOCTYPE html>
-<html lang="${lang === 'zh' ? 'zh-Hant' : 'en'}">
+<html lang="${htmlLang(lang)}">
 <head>
   <meta charset="utf-8">
   <title>${t('🧪 BugEzy 測試頁', '🧪 BugEzy Test Page')}</title>
@@ -4578,13 +5157,34 @@ async function summarizeText(request: Request, env: Env): Promise<Response> {
   if (!text || text.length < 10) {
     return json({ summary: text ?? '' });
   }
+  // PM-232：zh-CN → 簡體 prompt；PM-233~235：ja/ko/vi → 日/韓/越語 prompt
   const isEn = language === 'en';
+  const isCn = language === 'zh-CN';
+  const isJa = language === 'ja';
+  const isKo = language === 'ko';
+  const isVi = language === 'vi';
   const sysContent = isEn
     ? "You are a bug report summarizer. Condense the user's voice description into 2-5 key points. Keep critical info (what element, what problem, expected behavior). Remove repetition and filler. Output in English, bullet points."
-    : '你是 Bug 報告精簡助手。把使用者的語音描述精簡成 2-5 個重點。保留關鍵資訊（什麼元素、什麼問題、預期行為），去除重複和口語贅詞。用繁體中文，條列式輸出。';
+    : isJa
+      ? 'あなたはバグレポートの要約者です。ユーザーの音声説明を 2〜5 個の要点にまとめてください。重要な情報（どの要素か、どんな問題か、期待される挙動）を残し、繰り返しや冗長な口語表現を取り除いてください。日本語（敬体）で、箇条書きで出力してください。'
+      : isKo
+        ? '당신은 버그 리포트 요약 도우미입니다. 사용자의 음성 설명을 2~5개의 핵심으로 요약하세요. 핵심 정보(어떤 요소, 어떤 문제, 기대 동작)를 유지하고 반복과 군더더기 구어체를 제거하세요. 한국어(합니다체)로 불릿 형식으로 출력하세요.'
+        : isVi
+          ? 'Bạn là trợ lý tóm tắt báo cáo lỗi. Hãy tóm tắt phần mô tả bằng giọng nói của người dùng thành 2-5 điểm chính. Giữ lại thông tin quan trọng (phần tử nào, vấn đề gì, hành vi mong đợi), loại bỏ lặp lại và từ đệm khẩu ngữ. Xuất ra bằng tiếng Việt, dạng gạch đầu dòng.'
+          : isCn
+            ? toSimplified('你是 Bug 報告精簡助手。把使用者的語音描述精簡成 2-5 個重點。保留關鍵資訊（什麼元素、什麼問題、預期行為），去除重複和口語贅詞。用簡體中文，條列式輸出。')
+            : '你是 Bug 報告精簡助手。把使用者的語音描述精簡成 2-5 個重點。保留關鍵資訊（什麼元素、什麼問題、預期行為），去除重複和口語贅詞。用繁體中文，條列式輸出。';
   const userContent = isEn
     ? `Please summarize the following voice log:\n\n${text}`
-    : `請精簡以下語音記錄：\n\n${text}`;
+    : isJa
+      ? `次の音声記録を要約してください：\n\n${text}`
+      : isKo
+        ? `다음 음성 기록을 요약해 주세요:\n\n${text}`
+        : isVi
+          ? `Vui lòng tóm tắt bản ghi giọng nói sau:\n\n${text}`
+          : isCn
+            ? `${toSimplified('請精簡以下語音記錄')}：\n\n${text}`
+            : `請精簡以下語音記錄：\n\n${text}`;
   try {
     const result = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
       messages: [
@@ -4619,20 +5219,52 @@ async function correctText(request: Request, env: Env): Promise<Response> {
   if (!text?.trim()) {
     return json({ error: '沒有文字可校正' }, 400);
   }
+  // PM-232：zh-CN → 簡體 prompt（繁體 t2s 轉換）；PM-233~235：ja/ko/vi → 日/韓/越語 prompt
   const isEn = language === 'en';
-  const sysContent = isEn
-    ? `You are a speech-to-text proofreading expert. The input is raw speech recognition output in English. Please only correct it.
+  const isCn = language === 'zh-CN';
+  const isJa = language === 'ja';
+  const isKo = language === 'ko';
+  const isVi = language === 'vi';
+  const viSys = `Bạn là chuyên gia hiệu đính văn bản nhận dạng giọng nói tiếng Việt. Đầu vào chắc chắn là kết quả thô của nhận dạng giọng nói tiếng Việt, có thể có lỗi đồng âm và từ đệm khẩu ngữ. Chỉ thực hiện "hiệu đính", xuất ra văn bản tiếng Việt đã hiệu đính.
 
-Rules:
-1. Fix misheard words and homophones
-2. Remove filler words (um, uh, like, you know, so basically)
-3. Keep technical terms as-is (console error, TypeError, 404, undefined, null, fetch, API)
-4. Add proper punctuation and capitalization
-5. Preserve original meaning and order, do not rewrite or summarize
-6. If the original is already correct, return as-is
+Quy tắc:
+1. Sửa lỗi chính tả đồng âm
+2. Loại bỏ từ đệm khẩu ngữ (ừm, à, thì, kiểu như, đại loại là)
+3. Giữ nguyên thuật ngữ kỹ thuật bằng tiếng Anh (console error, TypeError, 404, undefined, null, fetch, API)
+4. Số và mã trạng thái HTTP dùng chữ số (năm trăm → 500, bốn không bốn → 404)
+5. Giữ nguyên ý nghĩa và thứ tự mô tả gốc, không viết lại, không tóm tắt, không thêm nội dung
+6. Thêm dấu câu phù hợp để dễ đọc
+7. Nếu văn bản gốc đã chính xác thì trả về nguyên vẹn
+8. Dù đầu vào có lộn xộn đến đâu, luôn phải xuất ra văn bản tiếng Việt đã hiệu đính. Tuyệt đối không trả lời "không thể nhận dạng", "vui lòng cung cấp văn bản đúng" hoặc yêu cầu nhập lại.
 
-Only return the corrected text, no explanation.`
-    : `你是繁體中文語音轉文字的校對專家。輸入一定是中文語音辨識的原始結果，可能有同音錯字與口語贅字。請只做「校正」，輸出校正後的中文文字。
+Chỉ trả về văn bản đã hiệu đính, không thêm bất kỳ giải thích hay tiền tố nào.`;
+  const koSys = `당신은 한국어 음성 인식 텍스트의 교정 전문가입니다. 입력은 반드시 한국어 음성 인식의 원본 결과이며, 동음 오타나 구어체 군더더기가 포함될 수 있습니다. "교정"만 수행하고, 교정된 한국어 텍스트를 출력하세요.
+
+규칙:
+1. 동음 오타를 수정한다
+2. 구어체 군더더기(음, 어, 그, 그러니까, 뭐랄까)를 제거한다
+3. 기술 용어는 영어 원문 그대로 유지한다(console error, TypeError, 404, undefined, null, fetch, API)
+4. 숫자와 HTTP 상태 코드는 아라비아 숫자로(오백 → 500, 사공사 → 404)
+5. 원래 의미와 설명 순서를 유지하고, 다시 쓰거나 요약하거나 내용을 추가하지 않는다
+6. 적절히 문장 부호를 추가하여 읽기 쉽게 한다
+7. 원문이 이미 정확하면 그대로 반환한다
+8. 입력이 아무리 어수선해도 반드시 교정된 한국어 텍스트를 출력할 것. "인식할 수 없습니다", "올바른 텍스트를 제공해 주세요" 같은 답변이나 재입력 요청은 절대 하지 말 것.
+
+교정된 텍스트만 반환하고, 설명이나 접두어는 일절 붙이지 마세요.`;
+  const jaSys = `あなたは日本語の音声認識テキストの校正専門家です。入力は必ず日本語の音声認識の生の結果で、同音の誤字や口語的な冗長表現が含まれる可能性があります。「校正」のみを行い、校正後の日本語テキストを出力してください。
+
+ルール：
+1. 同音の誤字を修正する
+2. 口語的な冗長表現（えー、あの、まあ、そのー、なんか）を取り除く
+3. 技術用語は英語のまま保持する（console error、TypeError、404、undefined、null、fetch、API）
+4. 数字と HTTP ステータスコードは半角数字で（五百 → 500、四〇四 → 404）
+5. 元の意味と説明の順序を保持し、書き換え・要約・追加をしない
+6. 適切に句読点を加えて読みやすくする
+7. 元の文がすでに正しい場合はそのまま返す
+8. 入力がどれほど乱れていても、必ず校正後の日本語テキストを出力すること。「認識できません」「正しいテキストを提供してください」などの返答や、再入力の要求は絶対にしないこと。
+
+校正後のテキストのみを返し、説明や前置きは一切加えないでください。`;
+  const zhSys = `你是繁體中文語音轉文字的校對專家。輸入一定是中文語音辨識的原始結果，可能有同音錯字與口語贅字。請只做「校正」，輸出校正後的中文文字。
 
 規則：
 1. 修正同音錯字（例：噴五白 → 噴 500、台破 → TypeError）
@@ -4649,9 +5281,38 @@ Only return the corrected text, no explanation.`
 輸出：我按下搜尋按鈕之後，頁面就出現 TypeError 的錯誤，狀態碼是 404。
 
 只回傳校正後的文字，不加任何說明或前綴。`;
+  const sysContent = isEn
+    ? `You are a speech-to-text proofreading expert. The input is raw speech recognition output in English. Please only correct it.
+
+Rules:
+1. Fix misheard words and homophones
+2. Remove filler words (um, uh, like, you know, so basically)
+3. Keep technical terms as-is (console error, TypeError, 404, undefined, null, fetch, API)
+4. Add proper punctuation and capitalization
+5. Preserve original meaning and order, do not rewrite or summarize
+6. If the original is already correct, return as-is
+
+Only return the corrected text, no explanation.`
+    : isJa
+      ? jaSys
+      : isKo
+        ? koSys
+        : isVi
+          ? viSys
+          : isCn
+            ? toSimplified(zhSys)
+            : zhSys;
   const userContent = isEn
     ? `Please correct the following speech recognition text:\n${text}`
-    : `請校正以下語音辨識文字：\n${text}`;
+    : isJa
+      ? `次の音声認識テキストを校正してください：\n${text}`
+      : isKo
+        ? `다음 음성 인식 텍스트를 교정해 주세요:\n${text}`
+        : isVi
+          ? `Vui lòng hiệu đính văn bản nhận dạng giọng nói sau:\n${text}`
+          : isCn
+            ? `${toSimplified('請校正以下語音辨識文字')}：\n${text}`
+            : `請校正以下語音辨識文字：\n${text}`;
   try {
     const result = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
       messages: [
@@ -4714,9 +5375,11 @@ async function handleTranscribe(request: Request, env: Env): Promise<Response> {
     return json({ error: '音訊太短' }, 400);
   }
 
+  // PM-232：zh-CN（簡體）——Whisper 語言碼只有 'zh'，改用 zh 辨識，但用簡體 prompt 引導簡體輸出。
+  const wantSimplified = language === 'zh-CN';
   // PM-137/140：語言白名單（防濫用；非白名單一律 fallback zh）。
-  // PM-140：金流（綠界特約商店）未開通前只放行 zh/yue/en；日韓越（ja/ko/vi）暫鎖，開放時再加回。
-  const ALLOWED_LANGS = ['zh', 'yue', 'en'];
+  // PM-233/234/235：解鎖 ja（日）、ko（韓）、vi（越）——Whisper 原生支援品質佳。七語全開。
+  const ALLOWED_LANGS = ['zh', 'yue', 'en', 'ja', 'ko', 'vi'];
   const finalLang = ALLOWED_LANGS.includes(language) ? language : 'zh';
 
   // 3. 呼叫 Groq Whisper API
@@ -4727,7 +5390,15 @@ async function handleTranscribe(request: Request, env: Env): Promise<Response> {
   groqForm.append('response_format', 'verbose_json');
   // PM-214：Groq Whisper 的 language 只控制辨識語言、不控制簡/繁輸出。台灣市場統一繁體——
   //   對中文與粵語加 prompt 引導繁體中文輸出（不影響辨識準確度；en 與日韓越不需要）。
-  if (finalLang === 'zh' || finalLang === 'yue') {
+  if (wantSimplified) {
+    groqForm.append('prompt', '以下是简体中文的语音转录内容。'); // PM-232：簡體引導
+  } else if (finalLang === 'ja') {
+    groqForm.append('prompt', '以下は日本語の音声文字起こしです。'); // PM-233：日語引導
+  } else if (finalLang === 'ko') {
+    groqForm.append('prompt', '다음은 한국어 음성 텍스트 변환입니다.'); // PM-234：韓語引導
+  } else if (finalLang === 'vi') {
+    groqForm.append('prompt', 'Sau đây là nội dung chuyển đổi giọng nói tiếng Việt.'); // PM-235：越南語引導
+  } else if (finalLang === 'zh' || finalLang === 'yue') {
     groqForm.append('prompt', '以下是繁體中文的語音轉錄內容。');
   }
 
@@ -4748,10 +5419,15 @@ async function handleTranscribe(request: Request, env: Env): Promise<Response> {
       language?: string;
       duration?: number;
     };
+    // PM-232：prompt 引導後仍可能夾繁體字，保險用 t2s 轉全簡體
+    const rawText = result.text ?? '';
+    const rawSegs = result.segments ?? [];
     return json({
       ok: true,
-      text: result.text ?? '',
-      segments: result.segments ?? [],
+      text: wantSimplified ? toSimplified(rawText) : rawText,
+      segments: wantSimplified
+        ? rawSegs.map((s) => ({ ...s, text: toSimplified(s.text) }))
+        : rawSegs,
       language: result.language ?? 'zh',
       duration: result.duration ?? 0,
     });
