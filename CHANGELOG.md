@@ -1,5 +1,21 @@
 # BugEzy Changelog
 
+## 2026-07-17
+
+Day 31（PM-237~242）。**即時字幕（Web Speech）五項體驗優化與 bug 修復**，FOX 多語實測回報。純 extension（只改 `extension/src/inject.ts`）；四次 `npm run build` + `tsc --noEmit` 皆過，dist 更新待 FOX 重上架（仍 v1.1.3）。
+
+- **PM-237 interim 即時字幕 + 語音面板可拖曳**。①`createRecognition()` 的 `rec.interimResults` `false`→`true`；`onresult` 迴圈加 interim 分支——`isFinal===false` 累積到區域變數即時顯示於底部字幕條（像 YouTube 字幕），**不**推 segments/面板/flush，只在本次事件無 final 時 `setCaptionText('🟢 '+interim)`（避免蓋掉 `✅` 確認文字 1.5 秒）。②右上語音面板（音声記録）改可拖曳：新增 module 級 `voicePanelPos` 記憶位置（頁面存活期間跨錄製）；面板/header `pointer-events:none`→`auto`、header 加 `cursor:grab` 當 drag handle（內容區 `bugezy-voice-content` 顯式保留 `none` 防誤選）；`mousedown`（排除收合鈕）記 offset→`mousemove` 更新 `left/top` 並用 `Math.min/max` 夾在視窗內→`mouseup` 結束，監聽器只在拖曳期間掛 window 結束即移除（不洩漏）；收合/展開與 `position:fixed` 不變。
+
+- **PM-238 修復 🔄 重啟按鈕無限循環（race condition）**。`forceRestartVoice()` 的 `recognition.stop()` 觸發舊實例 `onend`，因 `voiceActive` 仍 `true` → 對舊 rec `start()` 自動重啟；隨後又建新實例 start() → 兩個 SpeechRecognition 搶麥克風互相觸發 onend → 無限「Restarting…」。修法：Step 1 先 `voiceActive=false`（讓舊實例 onend `!voiceActive` 直接 return），getUserMedia 失敗路徑補 `voiceActive=true`，Step 4 建新實例前 `voiceActive=true`。
+
+- **PM-239 修復右上面板第一段語音被 VOICE_HISTORY 覆寫**。`showCaptionBar()` 發 `REQUEST_VOICE_HISTORY`（四層非同步 message），若第一段 final（`+=` 追加面板）先於回應到達，原 `textContent =`（覆寫）把第一段吃掉。改「覆寫」為「合併」：面板為空才直接填；已有文字則 `historyText + '\n' + currentText`（歷史放前保留既有）。
+
+- **PM-240 修復韓語即時字幕效能崩潰**。①interim 節流：韓語組合型文字（ㅎ→하→한→한국어）每組字步驟都觸發 onresult（每秒數十次）淹沒 DOM → interim 的 `setCaptionText` 最多每 150ms 一次（final 不受限）。②onend 防快速循環：原 `onstart` 無條件歸零 `autoRestartFails` 讓計數永遠到不了 3；改為 `onstart` 只記 `lastRecognitionStartTime` 不歸零，`onend` 算 session 時長——只有 >1s 正常 session 才歸零，短命 session（<1s）累積計數到 3 次後停手。
+
+- **PM-241 越南語 interim 自動升級 final（stale interim 超時）**。Chrome 越南語模型很少主動送 `isFinal`，長停 interim → 右上面板收不到文字。新增「stale interim 自動升級」：interim 文字每變動就重設 3 秒 timer，3 秒穩定未變即視為 final（推 segments/flush/面板/`✅`）；停錄、forceRestart、**收到真 final**皆呼叫 `clearInterimPromote()` 清 timer（真 final 清除避免 en/zh/ja 停頓後過期 timer 重複送出），回呼另以 `voiceActive` 守門。其他語言正常 1~2 秒 finalize，timer 永不觸發。
+
+- **PM-242 Day 31 收工**：CHANGELOG + ARCHITECTURE + git push。
+
 ## 2026-07-15
 
 Day 29（PM-232~236）。**四語擴展達成七語全覆蓋**：簡體中文 zh-CN + 日語 ja + 韓語 ko + 越南語 vi。Extension 每語補完整 UI 翻譯、Server 官網（首頁 + 完整功能頁）補對應翻譯、Whisper/AI 校正/精簡各語 prompt、`Accept-Language` 自動偵測。extension 四次 `npm run build`（dist 更新待 FOX 重上架，仍 v1.1.3）；server deploy `02720582`→`ce1fe70c`→`9728f239`→`7fb7078a`。

@@ -100,6 +100,8 @@ function main() {
   let recognition: SRInstance | null = null;
   let voiceActive = false;
   let captionBar: HTMLDivElement | null = null; // PM-24：錄製中即時字幕
+  // PM-237 Bug2：語音面板拖曳後的位置記憶（頁面存活期間跨錄製保留；用 left/top）
+  let voicePanelPos: { left: number; top: number } | null = null;
 
   // ===== PM-50：背景循環緩存（⏪ 回溯最近 30 秒，不需先按錄製）=====
   const REWIND_WINDOW = 30_000;
@@ -363,14 +365,21 @@ function main() {
     document.getElementById('bugezy-voice-panel')?.remove();
     const panel = document.createElement('div');
     panel.id = 'bugezy-voice-panel';
+    // PM-237 Bug2：面板本體改 pointer-events:auto（否則拖不動）；預設 top:200px/right:12px，
+    //   若使用者本頁曾拖曳過（voicePanelPos）則沿用該座標（改用 left 定位）。
     panel.style.cssText =
-      'position:fixed;top:200px;right:12px;z-index:2147483647;pointer-events:none;width:260px;max-height:50vh;overflow-y:auto;background:rgba(0,0,0,0.8);border:1px solid rgba(124,58,237,0.5);border-radius:12px;padding:10px 14px;font-family:system-ui,sans-serif;font-size:14px;color:#eee;line-height:1.6;transition:opacity 0.3s;'; // PM-40/44：60→140→200px 避免被書籤列/其他擴充遮擋
+      'position:fixed;top:200px;right:12px;z-index:2147483647;pointer-events:auto;width:260px;max-height:50vh;overflow-y:auto;background:rgba(0,0,0,0.8);border:1px solid rgba(124,58,237,0.5);border-radius:12px;padding:10px 14px;font-family:system-ui,sans-serif;font-size:14px;color:#eee;line-height:1.6;transition:opacity 0.3s;'; // PM-40/44：60→140→200px 避免被書籤列/其他擴充遮擋
+    if (voicePanelPos) {
+      panel.style.left = `${voicePanelPos.left}px`;
+      panel.style.top = `${voicePanelPos.top}px`;
+      panel.style.right = 'auto';
+    }
 
-    // PM-31 Bug1：header 整列 pointer-events:none，只有收合按鈕本身可點，
-    // 避免使用者誤點面板其他區域觸發奇怪行為導致頁面卡死。
+    // PM-237 Bug2：header 作為拖曳把手——改 pointer-events:auto + cursor:grab。
+    //   （PM-31 Bug1 原設 none 防誤點；改用「只有 header 可拖、內容區仍 none」達成同樣防呆。）
     const header = document.createElement('div');
     header.style.cssText =
-      'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.15);pointer-events:none;';
+      'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.15);pointer-events:auto;cursor:grab;user-select:none;';
     // PM-69：用 DOM 節點建構，避免 innerHTML 在 Trusted-Types CSP 網站（如 GitHub）拋錯
     const headerLabel = document.createElement('span');
     headerLabel.style.cssText = 'font-size:12px;color:#a78bfa;';
@@ -379,7 +388,8 @@ function main() {
 
     const content = document.createElement('div');
     content.id = 'bugezy-voice-content';
-    content.style.cssText = 'white-space:pre-wrap;word-break:break-word;';
+    // PM-237 Bug2：內容區維持 pointer-events:none（面板本體現為 auto，需顯式關掉內容區避免誤選文字干擾頁面）
+    content.style.cssText = 'white-space:pre-wrap;word-break:break-word;pointer-events:none;';
 
     // 收合按鈕獨立，只有它是 pointer-events:auto
     let collapsed = false;
@@ -396,6 +406,36 @@ function main() {
       toggleBtn.textContent = collapsed ? '▶' : '▼';
     });
     header.appendChild(toggleBtn);
+
+    // PM-237 Bug2：header 拖曳——mousedown 記 offset → mousemove 更新 left/top（限制在視窗內）→ mouseup 結束。
+    //   mousemove/mouseup 只在拖曳期間掛上 window，結束即移除（面板重建不累積監聽器）。
+    let dragOffsetX = 0;
+    let dragOffsetY = 0;
+    const onDragMove = (ev: MouseEvent) => {
+      const maxLeft = Math.max(0, window.innerWidth - panel.offsetWidth);
+      const maxTop = Math.max(0, window.innerHeight - panel.offsetHeight);
+      const left = Math.min(Math.max(0, ev.clientX - dragOffsetX), maxLeft);
+      const top = Math.min(Math.max(0, ev.clientY - dragOffsetY), maxTop);
+      panel.style.left = `${left}px`;
+      panel.style.top = `${top}px`;
+      panel.style.right = 'auto';
+      voicePanelPos = { left, top }; // 記憶（頁面存活期間）
+    };
+    const onDragEnd = () => {
+      header.style.cursor = 'grab';
+      window.removeEventListener('mousemove', onDragMove);
+      window.removeEventListener('mouseup', onDragEnd);
+    };
+    header.addEventListener('mousedown', (ev) => {
+      if (toggleBtn.contains(ev.target as Node)) return; // 點收合按鈕不觸發拖曳
+      const rect = panel.getBoundingClientRect();
+      dragOffsetX = ev.clientX - rect.left;
+      dragOffsetY = ev.clientY - rect.top;
+      header.style.cursor = 'grabbing';
+      ev.preventDefault(); // 防拖曳時選字
+      window.addEventListener('mousemove', onDragMove);
+      window.addEventListener('mouseup', onDragEnd);
+    });
 
     panel.appendChild(header);
     panel.appendChild(content);
@@ -488,6 +528,25 @@ function main() {
 
   // PM-33：自動重啟連續失敗計數（放在 createRecognition 外，建新實例不重置）
   let autoRestartFails = 0;
+  // PM-240 問題1：interim 字幕節流——韓語等組合型文字每個組字步驟都觸發 onresult（每秒數十次），
+  //   每次都做 DOM 更新會淹沒瀏覽器。interim 的 setCaptionText 最多每 150ms 更新一次（final 不受限）。
+  let lastInterimUpdate = 0;
+  const INTERIM_THROTTLE_MS = 150;
+  // PM-240 問題2：記錄本次 recognition session 啟動時間——onend 判斷 session 是否「短命」（<1s），
+  //   短命不歸零失敗計數，避免韓語瞬間 onstart→onend 循環讓計數永遠到不了 3。
+  let lastRecognitionStartTime = 0;
+  // PM-241：越南語模型很少主動送 isFinal，長時間停在 interim。加「stale interim 自動升級」——
+  //   interim 文字穩定不變超過 3 秒即視為 final（推 segments/flush/面板）。
+  let interimPromoteTimer: ReturnType<typeof setTimeout> | null = null;
+  let lastInterimText = '';
+  /** PM-241：清除待升級的 interim timer（停錄 / 強制重啟 / 收到真 final 時呼叫，避免延遲後冒出過期文字）。 */
+  function clearInterimPromote() {
+    if (interimPromoteTimer) {
+      clearTimeout(interimPromoteTimer);
+      interimPromoteTimer = null;
+    }
+    lastInterimText = '';
+  }
 
   // PM-137：Web Speech 語言（BCP-47）。inject 在 MAIN world 無 chrome.storage，由 START 指令帶入。
   let currentSpeechLang = 'zh-TW';
@@ -508,13 +567,20 @@ function main() {
     const rec = new SR();
     rec.lang = currentSpeechLang; // PM-137：使用者選的語言（預設 zh-TW）
     rec.continuous = true;
-    rec.interimResults = false;
+    rec.interimResults = true; // PM-237 Bug1：開啟暫時結果，底部字幕即時顯示辨識中文字
 
     rec.onresult = (e: SREvent) => {
+      // PM-237 Bug1：本次事件的暫時（interim）文字，僅供底部字幕即時顯示，不推入 segments/面板
+      let interim = '';
+      let hadFinal = false;
       for (let i = e.resultIndex; i < e.results.length; i++) {
         if (e.results[i].isFinal) {
+          hadFinal = true;
           const text = e.results[i][0].transcript.trim();
           if (text) {
+            // PM-241：真 final 到達 → 取消待升級的 stale interim timer（此 interim 已被真 final 取代），
+            //   避免 3 秒後 timer 又把過期 interim 當 final 送出造成重複。
+            clearInterimPromote();
             const seg: VoiceSegment = { text, timestamp: Date.now(), isFinal: true };
             voiceSegments.push(seg); // 本地也存（同頁 STOP 用）
             post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'FLUSH_VOICE', segment: seg }); // PM-34
@@ -534,15 +600,62 @@ function main() {
               if (voiceActive) setVoiceStatus('listening');
             }, 1500);
           }
+        } else {
+          // PM-237 Bug1：暫時結果累積（不 trim，保留空格讓即時字幕自然）
+          interim += e.results[i][0].transcript;
+        }
+      }
+      // PM-237 Bug1：只在「本次沒有 final」時把 interim 顯示到底部字幕條
+      //（有 final 時保留 ✅ 確認文字 1.5 秒不被 interim 蓋掉）
+      // PM-240 問題1：interim 更新加節流（最多每 150ms 一次），避免韓語組字風暴淹沒 DOM。
+      if (!hadFinal && interim.trim()) {
+        const trimmed = interim.trim();
+        const now = Date.now();
+        if (now - lastInterimUpdate >= INTERIM_THROTTLE_MS) {
+          setCaptionText(`🟢 ${trimmed}`);
+          lastInterimUpdate = now;
+        }
+
+        // PM-241：stale interim 自動升級——interim 文字每次變動就重設 3 秒 timer；
+        //   若 3 秒內都沒再變（越南語模型停在 interim 不主動 finalize），視為 final 送出。
+        if (trimmed !== lastInterimText) {
+          lastInterimText = trimmed;
+          if (interimPromoteTimer) clearTimeout(interimPromoteTimer);
+          interimPromoteTimer = setTimeout(() => {
+            interimPromoteTimer = null;
+            if (lastInterimText && voiceActive) {
+              blog('interim 自動升級 final:', lastInterimText.slice(0, 40));
+              const seg: VoiceSegment = { text: lastInterimText, timestamp: Date.now(), isFinal: true };
+              voiceSegments.push(seg);
+              post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'FLUSH_VOICE', segment: seg });
+
+              // 右上面板追加
+              const vc = document.getElementById('bugezy-voice-content');
+              if (vc) {
+                vc.textContent += (vc.textContent ? '\n' : '') + lastInterimText;
+                const panel = document.getElementById('bugezy-voice-panel');
+                if (panel) panel.scrollTop = panel.scrollHeight;
+              }
+
+              // 底部字幕確認
+              setCaptionText(`✅ ${lastInterimText}`);
+              window.setTimeout(() => {
+                if (voiceActive) setVoiceStatus('listening');
+              }, 1500);
+
+              lastInterimText = '';
+            }
+          }, 3000); // 3 秒穩定 → 升級
         }
       }
     };
 
-    // PM-70：實際啟動成功才把狀態切到「聽取中」並重置失敗計數
-    // （比在 start() 後立即歸零更準——start() 不拋例外不代表真的開始接收）。
+    // PM-70：實際啟動成功才把狀態切到「聽取中」。
+    // PM-240 問題2：記錄啟動時間，但**不**在此歸零 autoRestartFails——
+    //   改在 onend 判斷 session 夠長（>1s）才歸零，防止韓語等短命 session 無限循環。
     rec.onstart = () => {
       if (voiceActive) {
-        autoRestartFails = 0;
+        lastRecognitionStartTime = Date.now();
         setVoiceStatus('listening');
       }
     };
@@ -550,11 +663,16 @@ function main() {
     rec.onend = () => {
       // 靜默自停 → 仍在錄製就自動重啟；連續失敗 3 次就停手，等使用者按 🔄
       if (!voiceActive) return;
-      blog('SpeechRecognition onend → auto restart');
+      // PM-240 問題2：只有「持續超過 1 秒」的正常 session 才歸零計數；
+      //   短命 session（<1s，疑似韓語辨識瞬間 onstart→onend）不歸零，讓計數累積到 3 次後停手。
+      const sessionDuration = Date.now() - lastRecognitionStartTime;
+      if (sessionDuration > 1000) {
+        autoRestartFails = 0;
+      }
+      blog(`SpeechRecognition onend（session ${sessionDuration}ms）→ auto restart`);
       setVoiceStatus('restarting');
       try {
         rec.start();
-        // 不在這裡歸零 autoRestartFails——交給 onstart（確認真的啟動）才歸零
       } catch {
         autoRestartFails++;
         blog(`auto restart 失敗 (第 ${autoRestartFails} 次)`);
@@ -603,7 +721,13 @@ function main() {
 
     setVoiceStatus('restarting');
 
-    // Step 1：停掉舊的並丟棄
+    // Step 1：先關 voiceActive，再停掉舊的並丟棄。
+    // PM-238：關鍵修法——`stop()` 會觸發舊實例的 onend，而 onend 看到 voiceActive===true
+    //   就會對「舊」rec 執行 start() 自動重啟；隨後 Step 4 又建新實例 start()，
+    //   兩個 SpeechRecognition 搶麥克風互相觸發 onend → 無限「Restarting…」循環。
+    //   先設 false 讓 onend 直接 return，等新實例建好再設回 true。
+    voiceActive = false;
+    clearInterimPromote(); // PM-241：重啟前清除待升級 timer
     try {
       recognition?.stop();
     } catch {
@@ -618,6 +742,7 @@ function main() {
       blog('getUserMedia 刷新成功');
     } catch (err) {
       blog('getUserMedia 刷新失敗（麥克風可能被封鎖）', err);
+      voiceActive = true; // PM-238：恢復旗標，讓使用者可再次嘗試
       setVoiceStatus('stopped', it('caption-note-noaccess'));
       return;
     }
@@ -625,7 +750,8 @@ function main() {
     // Step 3：等 500ms 讓 Chrome 清理舊的音訊資源
     await new Promise((r) => setTimeout(r, 500));
 
-    // Step 4：建全新實例（全新 handlers）
+    // Step 4：恢復 voiceActive，建全新實例（全新 handlers）
+    voiceActive = true; // PM-238：新實例的 onend 需要 voiceActive===true 才會自動重啟
     recognition = createRecognition();
     if (recognition) {
       try {
@@ -1160,6 +1286,7 @@ function main() {
     }
     // 停止語音辨識 + 移除即時字幕
     voiceActive = false;
+    clearInterimPromote(); // PM-241：停錄清除待升級 timer，避免停錄後還冒出過期文字
     if (recognition) {
       try {
         recognition.stop();
@@ -1253,10 +1380,19 @@ function main() {
       // PM-36：收到歷史語音 → 填入右上面板（跳頁恢復時不再是空的）
       const voiceContent = document.getElementById('bugezy-voice-content');
       if (voiceContent && data.segments && data.segments.length > 0) {
-        voiceContent.textContent = data.segments.map((s) => s.text).join('\n');
+        // PM-239：改「覆寫」為「合併」。REQUEST_VOICE_HISTORY 走 inject→content→background 四層
+        //   非同步 message passing，若第一段 final（onresult 用 += 追加面板）先於本回應到達，
+        //   原本 `textContent =` 會把第一段蓋掉。改成：面板為空才直接填；已有文字則歷史放前面保留既有。
+        const historyText = data.segments.map((s) => s.text).join('\n');
+        const currentText = voiceContent.textContent || '';
+        if (!currentText) {
+          voiceContent.textContent = historyText; // 面板還空 → 正常跳頁恢復
+        } else {
+          voiceContent.textContent = `${historyText}\n${currentText}`; // 第一段 final 先到 → 歷史放前面保留既有
+        }
         const panel = document.getElementById('bugezy-voice-panel');
         if (panel) panel.scrollTop = panel.scrollHeight;
-        blog('載入歷史語音', data.segments.length, '段');
+        blog('載入歷史語音', data.segments.length, '段', currentText ? '（已合併既有）' : '');
       }
     } else if (data.kind === 'READY_ACK') {
       readyAcked = true; // PM-37：content 已收到 READY，可停止重複發送
