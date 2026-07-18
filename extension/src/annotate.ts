@@ -12,6 +12,7 @@ import {
   MIC_KEY,
   MIC_MODE_KEY,
   SESSION_KEY,
+  SPEECH_LANG_MAP,
   STATE_KEY,
   STORAGE_KEY,
   TOOLBAR_EFFECT_KEY,
@@ -21,10 +22,13 @@ import {
 } from './types';
 import { getAuthHeaderOnly } from './auth';
 import { t, getUILang, type UILang } from './i18n';
+import { toSimplified } from './t2s'; // PM-248 修2：zh-CN 語音轉錄繁轉簡
 import { getNetworkSnapshot } from './net'; // PM-156：網路環境快照
 
 // PM-139：截圖標注頁 i18n（annotate 是擴充頁，有 chrome.storage，直接讀 LANG_KEY）。
 let annotateUILang: UILang = 'zh';
+// PM-248 修1：語音辨識語言跟隨 popup（原本寫死 zh-TW）。BCP-47 語碼，同 inject/edit-report。
+let annotateSpeechLang = 'zh-TW';
 function applyAnnotateTranslations() {
   document.querySelectorAll<HTMLElement>('[data-i18n]').forEach((el) => {
     const key = el.getAttribute('data-i18n');
@@ -37,6 +41,8 @@ function applyAnnotateTranslations() {
 }
 void chrome.storage.local.get(LANG_KEY, (r) => {
   annotateUILang = getUILang((r[LANG_KEY] as string) || 'zh');
+  // PM-248 修1：LANG_KEY → BCP-47 語碼（powered speechToSrLang 同源），createAnnotateRecognition 用。
+  annotateSpeechLang = SPEECH_LANG_MAP[(r[LANG_KEY] as string) || 'zh'] || 'zh-TW';
   applyAnnotateTranslations();
 });
 
@@ -313,6 +319,7 @@ interface SRInst {
   continuous: boolean;
   interimResults: boolean;
   onresult: ((e: SREvt) => void) | null;
+  onstart: (() => void) | null; // PM-248 修4
   onend: (() => void) | null;
   onerror: ((e: SRErr) => void) | null;
   start(): void;
@@ -352,11 +359,37 @@ voiceToggle.addEventListener('click', () => {
 
 // PM-42：套用 inject.ts PM-32/33 穩定模式——工廠建全新實例 + onend 失敗計數。
 let autoRestartFails = 0;
+// PM-248 修3：interim 節流（韓語組字風暴防護，同 PM-240）。
+let lastAnnotateInterimUpdate = 0;
+const ANNOTATE_INTERIM_THROTTLE = 150;
+// PM-248 修4：記 session 啟動時間，onend 判斷 >1s 才歸零失敗計數（防韓語短命 session 無限循環，同 PM-240）。
+let lastAnnotateRecStart = 0;
+// PM-248 修5：只有粵語/越南語需要 stale interim 自動升級（同 PM-247）。
+const ANNOTATE_NEEDS_PROMOTE = new Set(['yue-Hant-HK', 'vi']);
+let annotateInterimTimer: ReturnType<typeof setTimeout> | null = null;
+let annotateLastInterim = '';
+// PM-248 修6：記最近升級文字供 final 去重（同 PM-246）。
+let annotatePromotedText = '';
+let annotatePromotedTime = 0;
+/** PM-248 修6：取消待升級 timer（僅動 timer + lastInterim；保留 promoted 供 final 去重）。 */
+function cancelAnnotateInterimTimer() {
+  if (annotateInterimTimer) {
+    clearTimeout(annotateInterimTimer);
+    annotateInterimTimer = null;
+  }
+  annotateLastInterim = '';
+}
+/** PM-248 修6：停錄完整清除（timer + lastInterim + promoted 追蹤）。 */
+function clearAnnotatePromote() {
+  cancelAnnotateInterimTimer();
+  annotatePromotedText = '';
+  annotatePromotedTime = 0;
+}
 
 function createAnnotateRecognition(): SRInst | null {
   if (!SR) return null;
   const rec = new SR();
-  rec.lang = 'zh-TW';
+  rec.lang = annotateSpeechLang; // PM-248 修1：跟隨 popup 語言（原寫死 zh-TW）
   rec.continuous = true;
   rec.interimResults = true;
 
@@ -364,8 +397,22 @@ function createAnnotateRecognition(): SRInst | null {
     let interim = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const res = e.results[i];
-      const text = res[0].transcript;
       if (res.isFinal) {
+        // PM-248 修6：真 final → 取消待升級 timer（保留 promoted 供去重）。
+        cancelAnnotateInterimTimer();
+        // PM-248 修2：Chrome zh-CN 辨識回傳仍繁體，final 繁轉簡（其他語言零影響）。
+        let text = res[0].transcript;
+        if (annotateSpeechLang === 'zh-CN') text = toSimplified(text);
+        // PM-248 修6：去重——若這段 final 在 5 秒內已被 stale interim 升級寫入過（相同或互為子集），跳過。
+        const dup =
+          annotatePromotedText !== '' &&
+          Date.now() - annotatePromotedTime < 5000 &&
+          (text === annotatePromotedText ||
+            annotatePromotedText.includes(text) ||
+            text.includes(annotatePromotedText));
+        annotatePromotedText = '';
+        annotatePromotedTime = 0;
+        if (dup) continue;
         // PM-31 Bug4：append 到末端，但若 cursor 原本不在末端則保留原位（不干擾中間編輯）
         const cursorPos = descInput.selectionStart;
         const isAtEnd = cursorPos === descInput.value.length;
@@ -376,23 +423,60 @@ function createAnnotateRecognition(): SRInst | null {
         }
         captionText.textContent = `✅ ${text}`;
         window.setTimeout(() => {
-          if (listening) captionText.textContent = '🔴 聆聽中...';
+          if (listening) captionText.textContent = t('er-listening', annotateUILang); // PM-248 修7
         }, 1500);
       } else {
-        interim = text;
+        // PM-248 修2：zh-CN interim 也繁轉簡
+        let seg = res[0].transcript;
+        if (annotateSpeechLang === 'zh-CN') seg = toSimplified(seg);
+        interim = seg;
+
+        // PM-248 修5：粵語/越南語 stale interim 3 秒未變 → 自動寫入文字框（帶語言守門）。
+        if (ANNOTATE_NEEDS_PROMOTE.has(annotateSpeechLang) && seg !== annotateLastInterim) {
+          annotateLastInterim = seg;
+          if (annotateInterimTimer) clearTimeout(annotateInterimTimer);
+          annotateInterimTimer = setTimeout(() => {
+            annotateInterimTimer = null;
+            if (annotateLastInterim && listening) {
+              const promoted = annotateLastInterim;
+              const cursorPos = descInput.selectionStart;
+              const isAtEnd = cursorPos === descInput.value.length;
+              descInput.value += promoted;
+              if (!isAtEnd) {
+                descInput.selectionStart = cursorPos;
+                descInput.selectionEnd = cursorPos;
+              }
+              captionText.textContent = t('er-listening', annotateUILang);
+              annotateLastInterim = '';
+              // PM-248 修6：記錄升級文字 + 時間供隨後補發的 isFinal 去重。
+              annotatePromotedText = promoted;
+              annotatePromotedTime = Date.now();
+            }
+          }, 3000);
+        }
       }
     }
     if (interim) {
-      captionText.textContent = `🔴 ${interim}`; // 正在講的 → 即時字幕
+      // PM-248 修3：interim 字幕節流 150ms（防韓語組字風暴淹沒 DOM；final 不受限）。
+      const now = Date.now();
+      if (now - lastAnnotateInterimUpdate >= ANNOTATE_INTERIM_THROTTLE) {
+        captionText.textContent = `🔴 ${interim}`; // 正在講的 → 即時字幕
+        lastAnnotateInterimUpdate = now;
+      }
       liveCaptions.classList.remove('hidden');
     }
+  };
+  // PM-248 修4：記啟動時間，不在此歸零失敗計數（改 onend 判 session 夠長才歸零，防韓語短命循環）。
+  rec.onstart = () => {
+    lastAnnotateRecStart = Date.now();
   };
   rec.onend = () => {
     // 靜默自停 → 仍在聽就重啟；連續失敗 3 次改用 getUserMedia 刷新 + 新實例
     if (listening) {
+      // PM-248 修4：只有持續 >1s 的正常 session 才歸零；短命 session（韓語瞬間 onstart→onend）不歸零。
+      if (Date.now() - lastAnnotateRecStart > 1000) autoRestartFails = 0;
       try {
         rec.start();
-        autoRestartFails = 0;
       } catch {
         autoRestartFails++;
         if (autoRestartFails >= 3) {
@@ -407,10 +491,10 @@ function createAnnotateRecognition(): SRInst | null {
               if (recognition) {
                 recognition.start();
                 autoRestartFails = 0;
-                captionText.textContent = '🔴 語音已重啟...';
+                captionText.textContent = t('er-restarted', annotateUILang); // PM-248 修7
               }
             } catch {
-              captionText.textContent = '⚠ 語音中斷，按 🎤 重新啟動';
+              captionText.textContent = t('er-voice-interrupted', annotateUILang); // PM-248 修7
               stopListening();
             }
           })();
@@ -451,13 +535,14 @@ async function startWebSpeech() {
   voiceInputBtn.classList.add('listening');
   voiceInputBtn.textContent = '⏹';
   voiceStatus.textContent = '';
-  captionText.textContent = '🔴 聆聽中，邊畫邊說描述問題...';
+  captionText.textContent = t('annotate-listening', annotateUILang); // PM-248 修7
   liveCaptions.classList.remove('hidden');
 }
 
 function stopWebSpeech() {
   if (!listening) return;
   listening = false;
+  clearAnnotatePromote(); // PM-248 修6：停錄清除待升級 timer + promoted 追蹤
   if (recognition) {
     try {
       recognition.stop();

@@ -1,5 +1,23 @@
 # BugEzy Changelog
 
+## 2026-07-18
+
+Day 32（PM-243~249）。**七語語音三入口全面對齊**——把 zh-CN 繁轉簡、粵語/越南語 stale interim 自動升級、升級後去重等修復，套到即時字幕（inject.ts）、編輯報告補充說明（edit-report.ts）、截圖標注（annotate.ts）三處各自獨立的 SpeechRecognition。純 extension；六次 `npm run build` + `tsc --noEmit` 皆過，dist 更新待 FOX 重上架（仍 v1.1.3）。
+
+- **PM-243 即時字幕 zh-CN 繁轉簡**（`inject.ts`）。Chrome Web Speech `lang='zh-CN'` 只控辨識引擎、回傳 `transcript` 仍繁體。import `toSimplified`，`onresult` final/interim 在 `currentSpeechLang === 'zh-CN'` 時繁轉簡（其他語言零影響）——底部字幕 + 右上面板皆簡體。
+
+- **PM-244 edit-report 補充說明 zh-CN 繁轉簡**（`edit-report.ts`）。edit-report 有自己獨立的 SpeechRecognition，同套 `toSimplified`——final append 與 `🔴 interim` 狀態皆簡體。判斷用 `reportLang`（LANG_KEY 原始碼）。
+
+- **PM-245 edit-report 粵語/越南語 stale interim 自動寫入**（`edit-report.ts`）。粵語（`yue-Hant-HK`）/越南語（`vi`）的 Chrome 很少送 `isFinal`、只持續 interim → 文字框永遠空。搬入 inject.ts PM-241 機制：interim 穩定 3 秒未變即自動 append 到 `descInput`（保留游標保位）+ 真 final/停錄清 timer。
+
+- **PM-246 stale interim 升級後 isFinal 去重**（`edit-report.ts` + `inject.ts` 同步）。升級寫入後 Chrome 在 session 結束會補發同一段文字的 `isFinal` → 重複（FOX 實測粵語第一句重複）。新增 `promotedText`/`promotedTime` 追蹤，final handler 5 秒內相同/子集則跳過。拆 `cancel*Timer()`（保留 promoted 供去重）與 `clear*Promote()`（停錄完整清），破解「開頭清 promoted 導致去重失效」的規格衝突。inject.ts 即時字幕面板同機制一併修。
+
+- **PM-247 stale interim 自動升級改為僅限粵語/越南語**（`inject.ts` + `edit-report.ts`）。原本對所有語言啟用，英文常有 >3 秒停頓 → timer 升級部分文字 → 真 final（完整句）被 PM-246 去重誤殺（只剩 2 個字）。加 `NEEDS_INTERIM_PROMOTE = Set(['yue-Hant-HK','vi'])` 語言守門，只有這兩語才升級。
+
+- **PM-248 annotate.ts 截圖語音全面對齊（七項修復一次到位）**（`annotate.ts`）。截圖語音辨識完全沒跟上 PM-237~247：①`rec.lang` 由寫死 `zh-TW` 改跟隨 popup（`SPEECH_LANG_MAP[LANG_KEY]`）②zh-CN 繁轉簡 ③interim 節流 150ms（防韓語組字風暴）④`onstart` 記啟動時間、onend 判 session >1s 才歸零失敗計數（防韓語短命循環；SRInst 型別補 `onstart`）⑤粵語/越南語 stale interim 3 秒升級（帶語言守門）⑥升級後去重 ⑦字幕條硬寫中文改 `t()`（沿用既有七語 key）。i18n.ts 無需改。三入口語音自此完全一致。
+
+- **PM-249 Day 32 收工**：CHANGELOG + ARCHITECTURE + git push。
+
 ## 2026-07-17
 
 Day 31（PM-237~242）。**即時字幕（Web Speech）五項體驗優化與 bug 修復**，FOX 多語實測回報。純 extension（只改 `extension/src/inject.ts`）；四次 `npm run build` + `tsc --noEmit` 皆過，dist 更新待 FOX 重上架（仍 v1.1.3）。

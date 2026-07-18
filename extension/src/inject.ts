@@ -20,6 +20,7 @@ import {
   type VoiceSegment,
 } from './types';
 import { t, getUILang } from './i18n';
+import { toSimplified } from './t2s'; // PM-243：zh-CN 語音轉錄繁轉簡
 import { getNetworkSnapshot } from './net'; // PM-156：網路環境快照
 import { getStorageSnapshot } from './storage'; // PM-157：儲存空間快照（本機遮罩）
 
@@ -532,6 +533,10 @@ function main() {
   //   每次都做 DOM 更新會淹沒瀏覽器。interim 的 setCaptionText 最多每 150ms 更新一次（final 不受限）。
   let lastInterimUpdate = 0;
   const INTERIM_THROTTLE_MS = 150;
+  // PM-247：只有這些語言的 Chrome Web Speech 很少送 isFinal（一直停在 interim），才需要 stale interim
+  //   自動升級（currentSpeechLang 為 BCP-47：粵語=yue-Hant-HK、越南語=vi）。其餘語言正常 finalize，
+  //   啟用會誤把停頓當結束、又被 PM-246 去重誤殺完整句子。
+  const NEEDS_INTERIM_PROMOTE = new Set(['yue-Hant-HK', 'vi']);
   // PM-240 問題2：記錄本次 recognition session 啟動時間——onend 判斷 session 是否「短命」（<1s），
   //   短命不歸零失敗計數，避免韓語瞬間 onstart→onend 循環讓計數永遠到不了 3。
   let lastRecognitionStartTime = 0;
@@ -539,13 +544,24 @@ function main() {
   //   interim 文字穩定不變超過 3 秒即視為 final（推 segments/flush/面板）。
   let interimPromoteTimer: ReturnType<typeof setTimeout> | null = null;
   let lastInterimText = '';
-  /** PM-241：清除待升級的 interim timer（停錄 / 強制重啟 / 收到真 final 時呼叫，避免延遲後冒出過期文字）。 */
-  function clearInterimPromote() {
+  // PM-246：記錄最近一次 stale interim 自動升級推送的文字，供 final handler 去重——
+  //   Chrome（粵語/越南語）在 session 結束會補發同一段文字的 isFinal，避免再推一次造成重複。
+  let lastPromotedText = '';
+  let lastPromotedTime = 0;
+  /** PM-241：取消待升級的 interim timer（僅動 timer + lastInterimText；不清 promoted 追蹤，
+   *  留給 final handler 去重用）。final handler 開頭呼叫此函式。 */
+  function cancelInterimTimer() {
     if (interimPromoteTimer) {
       clearTimeout(interimPromoteTimer);
       interimPromoteTimer = null;
     }
     lastInterimText = '';
+  }
+  /** PM-241/246：停錄 / 強制重啟時完整清除（timer + lastInterimText + promoted 去重追蹤）。 */
+  function clearInterimPromote() {
+    cancelInterimTimer();
+    lastPromotedText = '';
+    lastPromotedTime = 0;
   }
 
   // PM-137：Web Speech 語言（BCP-47）。inject 在 MAIN world 無 chrome.storage，由 START 指令帶入。
@@ -576,33 +592,48 @@ function main() {
       for (let i = e.resultIndex; i < e.results.length; i++) {
         if (e.results[i].isFinal) {
           hadFinal = true;
-          const text = e.results[i][0].transcript.trim();
+          let text = e.results[i][0].transcript.trim();
+          // PM-243：Chrome zh-CN 辨識回傳仍是繁體字，final 文字繁轉簡（其他語言零影響）。
+          if (text && currentSpeechLang === 'zh-CN') text = toSimplified(text);
           if (text) {
-            // PM-241：真 final 到達 → 取消待升級的 stale interim timer（此 interim 已被真 final 取代），
-            //   避免 3 秒後 timer 又把過期 interim 當 final 送出造成重複。
-            clearInterimPromote();
-            const seg: VoiceSegment = { text, timestamp: Date.now(), isFinal: true };
-            voiceSegments.push(seg); // 本地也存（同頁 STOP 用）
-            post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'FLUSH_VOICE', segment: seg }); // PM-34
-            blog('voice segment:', text.slice(0, 40));
+            // PM-241：真 final 到達 → 取消待升級的 stale interim timer（僅動 timer，保留 promoted 供去重）。
+            cancelInterimTimer();
+            // PM-246：去重——若這段 final 在 5 秒內已被 stale interim 自動升級推送過（相同或互為子集），跳過。
+            const dup =
+              lastPromotedText !== '' &&
+              Date.now() - lastPromotedTime < 5000 &&
+              (text === lastPromotedText ||
+                lastPromotedText.includes(text) ||
+                text.includes(lastPromotedText));
+            lastPromotedText = '';
+            lastPromotedTime = 0;
+            if (!dup) {
+              const seg: VoiceSegment = { text, timestamp: Date.now(), isFinal: true };
+              voiceSegments.push(seg); // 本地也存（同頁 STOP 用）
+              post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'FLUSH_VOICE', segment: seg }); // PM-34
+              blog('voice segment:', text.slice(0, 40));
 
-            // 右上面板：堆疊已確認文字（PM-27）
-            const voiceContent = document.getElementById('bugezy-voice-content');
-            if (voiceContent) {
-              voiceContent.textContent += (voiceContent.textContent ? '\n' : '') + text;
-              const panel = document.getElementById('bugezy-voice-panel');
-              if (panel) panel.scrollTop = panel.scrollHeight;
+              // 右上面板：堆疊已確認文字（PM-27）
+              const voiceContent = document.getElementById('bugezy-voice-content');
+              if (voiceContent) {
+                voiceContent.textContent += (voiceContent.textContent ? '\n' : '') + text;
+                const panel = document.getElementById('bugezy-voice-panel');
+                if (panel) panel.scrollTop = panel.scrollHeight;
+              }
+
+              // 底部字幕：短暫顯示確認後回到聆聽中
+              setCaptionText(`✅ ${text}`);
+              window.setTimeout(() => {
+                if (voiceActive) setVoiceStatus('listening');
+              }, 1500);
             }
-
-            // 底部字幕：短暫顯示確認後回到聆聽中
-            setCaptionText(`✅ ${text}`);
-            window.setTimeout(() => {
-              if (voiceActive) setVoiceStatus('listening');
-            }, 1500);
           }
         } else {
           // PM-237 Bug1：暫時結果累積（不 trim，保留空格讓即時字幕自然）
-          interim += e.results[i][0].transcript;
+          // PM-243：zh-CN interim 也繁轉簡，底部即時字幕才是簡體。
+          let seg = e.results[i][0].transcript;
+          if (currentSpeechLang === 'zh-CN') seg = toSimplified(seg);
+          interim += seg;
         }
       }
       // PM-237 Bug1：只在「本次沒有 final」時把 interim 顯示到底部字幕條
@@ -618,32 +649,37 @@ function main() {
 
         // PM-241：stale interim 自動升級——interim 文字每次變動就重設 3 秒 timer；
         //   若 3 秒內都沒再變（越南語模型停在 interim 不主動 finalize），視為 final 送出。
-        if (trimmed !== lastInterimText) {
+        // PM-247：僅粵語/越南語啟用（其餘語言正常 finalize，啟用會誤殺完整句子）。
+        if (NEEDS_INTERIM_PROMOTE.has(currentSpeechLang) && trimmed !== lastInterimText) {
           lastInterimText = trimmed;
           if (interimPromoteTimer) clearTimeout(interimPromoteTimer);
           interimPromoteTimer = setTimeout(() => {
             interimPromoteTimer = null;
             if (lastInterimText && voiceActive) {
-              blog('interim 自動升級 final:', lastInterimText.slice(0, 40));
-              const seg: VoiceSegment = { text: lastInterimText, timestamp: Date.now(), isFinal: true };
+              const promoted = lastInterimText;
+              blog('interim 自動升級 final:', promoted.slice(0, 40));
+              const seg: VoiceSegment = { text: promoted, timestamp: Date.now(), isFinal: true };
               voiceSegments.push(seg);
               post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'FLUSH_VOICE', segment: seg });
 
               // 右上面板追加
               const vc = document.getElementById('bugezy-voice-content');
               if (vc) {
-                vc.textContent += (vc.textContent ? '\n' : '') + lastInterimText;
+                vc.textContent += (vc.textContent ? '\n' : '') + promoted;
                 const panel = document.getElementById('bugezy-voice-panel');
                 if (panel) panel.scrollTop = panel.scrollHeight;
               }
 
               // 底部字幕確認
-              setCaptionText(`✅ ${lastInterimText}`);
+              setCaptionText(`✅ ${promoted}`);
               window.setTimeout(() => {
                 if (voiceActive) setVoiceStatus('listening');
               }, 1500);
 
               lastInterimText = '';
+              // PM-246：記錄本次升級文字 + 時間，供隨後補發的 isFinal 去重。
+              lastPromotedText = promoted;
+              lastPromotedTime = Date.now();
             }
           }, 3000); // 3 秒穩定 → 升級
         }

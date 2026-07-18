@@ -17,6 +17,7 @@ import {
 } from './types';
 import { getAuthHeaders } from './auth';
 import { getUILang, t, type UILang } from './i18n';
+import { toSimplified } from './t2s'; // PM-244：zh-CN 語音轉錄繁轉簡
 
 // PM-215：編輯報告頁 UI 語言 + 語音辨識語言跟隨 popup 的語言設定（LANG_KEY）。
 let uiLang: UILang = 'zh';
@@ -624,6 +625,7 @@ let listening = false;
 
 function stopVoice() {
   listening = false;
+  clearErInterimPromote(); // PM-245：停錄清除待升級 timer，避免停錄後還冒出過期文字
   if (recognition) {
     try {
       recognition.stop();
@@ -640,6 +642,34 @@ function stopVoice() {
 // PM-42：套用 inject.ts PM-32/33 的穩定模式——工廠建全新實例 + onend 失敗計數。
 let autoRestartFails = 0;
 
+// PM-245：搬入 inject.ts PM-241 的 stale interim 自動升級——粵語（yue-Hant-HK）/越南語（vi）
+//   的 Chrome Web Speech 很少送 isFinal，只持續送 interim，導致文字框永遠空的。
+//   interim 文字穩定 3 秒未變即自動寫入文字框。
+// PM-247：只有這些語言（BCP-47 srLang）的 Chrome Web Speech 很少送 isFinal，才需要 stale interim
+//   自動升級（粵語=yue-Hant-HK、越南語=vi）。其餘語言正常 finalize，啟用會誤把停頓當結束並被 PM-246 去重誤殺。
+const NEEDS_INTERIM_PROMOTE = new Set(['yue-Hant-HK', 'vi']);
+let erInterimTimer: ReturnType<typeof setTimeout> | null = null;
+let erLastInterim = '';
+// PM-246：記錄「最近一次 stale interim 自動升級寫入的文字」，供 final handler 去重——
+//   Chrome 在 session 結束會補發同一段文字的 isFinal，避免再寫一次造成重複。
+let erLastPromotedText = '';
+let erLastPromotedTime = 0;
+/** PM-245：取消待升級的 interim timer（僅動 timer + erLastInterim；不清 promoted 追蹤，
+ *  留給 final handler 去重用）。final handler 開頭呼叫此函式。 */
+function cancelErInterimTimer() {
+  if (erInterimTimer) {
+    clearTimeout(erInterimTimer);
+    erInterimTimer = null;
+  }
+  erLastInterim = '';
+}
+/** PM-245/246：停錄時完整清除（timer + erLastInterim + promoted 去重追蹤）。 */
+function clearErInterimPromote() {
+  cancelErInterimTimer();
+  erLastPromotedText = '';
+  erLastPromotedTime = 0;
+}
+
 function createEditRecognition(): SRInst | null {
   if (!SR) return null;
   const rec = new SR();
@@ -652,16 +682,59 @@ function createEditRecognition(): SRInst | null {
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const res = e.results[i];
       if (res.isFinal) {
+        // PM-245：真 final 到達 → 取消待升級的 stale interim timer（僅動 timer，保留 promoted 供去重）。
+        cancelErInterimTimer();
+        // PM-244：Chrome zh-CN 辨識回傳仍是繁體字，final 文字繁轉簡（其他語言零影響）。
+        let text = res[0].transcript;
+        if (reportLang === 'zh-CN') text = toSimplified(text);
+        // PM-246：去重——若這段 final 在 5 秒內已被 stale interim 自動升級寫入過（相同或互為子集），跳過不重寫。
+        const dup =
+          erLastPromotedText !== '' &&
+          Date.now() - erLastPromotedTime < 5000 &&
+          (text === erLastPromotedText ||
+            erLastPromotedText.includes(text) ||
+            text.includes(erLastPromotedText));
+        erLastPromotedText = '';
+        erLastPromotedTime = 0;
+        if (dup) continue; // 已由 stale interim 升級寫入，略過此 final
         // PM-31 Bug4：append 到末端，但若 cursor 原本不在末端則保留原位（不干擾中間編輯）
         const cursorPos = descInput.selectionStart;
         const isAtEnd = cursorPos === descInput.value.length;
-        descInput.value += res[0].transcript;
+        descInput.value += text;
         if (!isAtEnd) {
           descInput.selectionStart = cursorPos;
           descInput.selectionEnd = cursorPos;
         }
       } else {
-        interim = res[0].transcript;
+        // PM-244：zh-CN interim 也繁轉簡
+        let seg = res[0].transcript;
+        if (reportLang === 'zh-CN') seg = toSimplified(seg);
+        interim = seg;
+
+        // PM-245：stale interim 3 秒未變 → 自動寫入文字框（粵語/越南語很少送 isFinal 的修復）。
+        // PM-247：僅粵語/越南語啟用（其餘語言正常 finalize，啟用會誤殺完整句子）。
+        if (NEEDS_INTERIM_PROMOTE.has(srLang) && seg !== erLastInterim) {
+          erLastInterim = seg;
+          if (erInterimTimer) clearTimeout(erInterimTimer);
+          erInterimTimer = setTimeout(() => {
+            erInterimTimer = null;
+            if (erLastInterim && listening) {
+              const promoted = erLastInterim;
+              const cursorPos = descInput.selectionStart;
+              const isAtEnd = cursorPos === descInput.value.length;
+              descInput.value += promoted;
+              if (!isAtEnd) {
+                descInput.selectionStart = cursorPos;
+                descInput.selectionEnd = cursorPos;
+              }
+              voiceStatus.textContent = T('er-listening');
+              erLastInterim = '';
+              // PM-246：記錄本次升級文字 + 時間，供隨後補發的 isFinal 去重。
+              erLastPromotedText = promoted;
+              erLastPromotedTime = Date.now();
+            }
+          }, 3000);
+        }
       }
     }
     voiceStatus.textContent = interim ? `🔴 ${interim}` : T('er-listening');
