@@ -281,6 +281,35 @@ const dict: Record<string, { zh: string; en: string; ja: string; ko: string; vi:
   'annotate-desc-ph': { zh: '描述你看到的問題，或按右邊麥克風語音輸入...', en: 'Describe the issue, or tap the mic on the right to dictate...', ja: '見つけた問題を説明するか、右のマイクで音声入力...', ko: '발견한 문제를 설명하거나, 오른쪽 마이크로 음성 입력하세요...', vi: 'Mô tả vấn đề bạn thấy, hoặc nhấn micro bên phải để nhập bằng giọng nói...' },
   'annotate-listening': { zh: '🔴 聆聽中，邊畫邊說描述問題...', en: '🔴 Listening — describe while you draw...', ja: '🔴 聞き取り中、描きながら問題を説明してください...', ko: '🔴 듣는 중, 그리면서 문제를 설명하세요...', vi: '🔴 Đang nghe, vừa vẽ vừa mô tả vấn đề...' },
   'annotate-uploading': { zh: '⏳ 上傳中...', en: '⏳ Uploading...', ja: '⏳ アップロード中...', ko: '⏳ 업로드 중...', vi: '⏳ Đang tải lên...' },
+  // PM-250：截圖標注頁 Whisper 提示 i18n（zh-CN 由 zh 自動 toSimplified；yue 走 zh UI）
+  'an-whisper-recording': {
+    zh: '🔴 Whisper 錄音中，講完按 ⏹ 轉錄…',
+    en: '🔴 Whisper recording — press ⏹ when done to transcribe…',
+    ja: '🔴 Whisper 録音中——話し終えたら ⏹ で文字起こし…',
+    ko: '🔴 Whisper 녹음 중——끝나면 ⏹ 눌러 변환…',
+    vi: '🔴 Whisper đang ghi âm — nói xong nhấn ⏹ để chuyển đổi…',
+  },
+  'an-whisper-transcribing': {
+    zh: '⏳ Whisper 轉錄中…',
+    en: '⏳ Whisper transcribing…',
+    ja: '⏳ Whisper 文字起こし中…',
+    ko: '⏳ Whisper 변환 중…',
+    vi: '⏳ Whisper đang chuyển đổi…',
+  },
+  'an-whisper-paid-only': {
+    zh: 'Whisper 為付費功能，請升級（或改用鍵盤）',
+    en: 'Whisper is a premium feature. Please upgrade (or use keyboard).',
+    ja: 'Whisper は有料機能です。アップグレードしてください（またはキーボードをご利用ください）。',
+    ko: 'Whisper는 유료 기능입니다. 업그레이드하세요 (또는 키보드를 사용하세요).',
+    vi: 'Whisper là tính năng trả phí. Vui lòng nâng cấp (hoặc dùng bàn phím).',
+  },
+  'an-whisper-prompt': {
+    zh: '🎙️ 付費版 Whisper：按 🎤 錄音描述，講完按 ⏹ 轉錄',
+    en: '🎙️ Premium Whisper: tap 🎤 to record, ⏹ when done to transcribe',
+    ja: '🎙️ 有料版 Whisper：🎤 で録音、話し終えたら ⏹ で文字起こし',
+    ko: '🎙️ 유료 Whisper: 🎤 눌러 녹음, 끝나면 ⏹ 눌러 변환',
+    vi: '🎙️ Whisper trả phí: nhấn 🎤 để ghi âm, ⏹ khi xong để chuyển đổi',
+  },
 
   // ── PM-215：編輯報告頁（edit-report）i18n ──
   'er-tag': { zh: '報告編輯', en: 'Edit Report', ja: 'レポート編集', ko: '리포트 편집', vi: 'Chỉnh sửa báo cáo' },

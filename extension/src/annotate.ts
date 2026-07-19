@@ -648,7 +648,7 @@ async function startWhisper() {
   voiceInputBtn.classList.add('listening');
   voiceInputBtn.textContent = '⏹';
   voiceStatus.textContent = '';
-  captionText.textContent = '🔴 Whisper 錄音中，講完按 ⏹ 轉錄…';
+  captionText.textContent = t('an-whisper-recording', annotateUILang); // PM-250
   liveCaptions.classList.remove('hidden');
   void startVolumeMeter(whisperStream); // PM-205：綠色音量條跳動
 }
@@ -683,7 +683,7 @@ async function stopWhisper() {
     liveCaptions.classList.add('hidden');
     return;
   }
-  voiceStatus.textContent = '⏳ Whisper 轉錄中…';
+  voiceStatus.textContent = t('an-whisper-transcribing', annotateUILang); // PM-250
   captionText.textContent = '⏳ 轉錄中…';
   try {
     const form = new FormData();
@@ -700,7 +700,7 @@ async function stopWhisper() {
       descInput.value += (descInput.value ? ' ' : '') + data.text;
       voiceStatus.textContent = '✅ 已轉錄';
     } else if (res.status === 403) {
-      voiceStatus.textContent = 'Whisper 為付費功能，請升級（或改用鍵盤）';
+      voiceStatus.textContent = t('an-whisper-paid-only', annotateUILang); // PM-250
     } else {
       voiceStatus.textContent = '轉錄失敗，可改用鍵盤輸入';
     }
@@ -749,7 +749,7 @@ chrome.storage.local.get([KEYBOARD_MODE_KEY, USER_PLAN_KEY, MIC_MODE_KEY, MIC_KE
     setVoiceToggleUI(false);
   } else if (useWhisper) {
     // Whisper 模式不自動錄音（避免整段長錄音爆量/超 25MB）——引導使用者手動按 🎤
-    voiceStatus.textContent = '🎙️ 付費版 Whisper：按 🎤 錄音描述，講完按 ⏹ 轉錄';
+    voiceStatus.textContent = t('an-whisper-prompt', annotateUILang); // PM-250
   } else {
     window.setTimeout(() => void startListening(), 800);
   }

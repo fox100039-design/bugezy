@@ -1,5 +1,21 @@
 # BugEzy Changelog
 
+## 2026-07-19
+
+Day 33（PM-250~255）。**v1.1.4 打包上架 + 全站版本同步 + 截圖 Whisper i18n 補完**。extension `manifest` 1.1.3→1.1.4、產出 `bugezy-v1.1.4.zip`（FOX 已送審 Chrome Web Store）；server 三次 deploy（`b403ad56`→`8f8de54d`→`ce3d63bc`）把 `/api/version`、官網 changelog/footer、SKILL_MD 全部同步到 v1.1.4。
+
+- **PM-250 截圖 Whisper 提示文字 i18n**（`annotate.ts` + `i18n.ts`）。PM-248 修 7 只 i18n 了 Web Speech 字幕條，Whisper 區塊 4 處提示（錄音中/轉錄中/付費限定/操作提示）仍硬寫中文。新增 4 個 i18n key（`an-whisper-recording`/`-transcribing`/`-paid-only`/`-prompt`，zh/en/ja/ko/vi 五欄，zh-CN 由 toSimplified 自動、yue 走 zh），annotate.ts 4 處改 `t(key, annotateUILang)`。
+
+- **PM-251 新 Icon + v1.1.4 打包**（`manifest.json`）。version 1.1.3→1.1.4；確認 icons/ 三尺寸為 FOX 新版（綠蟲+麥克風+深紫）；`npm run build` 後打包 `bugezy-v1.1.4.zip`（33 entry，排除 build 遞迴帶入 dist 的 `icons/proposals/` 與 `icon-source.svg` 設計原稿）。
+
+- **PM-252 Server `/api/version` → 1.1.4**（`server/index.ts`）。`GET /api/version` 的 `latest` 1.1.3→1.1.4（`b403ad56`），讓舊版用戶 popup 更新提示指向 1.1.4。
+
+- **PM-253 官網 changelog + footer 同步 v1.1.4**（`server/index.ts`）。`/changelog` 最上方新增 `v1.1.4 — 2026-07-19` 中英雙語區塊（即時字幕體驗優化 / 多語語音強化 / 新 Icon，涵蓋 Day 31~33）；首頁 + /features footer `v1.1.3`→`v1.1.4`（`8f8de54d`）。
+
+- **PM-254 SKILL_MD（/skill AI 客服手冊）v1.1.4 更新**（`server/index.ts`）。頂部「最新版本」→ v1.1.4；**修正過時的支援語言**（原寫日韓越「即將開放」，實際 Day 29 起七語全開）→ 列出七語全支援；新增「v1.1.4 語音體驗更新」段落（interim 即時字幕 / 面板拖曳 / 粵越自動升級 / 簡體繁轉簡 / 截圖語音對齊）。全站掃 1.1.3——只改當前版本指標，保留 4 處 `(v1.1.3 修)` 史實註記與 changelog 的 v1.1.3 歷史發版條目（`ce3d63bc`）。
+
+- **PM-255 Day 33 收工**：CHANGELOG + ARCHITECTURE + git push。
+
 ## 2026-07-18
 
 Day 32（PM-243~249）。**七語語音三入口全面對齊**——把 zh-CN 繁轉簡、粵語/越南語 stale interim 自動升級、升級後去重等修復，套到即時字幕（inject.ts）、編輯報告補充說明（edit-report.ts）、截圖標注（annotate.ts）三處各自獨立的 SpeechRecognition。純 extension；六次 `npm run build` + `tsc --noEmit` 皆過，dist 更新待 FOX 重上架（仍 v1.1.3）。
