@@ -1,5 +1,23 @@
 # BugEzy Changelog
 
+## 2026-07-20
+
+Day 34（PM-256~262）。**SEO 部落格上線 + 官網七語全面化 + 子頁面多語化**。純 server（只改 `server/src/index.ts`）；多次 deploy（`34d014c9`→`56c614d4`→`b5f1d00f`→`787cf4b4`→`a822c63b`→`9c49814b`）。
+
+- **PM-256 /blog 架構**（`server/index.ts`）。新增部落格：`interface BlogPost{slug,date,title,description,blocks}` + `BLOG_POSTS[]` 集中管理；`/blog` 列表頁（深色主題、日期排序、標題/摘要/連結）；`/blog/{slug}` 單篇頁（正文 `renderBlogPara` 段落粗體 + 完整 SEO meta + **JSON-LD Article schema** + CTA + 上/下篇導航 + 返回列表）；路由（列表 / 單篇 / 404）；sitemap 加 /blog + 5 篇。
+
+- **PM-257 五篇 SEO 文章上線**（`server/index.ts` BLOG_POSTS）。填入實際內容：Vibe Coding 隱藏成本 / AI Debug 成本 3 倍 / 別再截圖 Debug / 新手不需看懂 Console / 為什麼 AI 要更多資訊——皆繁中長文（各 4 小標 + 段落），主打「截圖只有表面、完整錯誤脈絡才修得快」，導流 BugEzy。
+
+- **PM-258 Blog 入口 + 全站簡體字掃描**（`server/index.ts`）。7 個頁面 footer 加「📝 部落格」連結；用 opencc（`t2s(C)===C && s2t(C)!==C` 判定簡體專用字，排除 T2S/JA/KO/VI 表）掃出 4 處誤植簡體/日文（SKILL_MD 的 `简体中文`×3、`音声記録`），改繁體；保留簡繁共用字（台/群/吃）與刻意簡體 Whisper prompt。
+
+- **PM-259 七語標籤全亮 + 首頁六語切換**（`server/index.ts`）。/features + 首頁語言徽章 `soon`→`active` 並補簡中 → 7 語全亮；「支援三種語言…即將開放」→「支援七種語言」（同步 JA/KO/VI 表 key）；首頁 lang-switch 由「中↔EN」改 6 語連結列（繁/简/EN/日/한/VI，當前高亮）；sitemap 加 `/?lang=ja/ko/vi`。日/韓/越首頁本已由 PM-233~235 的翻譯表渲染。
+
+- **PM-260 隱藏電話/服務時間**（`server/index.ts`）。首頁 `.contact-info` 移除 📱 電話與服務時間兩行，只留 📧 Email（一處改涵蓋五語）；清理 JA/KO/VI 表孤兒翻譯 key。
+
+- **PM-261 子頁面多語化 /features·/install·/faq**（`server/index.ts`）。/features 本已多語（PM-233~235）；install（59 條）+ faq（37 條）手譯 ja/ko/vi 各 95 條補入 JA/KO/VI 表（頁面用 `makeT` 自動生效，faq 的 FAQPage JSON-LD 同步多語）；新增 helper `langSwitchBar(lang)` 六語切換列套到這三頁；sitemap 加 9 URL（三頁 × ja/ko/vi）。
+
+- **PM-262 Day 34 收工**：CHANGELOG + ARCHITECTURE + git push。
+
 ## 2026-07-19
 
 Day 33（PM-250~255）。**v1.1.4 打包上架 + 全站版本同步 + 截圖 Whisper i18n 補完**。extension `manifest` 1.1.3→1.1.4、產出 `bugezy-v1.1.4.zip`（FOX 已送審 Chrome Web Store）；server 三次 deploy（`b403ad56`→`8f8de54d`→`ce3d63bc`）把 `/api/version`、官網 changelog/footer、SKILL_MD 全部同步到 v1.1.4。
