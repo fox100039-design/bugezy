@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="BugEzy minimal toolbar icon proposal">
+  <defs>
+    <linearGradient id="bgC" x1="18" y1="10" x2="110" y2="118" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#242047"/>
+      <stop offset="0.62" stop-color="#1a1a2e"/>
+      <stop offset="1" stop-color="#101321"/>
+    </linearGradient>
+    <linearGradient id="markC" x1="31" y1="33" x2="90" y2="94" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#88f7b4"/>
+      <stop offset="1" stop-color="#4ade80"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#bgC)"/>
+  <path d="M35 67c0-17 13-30 30-30h9c16 0 29 13 29 30S90 97 74 97h-9c-17 0-30-13-30-30Z" fill="url(#markC)"/>
+  <path d="M40 53c-7-7-15-8-22-3M74 38c4-9 12-13 21-9" stroke="#4ade80" stroke-width="7" stroke-linecap="round" fill="none"/>
+  <circle cx="57" cy="60" r="9" fill="#f8fafc"/>
+  <circle cx="78" cy="60" r="9" fill="#f8fafc"/>
+  <circle cx="59" cy="62" r="3.5" fill="#17172a"/>
+  <circle cx="76" cy="62" r="3.5" fill="#17172a"/>
+  <path d="M59 77c5 4 12 4 18 0" stroke="#116833" stroke-width="5" stroke-linecap="round" fill="none"/>
+  <path d="M88 74c0-7 5-12 12-12s12 5 12 12v10c0 7-5 12-12 12S88 91 88 84V74Z" fill="#f8fafc"/>
+  <rect x="96" y="68" width="8" height="20" rx="4" fill="#8c96aa"/>
+  <path d="M82 82c0 10 8 18 18 18s18-8 18-18" fill="none" stroke="#f8fafc" stroke-width="5" stroke-linecap="round"/>
+  <path d="M100 100v10M91 110h18" stroke="#f8fafc" stroke-width="5" stroke-linecap="round"/>
+  <path d="M22 72h9M22 85h17" stroke="#4ade80" stroke-width="6" stroke-linecap="round"/>
+  <path d="M116 51c5 6 8 13 8 22" stroke="#4ade80" stroke-width="4" stroke-linecap="round" fill="none"/>
+</svg>

@@ -1198,46 +1198,60 @@ function isPayCountry(request: Request): boolean {
 }
 
 // ── PM-136：SEO — sitemap.xml + robots.txt（讓搜尋引擎收錄 bugezy.dev）──
+// PM-264：改由「頁面 + 語言集合」驅動，語言集合直接沿用 PM-263 的 LANGS_6/LANGS_3/LANGS_ZH，
+//   確保 sitemap 列的 URL 與 HTML 的 canonical/hreflang 完全一致（單一事實來源，避免各說各話）。
+//   每頁輸出：裸 URL（x-default 入口）+ 每個語言版本的 canonical URL（?lang=X），
+//   並附 Google 支援的 xhtml:link hreflang 擴展（每筆 <url> 都帶完整語言集合 + x-default，含自我指涉）。
+interface SitemapPage {
+  path: string;
+  langs: PageLang[];
+  freq: string;
+  pri: string; // 裸 URL 權重
+  langPri?: string; // 語言版本權重（省略則同 pri）
+}
 function sitemapXml(): Response {
-  const urls: Array<[string, string, string]> = [
-    ['/', 'weekly', '1.0'],
-    // PM-259：日/韓/越首頁著陸頁（母語 SEO）
-    ['/?lang=ja', 'weekly', '0.8'],
-    ['/?lang=ko', 'weekly', '0.8'],
-    ['/?lang=vi', 'weekly', '0.8'],
-    ['/install', 'monthly', '0.9'],
-    // PM-261：features/install/faq 的日/韓/越語版本
-    ['/features?lang=ja', 'monthly', '0.7'],
-    ['/features?lang=ko', 'monthly', '0.7'],
-    ['/features?lang=vi', 'monthly', '0.7'],
-    ['/install?lang=ja', 'monthly', '0.7'],
-    ['/install?lang=ko', 'monthly', '0.7'],
-    ['/install?lang=vi', 'monthly', '0.7'],
-    ['/faq?lang=ja', 'monthly', '0.5'],
-    ['/faq?lang=ko', 'monthly', '0.5'],
-    ['/faq?lang=vi', 'monthly', '0.5'],
-    ['/features', 'monthly', '0.8'],
-    ['/changelog', 'weekly', '0.7'],
-    ['/guide', 'monthly', '0.6'],
-    ['/faq', 'monthly', '0.5'],
-    ['/skill', 'monthly', '0.5'], // PM-201：AI 客服手冊
-    ['/blog', 'weekly', '0.6'], // PM-256：部落格列表
-    ['/feedback', 'monthly', '0.4'], // PM-174
-    ['/privacy', 'yearly', '0.3'],
+  const pages: SitemapPage[] = [
+    { path: '/', langs: LANGS_6, freq: 'weekly', pri: '1.0', langPri: '0.8' },
+    { path: '/install', langs: LANGS_6, freq: 'monthly', pri: '0.9', langPri: '0.7' },
+    { path: '/features', langs: LANGS_6, freq: 'monthly', pri: '0.8', langPri: '0.7' },
+    { path: '/faq', langs: LANGS_6, freq: 'monthly', pri: '0.5' },
+    { path: '/changelog', langs: LANGS_3, freq: 'weekly', pri: '0.7' },
+    { path: '/guide', langs: LANGS_3, freq: 'monthly', pri: '0.6' },
+    { path: '/skill', langs: LANGS_3, freq: 'monthly', pri: '0.5' }, // PM-201：AI 客服手冊
+    { path: '/blog', langs: LANGS_ZH, freq: 'weekly', pri: '0.6' }, // PM-256：部落格列表
+    { path: '/feedback', langs: LANGS_3, freq: 'monthly', pri: '0.4' }, // PM-174
+    { path: '/privacy', langs: LANGS_3, freq: 'yearly', pri: '0.3' },
     // PM-256：部落格文章（SEO）
     ...BLOG_POSTS.map(
-      (p) => [`/blog/${p.slug}`, 'monthly', '0.5'] as [string, string, string],
+      (p): SitemapPage => ({
+        path: `/blog/${p.slug}`,
+        langs: LANGS_ZH,
+        freq: 'monthly',
+        pri: '0.5',
+      }),
     ),
   ];
+  const entries: string[] = [];
+  for (const pg of pages) {
+    const base = `https://bugezy.dev${pg.path}`;
+    // 該頁的 hreflang 擴展（所有語言 + x-default），每筆 <url> 都要完整重複一次（Google 要求）
+    const alts =
+      pg.langs
+        .map(
+          (l) =>
+            `    <xhtml:link rel="alternate" hreflang="${HREFLANG_CODE[l]}" href="${base}?lang=${l}"/>`,
+        )
+        .join('\n') +
+      `\n    <xhtml:link rel="alternate" hreflang="x-default" href="${base}"/>`;
+    const url = (loc: string, pri: string) =>
+      `  <url>\n    <loc>${loc}</loc>\n    <changefreq>${pg.freq}</changefreq>\n    <priority>${pri}</priority>\n${alts}\n  </url>`;
+    entries.push(url(base, pg.pri)); // 裸 URL = x-default 入口
+    for (const l of pg.langs) entries.push(url(`${base}?lang=${l}`, pg.langPri ?? pg.pri));
+  }
   const body =
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
-    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
-    urls
-      .map(
-        ([loc, freq, pri]) =>
-          `  <url><loc>https://bugezy.dev${loc}</loc><changefreq>${freq}</changefreq><priority>${pri}</priority></url>`,
-      )
-      .join('\n') +
+    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n` +
+    entries.join('\n') +
     `\n</urlset>\n`;
   return new Response(body, { headers: { 'Content-Type': 'application/xml; charset=utf-8' } });
 }
@@ -1273,6 +1287,40 @@ function ogMeta(path: string, title: string, description: string): string {
   <meta name="twitter:title" content="${tt}">
   <meta name="twitter:description" content="${dd}">
   <meta name="twitter:image" content="https://bugezy.dev/icon-128.png">`;
+}
+
+// ── PM-263：hreflang 多語索引（修 GSC「替代頁面（有適當的標準標記）」不索引問題）──────────
+// 原因：各語言版本的 canonical 都指向主 URL → Google 視 ?lang=ja 等為主頁的替代版本而不單獨索引。
+// 修法：①每個語言版本 canonical 指向「自己」②同頁所有語言版本輸出「同一組」hreflang（雙向互指）
+//       ③x-default 指向不帶 lang 的主 URL。hreflang 的 URL 必須等於該版本的 canonical，故一律帶 ?lang=。
+const HREFLANG_CODE: Record<PageLang, string> = {
+  zh: 'zh-TW',
+  'zh-CN': 'zh-CN',
+  en: 'en',
+  ja: 'ja',
+  ko: 'ko',
+  vi: 'vi',
+};
+/** 六語頁：首頁 / features / install / faq（JA/KO/VI_MAP 已全譯）。 */
+const LANGS_6: PageLang[] = ['zh', 'zh-CN', 'en', 'ja', 'ko', 'vi'];
+/** 三語頁：其餘 makeT 頁（zh 原文 / zh-CN 由 toSimplified / en）；ja/ko/vi 會 fallback 英文故不宣告。 */
+const LANGS_3: PageLang[] = ['zh', 'zh-CN', 'en'];
+/** 純中文頁：/blog 與文章頁（正文不過 t()，各語言內容相同）。 */
+const LANGS_ZH: PageLang[] = ['zh'];
+
+/** PM-263：該頁的 hreflang 標籤組（含 x-default）。同頁所有語言版本輸出相同內容。 */
+function hreflangTags(path: string, langs: PageLang[]): string {
+  const base = `https://bugezy.dev${path}`;
+  const alts = langs.map(
+    (l) => `<link rel="alternate" hreflang="${HREFLANG_CODE[l]}" href="${base}?lang=${l}" />`,
+  );
+  alts.push(`<link rel="alternate" hreflang="x-default" href="${base}" />`);
+  return alts.join('\n');
+}
+/** PM-263：canonical 指向「自己這個語言版本」；該頁沒有此語言版本時收斂到主版本（langs[0]）。 */
+function canonicalTag(path: string, lang: PageLang, langs: PageLang[]): string {
+  const self = langs.includes(lang) ? lang : langs[0];
+  return `<link rel="canonical" href="https://bugezy.dev${path}?lang=${self}" />`;
 }
 
 // PM-211：og:image 用的品牌 icon（128×128 PNG，內嵌 base64 = extension/icons/icon-128.png），
@@ -1473,7 +1521,8 @@ function homePage(lang: PageLang, _request: Request): string {
   ${jsonLd(SOFTWARE_APP_LD)}
   ${jsonLd(ORGANIZATION_LD)}
   <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
-  <link rel="canonical" href="https://bugezy.dev">
+  ${canonicalTag('/', lang, LANGS_6)}
+  ${hreflangTags('/', LANGS_6)}
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     body { background:#0f0f1a; color:#e0e0e0; font-family:system-ui,-apple-system,"Segoe UI","Microsoft JhengHei",sans-serif; line-height:1.6; }
@@ -1664,7 +1713,8 @@ function privacyPage(lang: PageLang): string {
 <title>${t('隱私政策 · BugEzy', 'Privacy Policy · BugEzy')}</title>
 <meta name="description" content="${t('BugEzy 隱私政策：我們收集什麼資料、如何使用與保護。', 'BugEzy privacy policy — what data we collect, how we use it, and how we protect your information.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
-<link rel="canonical" href="https://bugezy.dev/privacy">
+${canonicalTag('/privacy', lang, LANGS_3)}
+${hreflangTags('/privacy', LANGS_3)}
 ${ogMeta('/privacy', 'Privacy Policy — BugEzy', 'How BugEzy handles your data.')}
 <style>
   * { box-sizing: border-box; }
@@ -2113,7 +2163,8 @@ function skillPage(lang: PageLang): string {
 <title>${t('🤖 AI 客服手冊 · BugEzy', '🤖 AI Support Manual · BugEzy')}</title>
 <meta name="description" content="${t('把 BugEzy AI 客服手冊放進你的專案，AI 就會教你怎麼用 BugEzy、幫你讀報告、排除故障。', 'Add the BugEzy AI support manual to your project and your AI will teach you how to use BugEzy, read reports, and troubleshoot.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
-<link rel="canonical" href="https://bugezy.dev/skill">
+${canonicalTag('/skill', lang, LANGS_3)}
+${hreflangTags('/skill', LANGS_3)}
 ${ogMeta('/skill', 'AI Customer Service Guide — BugEzy SKILL.md', 'BugEzy MCP tool documentation for AI assistants. 13 tools including get_timeline.')}
 <style>
   * { box-sizing: border-box; }
@@ -2236,7 +2287,8 @@ function guidePage(lang: PageLang): string {
 <title>${t('使用指南 · BugEzy', 'User Guide · BugEzy')}</title>
 <meta name="description" content="${t('BugEzy 使用指南：安裝登入、六種錄製模式、編輯上傳、讓 AI 透過 MCP 讀報告修 Bug。', 'Learn how to use BugEzy to record bugs, annotate screenshots, and connect with AI via MCP.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
-<link rel="canonical" href="https://bugezy.dev/guide">
+${canonicalTag('/guide', lang, LANGS_3)}
+${hreflangTags('/guide', LANGS_3)}
 ${ogMeta('/guide', 'User Guide — BugEzy', 'Step-by-step guide to using BugEzy for bug reporting.')}
 <style>
   * { box-sizing: border-box; }
@@ -2466,7 +2518,8 @@ function faqPage(lang: PageLang): string {
 <title>${t('常見問題 · BugEzy', 'FAQ · BugEzy')}</title>
 <meta name="description" content="${t('BugEzy 常見問題：安裝、錄製、語音辨識、MCP 設定、付費方案等問答。', 'Frequently asked questions about BugEzy — pricing, AI tool support, data security, and more.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
-<link rel="canonical" href="https://bugezy.dev/faq">
+${canonicalTag('/faq', lang, LANGS_6)}
+${hreflangTags('/faq', LANGS_6)}
 ${ogMeta('/faq', 'FAQ — BugEzy', 'Frequently asked questions about BugEzy.')}
 ${jsonLd(faqLd)}
 <style>
@@ -2640,7 +2693,8 @@ Full guide: https://bugezy.dev/install`,
 <title>${t('安裝 BugEzy — 3 分鐘搞定 Chrome 擴充 + MCP 設定', 'Install BugEzy — Chrome extension + MCP setup in 3 minutes')}</title>
 <meta name="description" content="${t('安裝 BugEzy Chrome 擴充功能，設定 MCP 連線，讓 AI 直接讀取你的 Bug 報告。支援 Claude、Cursor、Windsurf、Google Antigravity、Gemini CLI。', 'Install the BugEzy Chrome extension and set up MCP so AI can read your bug reports directly. Works with Claude, Cursor, Windsurf, Google Antigravity, Gemini CLI.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
-<link rel="canonical" href="https://bugezy.dev/install">
+${canonicalTag('/install', lang, LANGS_6)}
+${hreflangTags('/install', LANGS_6)}
 ${ogMeta('/install', 'Install BugEzy — Setup Guide', 'Install BugEzy Chrome Extension and connect MCP in 2 minutes.')}
 <style>
   * { box-sizing: border-box; }
@@ -2931,7 +2985,8 @@ function featuresPage(lang: PageLang): string {
 <title>${t('BugEzy 功能 — 六種錄製模式、Whisper 語音、即時監控', 'BugEzy Features — Six Recording Modes, Whisper Voice, Live Monitor')}</title>
 <meta name="description" content="${t('BugEzy 六種除錯模式：錄製、回溯 30 秒、截圖標注、即時監控、終端機 CLI、MCP AI 讀取。Whisper 精準語音轉錄。', 'BugEzy offers six debugging modes: Record, Rewind, Screenshot, Live Monitor, Terminal CLI, and MCP AI. Whisper voice transcription for premium users.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
-<link rel="canonical" href="https://bugezy.dev/features">
+${canonicalTag('/features', lang, LANGS_6)}
+${hreflangTags('/features', LANGS_6)}
 ${ogMeta('/features', 'Features — BugEzy', 'Voice recording, DOM replay, console capture, network errors, MCP integration, and more.')}
 <style>
   * { box-sizing: border-box; }
@@ -3333,7 +3388,8 @@ function blogListPage(lang: PageLang): string {
 <title>${t('BugEzy 部落格 — 除錯、Vibe Coding 與 AI 開發', 'BugEzy Blog — Debugging, Vibe Coding & AI Development')}</title>
 <meta name="description" content="${t('關於除錯、Vibe Coding、AI 寫程式的實用文章。BugEzy 讓你用說的就能回報 Bug。', 'Practical articles on debugging, vibe coding, and AI development. BugEzy lets you report bugs by talking.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
-<link rel="canonical" href="https://bugezy.dev/blog">
+${canonicalTag('/blog', lang, LANGS_ZH)}
+${hreflangTags('/blog', LANGS_ZH)}
 ${ogMeta('/blog', 'BugEzy Blog — Debugging & AI Development', 'Practical articles on debugging, vibe coding, and AI development.')}
 <style>${BLOG_CSS}</style>
 </head>
@@ -3385,7 +3441,8 @@ function blogPostPage(post: BlogPost, lang: PageLang): string {
 <title>${escHtml(post.title)} · BugEzy</title>
 <meta name="description" content="${post.description.replace(/"/g, '&quot;')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
-<link rel="canonical" href="https://bugezy.dev/blog/${post.slug}">
+${canonicalTag(`/blog/${post.slug}`, lang, LANGS_ZH)}
+${hreflangTags(`/blog/${post.slug}`, LANGS_ZH)}
 ${ogMeta(`/blog/${post.slug}`, post.title, post.description)}
 ${jsonLd(articleLd)}
 <style>${BLOG_CSS}</style>
@@ -3427,7 +3484,8 @@ function changelogPage(lang: PageLang): string {
 <title>${t('更新日誌 · BugEzy', 'Changelog · BugEzy')}</title>
 <meta name="description" content="${t('BugEzy 每次更新做了什麼，都記在這裡。', 'What changed in each BugEzy update, all in one place.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
-<link rel="canonical" href="https://bugezy.dev/changelog">
+${canonicalTag('/changelog', lang, LANGS_3)}
+${hreflangTags('/changelog', LANGS_3)}
 ${ogMeta('/changelog', 'Changelog — BugEzy', 'Latest updates and release notes.')}
 <style>
   * { box-sizing: border-box; }
@@ -3561,7 +3619,8 @@ function feedbackPage(lang: PageLang): string {
 <title>${t('問題回報 · BugEzy', 'Feedback · BugEzy')}</title>
 <meta name="description" content="${t('回報 BugEzy 的問題或提出功能建議。', 'Report bugs or suggest features for BugEzy.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
-<link rel="canonical" href="https://bugezy.dev/feedback">
+${canonicalTag('/feedback', lang, LANGS_3)}
+${hreflangTags('/feedback', LANGS_3)}
 ${ogMeta('/feedback', 'Feedback — BugEzy', 'Share your feedback and help improve BugEzy.')}
 <style>
   * { box-sizing: border-box; }

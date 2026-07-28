@@ -1,0 +1,23 @@
+[mcp_servers.bugezy]
+command = "node"
+args = ['C:\dev\bugezy\mcp-server\dist\index.js']
+
+[mcp_servers.bugezy.env]
+BUGEZY_API_URL = "http://127.0.0.1:8787"
+
+[mcp_servers.memory]
+command = "npx"
+args = [
+    "-y",
+    "@modelcontextprotocol/server-memory",
+]
+
+[mcp_servers.memory.env]
+MEMORY_FILE_PATH = 'C:\Users\FOX77\.memory\bugezy.json'
+
+[mcp_servers.sequential-thinking]
+command = "npx"
+args = [
+    "-y",
+    "@modelcontextprotocol/server-sequential-thinking",
+]
