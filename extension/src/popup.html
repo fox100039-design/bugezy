@@ -199,6 +199,55 @@
       .cancel-link { flex-shrink: 0; color: #888; font-size: 12px; cursor: pointer; text-decoration: underline; }
       .cancel-link:hover { color: #ef4444; }
 
+      /* PM-267：🎫 票券錢包（深色卡片，與付費徽章同一視覺語彙）*/
+      .ticket-wallet { margin-bottom: 8px; }
+      .promo-input { display: flex; gap: 6px; }
+      .promo-input input {
+        flex: 1; min-width: 0; background: #12121f; border: 1px solid #2a2a3e; border-radius: 8px;
+        padding: 7px 10px; font-size: 12px; color: #e0e0e0; outline: none;
+      }
+      .promo-input input:focus { border-color: #7c3aed; }
+      .promo-input input::placeholder { color: #6b7280; }
+      .promo-redeem-btn {
+        width: auto; margin: 0; flex-shrink: 0; padding: 7px 14px; font-size: 12px;
+        background: #7c3aed; border-radius: 8px;
+      }
+      .promo-redeem-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+      .redeem-result { margin-top: 8px; }
+      .redeem-msg { font-size: 12px; line-height: 1.5; }
+      .redeem-msg.ok { color: #3fb950; }
+      .redeem-msg.err { color: #ef4444; }
+      .redeem-actions { display: flex; gap: 6px; margin-top: 8px; }
+      .promo-primary-btn, .promo-ghost-btn {
+        width: auto; flex: 1; margin: 0; padding: 7px 10px; font-size: 12px; border-radius: 8px;
+      }
+      .promo-primary-btn { background: #16a34a; }
+      .promo-ghost-btn { background: transparent; border: 1px solid #2a2a3e; color: #9aa3b2; }
+      .promo-ghost-btn:hover { border-color: #7c3aed; color: #c4b5fd; }
+      .active-ticket {
+        margin-top: 8px; background: rgba(22, 163, 74, 0.14); border: 1px solid #16a34a;
+        border-radius: 8px; padding: 8px 12px; font-size: 13px; color: #3fb950;
+      }
+      .active-ticket .ticket-sub { display: block; margin-top: 3px; font-size: 11px; color: #7f9; opacity: 0.9; }
+      .ticket-expire-warn {
+        margin-top: 8px; background: rgba(245, 158, 11, 0.14); border: 1px solid #f59e0b;
+        border-radius: 8px; padding: 8px 10px; font-size: 12px; color: #f59e0b; line-height: 1.6;
+      }
+      .saved-tickets {
+        margin-top: 8px; background: #16162a; border: 1px solid #2a2a3e;
+        border-radius: 8px; padding: 8px 12px;
+      }
+      .saved-tickets-title { font-size: 12px; color: #a78bfa; margin-bottom: 6px; }
+      .saved-ticket-row {
+        display: flex; justify-content: space-between; align-items: center; gap: 8px;
+        font-size: 12px; color: #ccc; padding: 4px 0;
+      }
+      .saved-ticket-btn {
+        width: auto; margin: 0; flex-shrink: 0; padding: 4px 12px; font-size: 11px;
+        background: #7c3aed; border-radius: 6px;
+      }
+      .saved-ticket-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
       /* PM-71：版本更新通知 */
       .update-notice {
         background: linear-gradient(135deg, #7c3aed20, #10b98120);
@@ -416,6 +465,31 @@
       <div id="cancelledBadge" class="cancelled-badge hidden">
         <span><span data-i18n="cancelled-prefix">已取消訂閱，可用到</span> <span id="expiresDate"></span></span>
         <a id="resubBtn" class="cancel-link" data-i18n="resub">重新訂閱</a>
+      </div>
+      <!-- PM-267：🎫 票券錢包（輸入活動代碼 → 兌換 → 儲存/啟用；到期提醒）-->
+      <div id="ticketWallet" class="ticket-wallet hidden">
+        <div id="promoInput" class="promo-input">
+          <input id="promoCode" type="text" maxlength="30" data-i18n-ph="promo_placeholder" placeholder="輸入活動代碼" />
+          <button id="redeemBtn" class="promo-redeem-btn" data-i18n="promo_redeem">兌換</button>
+        </div>
+        <!-- 兌換結果：成功顯示「立即啟用／儲存備用」，失敗顯示錯誤 -->
+        <div id="redeemResult" class="redeem-result hidden">
+          <div id="redeemMsg" class="redeem-msg"></div>
+          <div id="redeemActions" class="redeem-actions hidden">
+            <button id="activateNowBtn" class="promo-primary-btn" data-i18n="promo_activate_now">🚀 立即啟用</button>
+            <button id="saveForLaterBtn" class="promo-ghost-btn" data-i18n="promo_save">💾 儲存備用</button>
+          </div>
+        </div>
+        <!-- 使用中的票券 -->
+        <div id="activeTicket" class="active-ticket hidden">
+          <div id="activeTicketInfo"></div>
+          <div id="ticketExpireWarn" class="ticket-expire-warn hidden"></div>
+        </div>
+        <!-- 庫存票券 -->
+        <div id="savedTickets" class="saved-tickets hidden">
+          <div id="savedTicketsTitle" class="saved-tickets-title"></div>
+          <div id="savedTicketsList"></div>
+        </div>
       </div>
       <!-- PM-122：進階設定 accordion（四個 toggle 折疊收納，預設收合，狀態存 storage） -->
       <div class="settings-accordion">

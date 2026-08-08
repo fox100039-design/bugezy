@@ -117,6 +117,35 @@ CREATE TABLE IF NOT EXISTS feedback (
   status     TEXT DEFAULT 'new'
 );
 
+-- ── PM-265：活動代碼（promo_codes）+ 用戶票券錢包（user_tickets）──
+--    公開碼衝量（FIRSTMONTH/BUZZ100，max_uses NULL=無限）、個人碼任務換票（BZ-VID-xxxx，max_uses=1）。
+--    票券 SAVED（儲存不計時）→ ACTIVE（啟用倒數）→ USED（到期），可疊加。
+--    ⚠ user_id 是 TEXT 且 REFERENCES users(user_id)：users 主鍵為 user_id（非 id）、型別 TEXT（PM-133 起 = Google sub）。
+--    可貼上執行的完整版（含預塞公開碼 + 驗收查詢）見 server/promo-tickets.sql。
+CREATE TABLE IF NOT EXISTS promo_codes (
+  code            VARCHAR(30) PRIMARY KEY,               -- 'FIRSTMONTH' / 'BZ-VID-K8M3X2'
+  description     TEXT NOT NULL,
+  duration_days   INTEGER NOT NULL,                      -- 30 / 60 / 90
+  code_type       VARCHAR(10) NOT NULL DEFAULT 'public', -- 'public' / 'personal'
+  max_uses        INTEGER,                               -- NULL = 無限
+  current_uses    INTEGER NOT NULL DEFAULT 0,
+  is_active       BOOLEAN NOT NULL DEFAULT true,
+  code_expires_at TIMESTAMPTZ,                           -- NULL = 永不過期
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS user_tickets (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id         TEXT NOT NULL REFERENCES users(user_id),
+  code            VARCHAR(30) NOT NULL REFERENCES promo_codes(code),
+  duration_days   INTEGER NOT NULL,
+  status          VARCHAR(10) NOT NULL DEFAULT 'SAVED',  -- SAVED / ACTIVE / USED
+  activated_at    TIMESTAMPTZ,
+  expires_at      TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (user_id, code)                                 -- 同帳號同碼只能兌換一次
+);
+CREATE INDEX IF NOT EXISTS idx_user_tickets_user_status ON user_tickets (user_id, status);
+
 -- ── PM-93：全 public table 開 RLS(deny all)，anon key 完全鎖死；唯一存取途徑是 Worker 的 service_role。
 --    ⚠ 執行前務必先 `wrangler secret put SUPABASE_SERVICE_ROLE_KEY`，否則 Worker(anon) 會被鎖死。
 --    完整腳本 + 步驟見 server/rls-lockdown.sql。
@@ -126,3 +155,5 @@ ALTER TABLE users     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sessions  ENABLE ROW LEVEL SECURITY; -- PM-128：只有 service_role 能存取
 ALTER TABLE payments  ENABLE ROW LEVEL SECURITY; -- PM-145：只有 service_role 能存取
 ALTER TABLE feedback  ENABLE ROW LEVEL SECURITY; -- PM-174：只有 service_role 能存取
+ALTER TABLE promo_codes  ENABLE ROW LEVEL SECURITY; -- PM-265：只有 service_role 能存取
+ALTER TABLE user_tickets ENABLE ROW LEVEL SECURITY; -- PM-265：只有 service_role 能存取

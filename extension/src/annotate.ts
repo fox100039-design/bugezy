@@ -734,8 +734,11 @@ voiceInputBtn.addEventListener('click', () => {
 //   （截圖麥克風提示選「直接錄製（不錄語音）」→ MIC_KEY 維持 off → 此處不自動啟動語音）。
 chrome.storage.local.get([KEYBOARD_MODE_KEY, USER_PLAN_KEY, MIC_MODE_KEY, MIC_KEY], (r) => {
   // PM-147：判斷語音引擎——付費（paid/cancelled/day_pass）+ popup Whisper toggle 才走 Whisper
+  // PM-267：活動票券（popup 寫入 'ticket'）同樣視同付費，否則票券用戶在錄製頁有 Whisper、
+  //         到截圖標注頁卻退回即時字幕（background/content 用 !== 'free' 判斷故無此問題）
   const plan = (r[USER_PLAN_KEY] as string) || 'free';
-  const isPaid = plan === 'paid' || plan === 'cancelled' || plan === 'day_pass';
+  const isPaid =
+    plan === 'paid' || plan === 'cancelled' || plan === 'day_pass' || plan === 'ticket';
   const micMode = (r[MIC_MODE_KEY] as string) || 'whisper'; // 付費預設 whisper（與錄製流程 computeStartFlags 一致）
   useWhisper = isPaid && micMode === 'whisper';
   const micOn = r[MIC_KEY] === true;

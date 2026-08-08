@@ -70,6 +70,21 @@ const cancelledBadge = $('cancelledBadge');
 const expiresDate = $('expiresDate');
 const cancelSubBtn = $<HTMLAnchorElement>('cancelSubBtn');
 const resubBtn = $<HTMLAnchorElement>('resubBtn');
+// PM-267：🎫 票券錢包（活動代碼兌換 / 啟用 / 到期提醒）
+const ticketWallet = $('ticketWallet');
+const promoCodeInput = $<HTMLInputElement>('promoCode');
+const redeemBtn = $<HTMLButtonElement>('redeemBtn');
+const redeemResult = $('redeemResult');
+const redeemMsg = $('redeemMsg');
+const redeemActions = $('redeemActions');
+const activateNowBtn = $<HTMLButtonElement>('activateNowBtn');
+const saveForLaterBtn = $<HTMLButtonElement>('saveForLaterBtn');
+const activeTicketBox = $('activeTicket');
+const activeTicketInfo = $('activeTicketInfo');
+const ticketExpireWarn = $('ticketExpireWarn');
+const savedTicketsBox = $('savedTickets');
+const savedTicketsTitle = $('savedTicketsTitle');
+const savedTicketsList = $('savedTicketsList');
 // PM-111：日票升級鈕 + 日票中倒數狀態
 const dayPassBtn = $<HTMLButtonElement>('dayPassBtn');
 const dayPassStatus = $('dayPassStatus');
@@ -151,6 +166,12 @@ function applyTranslations() {
     const key = el.getAttribute('data-i18n');
     if (key) el.textContent = t(key, currentUILang);
   });
+  // PM-267：placeholder 也要翻（比照 edit-report / annotate 的 data-i18n-ph 慣例）
+  document.querySelectorAll<HTMLElement>('[data-i18n-ph]').forEach((el) => {
+    const key = el.getAttribute('data-i18n-ph');
+    if (key) (el as HTMLInputElement | HTMLTextAreaElement).placeholder = t(key, currentUILang);
+  });
+  renderTicketWallet(); // PM-267：票券區含動態文字，語言切換後要重繪
   updateJsonLockUI(); // PM-189：靜態翻譯會把 copy/export 還原為預設文字，依付費狀態覆寫鎖頭
 }
 
@@ -741,6 +762,41 @@ interface PlanInfo {
     rewind: { used: number; max: number };
     mcp: { used: number; max: number };
   };
+  // PM-266/267：活動票券。isPaid 已整合票券（ECPay 或 ACTIVE 票券任一成立即為 true）
+  isPaid?: boolean;
+  tickets?: {
+    active: ActiveTicket | null;
+    saved: SavedTicket[];
+    savedCount: number;
+    free_until?: string | null;
+  };
+}
+
+// PM-267：票券型別（對應 PM-266 的 /api/user/plan、/api/promo/* 回傳）
+interface ActiveTicket {
+  ticket_id: string;
+  code: string;
+  duration_days: number;
+  expires_at: string;
+  days_left: number;
+}
+interface SavedTicket {
+  ticket_id: string;
+  code: string;
+  duration_days: number;
+  created_at?: string;
+}
+/** 票券快取（loadPlan 寫入；語言切換時重繪用）。 */
+let ticketState: { active: ActiveTicket | null; saved: SavedTicket[] } = { active: null, saved: [] };
+/** 剛兌換、尚未決定「立即啟用／儲存備用」的票券 id。 */
+let pendingTicketId: string | null = null;
+const TICKET_WARN_DAYS = 10; // 剩 ≤10 天顯示到期提醒（卡片 2d）
+
+/** duration_days → 「N 個月」或「N 天」（整月才說月，避免 45 天顯示成 1.5 個月）。 */
+function fmtDuration(days: number): string {
+  return days % 30 === 0 && days >= 30
+    ? t('promo_months', currentUILang, { n: days / 30 })
+    : t('promo_days', currentUILang, { n: days });
 }
 
 /** ISO 日期 → YYYY/MM/DD（顯示用，避免依賴 Intl locale）。 */
@@ -828,6 +884,153 @@ function confirmJsonDisclaimer(): Promise<boolean> {
 
 // PM-63/75：查方案 → 依 plan 狀態（source of truth）控制 UI。
 // paid：隱藏升級提示 + ✨ + 管理訂閱（含取消）；cancelled：隱藏升級提示 + 顯示到期日；free：剩餘次數 + 升級提示。
+// ── PM-267：🎫 票券錢包 UI ────────────────────────────────────────────────
+/** 依 ticketState 重繪「使用中／到期提醒／庫存」三區（純渲染，不打 API）。 */
+function renderTicketWallet() {
+  const { active, saved } = ticketState;
+
+  // 使用中票券
+  if (active) {
+    activeTicketInfo.textContent = '';
+    const line1 = document.createElement('div');
+    line1.textContent = `${t('promo_active', currentUILang)}（${active.code}）`;
+    const line2 = document.createElement('span');
+    line2.className = 'ticket-sub';
+    line2.textContent =
+      `${t('promo_expires', currentUILang)}：${fmtDate(active.expires_at)}　` +
+      t('promo_days_left', currentUILang, { n: active.days_left });
+    activeTicketInfo.appendChild(line1);
+    activeTicketInfo.appendChild(line2);
+    activeTicketBox.classList.remove('hidden');
+
+    // 到期提醒（剩 ≤10 天）：有庫存票就引導啟用，沒有就提示到期後轉月費
+    if (active.days_left <= TICKET_WARN_DAYS) {
+      ticketExpireWarn.textContent = '';
+      const w1 = document.createElement('div');
+      w1.textContent = `${t('promo_expiring_soon', currentUILang)}（${t('promo_days_left', currentUILang, { n: active.days_left })}）`;
+      ticketExpireWarn.appendChild(w1);
+      const w2 = document.createElement('div');
+      w2.textContent = saved.length
+        ? `${t('promo_saved_count', currentUILang, { n: saved.length })} — ${t('promo_use_saved', currentUILang)}`
+        : t('promo_monthly_after', currentUILang);
+      ticketExpireWarn.appendChild(w2);
+      ticketExpireWarn.classList.remove('hidden');
+    } else {
+      ticketExpireWarn.classList.add('hidden');
+    }
+  } else {
+    activeTicketBox.classList.add('hidden');
+    ticketExpireWarn.classList.add('hidden');
+  }
+
+  // 庫存票券
+  if (saved.length) {
+    savedTicketsTitle.textContent = `${t('promo_saved_tickets', currentUILang)}（${saved.length}）`;
+    savedTicketsList.textContent = '';
+    for (const s of saved) {
+      const row = document.createElement('div');
+      row.className = 'saved-ticket-row';
+      const label = document.createElement('span');
+      label.textContent = `🎫 ${s.code} — ${fmtDuration(s.duration_days)}`;
+      const btn = document.createElement('button');
+      btn.className = 'saved-ticket-btn';
+      btn.textContent = t('promo_activate', currentUILang);
+      btn.addEventListener('click', () => void activateTicket(s.ticket_id, btn));
+      row.appendChild(label);
+      row.appendChild(btn);
+      savedTicketsList.appendChild(row);
+    }
+    savedTicketsBox.classList.remove('hidden');
+  } else {
+    savedTicketsBox.classList.add('hidden');
+  }
+}
+
+/** 顯示兌換結果訊息；ok=true 時一併給「立即啟用／儲存備用」兩顆按鈕。 */
+function showRedeemMsg(text: string, ok: boolean, withActions = false) {
+  redeemMsg.textContent = text;
+  redeemMsg.className = `redeem-msg ${ok ? 'ok' : 'err'}`;
+  redeemActions.classList.toggle('hidden', !withActions);
+  redeemResult.classList.remove('hidden');
+}
+
+/** 啟用一張票券；成功後重新 loadPlan 刷新全部狀態（含三張卡片、JSON 鎖）。 */
+async function activateTicket(ticketId: string, btn?: HTMLButtonElement) {
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch(`${API_BASE}/api/promo/activate`, {
+      method: 'POST',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ticket_id: ticketId }),
+    });
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) {
+      showRedeemMsg(data.error || t('promo_failed', currentUILang), false);
+      return;
+    }
+    pendingTicketId = null;
+    redeemResult.classList.add('hidden'); // 啟用後結果區收起，狀態改由「使用中」區呈現
+    await loadPlan();
+  } catch {
+    showRedeemMsg(t('promo_failed', currentUILang), false);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// 兌換代碼
+redeemBtn.addEventListener('click', () => void redeemPromoCode());
+promoCodeInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') void redeemPromoCode();
+});
+
+async function redeemPromoCode() {
+  const code = promoCodeInput.value.trim();
+  if (!code) return;
+  redeemBtn.disabled = true;
+  try {
+    const res = await fetch(`${API_BASE}/api/promo/redeem`, {
+      method: 'POST',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    });
+    const data = (await res.json().catch(() => ({}))) as {
+      ticket_id?: string;
+      duration_days?: number;
+      error?: string;
+    };
+    if (!res.ok) {
+      // 401 = 未登入（getAuthHeaders 無 token）→ 給明確指引而非後端的泛用訊息
+      showRedeemMsg(
+        res.status === 401 ? t('promo_need_login', currentUILang) : data.error || t('promo_failed', currentUILang),
+        false,
+      );
+      return;
+    }
+    pendingTicketId = data.ticket_id ?? null;
+    promoCodeInput.value = '';
+    showRedeemMsg(
+      `${t('promo_success', currentUILang)}${data.duration_days ? ` ${fmtDuration(data.duration_days)}` : ''}`,
+      true,
+      true, // 顯示「立即啟用 / 儲存備用」
+    );
+    await loadPlan(); // 票券已存在 SAVED，先刷新庫存區
+  } catch {
+    showRedeemMsg(t('promo_failed', currentUILang), false);
+  } finally {
+    redeemBtn.disabled = false;
+  }
+}
+
+activateNowBtn.addEventListener('click', () => {
+  if (pendingTicketId) void activateTicket(pendingTicketId, activateNowBtn);
+});
+saveForLaterBtn.addEventListener('click', () => {
+  // 「儲存備用」不需打 API——兌換當下票券已是 SAVED，這裡只收起選擇區
+  pendingTicketId = null;
+  showRedeemMsg(t('promo_saved_done', currentUILang), true, false);
+});
+
 async function loadPlan() {
   try {
     const res = await fetch(`${API_BASE}/api/user/plan`, {
@@ -838,10 +1041,19 @@ async function loadPlan() {
     freeLimits = plan.limits; // PM-170：快取免費額度供 overlay 顯示 used/max
     currentCountry = plan.country ?? 'UNKNOWN'; // PM-172：IP 國家碼決定付費資格
     // PM-87：持久化 plan 供 background/content 路由語音引擎（free→Web Speech、paid/cancelled→Groq Whisper）
-    void chrome.storage.local.set({ [USER_PLAN_KEY]: plan.plan });
+    // PM-267：票券生效時 server 端已視同付費（Whisper/額度皆放行），
+    //   故 USER_PLAN_KEY 也要給非 'free' 值，否則 popup 不會顯示精準轉錄選項。
+    const ticketActive = !!plan.tickets?.active;
+    const effectivePlan = plan.plan === 'free' && ticketActive ? 'ticket' : plan.plan;
+    void chrome.storage.local.set({ [USER_PLAN_KEY]: effectivePlan });
     // PM-91：更新模式選擇可見性（付費版才顯示）
-    micPlan = plan.plan;
+    micPlan = effectivePlan;
     updateMicModeUI();
+
+    // PM-267：票券狀態快取 + 重繪錢包（登入成功才顯示整個票券區）
+    ticketState = { active: plan.tickets?.active ?? null, saved: plan.tickets?.saved ?? [] };
+    ticketWallet.classList.remove('hidden');
+    renderTicketWallet();
 
     // 狀態互斥：先全部收起，再依 plan 開對應的一個（PM-111：多日票兩態）
     upgradeHint.classList.add('hidden');
@@ -860,10 +1072,13 @@ async function loadPlan() {
       : 0;
 
     // PM-189：付費會員（月費 paid / 取消未到期 cancelled / 日票未到期）→ 解鎖 JSON 複製匯出
-    isPaidMember =
+    // PM-267：改以 server 的 plan.isPaid 為準（已整合活動票券）；
+    //   舊版 server 沒有這個欄位時 fallback 回原本的 ECPay 判斷，避免付費用戶被誤鎖。
+    const ecpayPaid =
       plan.plan === 'paid' ||
       plan.plan === 'cancelled' ||
       (plan.plan === 'day_pass' && dayPassRemainMs > 0);
+    isPaidMember = plan.isPaid ?? ecpayPaid;
     updateJsonLockUI();
 
     // PM-170：付費/日票/取消 → 三張卡片皆「✨ 無限次」
@@ -889,6 +1104,11 @@ async function loadPlan() {
       setAllUnlimited();
       startBtn.disabled = false;
       showDayPassActive(dayPassRemainMs);
+    } else if (ticketActive) {
+      // PM-267：活動票券生效（plan 仍是 free）→ 比照付費：三張卡片無限次、不顯示升級提示。
+      //   狀態由票券區的「🟢 免費體驗中」呈現，故不另開付費徽章。
+      setAllUnlimited();
+      startBtn.disabled = false;
     } else {
       // 免費版（含未知狀態 fallback）→ PM-170：三張卡片剩餘次數（record/rewind 剩 N 次、screenshot 無限）
       if (plan.limits) renderFreeUsage(plan.limits);

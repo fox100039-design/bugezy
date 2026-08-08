@@ -1,5 +1,29 @@
 # BugEzy Changelog
 
+## 2026-08-08
+
+Day 36（PM-265~270）。**活動代碼 + 票券錢包系統上線 + FOX 即時推播**。新增「兌換代碼 → 存進錢包 → 想用才啟用」的免費期發放機制（DB + API + popup UI），並替 7 個重要事件接上即時推播。server 多次 deploy（`27f3a1c8`→`7a998663`→`62459098`→`eb09b632`→`e0b74201`）；extension 待重上架（仍 v1.1.4）。
+
+- **PM-265 DB 設計**（`server/promo-tickets.sql` + `verify-promo-tickets.mjs` + `schema.sql`）。`promo_codes`（代碼定義：`duration_days`/`code_type` public|personal/`max_uses`/`is_active`/`code_expires_at`）+ `user_tickets`（票券錢包：`status` SAVED|ACTIVE|USED/`activated_at`/`expires_at`/`UNIQUE(user_id, code)`）+ 索引 `idx_user_tickets_user_status` + RLS deny-all（§4-6）+ 預塞 `FIRSTMONTH`/`BUZZ100`。**修正卡片兩處會直接執行失敗的 SQL**：`REFERENCES users(id)`→`users(user_id)`（無 `id` 欄）、`user_id UUID`→`TEXT`（PM-133 起 = Google sub）。DDL 需 FOX 在 Dashboard 執行（PostgREST 不做 DDL）；以 `pglast`（libpg_query＝Postgres 官方 parser）實際解析驗證語法。
+
+- **PM-266 兌換/錢包 API**（`server/index.ts`）。`POST /api/promo/redeem`（驗代碼存在/啟用/未過期/未達上限/未重複兌換 → 發 SAVED 票）、`POST /api/promo/activate`（**到期日疊加**：基準 = MAX(現有到期日, NOW()) + duration_days）、`GET /api/promo/wallet`（active/saved/free_until）。`hasActiveTicket`/`expireDueTickets` 併入 `isActiveUserId`，`getUserPlan` 回傳 `tickets`。**`max_uses` 改 CAS 併發控制**（PostgREST 不能做欄位運算，check-then-increment 會超發）：`.update({n: prev+1}).eq('current_uses', prev)` 最多重試 5 次 + 插入失敗補償回退。**拆出 `isEcpayActiveUserId()`** 給 ECPay 三個 callback 的孤兒自癒守門——否則「持有免費票券的用戶付款」會被當成已啟用而跳過升級，**收了錢卻沒開通**。
+
+- **PM-267 popup 票券錢包 UI**（`extension/src/popup.html/.ts` + `i18n.ts` + `annotate.ts`）。輸入代碼兌換 → 選「先存著」或「立即啟用」→ 庫存列表逐張啟用 → 使用中票券顯示剩餘天數（≤10 天橘色提醒）；19 個 `promo_*` i18n key × 5 語；`applyTranslations` 支援 `data-i18n-ph`。**補通後端三處只認 ECPay 的付費守門**（`bumpUsage`/`handleTranscribe`/`createReport` rrweb）+ annotate Whisper 加 `plan === 'ticket'`——否則 popup 顯示無限制、server 卻回 403。
+
+- **PM-268 即時推播 7 觸發點**（`server/index.ts`）。🆕 新用戶 / 🐛 新報告 / 🎫 代碼兌換 / 🚀 票券啟用 / 💰 月費付款 / 💰 日票付款 / 💰 續扣成功；`notifyFox` + `notifyFoxForUser`（延遲查 email：先確認有設推播才查 DB，且查詢一併進 `waitUntil`，不佔回應路徑）。**改用 `ctx.waitUntil` 而非卡片的 `void notifyFox(...)`**——Workers 回應後終止 isolate 會中斷未追蹤的 fetch（本專案 mcp_usage 踩過），但純 await 又違反「不阻塞」驗收。三個付款推播一律放在 **DB 更新成功之後**，否則升級失敗回 500 讓綠界重送時會推出假的「付款成功」。
+
+- **PM-269 推播沒送達除錯**（`server/index.ts`）。加臨時除錯端點抓到 ntfy 回應 `{"code":42908,"http":429,"error":"daily message quota reached"}`——**根因：ntfy.sh 按「來源 IP」計配額，而 Workers 出網走共用 Cloudflare IP，該 IP 額度早被用光**（本機同 API 200 vs Worker 429，差別只有來源 IP）。排除 topic 未讀到/夾空白/ctx 取不到/編碼/呼叫位置五項嫌疑。修：加 `NTFY_TOKEN` 支援、**失敗改 `console.error`**（上一版全靜默吞掉才導致查不出來）、抽 `sendNtfy()` 讓「查 email→送推播」成單一 promise（原本巢狀 `waitUntil` 時序脆弱）；除錯端點用完刪除。
+
+- **PM-270 改用 Discord Webhook**（`server/index.ts`）。`DISCORD_WEBHOOK_URL` 取代 `NTFY_TOPIC`/`NTFY_TOKEN`；`sendDiscord()` 送 embed（標題/內文/顏色/時間戳，priority≥4 橘、其餘 Discord 藍）；**`encodeNtfyHeader` 整個移除**——走 JSON body，中文與 emoji 原生支援，不再需要 RFC 2047。`notifyFox`/`notifyFoxForUser` 簽名不變，**7 個觸發點一行未動**；額外加 Discord embed 的 title 256/description 4096 字元截斷（超長會整包回 400，通知直接消失）。
+
+- **PM-271 Day 36 收工**：CHANGELOG + ARCHITECTURE + git push。
+
+> **待 FOX**：① Supabase 跑 `promo-tickets.sql` 建表 ② `wrangler secret put DISCORD_WEBHOOK_URL` ③ extension 重上架（Day 29~36 的 dist 變更累積中）
+
+## 2026-07-28
+
+Day 35（PM-263~264）。**多語 SEO 收尾**（純 server）。**PM-263 hreflang**：全站多語頁面補 `<link rel="alternate" hreflang>` + `x-default` + self-canonical（helper `hreflangTags(path, langs)` / `canonicalTag(path, lang, langs)` + 語言集合常數 `LANGS_6`/`LANGS_3`/`LANGS_ZH`/`HREFLANG_CODE`），讓 Google 正確辨識同頁不同語版本而非重複內容。**PM-264 sitemap 補齊**：`sitemapXml()` 改以 `interface SitemapPage{path,langs,freq,pri,langPri?}` 驅動，每頁列出所有語言版本並加 `xhtml:link` 互指；**直接複用 PM-263 的 `LANGS_*` 常數作單一事實來源**，確保 sitemap URL 與頁面 canonical 永遠一致（已交叉比對驗證）。另：FB 文案、icon 提案（FOX）。
+
 ## 2026-07-20
 
 Day 34（PM-256~262）。**SEO 部落格上線 + 官網七語全面化 + 子頁面多語化**。純 server（只改 `server/src/index.ts`）；多次 deploy（`34d014c9`→`56c614d4`→`b5f1d00f`→`787cf4b4`→`a822c63b`→`9c49814b`）。

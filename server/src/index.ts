@@ -31,6 +31,11 @@ export interface Env {
   // PM-190：MCP handler 入口從 URL query（?token=）讀出的 session_token，供 MCP tools 免參數自動取用（方案 B）。
   //   per-request 設定：Worker 每個 request 用同一 env 物件實例，MCP handler 同步呼叫 tools，不會跨 request 汙染。
   __mcp_session_token?: string;
+  // PM-270：Discord Webhook URL（`wrangler secret put DISCORD_WEBHOOK_URL`）。未設定 → 靜默跳過。
+  // 取代 PM-268 的 ntfy：ntfy.sh 按來源 IP 計配額，Workers 共用 IP 額度已滿 → 永遠 429（PM-269）。
+  DISCORD_WEBHOOK_URL?: string;
+  // PM-268：per-request ExecutionContext，供 notifyFox 用 waitUntil 送出非阻塞推播（見 notifyFox 註解）。
+  __ctx?: ExecutionContext;
 }
 
 // ── 與擴充端一致的 payload 型別 ──────────────────────────
@@ -210,6 +215,105 @@ async function verifyGoogleToken(
 
 /** PM-133：POST /api/auth/session — 收 Google access token，server 驗 audience + 推導 user_id
  *  （絕不信任客戶端傳的 user_id，P0-2），發 DB session token。 */
+// ── PM-268/270：即時推播（重要用戶事件 → FOX 的 Discord）──────────────────
+/** PM-268：以 user_id 取 email 供推播文案用；查不到就退回 user_id（推播不該因此失敗）。 */
+async function getUserEmail(userId: string, env: Env): Promise<string> {
+  const { data } = await supa(env)
+    .from('users')
+    .select('email')
+    .eq('user_id', userId)
+    .maybeSingle();
+  return (data as { email?: string } | null)?.email ?? userId;
+}
+
+/**
+ * PM-270：推播到 Discord Webhook（未設 DISCORD_WEBHOOK_URL → 靜默跳過；失敗不影響主流程）。
+ *
+ * 為什麼從 ntfy 換過來（PM-269 查出的根因）：ntfy.sh 按「來源 IP」計每日配額，
+ * 而 Workers 出網走共用 Cloudflare IP，該 IP 額度早被用光 → 每則都被回 429（code 42908）。
+ * Discord webhook 的額度綁在 webhook 本身、與來源 IP 無關，且免費、原生支援 emoji + 中文。
+ *
+ * priority 沿用原本語意（>=4 視為重要）→ 只用來決定 embed 顏色，不再送任何 header。
+ */
+async function sendDiscord(env: Env, title: string, body: string, priority: number): Promise<void> {
+  const url = env.DISCORD_WEBHOOK_URL?.trim();
+  if (!url) return;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        embeds: [
+          {
+            // Discord 上限：title 256 / description 4096 字元，超過整包會被回 400
+            title: title.slice(0, 256),
+            description: body.slice(0, 4096),
+            color: priority >= 4 ? 0xff6b35 : 0x5865f2, // 重要=橘，一般=Discord 藍
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      }),
+    });
+    if (!res.ok) {
+      // PM-269 的教訓：失敗一定要留痕跡，否則「兌換成功卻沒收到通知」根本查不出來。
+      // 有這行就能直接 `wrangler tail` 看到狀態碼與原因。
+      console.error('Discord 推播失敗:', res.status, (await res.text().catch(() => '')).slice(0, 200));
+    }
+  } catch (e) {
+    console.error('Discord 推播例外:', String(e));
+  }
+}
+
+/**
+ * PM-268：推播給 FOX。呼叫端介面不變（7 個觸發點不需動）。
+ *
+ * ⚠ 為什麼用 `ctx.waitUntil` 而不是 `void notifyFox(...)`：
+ *   Cloudflare Workers 在回應送出後會終止 isolate，**沒被 await 也沒交給 waitUntil 的 fetch 會被中斷**
+ *   （本專案既有的 mcp_usage 側寫就是為此改成 await）。但驗收要求「不阻塞主流程」，
+ *   純 await 又會把推播延遲加到使用者請求上。`waitUntil` 是唯一同時滿足兩者的做法：
+ *   回應照常立刻送出，isolate 會等推播送完才回收。
+ *   取不到 ctx（或 ctx 已結束）時退回 fire-and-forget，最壞情況只是這則推播沒送到。
+ *
+ * 回傳 void（非 async）→ 呼叫端寫 `notifyFox(...)` 即可，不會產生 floating promise。
+ */
+function notifyFox(env: Env, title: string, body: string, priority = 3): void {
+  if (!env.DISCORD_WEBHOOK_URL) return; // 未設定 → 靜默跳過（正式環境可不設）
+  const p = sendDiscord(env, title, body, priority);
+  try {
+    env.__ctx?.waitUntil(p);
+  } catch {
+    /* ctx 已結束 → 保持 fire-and-forget，不再處理 */
+  }
+}
+
+/**
+ * PM-268：需要 email 的推播。**先確認有設 webhook 才查 DB**——否則未啟用推播時，
+ * 每次兌換/付款/上傳報告都會白白多一次 Supabase 查詢；且 email 查詢一併放進 waitUntil，
+ * 完全不佔用回應路徑（若寫成 `notifyFox(env, t, \`${await getUserEmail(...)}\`)` 就會卡住回應）。
+ */
+function notifyFoxForUser(
+  env: Env,
+  userId: string,
+  title: string,
+  makeBody: (email: string) => string,
+  priority = 3,
+): void {
+  if (!env.DISCORD_WEBHOOK_URL) return;
+  // 直接串 sendDiscord（而非 notifyFox）——這樣整條「查 email → 送推播」是**單一** promise，
+  // waitUntil 會等到推播真的送完；若改呼叫 notifyFox 則它會另外註冊一個巢狀 waitUntil，
+  // 外層 promise 在推播還沒送出前就 resolve，時序上較脆弱。
+  const p = getUserEmail(userId, env)
+    .then((email) => sendDiscord(env, title, makeBody(email), priority))
+    .catch(() => {
+      /* 查 email 失敗就放棄這則推播，不影響主流程 */
+    });
+  try {
+    env.__ctx?.waitUntil(p);
+  } catch {
+    /* ctx 已結束 → 保持 fire-and-forget */
+  }
+}
+
 async function createSession(request: Request, env: Env): Promise<Response> {
   const body = (await request.json().catch(() => null)) as
     | { google_token?: string; name?: string }
@@ -236,6 +340,7 @@ async function createSession(request: Request, env: Env): Promise<Response> {
     await supa(env)
       .from('users')
       .insert({ user_id: userId, email, name: body.name || '', plan: 'free' });
+    notifyFox(env, '🆕 新用戶', `${email} 剛註冊了 BugEzy`, 4); // PM-268
   }
 
   // 產生不可猜測的 session token（雙 UUID）
@@ -1492,14 +1597,38 @@ async function updateUserPlan(env: Env, userId: string, patch: Record<string, un
   return true;
 }
 
-// PM-144：以 user_id 查 users 表判斷是否為有效付費用戶（terminal-logs 付費限定用）。
-async function isActiveUserId(userId: string, env: Env): Promise<boolean> {
+// PM-266：活動票券 —— 查此用戶是否有「ACTIVE 且未到期」的票券（視同付費）。
+async function hasActiveTicket(userId: string, env: Env): Promise<boolean> {
+  const { data } = await supa(env)
+    .from('user_tickets')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('status', 'ACTIVE')
+    .gt('expires_at', new Date().toISOString())
+    .limit(1);
+  return (data?.length ?? 0) > 0;
+}
+
+/** PM-267：**只看 ECPay**（月費/取消未到期/日票）的付費狀態，不看活動票券。
+ *  ECPay callback 的孤兒自癒守門必須用這支——若用含票券的版本，
+ *  「持有免費票券的人付費」會被誤判為已 active 而**跳過升級 → 收了錢卻沒開通**。 */
+async function isEcpayActiveUserId(userId: string, env: Env): Promise<boolean> {
   const { data } = await supa(env)
     .from('users')
     .select('plan, day_pass_expires_at')
     .eq('user_id', userId)
     .maybeSingle();
-  return data ? isActiveUser(data as { plan?: string | null; day_pass_expires_at?: string | null }) : false;
+  return data
+    ? isActiveUser(data as { plan?: string | null; day_pass_expires_at?: string | null })
+    : false;
+}
+
+// PM-144：以 user_id 查 users 表判斷是否為有效付費用戶（terminal-logs 付費限定用）。
+// PM-266：ECPay 不通過時再查活動票券（ACTIVE 未到期 → 視同付費）。
+// ⚠ 這支代表「是否享有付費功能」，**不可**用於 ECPay 開通判斷（見 isEcpayActiveUserId）。
+async function isActiveUserId(userId: string, env: Env): Promise<boolean> {
+  if (await isEcpayActiveUserId(userId, env)) return true;
+  return await hasActiveTicket(userId, env);
 }
 
 // ── PM-62：產品首頁（GET /）— 一頁式、深色主題、無 JS、RWD（綠界審核 + 客戶訪問用）──
@@ -5213,6 +5342,7 @@ ${Array.from(
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    env.__ctx = ctx; // PM-268：供 notifyFox 用 waitUntil 送非阻塞推播（回應後 isolate 才回收）
     const cors = getCorsHeaders(request); // PM-130：動態 CORS（只放行自家域名 + chrome-extension）
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: cors });
@@ -5486,6 +5616,16 @@ export default {
       if (request.method === 'POST' && path === '/api/user/usage') {
         return await bumpUsage(request, env);
       }
+      // PM-266：活動代碼兌換 + 票券錢包（三支皆需登入，未帶 token → 401）
+      if (request.method === 'POST' && path === '/api/promo/redeem') {
+        return await redeemPromoCode(request, env);
+      }
+      if (request.method === 'POST' && path === '/api/promo/activate') {
+        return await activateTicket(request, env);
+      }
+      if (request.method === 'GET' && path === '/api/promo/wallet') {
+        return await getTicketWallet(request, env);
+      }
       if (request.method === 'POST' && path === '/api/user/cancel') {
         return await ecpayCancel(request, env); // PM-73：取消訂閱
       }
@@ -5609,7 +5749,9 @@ async function createReport(request: Request, env: Env, origin: string): Promise
         usage_reset_at?: string | null;
       };
       const hasRrweb = Array.isArray(payload.rrwebEvents) && payload.rrwebEvents.length > 0;
-      if (hasRrweb && !isActiveUser(uu)) {
+      // PM-267：活動票券生效視同付費，不受免費版錄製額度限制
+      const uuPaid = isActiveUser(uu) || (await hasActiveTicket(authUserId, env));
+      if (hasRrweb && !uuPaid) {
         // 跨月重置（唯讀比對，不寫 DB；實際重置由 getUserPlan 負責）：新月份不計舊額度
         const resetAt = new Date(uu.usage_reset_at ?? 0);
         const now = new Date();
@@ -5699,6 +5841,12 @@ async function createReport(request: Request, env: Env, origin: string): Promise
     return json({ error: GENERIC_500 }, 500);
   }
 
+  // PM-268：新報告推播（低優先 2；訪客未登入時 authUserId 為 null → 標示為訪客）
+  if (authUserId) {
+    notifyFoxForUser(env, authUserId, '🐛 新報告', (email) => `${email} 提交了新報告`, 2);
+  } else {
+    notifyFox(env, '🐛 新報告', '訪客提交了新報告', 2);
+  }
   return json({
     report_id,
     share_url: `${origin}/report/${report_id}`,
@@ -6046,7 +6194,8 @@ async function handleTranscribe(request: Request, env: Env): Promise<Response> {
     .eq('user_id', userId)
     .maybeSingle();
   const u = (uData ?? {}) as { plan?: string | null; day_pass_expires_at?: string | null };
-  if (!isActiveUser(u)) {
+  // PM-267：活動票券生效視同付費（popup 會讓票券用戶選精準轉錄，這裡不放行就會 403 打臉）
+  if (!isActiveUser(u) && !(await hasActiveTicket(userId, env))) {
     return json({ error: 'Whisper 語音為付費功能，請升級' }, 403);
   }
 
@@ -6195,10 +6344,63 @@ async function getUserPlan(request: Request, env: Env): Promise<Response> {
       u.day_pass_expires_at = null;
     }
 
+    // PM-266：ACTIVE 票券到期 → 自動標 USED（與上面 cancelled/day_pass 自動降級同一段）
+    await expireDueTickets(userId, env);
+    const nowIso = now.toISOString();
+    const { data: activeTickets } = await supa(env)
+      .from('user_tickets')
+      .select('id, code, duration_days, expires_at')
+      .eq('user_id', userId)
+      .eq('status', 'ACTIVE')
+      .gt('expires_at', nowIso)
+      .order('expires_at', { ascending: false });
+    const { data: savedTickets } = await supa(env)
+      .from('user_tickets')
+      .select('id, code, duration_days, created_at')
+      .eq('user_id', userId)
+      .eq('status', 'SAVED')
+      .order('created_at', { ascending: true });
+    const activeTicketRows = (activeTickets ?? []) as Array<{
+      id: string;
+      code: string;
+      duration_days: number;
+      expires_at: string;
+    }>;
+    const savedTicketRows = (savedTickets ?? []) as Array<{
+      id: string;
+      code: string;
+      duration_days: number;
+      created_at: string;
+    }>;
+
     // PM-73/109：cancelled 未到期、day_pass 未到期皆視同付費（享無限功能）
-    const isPaid = isActiveUser(u);
+    // PM-266：持有 ACTIVE 未到期票券同樣視同付費（limits 一併變 null = 無限）
+    const isPaid = isActiveUser(u) || activeTicketRows.length > 0;
     return jsonNoStore({
       plan: u.plan ?? 'free',
+      isPaid, // PM-266：popup 可直接讀（票券用戶 plan 仍是 free，但 isPaid=true）
+      tickets: {
+        active: activeTicketRows[0]
+          ? {
+              ticket_id: activeTicketRows[0].id,
+              code: activeTicketRows[0].code,
+              duration_days: activeTicketRows[0].duration_days,
+              expires_at: activeTicketRows[0].expires_at,
+              days_left: Math.max(
+                0,
+                Math.ceil((new Date(activeTicketRows[0].expires_at).getTime() - now.getTime()) / 86_400_000),
+              ),
+            }
+          : null,
+        saved: savedTicketRows.map((s) => ({
+          ticket_id: s.id,
+          code: s.code,
+          duration_days: s.duration_days,
+          created_at: s.created_at,
+        })),
+        savedCount: savedTicketRows.length,
+        free_until: activeTicketRows[0]?.expires_at ?? null,
+      },
       expires_at: u.plan_expires_at ?? null, // 相容舊 popup（PM-75）
       plan_expires_at: u.plan_expires_at ?? null, // PM-134：cancelled 顯示到期日
       day_pass_expires_at: u.day_pass_expires_at ?? null, // PM-109
@@ -6214,6 +6416,324 @@ async function getUserPlan(request: Request, env: Env): Promise<Response> {
     });
   } catch (err) {
     console.error('plan error:', err);
+    return jsonNoStore({ error: GENERIC_500 }, 500);
+  }
+}
+
+// ── PM-266：活動代碼兌換 + 票券錢包 ─────────────────────────────────────────
+// 票券生命週期：SAVED（已兌換、未啟用、不計時）→ ACTIVE（啟用倒數）→ USED（到期）。
+// 啟用時會「疊加」——基準日 = MAX(現有到期日, NOW())，故不會浪費既有的付費/票券天數。
+
+interface TicketRow {
+  id: string;
+  code: string;
+  duration_days: number;
+  status: string;
+  activated_at: string | null;
+  expires_at: string | null;
+  created_at: string;
+}
+
+/** PM-266：把該用戶已過期的 ACTIVE 票券標成 USED（getUserPlan / wallet 進來時順手收斂）。 */
+async function expireDueTickets(userId: string, env: Env): Promise<void> {
+  const nowIso = new Date().toISOString();
+  const { data: due } = await supa(env)
+    .from('user_tickets')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('status', 'ACTIVE')
+    .lt('expires_at', nowIso)
+    .limit(1);
+  if (!due?.length) return;
+  await supa(env)
+    .from('user_tickets')
+    .update({ status: 'USED' })
+    .eq('user_id', userId)
+    .eq('status', 'ACTIVE')
+    .lt('expires_at', nowIso);
+}
+
+// POST /api/promo/redeem — 兌換活動代碼，成功後票券進錢包（SAVED，尚未開始計時）
+async function redeemPromoCode(request: Request, env: Env): Promise<Response> {
+  const userId = await getAuthUserId(request, env);
+  if (!userId) return jsonNoStore({ error: 'unauthorized' }, 401);
+  try {
+    const body = (await request.json().catch(() => ({}))) as { code?: string };
+    // 代碼一律轉大寫去空白比對（使用者常打小寫／貼上帶空白）
+    const code = (body.code ?? '').trim().toUpperCase();
+    if (!code) return jsonNoStore({ error: '請輸入活動代碼' }, 400);
+
+    const { data: promo, error: promoErr } = await supa(env)
+      .from('promo_codes')
+      .select('code, description, duration_days, code_type, max_uses, current_uses, is_active, code_expires_at')
+      .eq('code', code)
+      .maybeSingle();
+    if (promoErr) {
+      console.error('promo 查詢失敗:', promoErr.message);
+      return jsonNoStore({ error: GENERIC_500 }, 500);
+    }
+    // 不存在與已停用回同一句，避免被拿來窮舉探測哪些代碼存在
+    if (!promo || !promo.is_active) return jsonNoStore({ error: '無效的活動代碼' }, 400);
+
+    const p = promo as {
+      code: string;
+      duration_days: number;
+      max_uses: number | null;
+      current_uses: number;
+      code_expires_at: string | null;
+    };
+    if (p.code_expires_at && new Date(p.code_expires_at) <= new Date()) {
+      return jsonNoStore({ error: '此代碼已過期' }, 400);
+    }
+    if (p.max_uses !== null && p.current_uses >= p.max_uses) {
+      return jsonNoStore({ error: '此代碼已達兌換上限' }, 400);
+    }
+
+    // 先擋重複兌換（DB 的 UNIQUE(user_id, code) 是最終防線，這裡提早回友善訊息）
+    const { data: existing } = await supa(env)
+      .from('user_tickets')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('code', code)
+      .limit(1);
+    if (existing?.length) return jsonNoStore({ error: '你已兌換過此代碼' }, 409);
+
+    // 有名額上限的代碼：先「搶名額」再發票券。
+    // PostgREST 不支援 `current_uses = current_uses + 1` 這種欄位運算，故用 compare-and-swap：
+    // 只在 current_uses 仍等於剛讀到的值時才寫入 +1；併發時只有一個請求會更新到列，
+    // 其餘讀到新值後重試 → 不會超發（BUZZ100 這種限量碼的關鍵）。
+    let reserved = false;
+    if (p.max_uses !== null) {
+      let seen = p.current_uses;
+      for (let i = 0; i < 5 && !reserved; i++) {
+        if (seen >= p.max_uses) return jsonNoStore({ error: '此代碼已達兌換上限' }, 400);
+        const { data: bumped } = await supa(env)
+          .from('promo_codes')
+          .update({ current_uses: seen + 1 })
+          .eq('code', code)
+          .eq('current_uses', seen) // ← CAS 條件
+          .select('current_uses');
+        if (bumped?.length) {
+          reserved = true;
+          break;
+        }
+        const { data: fresh } = await supa(env)
+          .from('promo_codes')
+          .select('current_uses')
+          .eq('code', code)
+          .maybeSingle();
+        seen = (fresh as { current_uses: number } | null)?.current_uses ?? seen + 1;
+      }
+      if (!reserved) return jsonNoStore({ error: '此代碼已達兌換上限' }, 400);
+    }
+
+    const { data: ticket, error: insErr } = await supa(env)
+      .from('user_tickets')
+      .insert({ user_id: userId, code, duration_days: p.duration_days })
+      .select('id, code, duration_days, status, created_at')
+      .maybeSingle();
+
+    if (insErr || !ticket) {
+      // 發券失敗 → 把剛搶下的名額補回去（best-effort 補償，避免名額被白吃掉）
+      if (reserved) {
+        const { data: cur } = await supa(env)
+          .from('promo_codes')
+          .select('current_uses')
+          .eq('code', code)
+          .maybeSingle();
+        const now = (cur as { current_uses: number } | null)?.current_uses;
+        if (typeof now === 'number' && now > 0) {
+          await supa(env)
+            .from('promo_codes')
+            .update({ current_uses: now - 1 })
+            .eq('code', code)
+            .eq('current_uses', now);
+        }
+      }
+      // 23505 = UNIQUE(user_id, code) —— 兩個請求同時兌換同一碼時的最終防線
+      if (insErr?.code === '23505') return jsonNoStore({ error: '你已兌換過此代碼' }, 409);
+      console.error('發券失敗:', insErr?.message);
+      return jsonNoStore({ error: GENERIC_500 }, 500);
+    }
+
+    // 無上限代碼（max_uses = NULL）：發券成功後才記次數，純統計用途，不影響資格
+    if (p.max_uses === null) {
+      await supa(env)
+        .from('promo_codes')
+        .update({ current_uses: p.current_uses + 1 })
+        .eq('code', code)
+        .eq('current_uses', p.current_uses);
+    }
+
+    const t = ticket as TicketRow;
+    // PM-268：推播（waitUntil 非阻塞）
+    notifyFoxForUser(
+      env,
+      userId,
+      '🎫 代碼兌換',
+      (email) => `${email} 兌換了 ${t.code}（${t.duration_days} 天）`,
+    );
+    return jsonNoStore(
+      {
+        ticket_id: t.id,
+        code: t.code,
+        duration_days: t.duration_days,
+        status: t.status,
+        message: '兌換成功',
+      },
+      201,
+    );
+  } catch (err) {
+    console.error('redeem error:', err);
+    return jsonNoStore({ error: GENERIC_500 }, 500);
+  }
+}
+
+// POST /api/promo/activate — 啟用一張 SAVED 票券（到期日疊加在現有付費/票券之後）
+async function activateTicket(request: Request, env: Env): Promise<Response> {
+  const userId = await getAuthUserId(request, env);
+  if (!userId) return jsonNoStore({ error: 'unauthorized' }, 401);
+  try {
+    const body = (await request.json().catch(() => ({}))) as { ticket_id?: string };
+    const ticketId = (body.ticket_id ?? '').trim();
+    if (!ticketId) return jsonNoStore({ error: '缺少 ticket_id' }, 400);
+
+    // 一定要同時比對 user_id，避免拿別人的 ticket_id 來啟用
+    const { data: ticket } = await supa(env)
+      .from('user_tickets')
+      .select('id, code, duration_days, status')
+      .eq('id', ticketId)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (!ticket) return jsonNoStore({ error: '找不到票券' }, 404);
+    const t = ticket as { id: string; code: string; duration_days: number; status: string };
+    if (t.status !== 'SAVED') {
+      return jsonNoStore(
+        { error: t.status === 'ACTIVE' ? '此票券已在使用中' : '此票券已使用完畢' },
+        400,
+      );
+    }
+
+    // 疊加：基準日 = MAX(現有所有未到期的到期日, NOW())
+    const now = new Date();
+    const candidates: number[] = [now.getTime()];
+    const { data: actives } = await supa(env)
+      .from('user_tickets')
+      .select('expires_at')
+      .eq('user_id', userId)
+      .eq('status', 'ACTIVE')
+      .gt('expires_at', now.toISOString());
+    for (const a of (actives ?? []) as Array<{ expires_at: string | null }>) {
+      if (a.expires_at) candidates.push(new Date(a.expires_at).getTime());
+    }
+    const { data: user } = await supa(env)
+      .from('users')
+      .select('plan_expires_at, day_pass_expires_at')
+      .eq('user_id', userId)
+      .maybeSingle();
+    const u = user as { plan_expires_at: string | null; day_pass_expires_at: string | null } | null;
+    for (const d of [u?.plan_expires_at, u?.day_pass_expires_at]) {
+      if (d && new Date(d) > now) candidates.push(new Date(d).getTime());
+    }
+
+    const base = Math.max(...candidates);
+    const expiresAt = new Date(base + t.duration_days * 86_400_000);
+
+    const { data: updated, error: updErr } = await supa(env)
+      .from('user_tickets')
+      .update({ status: 'ACTIVE', activated_at: now.toISOString(), expires_at: expiresAt.toISOString() })
+      .eq('id', t.id)
+      .eq('user_id', userId)
+      .eq('status', 'SAVED') // ← 併發保護：只有第一個請求會啟用成功
+      .select('id, code, duration_days, status, activated_at, expires_at')
+      .maybeSingle();
+    if (updErr || !updated) {
+      console.error('啟用票券失敗:', updErr?.message);
+      return jsonNoStore({ error: GENERIC_500 }, 500);
+    }
+    const r = updated as TicketRow;
+    // PM-268：推播（waitUntil 非阻塞）
+    notifyFoxForUser(
+      env,
+      userId,
+      '🚀 票券啟用',
+      (email) => `${email} 啟用了 ${r.code}，到期 ${(r.expires_at ?? '').slice(0, 10)}`,
+    );
+    return jsonNoStore({
+      ticket_id: r.id,
+      code: r.code,
+      duration_days: r.duration_days,
+      status: r.status,
+      activated_at: r.activated_at,
+      expires_at: r.expires_at,
+      message: '票券已啟用',
+    });
+  } catch (err) {
+    console.error('activate error:', err);
+    return jsonNoStore({ error: GENERIC_500 }, 500);
+  }
+}
+
+// GET /api/promo/wallet — 票券錢包（使用中 + 庫存 + 免費到期日）
+async function getTicketWallet(request: Request, env: Env): Promise<Response> {
+  const userId = await getAuthUserId(request, env);
+  if (!userId) return jsonNoStore({ error: 'unauthorized' }, 401);
+  try {
+    await expireDueTickets(userId, env); // 先把過期的 ACTIVE 收斂成 USED，回傳才是真實狀態
+    const nowIso = new Date().toISOString();
+    const { data: actives } = await supa(env)
+      .from('user_tickets')
+      .select('id, code, duration_days, expires_at')
+      .eq('user_id', userId)
+      .eq('status', 'ACTIVE')
+      .gt('expires_at', nowIso)
+      .order('expires_at', { ascending: false });
+    const { data: saved } = await supa(env)
+      .from('user_tickets')
+      .select('id, code, duration_days, created_at')
+      .eq('user_id', userId)
+      .eq('status', 'SAVED')
+      .order('created_at', { ascending: true });
+
+    const activeRows = (actives ?? []) as Array<{
+      id: string;
+      code: string;
+      duration_days: number;
+      expires_at: string;
+    }>;
+    // free_until = 所有 ACTIVE 票券中最晚的到期日（已用 expires_at desc 排序，取第一筆）
+    const freeUntil = activeRows[0]?.expires_at ?? null;
+    const active = activeRows[0]
+      ? {
+          ticket_id: activeRows[0].id,
+          code: activeRows[0].code,
+          duration_days: activeRows[0].duration_days,
+          expires_at: activeRows[0].expires_at,
+          days_left: Math.max(
+            0,
+            Math.ceil((new Date(activeRows[0].expires_at).getTime() - Date.now()) / 86_400_000),
+          ),
+        }
+      : null;
+    const savedRows = (saved ?? []) as Array<{
+      id: string;
+      code: string;
+      duration_days: number;
+      created_at: string;
+    }>;
+    return jsonNoStore({
+      active_ticket: active,
+      saved_tickets: savedRows.map((s) => ({
+        ticket_id: s.id,
+        code: s.code,
+        duration_days: s.duration_days,
+        created_at: s.created_at,
+      })),
+      saved_count: savedRows.length,
+      free_until: freeUntil,
+    });
+  } catch (err) {
+    console.error('wallet error:', err);
     return jsonNoStore({ error: GENERIC_500 }, 500);
   }
 }
@@ -6246,7 +6766,10 @@ async function bumpUsage(request: Request, env: Env): Promise<Response> {
       usage_reset_at: string | null;
     };
     // PM-73/109：cancelled 未到期、day_pass 未到期皆視同付費（無限）
-    if (isActiveUser(u)) return json({ ok: true, unlimited: true });
+    // PM-267：活動票券生效同樣無限——否則 popup 顯示「✨ 無限次」但第 11 次錄製會被這裡擋掉（前後端說法不一）
+    if (isActiveUser(u) || (await hasActiveTicket(userId, env))) {
+      return json({ ok: true, unlimited: true });
+    }
 
     // PM-170：免費版每月自動重置——距上次重置 ≥30 天就把三個 count 歸零（否則用完永久鎖住）。
     // 免費用戶才需要（付費上面已 early-return）。usage_reset_at 缺值視為很久以前 → 觸發重置。
@@ -6401,7 +6924,7 @@ async function ecpayCallback(request: Request, env: Env): Promise<Response> {
   //   用 isActiveUserId 當守門：已 active（健康）→ 不動不展延；仍非 active（孤兒）→ 重放。RtnCode=1 才升級。
   if (tradeNo && (await paymentAlreadyPaid(env, tradeNo))) {
     const uid = params.CustomField1 ?? '';
-    if (params.RtnCode === '1' && uid && !(await isActiveUserId(uid, env))) {
+    if (params.RtnCode === '1' && uid && !(await isEcpayActiveUserId(uid, env))) {
       const healed = await updateUserPlan(env, uid, {
         plan: 'paid',
         ecpay_trade_no: tradeNo,
@@ -6445,6 +6968,8 @@ async function ecpayCallback(request: Request, env: Env): Promise<Response> {
         plan_expires_at: oneMonthLaterISO(),
       });
       if (!upgraded) return new Response('0|ErrorMessage=User upgrade failed', { status: 500 });
+      // PM-268：升級成功才推播（失敗已在上面 return 500 讓綠界重送）
+      notifyFoxForUser(env, userId, '💰 月費付款', (email) => `${email} 月費 NT$${amount} 成功`, 4);
     }
   } else {
     // 付款失敗：不升級，僅記錄（best-effort；失敗未升級無冪等風險，寫入失敗不阻斷）
@@ -6569,7 +7094,7 @@ async function handleDayPassCallback(request: Request, env: Env): Promise<Respon
   // PM-219 修復2b：孤兒自癒——前次 users.update 失敗（已收款未開通）→ 冪等重送重放（isActiveUserId 守門避免重複 +24h）。
   if (tradeNo && (await paymentAlreadyPaid(env, tradeNo))) {
     const uid = params.CustomField1 ?? '';
-    if (params.RtnCode === '1' && uid && !(await isActiveUserId(uid, env))) {
+    if (params.RtnCode === '1' && uid && !(await isEcpayActiveUserId(uid, env))) {
       const healed = await updateUserPlan(env, uid, {
         plan: 'day_pass',
         day_pass_expires_at: dayPassExpiryISO(),
@@ -6609,6 +7134,8 @@ async function handleDayPassCallback(request: Request, env: Env): Promise<Respon
         day_pass_expires_at: dayPassExpiryISO(),
       });
       if (!opened) return new Response('0|ErrorMessage=User upgrade failed', { status: 500 });
+      // PM-268：開通成功才推播
+      notifyFoxForUser(env, userId, '💰 日票付款', (email) => `${email} 日票 NT$${amount} 成功`, 4);
     }
   } else {
     await recordPayment(env, {
@@ -6666,7 +7193,7 @@ async function ecpayPeriodCallback(request: Request, env: Env): Promise<Response
     // PM-219 修復2b：本期已記錄但前次 users.update 失敗成孤兒（已扣款未展延）→ 冪等重送重放升級
     //   （isActiveUserId 守門：已 active 不重複展延）。RtnCode=1 才升級。
     const uid = params.CustomField1 ?? '';
-    if (params.RtnCode === '1' && uid && !(await isActiveUserId(uid, env))) {
+    if (params.RtnCode === '1' && uid && !(await isEcpayActiveUserId(uid, env))) {
       const healed = await updateUserPlan(env, uid, {
         plan: 'paid',
         plan_expires_at: oneMonthLaterISO(),
@@ -6711,6 +7238,8 @@ async function ecpayPeriodCallback(request: Request, env: Env): Promise<Response
         last_login_at: new Date().toISOString(),
       });
       if (!renewed) return new Response('0|ErrorMessage=User upgrade failed', { status: 500 });
+      // PM-268：展延成功才推播
+      notifyFoxForUser(env, userId, '💰 續扣成功', (email) => `${email} 續扣 NT$${amount || 80} 成功`);
     } else {
       // 本期扣款失敗 → 降級為 free（best-effort；失敗不阻斷回應）
       await updateUserPlan(env, userId, { plan: 'free' });
