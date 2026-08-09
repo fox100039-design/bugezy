@@ -132,14 +132,15 @@ const dict: Record<string, { zh: string; en: string; ja: string; ko: string; vi:
   promo_active: { zh: '🟢 免費體驗中', en: '🟢 Free trial active', ja: '🟢 無料体験中', ko: '🟢 무료 체험 중', vi: '🟢 Đang dùng thử miễn phí' },
   promo_expires: { zh: '到期日', en: 'Expires', ja: '有効期限', ko: '만료일', vi: 'Hết hạn' },
   promo_days_left: { zh: '剩 {n} 天', en: '{n} days left', ja: '残り {n} 日', ko: '{n}일 남음', vi: 'Còn {n} ngày' },
-  promo_expiring_soon: { zh: '⚠ 免費即將到期', en: '⚠ Trial expiring soon', ja: '⚠ 無料体験がまもなく終了', ko: '⚠ 무료 체험이 곧 종료', vi: '⚠ Bản dùng thử sắp hết hạn' },
+  promo_expiring_soon: { zh: '⚠ 免費體驗將於 {n} 天後結束', en: '⚠ Free trial ends in {n} day(s)', ja: '⚠ 無料体験はあと {n} 日で終了します', ko: '⚠ 무료 체험이 {n}일 후 종료됩니다', vi: '⚠ Bản dùng thử kết thúc sau {n} ngày' },
   promo_saved_tickets: { zh: '💾 庫存票券', en: '💾 Saved tickets', ja: '💾 保存済みチケット', ko: '💾 보관 중인 티켓', vi: '💾 Vé đã lưu' },
   promo_activate: { zh: '啟用', en: 'Activate', ja: '有効化', ko: '활성화', vi: 'Kích hoạt' },
-  promo_use_saved: { zh: '啟用庫存票可避免扣月費', en: 'Activate a saved ticket to avoid monthly charge', ja: '保存済みチケットを有効化すれば月額課金を回避できます', ko: '보관 중인 티켓을 활성화하면 월 요금을 피할 수 있습니다', vi: 'Kích hoạt vé đã lưu để tránh bị tính phí tháng' },
-  promo_monthly_after: { zh: '到期後以月費 NT$80 計算', en: 'NT$80/mo after expiry', ja: '期限後は月額 NT$80', ko: '만료 후 월 NT$80', vi: 'NT$80/tháng sau khi hết hạn' },
   promo_months: { zh: '{n} 個月', en: '{n} month(s)', ja: '{n} か月', ko: '{n}개월', vi: '{n} tháng' },
   promo_days: { zh: '{n} 天', en: '{n} days', ja: '{n} 日', ko: '{n}일', vi: '{n} ngày' },
-  promo_saved_count: { zh: '💾 你有 {n} 張庫存票券可啟用', en: '💾 You have {n} saved ticket(s) ready', ja: '💾 有効化できるチケットが {n} 枚あります', ko: '💾 활성화 가능한 티켓 {n}장 보유', vi: '💾 Bạn có {n} vé sẵn sàng kích hoạt' },
+  // PM-278：到期提醒第二行。舊的 promo_monthly_after/promo_use_saved/promo_saved_count 已移除——
+  //   前兩者寫「以月費 NT$80 計算」「避免扣月費」，會讓人以為到期自動扣款，但實際上只是回到 free。
+  promo_expiring_saved: { zh: '💾 你有 {n} 張庫存票券可啟用，延長免費使用', en: '💾 You have {n} saved ticket(s) to extend your free access', ja: '💾 保存済みチケットが {n} 枚あります。有効化すると無料期間を延長できます', ko: '💾 보관 중인 티켓 {n}장을 활성화하면 무료 기간을 연장할 수 있습니다', vi: '💾 Bạn có {n} vé đã lưu để gia hạn thời gian dùng miễn phí' },
+  promo_expiring_upgrade: { zh: '如需保持完整功能，可升級為訂閱會員', en: 'Upgrade to a subscription to keep full features', ja: 'すべての機能を使い続けるにはサブスクへのアップグレードをご検討ください', ko: '모든 기능을 계속 사용하려면 구독으로 업그레이드하세요', vi: 'Nâng cấp lên gói đăng ký để giữ đầy đủ tính năng' },
   // PM-274：啟用二次確認（不可逆）
   promo_confirm_title: { zh: '⚠ 確認啟用？', en: '⚠ Confirm activation?', ja: '⚠ 有効化しますか？', ko: '⚠ 활성화할까요?', vi: '⚠ Xác nhận kích hoạt?' },
   promo_confirm_desc: { zh: '啟用後立即開始倒數，無法取消', en: 'The countdown starts immediately and cannot be undone', ja: '有効化すると即座にカウントダウンが始まり、取り消せません', ko: '활성화하면 즉시 카운트다운이 시작되며 취소할 수 없습니다', vi: 'Bộ đếm bắt đầu ngay lập tức và không thể hoàn tác' },

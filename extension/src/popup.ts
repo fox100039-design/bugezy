@@ -975,12 +975,14 @@ function renderTicketWallet() {
     if (active.days_left <= TICKET_WARN_DAYS) {
       ticketExpireWarn.textContent = '';
       const w1 = document.createElement('div');
-      w1.textContent = `${t('promo_expiring_soon', currentUILang)}（${t('promo_days_left', currentUILang, { n: active.days_left })}）`;
+      // PM-278：天數併進同一句（「免費體驗將於 N 天後結束」），不再另外接「（剩 N 天）」
+      w1.textContent = t('promo_expiring_soon', currentUILang, { n: active.days_left });
       ticketExpireWarn.appendChild(w1);
       const w2 = document.createElement('div');
+      // PM-278：到期後只是回到 free（不會自動扣款），文案不再提「月費 NT$80」
       w2.textContent = saved.length
-        ? `${t('promo_saved_count', currentUILang, { n: saved.length })} — ${t('promo_use_saved', currentUILang)}`
-        : t('promo_monthly_after', currentUILang);
+        ? t('promo_expiring_saved', currentUILang, { n: saved.length })
+        : t('promo_expiring_upgrade', currentUILang);
       ticketExpireWarn.appendChild(w2);
       ticketExpireWarn.classList.remove('hidden');
     } else {
