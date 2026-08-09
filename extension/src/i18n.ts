@@ -141,6 +141,9 @@ const dict: Record<string, { zh: string; en: string; ja: string; ko: string; vi:
   promo_confirm_desc: { zh: '啟用後立即開始倒數，無法取消', en: 'The countdown starts immediately and cannot be undone', ja: '有効化すると即座にカウントダウンが始まり、取り消せません', ko: '활성화하면 즉시 카운트다운이 시작되며 취소할 수 없습니다', vi: 'Bộ đếm bắt đầu ngay lập tức và không thể hoàn tác' },
   promo_confirm_btn: { zh: '✅ 確認啟用', en: '✅ Confirm', ja: '✅ 有効化する', ko: '✅ 활성화', vi: '✅ Xác nhận' },
   promo_cancel_btn: { zh: '取消', en: 'Cancel', ja: 'キャンセル', ko: '취소', vi: 'Hủy' },
+  // PM-275：ECPay 訂閱中不給啟用（啟用只會白燒免費天數）
+  promo_already_member: { zh: '✨ 已是會員', en: '✨ Member', ja: '✨ 会員です', ko: '✨ 회원', vi: '✨ Đã là thành viên' },
+  promo_backup_note: { zh: '備用額度', en: 'Backup credits', ja: '予備クレジット', ko: '예비 크레딧', vi: 'Tín dụng dự phòng' },
   promo_need_login: { zh: '請先登入再兌換代碼', en: 'Please sign in to redeem a code', ja: 'コードを引き換えるにはログインしてください', ko: '코드를 교환하려면 로그인하세요', vi: 'Vui lòng đăng nhập để đổi mã' },
   promo_failed: { zh: '兌換失敗，請稍後再試', en: 'Redeem failed, please try again', ja: '引き換えに失敗しました。後でお試しください', ko: '교환 실패, 잠시 후 다시 시도하세요', vi: 'Đổi mã thất bại, vui lòng thử lại' },
   'cancel-sub': { zh: '取消訂閱', en: 'Cancel', ja: '解約', ko: '구독 취소', vi: 'Hủy đăng ký' },

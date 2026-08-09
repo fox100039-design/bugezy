@@ -799,6 +799,11 @@ interface SavedTicket {
 }
 /** 票券快取（loadPlan 寫入；語言切換時重繪用）。 */
 let ticketState: { active: ActiveTicket | null; saved: SavedTicket[] } = { active: null, saved: [] };
+// PM-275：ECPay 訂閱中（paid / cancelled 未到期）。**刻意不用 plan.isPaid**——server 的 isPaid
+//   把「持有有效票券」也算付費（getUserPlan: isActiveUser(u) || activeTickets.length > 0），
+//   若拿它當判斷，票券用戶的啟用鈕會被一起藏掉（驗收 #5 要求票券用戶仍可啟用下一張）。
+//   cancelled = 已取消但仍在有效期內（過期會被 getUserPlan 自動降回 free），故一樣算付費中。
+let isEcpayPaid = false;
 /** 剛兌換、尚未決定「立即啟用／儲存備用」的票券 id。 */
 let pendingTicket: { id: string; code: string; days: number } | null = null;
 const TICKET_WARN_DAYS = 10; // 剩 ≤10 天顯示到期提醒（卡片 2d）
@@ -958,20 +963,30 @@ function renderTicketWallet() {
 
   // 庫存票券
   if (saved.length) {
-    savedTicketsTitle.textContent = `${t('promo_saved_tickets', currentUILang)}（${saved.length}）`;
+    savedTicketsTitle.textContent =
+      `${t('promo_saved_tickets', currentUILang)}（${saved.length}）` +
+      (isEcpayPaid ? ` — ${t('promo_backup_note', currentUILang)}` : '');
     savedTicketsList.textContent = '';
     for (const s of saved) {
       const row = document.createElement('div');
       row.className = 'saved-ticket-row';
       const label = document.createElement('span');
       label.textContent = `🎫 ${s.code} — ${fmtDuration(s.duration_days)}`;
-      const btn = document.createElement('button');
-      btn.className = 'saved-ticket-btn';
-      btn.textContent = t('promo_activate', currentUILang);
-      // PM-274：不直接啟用，先跳確認
-      btn.addEventListener('click', () => askActivate(s.ticket_id, s.code, s.duration_days, btn));
       row.appendChild(label);
-      row.appendChild(btn);
+      if (isEcpayPaid) {
+        // PM-275：ECPay 訂閱中啟用票券只會白燒天數（月費照扣），不給啟用入口
+        const tag = document.createElement('span');
+        tag.className = 'saved-ticket-member';
+        tag.textContent = t('promo_already_member', currentUILang);
+        row.appendChild(tag);
+      } else {
+        const btn = document.createElement('button');
+        btn.className = 'saved-ticket-btn';
+        btn.textContent = t('promo_activate', currentUILang);
+        // PM-274：不直接啟用，先跳確認
+        btn.addEventListener('click', () => askActivate(s.ticket_id, s.code, s.duration_days, btn));
+        row.appendChild(btn);
+      }
       savedTicketsList.appendChild(row);
     }
     savedTicketsBox.classList.remove('hidden');
@@ -997,6 +1012,8 @@ function showRedeemMsg(text: string, ok: boolean, withActions = false) {
   redeemMsg.textContent = text;
   redeemMsg.className = `redeem-msg ${ok ? 'ok' : 'err'}`;
   redeemActions.classList.toggle('hidden', !withActions);
+  // PM-275：ECPay 訂閱中不給「立即啟用」，只留「儲存備用」
+  activateNowBtn.classList.toggle('hidden', isEcpayPaid);
   redeemResult.classList.remove('hidden');
 }
 
@@ -1132,6 +1149,7 @@ async function loadPlan() {
 
     // PM-267：票券狀態快取 + 重繪錢包（登入成功才顯示整個票券區）
     ticketState = { active: plan.tickets?.active ?? null, saved: plan.tickets?.saved ?? [] };
+    isEcpayPaid = plan.plan === 'paid' || plan.plan === 'cancelled'; // PM-275（需在重繪前設定）
     ticketWallet.classList.remove('hidden');
     renderTicketWallet();
 
