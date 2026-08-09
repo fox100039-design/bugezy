@@ -6496,7 +6496,10 @@ async function getUserPlan(request: Request, env: Env): Promise<Response> {
   try {
     const { data: user, error } = await supa(env)
       .from('users')
-      .select('plan, recording_count, rewind_count, mcp_count, usage_reset_at, plan_expires_at, day_pass_expires_at')
+      // PM-277：一併回傳 install_code，讓 popup 少打一支 API（開 popup 時併發請求越少越好）
+      .select(
+        'plan, recording_count, rewind_count, mcp_count, usage_reset_at, plan_expires_at, day_pass_expires_at, install_code',
+      )
       .eq('user_id', userId)
       .maybeSingle();
     if (error) {
@@ -6513,6 +6516,7 @@ async function getUserPlan(request: Request, env: Env): Promise<Response> {
       usage_reset_at: string;
       plan_expires_at: string | null;
       day_pass_expires_at: string | null;
+      install_code: string | null; // PM-277
     };
 
     // 跨月自動重置計數
@@ -6579,6 +6583,10 @@ async function getUserPlan(request: Request, env: Env): Promise<Response> {
     return jsonNoStore({
       plan: u.plan ?? 'free',
       isPaid, // PM-266：popup 可直接讀（票券用戶 plan 仍是 free，但 isPaid=true）
+      // PM-277：安裝碼併進本回應（原本 popup 另打 /api/user/install-code，開 popup 時
+      //   併發請求越多越容易被 /api/ 的 rate limit 擋掉）。欄位已在上面一起 select，
+      //   為 null 才補發（舊用戶）。
+      install_code: u.install_code ?? (await ensureInstallCode(userId, env)),
       tickets: {
         active: activeTicketRows[0]
           ? {

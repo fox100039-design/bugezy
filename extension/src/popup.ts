@@ -767,6 +767,7 @@ function showMainView(session: Session) {
 
 interface PlanInfo {
   plan: string;
+  install_code?: string | null; // PM-277：併進方案回應，popup 不再另打一支 API
   expires_at?: string | null;
   plan_expires_at?: string | null; // PM-134：月費到期日（cancelled 顯示用；與 expires_at 同值）
   day_pass_expires_at?: string | null; // PM-111：日票到期時間
@@ -906,18 +907,15 @@ function confirmJsonDisclaimer(): Promise<boolean> {
 // paid：隱藏升級提示 + ✨ + 管理訂閱（含取消）；cancelled：隱藏升級提示 + 顯示到期日；free：剩餘次數 + 升級提示。
 // ── PM-267：🎫 票券錢包 UI ────────────────────────────────────────────────
 // ── PM-276：安裝碼 ────────────────────────────────────────────────────────
-/** 查自己的安裝碼並顯示；未登入或欄位尚未建立（FOX 未跑 ALTER）→ 整列不顯示，不干擾其他功能。 */
-async function loadInstallCode() {
-  try {
-    const res = await fetch(`${API_BASE}/api/user/install-code`, { headers: await getAuthHeaders() });
-    if (!res.ok) return;
-    const data = (await res.json()) as { install_code?: string | null };
-    if (!data.install_code) return;
-    installCodeValue.textContent = data.install_code;
-    installCodeRow.classList.remove('hidden');
-  } catch {
-    /* 靜默失敗——安裝碼只是輔助資訊，不該影響 popup 其他區塊 */
+/** PM-277：安裝碼改由 /api/user/plan 一併帶回（原本另打 /api/user/install-code）。
+ *  純渲染、不發請求——開 popup 時的併發 API 請求越少越好。 */
+function renderInstallCode(code: string | null | undefined) {
+  if (!code) {
+    installCodeRow.classList.add('hidden');
+    return;
   }
+  installCodeValue.textContent = code;
+  installCodeRow.classList.remove('hidden');
 }
 
 installCodeCopy.addEventListener('click', () => {
@@ -1160,13 +1158,54 @@ saveForLaterBtn.addEventListener('click', () => {
   showRedeemMsg(t('promo_saved_done', currentUILang), true, false);
 });
 
-async function loadPlan() {
-  try {
-    const res = await fetch(`${API_BASE}/api/user/plan`, {
-      headers: await getAuthHeaders(),
-    });
-    if (!res.ok) return; // 表未建/未授權等 → 不顯示用量，按鈕維持原樣（非阻擋）
-    const plan = (await res.json()) as PlanInfo;
+// PM-277：開 popup 時 loadPlan 會被呼叫兩次（LANG_KEY storage callback + showMainView），
+//   /api/ 有 rate limit，併發重複請求容易被擋。以「進行中的 promise」去重：
+//   同一時間只送一次，後到的呼叫共用同一個結果。
+let planInflight: Promise<void> | null = null;
+
+function loadPlan(): Promise<void> {
+  if (planInflight) return planInflight;
+  planInflight = fetchAndRenderPlan().finally(() => {
+    planInflight = null;
+  });
+  return planInflight;
+}
+
+/** 取方案並渲染；失敗會重試一次，仍失敗則渲染「安全預設」而不是留白。 */
+async function fetchAndRenderPlan(): Promise<void> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(`${API_BASE}/api/user/plan`, { headers: await getAuthHeaders() });
+      if (res.ok) {
+        renderPlanUI((await res.json()) as PlanInfo);
+        return;
+      }
+      if (res.status === 401) return; // 未登入——維持登入畫面，不是錯誤
+      // PM-277：以前這裡是 `if (!res.ok) return;`（完全靜默），使用者只會看到一個少了
+      //   次數/升級鈕/安裝碼/票券錢包的 popup，卻沒有任何線索可查。至少要留下痕跡。
+      console.warn('[BugEzy popup] 取方案失敗:', res.status, attempt === 0 ? '→ 重試' : '→ 放棄');
+    } catch (e) {
+      console.warn('[BugEzy popup] 取方案例外:', e, attempt === 0 ? '→ 重試' : '→ 放棄');
+    }
+    if (attempt === 0) await new Promise((r) => setTimeout(r, 600));
+  }
+  renderPlanFallback();
+}
+
+/**
+ * PM-277：方案取不到時的安全預設——**寧可顯示免費版 UI，也不要留白**。
+ * 原本失敗就直接 return，導致三張卡片、升級鈕、安裝碼、票券錢包全部維持 HTML 的預設 hidden，
+ * 使用者看到一個殘缺的 popup，而且要切換語言（重新觸發 loadPlan）才會恢復。
+ */
+function renderPlanFallback() {
+  ticketWallet.classList.remove('hidden'); // 至少讓「輸入活動代碼」可用
+  renderTicketWallet();
+  if (isTaiwanUser()) upgradeHint.classList.remove('hidden');
+  else intlNotice.classList.remove('hidden');
+}
+
+/** PM-277：唯一的方案渲染路徑——初次載入與語言切換都走這裡，不會有分歧。 */
+function renderPlanUI(plan: PlanInfo) {
     freeLimits = plan.limits; // PM-170：快取免費額度供 overlay 顯示 used/max
     currentCountry = plan.country ?? 'UNKNOWN'; // PM-172：IP 國家碼決定付費資格
     // PM-87：持久化 plan 供 background/content 路由語音引擎（free→Web Speech、paid/cancelled→Groq Whisper）
@@ -1182,7 +1221,7 @@ async function loadPlan() {
     // PM-267：票券狀態快取 + 重繪錢包（登入成功才顯示整個票券區）
     ticketState = { active: plan.tickets?.active ?? null, saved: plan.tickets?.saved ?? [] };
     isEcpayPaid = plan.plan === 'paid' || plan.plan === 'cancelled'; // PM-275（需在重繪前設定）
-    void loadInstallCode(); // PM-276：走到這裡代表已登入；不 await，避免拖慢方案渲染
+    renderInstallCode(plan.install_code); // PM-277：安裝碼隨方案回應一起來
     ticketWallet.classList.remove('hidden');
     renderTicketWallet();
 
@@ -1251,9 +1290,6 @@ async function loadPlan() {
         intlNotice.classList.remove('hidden');
       }
     }
-  } catch {
-    /* API 不通就維持預設按鈕 */
-  }
 }
 
 /** 月費升級 → 開結帳跳板頁（該頁讀 session→POST /checkout→送出綠界表單）；未登入退回首頁價目表。
