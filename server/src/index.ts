@@ -1391,11 +1391,10 @@ interface SitemapPage {
 function sitemapXml(): Response {
   const pages: SitemapPage[] = [
     { path: '/', langs: LANGS_6, freq: 'weekly', pri: '1.0', langPri: '0.8' },
-    { path: '/install', langs: LANGS_6, freq: 'monthly', pri: '0.9', langPri: '0.7' },
     { path: '/features', langs: LANGS_6, freq: 'monthly', pri: '0.8', langPri: '0.7' },
     { path: '/faq', langs: LANGS_6, freq: 'monthly', pri: '0.5' },
     { path: '/changelog', langs: LANGS_3, freq: 'weekly', pri: '0.7' },
-    { path: '/guide', langs: LANGS_3, freq: 'monthly', pri: '0.6' },
+    { path: '/guide', langs: LANGS_3, freq: 'monthly', pri: '0.9' }, // PM-280：併入 /install
     { path: '/skill', langs: LANGS_3, freq: 'monthly', pri: '0.5' }, // PM-201：AI 客服手冊
     { path: '/blog', langs: LANGS_ZH, freq: 'weekly', pri: '0.6' }, // PM-256：部落格列表
     { path: '/testimonials', langs: LANGS_3, freq: 'monthly', pri: '0.6' }, // PM-272：用戶心得
@@ -1741,6 +1740,11 @@ function homePage(lang: PageLang, _request: Request): string {
     .hero h1 { font-size:40px; line-height:1.25; color:#fff; margin:14px 0 16px; letter-spacing:-0.01em; }
     .hero p { font-size:19px; color:#c9c9d6; max-width:640px; margin:0 auto 30px; }
     .btn-primary { display:inline-block; background:linear-gradient(135deg,#7c3aed,#6d28d9); color:#fff; font-weight:700; font-size:17px; padding:15px 34px; border-radius:12px; box-shadow:0 8px 24px rgba(124,58,237,0.35); transition:filter .15s, transform .1s; }
+  /* PM-280：完整指南入口——與 .btn-primary 同尺寸，但用外框做視覺分層（次要行動） */
+  .btn-guide { display:inline-block; border:2px solid #7c3aed; color:#c4b5fd; background:transparent;
+    font-weight:700; font-size:16px; padding:12px 30px; border-radius:12px; text-decoration:none;
+    transition:background 0.2s, color 0.2s; }
+  .btn-guide:hover { background:#7c3aed; color:#fff; }
     .btn-primary:hover { filter:brightness(1.1); }
     .btn-primary:active { transform:translateY(1px); }
     .hero .note { display:block; color:#8b8fa3; font-size:13px; margin-top:14px; }
@@ -1820,6 +1824,10 @@ function homePage(lang: PageLang, _request: Request): string {
       <div class="step"><span class="n">2</span><div class="icon">📋</div><h3>${t('自動整理', 'Auto-organized')}</h3><p>${t('BugEzy 自動收集畫面錄影、錯誤訊息、操作軌跡，整理成一份報告。', 'BugEzy captures screen replay, error logs, and actions into a structured report.')}</p></div>
       <div class="step"><span class="n">3</span><div class="icon">🤖</div><h3>${t('AI 幫你修', 'AI Fixes It')}</h3><p>${t('把報告交給 AI，它直接告訴你哪裡壞了、怎麼修。', 'Hand the report to AI — it tells you what broke and how to fix it.')}</p></div>
     </div>
+    <!-- PM-280：合併後的完整指南入口。次要色（紫框非實心）與上方「免費安裝」主 CTA 分層。 -->
+    <div style="text-align:center;margin-top:26px;">
+      <a class="btn-guide" href="/guide">${t('📖 完整安裝與使用指南', '📖 Complete Install & Usage Guide')}</a>
+    </div>
   </section>
 
   <!-- §3 截圖展示 -->
@@ -1885,7 +1893,7 @@ function homePage(lang: PageLang, _request: Request): string {
       <div class="cta-links">
         <a href="${CWS}" target="_blank" rel="noopener">Chrome Web Store</a> ·
         <a href="https://github.com/fox100039-design/bugezy" target="_blank" rel="noopener">GitHub</a> ·
-        <a href="/guide">${t('使用指南', 'Guide')}</a> ·
+        <a href="/guide">${t('完整指南', 'Guide')}</a> ·
         <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
       </div>
     </div>
@@ -1904,7 +1912,7 @@ function homePage(lang: PageLang, _request: Request): string {
       <h3>${t('聯絡我們', 'Contact Us')}</h3>
       <p>📧 Email：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></p>
     </div>
-    <div style="margin-top:8px;"><a href="/install">${t('安裝指南', 'Install')}</a> | <a href="/features">${t('功能說明', 'Features')}</a> | <a href="/guide">${t('使用指南', 'Guide')}</a> | <a href="/faq">${t('常見問題', 'FAQ')}</a> | <a href="/privacy">${t('隱私政策', 'Privacy')}</a> | <a href="/changelog">${t('更新日誌', 'Changelog')}</a> | <a href="/blog">${t('📝 部落格', '📝 Blog')}</a> | <a href="/skill">${t('🤖 AI 客服手冊', '🤖 AI Manual')}</a> | <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a> | <a href="/reports">${t('📋 我的報告', '📋 My Reports')}</a></div>
+    <div style="margin-top:8px;"><a href="/features">${t('功能說明', 'Features')}</a> | <a href="/guide">${t('完整指南', 'Guide')}</a> | <a href="/faq">${t('常見問題', 'FAQ')}</a> | <a href="/privacy">${t('隱私政策', 'Privacy')}</a> | <a href="/changelog">${t('更新日誌', 'Changelog')}</a> | <a href="/blog">${t('📝 部落格', '📝 Blog')}</a> | <a href="/skill">${t('🤖 AI 客服手冊', '🤖 AI Manual')}</a> | <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a> | <a href="/reports">${t('📋 我的報告', '📋 My Reports')}</a></div>
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy · v1.1.4 · ${t('亞洲平價 MCP 語音除錯工具', 'Affordable MCP voice debugging for Asia')}</div>
   </footer>
 </body>
@@ -2070,9 +2078,8 @@ ${t(
 
   <footer>
     <a href="/">${t('首頁', 'Home')}</a>
-    <a href="/install">${t('安裝指南', 'Install')}</a>
-    <a href="/features">${t('功能說明', 'Features')}</a>
-    <a href="/guide">${t('使用指南', 'Guide')}</a>
+        <a href="/features">${t('功能說明', 'Features')}</a>
+    <a href="/guide">${t('完整指南', 'Guide')}</a>
     <a href="/faq">FAQ</a>
     <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
     <a href="/blog">${t('📝 部落格', '📝 Blog')}</a>
@@ -2446,9 +2453,8 @@ ${ogMeta('/skill', 'AI Customer Service Guide — BugEzy SKILL.md', 'BugEzy MCP 
   <footer>
     <div class="links">
       <a href="/">${t('首頁', 'Home')}</a>
-      <a href="/install">${t('安裝指南', 'Install')}</a>
-      <a href="/features">${t('功能說明', 'Features')}</a>
-      <a href="/guide">${t('使用指南', 'Guide')}</a>
+            <a href="/features">${t('功能說明', 'Features')}</a>
+      <a href="/guide">${t('完整指南', 'Guide')}</a>
       <a href="/faq">FAQ</a>
       <a href="/skill">${t('🤖 AI 客服手冊', '🤖 AI Manual')}</a>
       <a href="/skill">${t('🤖 AI 客服手冊', '🤖 AI Manual')}</a>
@@ -2493,6 +2499,7 @@ ${ogMeta('/skill', 'AI Customer Service Guide — BugEzy SKILL.md', 'BugEzy MCP 
 // PM-192/199/200 踩過：讀 <pre>/<code> 的 textContent 會受排版縮排與換行影響，複製出來
 // 帶一堆空白甚至整段空白。存 attribute 才能讓「顯示」與「複製內容」各自獨立。
 const MCP_URL = 'https://bugezy.dev/mcp';
+const CWS_URL = 'https://chromewebstore.google.com/detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj';
 // PM-279：設定不起來時丟給 AI 的萬用提示詞（複製與顯示共用同一份）
 const AI_HELP_PROMPT_ZH = `請幫我設定 BugEzy MCP。
 BugEzy 是 Chrome 擴充功能的 Bug 報告工具。
@@ -2512,13 +2519,50 @@ const CLAUDE_DESKTOP_JSON = `{
   }
 }`;
 
-function copyBtn(text: string, label: string, done: string): string {
+function copyBtn(text: string, label: string, done: string, isStatic = false): string {
   const a = (v: string) => v.replace(/"/g, '&quot;');
-  return `<button type="button" class="copy-btn" data-copy-text="${encodeURIComponent(text)}" data-copy-label="${a(label)}" data-copy-done="${a(done)}">${label}</button>`;
+  // PM-280：static = 不讓 token 自動補齊改寫（AI 安裝提示詞維持 server render 的乾淨版本）
+  const st = isStatic ? ' data-copy-static="1"' : '';
+  return `<button type="button" class="copy-btn"${st} data-copy-text="${encodeURIComponent(text)}" data-copy-label="${a(label)}" data-copy-done="${a(done)}">${label}</button>`;
 }
 
 function guidePage(lang: PageLang): string {
   const t = makeT(lang); // PM-232：zh/en/zh-CN 三語（zh-CN 由繁體轉簡體）
+  // PM-280：從 /install 併過來的「複製貼給 AI」提示詞（/install 已 301 到本頁）
+  const aiPrompt = t(
+    `請幫我安裝 BugEzy MCP 除錯工具，讓你可以直接讀取我的 Bug 報告來幫我修 Bug。
+
+安裝步驟：
+1. Chrome 擴充功能：https://chromewebstore.google.com/detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj
+2. MCP 連線設定，在你的 MCP config 加入：
+{
+  "mcpServers": {
+    "bugezy": {
+      "url": "https://bugezy.dev/mcp"
+    }
+  }
+}
+
+安裝完成後，我只要用 BugEzy 錄製 Bug，你就能透過 MCP 讀取我的報告（Console 錯誤、Network 問題、語音描述、截圖），直接幫我修。
+
+詳細教學：https://bugezy.dev/guide`,
+    `Please help me install the BugEzy MCP debugging tool so you can read my bug reports and fix bugs for me.
+
+Steps:
+1. Chrome extension: https://chromewebstore.google.com/detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj
+2. MCP connection — add this to your MCP config:
+{
+  "mcpServers": {
+    "bugezy": {
+      "url": "https://bugezy.dev/mcp"
+    }
+  }
+}
+
+Once installed, whenever I record a bug with BugEzy, you can read my report via MCP (console errors, network issues, voice description, screenshots) and fix it directly.
+
+Full guide: https://bugezy.dev/guide`,
+  );
   return `<!DOCTYPE html>
 <html lang="${htmlLang(lang)}">
 <head>
@@ -2554,6 +2598,15 @@ ${ogMeta('/guide', 'User Guide — BugEzy', 'Step-by-step guide to using BugEzy 
     vertical-align:middle; transition:background 0.2s; }
   .copy-btn:hover { background:#6d28d9; }
   .copy-btn.copied { background:#238636; }
+  /* PM-280：合併 /install 後的區段標題與 AI 提示詞框 */
+  .section-title { margin:40px 0 0; font-size:22px; color:#fff; border-bottom:1px solid #2a2a3e; padding-bottom:10px; }
+  .ai-prompt-box { margin:0 0 10px; background:#12121f; border:1px solid #2a2a3e; border-radius:10px;
+    padding:14px 16px; font-size:13px; color:#d0d0d8; white-space:pre-wrap; word-break:break-word;
+    max-height:320px; overflow:auto; }
+  .cta-btn { display:inline-block; margin:12px 0 0; background:linear-gradient(135deg,#7c3aed,#6d28d9);
+    color:#fff; font-weight:700; padding:10px 22px; border-radius:10px; text-decoration:none; }
+  .cta-btn:hover { filter:brightness(1.1); }
+  .note { margin:12px 0 0; font-size:13px; color:#8b8fa3; }
   /* PM-279：⚡ 快速開始卡片 */
   .quick-start { margin:28px 0 0; padding:22px 24px; border:1px solid #f59e0b;
     border-radius:14px; background:radial-gradient(ellipse at top left,rgba(245,158,11,0.12),transparent 70%); }
@@ -2609,9 +2662,18 @@ ${ogMeta('/guide', 'User Guide — BugEzy', 'Step-by-step guide to using BugEzy 
 <div class="wrap">
   <header><a class="brand" href="/">🐛 BugEzy</a></header>
 
-  <h1>${t('🐛 BugEzy 使用指南', '🐛 BugEzy User Guide')}</h1>
-  <p class="lead">${t('讓 AI 幫你修 Bug，只需三步。', 'Let AI fix your bugs in just three steps.')}</p>
-  <div class="mcp-box" style="border-color:#2a2a3e;">${t('詳細安裝流程 → <a href="/install">安裝指南</a>　·　完整功能說明 → <a href="/features">功能說明</a>', 'Full install steps → <a href="/install">Install Guide</a>　·　All features → <a href="/features">Features</a>')}</div>
+  <h1>${t('🐛 BugEzy 完整指南', '🐛 BugEzy Complete Guide')}</h1>
+  <p class="lead">${t('從安裝到讓 AI 幫你修 Bug，一頁搞定。', 'From install to letting AI fix your bugs — all on one page.')}</p>
+  <div class="mcp-box" style="border-color:#2a2a3e;">${t('完整功能說明 → <a href="/features">功能說明</a>　·　常見問題 → <a href="/faq">FAQ</a>', 'All features → <a href="/features">Features</a>　·　Questions → <a href="/faq">FAQ</a>')}</div>
+
+  <!-- PM-280：最頂部＝最省事的路徑（原 /install 的「複製貼給 AI」）。不懂技術的人到這裡就結束了。 -->
+  <div class="step" style="border-color:#7c3aed;">
+    <h2>${t('🤖 最快的方式：複製貼給你的 AI', '🤖 Fastest way: copy & paste to your AI')}</h2>
+    <p style="color:#8b8fa3;margin:0 0 10px;">${t('不懂技術？把下面這段複製貼給你的 AI（Claude Desktop / Claude Code / Cursor / Windsurf / VS Code + Cline / Google Antigravity / Gemini CLI），它會幫你搞定。', 'Not technical? Copy the text below to your AI (Claude Desktop / Claude Code / Cursor / Windsurf / VS Code + Cline / Google Antigravity / Gemini CLI) and it will handle it.')}</p>
+    <pre class="ai-prompt-box" data-copy-static="1">${escHtml(aiPrompt)}</pre>
+    ${copyBtn(aiPrompt, t('📋 一鍵複製，貼給你的 AI', '📋 Copy & paste to your AI'), t('✅ 已複製！', '✅ Copied!'), true)}
+    <p class="help-note">${t('或依下方步驟自己來 ↓', 'Or follow the steps below yourself ↓')}</p>
+  </div>
 
   <!-- PM-279：⚡ 30 秒快速開始（放在第一步之前，讓趕時間的人不用讀完整頁）-->
   <div class="quick-start">
@@ -2622,17 +2684,30 @@ ${ogMeta('/guide', 'User Guide — BugEzy', 'Step-by-step guide to using BugEzy 
     <div class="qs-done">${t('✅ 然後問 AI：「讀我最新的 BugEzy 報告」', '✅ Then ask your AI: "Read my latest BugEzy report"')}</div>
   </div>
 
+  <h2 class="section-title">${t('📖 詳細步驟（給新手，一步一步操作）', '📖 Step-by-step (for first-timers)')}</h2>
+
   <div class="step">
-    <h2>${t('🚀 第一步：安裝與登入', '🚀 Step 1: Install & Sign in')}</h2>
+    <h2>${t('第一步：安裝 Chrome 擴充功能', 'Step 1: Install the Chrome extension')}</h2>
     <ol>
-      <li>${t('從 Chrome Web Store 安裝 BugEzy 擴充功能', 'Install the BugEzy extension from the Chrome Web Store')}</li>
-      <li>${t('點擊右上角 BugEzy 圖示 🐛', 'Click the BugEzy icon 🐛 at the top right')}</li>
-      <li>${t('按「用 Google 登入」→ 完成', 'Click "Sign in with Google" → done')}</li>
+      <li>${t('前往 Chrome Web Store 的 BugEzy 頁面', 'Open the BugEzy page on the Chrome Web Store')}</li>
+      <li>${t('點「加到 Chrome」→ 在彈窗按「新增擴充功能」確認', 'Click "Add to Chrome" → confirm "Add extension" in the popup')}</li>
+      <li>${t('點瀏覽器右上角拼圖圖示 🧩 → 找到 BugEzy 🐛 → 按釘選 📌', 'Click the puzzle icon 🧩 at the top right → find BugEzy 🐛 → click the pin 📌')}</li>
+    </ol>
+    <a class="cta-btn" href="${CWS_URL}" target="_blank" rel="noopener">${t('前往 Chrome Web Store →', 'Go to Chrome Web Store →')}</a>
+    <div class="note">${t('支援 Chrome 以及所有 Chromium 核心瀏覽器（Edge、Brave、Arc 等）。釘選後圖示會常駐工具列，隨時一鍵開錄。', 'Works on Chrome and all Chromium-based browsers (Edge, Brave, Arc, etc.). Pinning keeps the icon on your toolbar for one-click recording.')}</div>
+  </div>
+
+  <div class="step">
+    <h2>${t('第二步：登入', 'Step 2: Sign in')}</h2>
+    <ol>
+      <li>${t('點工具列上的 BugEzy 圖示 🐛', 'Click the BugEzy icon 🐛 on the toolbar')}</li>
+      <li>${t('按「用 Google 登入」→ 選擇帳號授權', 'Click "Sign in with Google" → choose your account to authorize')}</li>
+      <li>${t('popup 顯示你的名字 = 登入成功', 'Your name shown in the popup = signed in')}</li>
     </ol>
   </div>
 
   <div class="step">
-    <h2>${t('🎯 第二步：錄下 Bug（六種模式任選）', '🎯 Step 2: Capture the bug (choose from six modes)')}</h2>
+    <h2>${t('第三步：錄下你的第一個 Bug（六種模式任選）', 'Step 3: Capture your first bug (six modes)')}</h2>
 
     <div class="mode">
       <div class="mname">${t('🎬 錄製', '🎬 Record')}</div>
@@ -2677,7 +2752,7 @@ ${ogMeta('/guide', 'User Guide — BugEzy', 'Step-by-step guide to using BugEzy 
   </div>
 
   <div class="step">
-    <h2>${t('📝 第三步：編輯與上傳', '📝 Step 3: Edit & upload')}</h2>
+    <h2>${t('第四步：編輯與上傳', 'Step 4: Edit & upload')}</h2>
     <ol>
       <li>${t('錄製停止後進入編輯頁', 'The editor opens after you stop recording')}</li>
       <li>${t('可以編輯語音文字、加補充說明', 'Edit the voice text and add extra notes')}</li>
@@ -2688,7 +2763,7 @@ ${ogMeta('/guide', 'User Guide — BugEzy', 'Step-by-step guide to using BugEzy 
   </div>
 
   <div class="step">
-    <h2>${t('🤖 第四步：讓 AI 幫你修', '🤖 Step 4: Let AI fix it')}</h2>
+    <h2>${t('第五步：讓 AI 幫你修', 'Step 5: Let AI fix it')}</h2>
     <p><b style="color:#c4b5fd;">${t('方法一：在 Claude / Cursor / VS Code 直接問', 'Option 1: Ask directly in Claude / Cursor / VS Code')}</b><br />
       ${t('「讀我最新的 BugEzy 報告，告訴我怎麼修」', '"Read my latest BugEzy report and tell me how to fix it"')}<br />
       ${t('AI 透過 MCP 自動讀取報告 → 分析 Console error + Network error → 給出修復建議', 'AI reads the report via MCP → analyzes Console + Network errors → suggests a fix')}</p>
@@ -2697,11 +2772,11 @@ ${ogMeta('/guide', 'User Guide — BugEzy', 'Step-by-step guide to using BugEzy 
     <div class="mcp-box">
       <b>${t('🔌 MCP 連接設定', '🔌 MCP connection setup')}</b><br />
       ${t('BugEzy MCP 網址（所有工具通用）：', 'BugEzy MCP URL (same for all tools):')}<br />
-      <code>${MCP_URL}</code>${copyBtn(MCP_URL, t('📋 複製', '📋 Copy'), t('✅ 已複製', '✅ Copied'))}
+      <code class="mcp-cfg">${MCP_URL}</code>${copyBtn(MCP_URL, t('📋 複製', '📋 Copy'), t('✅ 已複製', '✅ Copied'))}
       <div class="mcp-warn">${t('⚠ 注意：這個網址<b>不能用瀏覽器開</b>，它是專給 AI 工具連接的協議。用瀏覽器開只會看到一段錯誤訊息，屬正常現象——請依下方步驟在 AI 工具裡設定。', '⚠ Note: <b>do not open this URL in a browser</b> — it is a protocol endpoint for AI tools. Opening it in a browser just shows an error, which is normal. Set it up in your AI tool per the steps below.')}</div>
 
       <div class="mcp-tool"><div class="tname">Claude.ai</div><div class="tstep">${t('Settings → Connectors → Add → 貼上網址 → 連接', 'Settings → Connectors → Add → paste the URL → Connect')}${copyBtn(MCP_URL, t('📋 複製', '📋 Copy'), t('✅ 已複製', '✅ Copied'))}</div></div>
-      <div class="mcp-tool"><div class="tname">Claude Desktop</div><div class="tstep">${t('編輯 claude_desktop_config.json，加入：', 'Edit claude_desktop_config.json, add:')}</div><pre>{
+      <div class="mcp-tool"><div class="tname">Claude Desktop</div><div class="tstep">${t('編輯 claude_desktop_config.json，加入：', 'Edit claude_desktop_config.json, add:')}</div><pre class="mcp-cfg">{
   "mcpServers": {
     "bugezy": {
       "url": "https://bugezy.dev/mcp"
@@ -2710,7 +2785,7 @@ ${ogMeta('/guide', 'User Guide — BugEzy', 'Step-by-step guide to using BugEzy 
 }</pre>${copyBtn(CLAUDE_DESKTOP_JSON, t('📋 複製 JSON', '📋 Copy JSON'), t('✅ 已複製', '✅ Copied'))}</div>
       <div class="mcp-tool"><div class="tname">Cursor</div><div class="tstep">${t('Settings → MCP → Add Server → 貼上網址', 'Settings → MCP → Add Server → paste the URL')}${copyBtn(MCP_URL, t('📋 複製', '📋 Copy'), t('✅ 已複製', '✅ Copied'))}</div></div>
       <div class="mcp-tool"><div class="tname">VS Code</div><div class="tstep">${t('Settings → 搜尋 MCP → Add Server → 貼上網址', 'Settings → search MCP → Add Server → paste the URL')}${copyBtn(MCP_URL, t('📋 複製', '📋 Copy'), t('✅ 已複製', '✅ Copied'))}</div></div>
-      <div class="mcp-tool"><div class="tname">${t('Claude Code（終端機）', 'Claude Code (terminal)')}</div><div class="tstep">${t('執行：', 'Run:')} <code>${CLAUDE_CODE_CMD}</code>${copyBtn(CLAUDE_CODE_CMD, t('📋 複製指令', '📋 Copy command'), t('✅ 已複製', '✅ Copied'))}</div></div>
+      <div class="mcp-tool"><div class="tname">${t('Claude Code（終端機）', 'Claude Code (terminal)')}</div><div class="tstep">${t('執行：', 'Run:')} <code class="mcp-cfg">${CLAUDE_CODE_CMD}</code>${copyBtn(CLAUDE_CODE_CMD, t('📋 複製指令', '📋 Copy command'), t('✅ 已複製', '✅ Copied'))}</div></div>
       <div class="mcp-tool"><div class="tname">Zed</div><div class="tstep">${t('設定檔加 context_servers', 'Add context_servers to the config file')}${copyBtn(MCP_URL, t('📋 複製', '📋 Copy'), t('✅ 已複製', '✅ Copied'))}</div></div>
 
       <!-- PM-279：🆘 設定不起來就把提示詞丟給 AI，讓 AI 依使用者實際的工具引導 -->
@@ -2738,7 +2813,6 @@ ${ogMeta('/guide', 'User Guide — BugEzy', 'Step-by-step guide to using BugEzy 
   <footer>
     <div class="links">
       <a href="/">${t('首頁', 'Home')}</a>
-      <a href="/install">${t('安裝指南', 'Install')}</a>
       <a href="/features">${t('功能說明', 'Features')}</a>
       <a href="/faq">FAQ</a>
       <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
@@ -2753,6 +2827,30 @@ ${ogMeta('/guide', 'User Guide — BugEzy', 'Step-by-step guide to using BugEzy 
   </footer>
 </div>
 <script>
+// PM-280（承接 PM-190/191，原本在 /install）：已登入 → 把本頁所有 MCP 設定/網址（.mcp-cfg）
+//   的 bugezy.dev/mcp 自動補上 ?token=<session token>，AI 端就零操作能讀報告。
+//   token 來自同源 localStorage（PM-187 存於 bugezy.dev；開「📋 我的報告」即 seed）。
+//   ⚠ 連同複製按鈕的 data-copy-text 一起改寫——否則畫面顯示帶 token、複製到的卻沒有，
+//     使用者會以為設定好了卻仍需手動帶 token。
+(function () {
+  try {
+    var token = localStorage.getItem('bugezy_session_token');
+    if (!token) return;
+    var enc = encodeURIComponent(token);
+    var RE = /(bugezy\\.dev\\/mcp)(?!\\?|[\\w])/g;
+    document.querySelectorAll('.mcp-cfg').forEach(function (el) {
+      if (el.getAttribute('data-copy-static')) return; // AI 提示詞維持乾淨版（同 PM-192 的決定）
+      el.textContent = el.textContent.replace(RE, '$1?token=' + enc);
+    });
+    document.querySelectorAll('[data-copy-text]').forEach(function (btn) {
+      if (btn.getAttribute('data-copy-static')) return;
+      try {
+        var txt = decodeURIComponent(btn.getAttribute('data-copy-text') || '');
+        btn.setAttribute('data-copy-text', encodeURIComponent(txt.replace(RE, '$1?token=' + enc)));
+      } catch (e) {}
+    });
+  } catch (e) {}
+})();
 // PM-279：一鍵複製（事件委派，內容一律從 data-copy-text 讀，不碰 DOM 排版文字）
 (function () {
   function fallbackCopy(text) {
@@ -2923,9 +3021,8 @@ ${langSwitchBar(lang)}
   <footer>
     <div class="links">
       <a href="/">${t('首頁', 'Home')}</a>
-      <a href="/install">${t('安裝指南', 'Install')}</a>
-      <a href="/features">${t('功能說明', 'Features')}</a>
-      <a href="/guide">${t('使用指南', 'Guide')}</a>
+            <a href="/features">${t('功能說明', 'Features')}</a>
+      <a href="/guide">${t('完整指南', 'Guide')}</a>
       <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
       <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
       <a href="/blog">${t('📝 部落格', '📝 Blog')}</a>
@@ -2954,334 +3051,8 @@ document.querySelectorAll('.faq-q').forEach(function (q) {
 </body>
 </html>`;
 }
+// PM-280：installPage 已移除——內容併入 guidePage，/install 改 301 導向 /guide。
 
-// ── PM-96：安裝指南頁（GET /install）— 從零到能用的完整五步流程 + MCP 設定 ──
-// PM-150：/install 改為函式（依 lang 中英切換）。
-function installPage(lang: PageLang): string {
-  const t = makeT(lang); // PM-232：zh/en/zh-CN 三語（zh-CN 由繁體轉簡體）
-  // PM-192（三修）：安裝指令抽成變數，供 <pre> 顯示與按鈕 data-copy-text 共用——複製改從 attribute 讀，
-  //   徹底不受 DOM textContent（PM-190 .mcp-cfg 改寫、空白、瀏覽器差異）影響。
-  const aiPrompt = t(
-    `請幫我安裝 BugEzy MCP 除錯工具，讓你可以直接讀取我的 Bug 報告來幫我修 Bug。
-
-安裝步驟：
-1. Chrome 擴充功能：https://chromewebstore.google.com/detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj
-2. MCP 連線設定，在你的 MCP config 加入：
-{
-  "mcpServers": {
-    "bugezy": {
-      "url": "https://bugezy.dev/mcp"
-    }
-  }
-}
-
-安裝完成後，我只要用 BugEzy 錄製 Bug，你就能透過 MCP 讀取我的報告（Console 錯誤、Network 問題、語音描述、截圖），直接幫我修。
-
-詳細教學：https://bugezy.dev/install`,
-    `Please help me install the BugEzy MCP debugging tool so you can read my bug reports and fix bugs for me.
-
-Steps:
-1. Chrome extension: https://chromewebstore.google.com/detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj
-2. MCP connection — add this to your MCP config:
-{
-  "mcpServers": {
-    "bugezy": {
-      "url": "https://bugezy.dev/mcp"
-    }
-  }
-}
-
-Once installed, whenever I record a bug with BugEzy, you can read my report via MCP (console errors, network issues, voice description, screenshots) and fix it directly.
-
-Full guide: https://bugezy.dev/install`,
-  );
-  return `<!DOCTYPE html>
-<html lang="${htmlLang(lang)}">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>${t('安裝 BugEzy — 3 分鐘搞定 Chrome 擴充 + MCP 設定', 'Install BugEzy — Chrome extension + MCP setup in 3 minutes')}</title>
-<meta name="description" content="${t('安裝 BugEzy Chrome 擴充功能，設定 MCP 連線，讓 AI 直接讀取你的 Bug 報告。支援 Claude、Cursor、Windsurf、Google Antigravity、Gemini CLI。', 'Install the BugEzy Chrome extension and set up MCP so AI can read your bug reports directly. Works with Claude, Cursor, Windsurf, Google Antigravity, Gemini CLI.')}">
-<meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
-${canonicalTag('/install', lang, LANGS_6)}
-${hreflangTags('/install', LANGS_6)}
-${ogMeta('/install', 'Install BugEzy — Setup Guide', 'Install BugEzy Chrome Extension and connect MCP in 2 minutes.')}
-<style>
-  * { box-sizing: border-box; }
-  .lang-switch { position:fixed; top:14px; right:16px; z-index:10; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:5px 12px; font-size:13px; color:#c4b5fd; text-decoration:none; }
-  .lang-switch:hover { background:#2a2a3e; }
-  body {
-    margin: 0; padding: 0; background: #0f0f1a; color: #e8e8f0;
-    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
-    line-height: 1.75; font-size: 15px;
-  }
-  .wrap { max-width: 820px; margin: 0 auto; padding: 48px 24px 80px; }
-  header { border-bottom: 1px solid #2a2a3e; padding-bottom: 20px; margin-bottom: 28px; }
-  .brand { font-size: 24px; font-weight: 700; color: #a78bfa; text-decoration: none; }
-  h1 { font-size: 28px; margin: 18px 0 6px; }
-  .lead { color: #8b8fa3; font-size: 15px; }
-  .step {
-    margin: 28px 0 0; padding: 22px 24px; background: #1a1a2e;
-    border: 1px solid #2a2a3e; border-radius: 14px;
-  }
-  .step h2 { font-size: 19px; color: #c4b5fd; margin: 0 0 12px; }
-  .step ol, .step ul { margin: 0; padding-left: 22px; }
-  .step li { margin: 6px 0; }
-  .snum {
-    display: inline-block; min-width: 26px; height: 26px; line-height: 26px; text-align: center;
-    background: #7c3aed; color: #fff; border-radius: 50%; font-size: 14px; font-weight: 700; margin-right: 8px;
-  }
-  .cta-btn {
-    display: inline-block; margin-top: 12px; padding: 10px 22px; border-radius: 10px;
-    background: #7c3aed; color: #fff; text-decoration: none; font-weight: 600; font-size: 15px;
-  }
-  .note { margin-top: 10px; padding: 10px 12px; border-radius: 8px;
-    background: rgba(124,58,237,0.12); border: 1px solid rgba(124,58,237,0.4); color: #c4b5fd; font-size: 13px; }
-  .mcp-box {
-    margin-top: 14px; padding: 14px 16px; background: #15152a;
-    border: 1px solid #7c3aed; border-radius: 10px; font-size: 14px;
-  }
-  .mcp-box code {
-    display: inline-block; margin-top: 4px; padding: 4px 8px; border-radius: 6px;
-    background: #0f0f1a; color: #7ee0c5; font-family: ui-monospace, monospace; word-break: break-all;
-  }
-  .mcp-warn { margin-top: 10px; padding: 10px 12px; border-radius: 8px;
-    background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.45); color: #fcd34d; font-size: 13px; }
-  .mcp-tool { margin-top: 12px; }
-  .mcp-tool .tname { font-weight: 700; color: #c4b5fd; font-size: 13px; }
-  .mcp-tool .tstep { color: #ccc; font-size: 13px; margin-top: 2px; }
-  .mcp-box pre { margin: 6px 0 0; padding: 10px 12px; background: #0f0f1a; border-radius: 6px;
-    color: #7ee0c5; font-family: ui-monospace, monospace; font-size: 12px; overflow-x: auto; white-space: pre; }
-  .toolgrid { margin-top: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 16px; }
-  .toolgrid div { font-size: 13px; color: #ccc; }
-  .toolgrid b { color: #7ee0c5; font-family: ui-monospace, monospace; }
-  a { color: #a78bfa; }
-  .bottom-cta { margin-top: 36px; text-align: center; }
-  footer {
-    margin-top: 48px; padding-top: 20px; border-top: 1px solid #2a2a3e;
-    color: #8b8fa3; font-size: 13px;
-  }
-  footer .links a { margin-right: 16px; }
-  /* PM-112：最快安裝——複製貼給 AI */
-  .ai-install-box { background:#161b22; border:1px solid #7c3aed; border-radius:12px; padding:20px; text-align:left; margin:16px 0 8px; }
-  .ai-install-box pre { color:#e6edf3; font-size:13px; font-family:'Consolas','Monaco',monospace; white-space:pre-wrap; word-break:break-word; line-height:1.6; margin:0 0 14px 0; }
-  .copy-btn { background:#7c3aed; color:#fff; border:none; border-radius:10px; padding:12px 24px; font-size:15px; font-weight:600; cursor:pointer; width:100%; transition:transform 0.08s ease, opacity 0.08s ease, background 0.2s; }
-  .copy-btn:hover { background:#6d28d9; }
-  /* PM-192：按下去沉下去的回饋 */
-  .copy-btn:active { transform:scale(0.97); opacity:0.8; }
-  .copy-btn.copied { background:#238636; }
-  .copy-feedback { color:#3fb950; font-size:14px; margin-top:8px; display:inline-block; }
-  .ai-install-tools { color:#8b8fa3; font-size:13px; margin-top:8px; }
-  @media (max-width: 640px) { .wrap { padding: 32px 16px 60px; } h1 { font-size: 24px; } }
-</style>
-</head>
-<body>
-${langSwitchBar(lang)}
-<div class="wrap">
-  <header><a class="brand" href="/">🐛 BugEzy</a></header>
-
-  <h1>${t('🚀 安裝 BugEzy — 三分鐘搞定', '🚀 Install BugEzy — done in 3 minutes')}</h1>
-  <p class="lead">${t('從零到能用，跟著五步走，馬上讓 AI 幫你修 Bug。', 'From zero to ready in five steps — let AI fix your bugs right away.')}</p>
-
-  <div class="step" style="border-color:#7c3aed;">
-    <h2>${t('🤖 最快的安裝方式：複製貼給 AI', '🤖 Fastest way: copy & paste to AI')}</h2>
-    <p style="color:#8b8fa3;margin:0 0 4px;">${t('不懂技術？把下面這段複製貼給你的 AI（Claude Desktop / Claude Code / Cursor / Windsurf / VS Code + Cline / Google Antigravity / Gemini CLI），它會幫你搞定。', 'Not technical? Copy the text below to your AI (Claude Desktop / Claude Code / Cursor / Windsurf / VS Code + Cline / Google Antigravity / Gemini CLI) and it will handle it.')}</p>
-    <div class="ai-install-box">
-      <pre id="ai-install-prompt" class="mcp-cfg">${aiPrompt}</pre>
-      <textarea id="install-copy-source" readonly style="position:absolute;left:-9999px;opacity:0;">${aiPrompt.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/&/g, '&amp;')}</textarea>
-      <button class="copy-btn" onclick="var s=document.getElementById('install-copy-source');s.style.position='fixed';s.style.left='0';s.style.top='0';s.style.opacity='0.01';s.select();try{s.setSelectionRange(0,99999)}catch(e){}document.execCommand('copy');s.style.position='absolute';s.style.left='-9999px';s.style.opacity='0';this.textContent='${t('✅ 已複製！', '✅ Copied!')}';this.classList.add('copied');var b=this;setTimeout(function(){b.textContent='${t('📋 一鍵複製，貼給你的 AI', '📋 Copy & paste to your AI')}';b.classList.remove('copied')},2000)">${t('📋 一鍵複製，貼給你的 AI', '📋 Copy & paste to your AI')}</button>
-    </div>
-    <p class="ai-install-tools">${t('或依下方手動五步安裝 ↓', 'Or install manually in five steps below ↓')}</p>
-  </div>
-
-  <div class="step">
-    <h2><span class="snum">1</span>${t('安裝擴充功能', 'Install the extension')}</h2>
-    <ol>
-      <li>${t('前往 Chrome Web Store 的 BugEzy 頁面', 'Open the BugEzy page on the Chrome Web Store')}</li>
-      <li>${t('點「加到 Chrome」→ 在彈窗按「新增擴充功能」確認', 'Click "Add to Chrome" → confirm "Add extension" in the popup')}</li>
-    </ol>
-    <a class="cta-btn" href="https://chromewebstore.google.com/detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj" target="_blank" rel="noopener">${t('前往 Chrome Web Store →', 'Go to Chrome Web Store →')}</a>
-    <div class="note">${t('支援 Chrome 以及所有 Chromium 核心瀏覽器（Edge、Brave、Arc 等）。', 'Works on Chrome and all Chromium-based browsers (Edge, Brave, Arc, etc.).')}</div>
-  </div>
-
-  <div class="step">
-    <h2><span class="snum">2</span>${t('固定到工具列', 'Pin to the toolbar')}</h2>
-    <ol>
-      <li>${t('點瀏覽器右上角的拼圖圖示 🧩（擴充功能選單）', 'Click the puzzle icon 🧩 at the top right (extensions menu)')}</li>
-      <li>${t('找到 BugEzy 🐛 → 按旁邊的釘選 📌', 'Find BugEzy 🐛 → click the pin 📌 next to it')}</li>
-    </ol>
-    <div class="note">${t('釘選後圖示會常駐在工具列，隨時一鍵開錄，不用每次翻選單。', 'Once pinned, the icon stays on the toolbar for one-click recording anytime.')}</div>
-  </div>
-
-  <div class="step">
-    <h2><span class="snum">3</span>${t('登入', 'Sign in')}</h2>
-    <ol>
-      <li>${t('點工具列上的 BugEzy 圖示 🐛', 'Click the BugEzy icon 🐛 on the toolbar')}</li>
-      <li>${t('按「用 Google 登入」→ 選擇帳號授權', 'Click "Sign in with Google" → choose your account to authorize')}</li>
-      <li>${t('popup 顯示你的名字 = 登入成功', 'Your name shown in the popup = signed in')}</li>
-    </ol>
-  </div>
-
-  <div class="step">
-    <h2><span class="snum">4</span>${t('第一次錄製', 'Your first recording')}</h2>
-    <ol>
-      <li>${t('開任意網頁 → 點 BugEzy 圖示 → 按「錄製」', 'Open any webpage → click the BugEzy icon → click "Record"')}</li>
-      <li>${t('操作重現問題，同時用語音描述你看到的 Bug', 'Reproduce the issue while describing the bug by voice')}</li>
-      <li>${t('按「停止」→ 自動打開報告編輯頁', 'Click "Stop" → the report editor opens automatically')}</li>
-    </ol>
-    <div class="note">${t('🎉 恭喜，你的第一份 Bug 報告完成了！可以編輯文字、AI 校正精簡後上傳。', '🎉 Congrats — your first bug report is done! Edit text, let AI clean it up, then upload.')}</div>
-  </div>
-
-  <div class="step">
-    <h2><span class="snum">5</span>${t('連接 AI（MCP 設定）', 'Connect AI (MCP setup)')}</h2>
-    <p style="margin:0 0 4px;color:#c4b5fd;font-weight:600;">${t('讓 AI 直接讀你的 Bug 報告，不用複製貼上。', 'Let AI read your bug reports directly — no copy-paste.')}</p>
-    <p style="margin:0;">${t('支援 Claude Desktop · Claude Code · Cursor · Windsurf · VS Code + Cline · Google Antigravity · Gemini CLI 等所有 MCP 工具。', 'Works with all MCP tools: Claude Desktop · Claude Code · Cursor · Windsurf · VS Code + Cline · Google Antigravity · Gemini CLI.')}</p>
-    <div class="mcp-box">
-      <b>${t('🔌 BugEzy MCP 網址（所有工具通用）', '🔌 BugEzy MCP URL (same for all tools)')}</b><br />
-      <code class="mcp-cfg">https://bugezy.dev/mcp</code>
-      <p class="mcp-token-hint" style="margin:6px 0 0;font-size:12px;color:#8b8fa3;">${t('登入 BugEzy 後，本頁的網址與設定會自動幫你補上 ?token=（AI 就不用每次手動帶 token）。', 'After signing in to BugEzy, this page auto-appends ?token= to the URL and configs (so your AI never needs to pass a token manually).')}</p>
-      <div class="mcp-warn">${t('⚠ 這個網址<b>不能用瀏覽器開</b>，它是給 AI 工具連接的協議。用瀏覽器開只會看到錯誤訊息，屬正常現象——請依下方步驟在 AI 工具裡設定。', '⚠ <b>Do not open this URL in a browser</b> — it is a protocol endpoint for AI tools. Opening it in a browser just shows an error, which is normal. Set it up in your AI tool per the steps below.')}</div>
-
-      <div class="mcp-tool"><div class="tname">Claude.ai</div><div class="tstep">${t('Settings → Connectors → Add → 貼上網址 → 連接', 'Settings → Connectors → Add → paste the URL → Connect')}</div></div>
-      <div class="mcp-tool"><div class="tname">Claude Desktop / Cursor / Windsurf</div><div class="tstep">${t('編輯設定檔（claude_desktop_config.json / mcp.json），加入：', 'Edit the config file (claude_desktop_config.json / mcp.json), add:')}</div><pre class="mcp-cfg">{
-  "mcpServers": {
-    "bugezy": {
-      "url": "https://bugezy.dev/mcp"
-    }
-  }
-}</pre></div>
-      <div class="mcp-tool"><div class="tname">VS Code + Cline</div><div class="tstep">${t('Cline → MCP Servers → Add → 貼上網址', 'Cline → MCP Servers → Add → paste the URL')}</div></div>
-      <div class="mcp-tool"><div class="tname">${t('Claude Code（終端機）', 'Claude Code (terminal)')}</div><div class="tstep"><code class="mcp-cfg">claude mcp add --transport http bugezy https://bugezy.dev/mcp</code></div></div>
-      <div class="mcp-tool"><div class="tname">Google Antigravity / Gemini CLI</div><div class="tstep">${t('在 MCP 設定加入（協定通用，格式同上）：', 'Add to your MCP config (same protocol / format as above):')}</div><pre class="mcp-cfg">{
-  "mcpServers": {
-    "bugezy": {
-      "url": "https://bugezy.dev/mcp"
-    }
-  }
-}</pre></div>
-
-      <div style="margin-top:14px;color:#ccc;font-size:13px;">${t('連接成功後直接問：', 'Once connected, just ask:')}<b style="color:#a78bfa;">${t('「讀我最新的 BugEzy 報告，告訴我怎麼修」', '"Read my latest BugEzy report and tell me how to fix it"')}</b></div>
-
-      <div style="margin-top:14px;"><b style="color:#c4b5fd;font-size:13px;">${t('13 個 MCP 工具（AI 按需查詢，省 Token）：', '13 MCP tools (AI queries on demand to save tokens):')}</b>
-        <div class="toolgrid">
-          <div><b>list_reports</b> ${t('最近報告清單', 'recent reports')}</div>
-          <div><b>get_report_overview</b> ${t('報告摘要', 'report summary')}</div>
-          <div><b>get_timeline</b> ${t('完整時序麵包屑', 'full timeline')}</div>
-          <div><b>get_console_logs</b> ${t('Console 錯誤', 'console errors')}</div>
-          <div><b>get_network_errors</b> ${t('網路錯誤', 'network errors')}</div>
-          <div><b>get_voice_transcript</b> ${t('語音全文', 'voice transcript')}</div>
-          <div><b>get_screenshots</b> ${t('截圖', 'screenshots')}</div>
-          <div><b>get_page_info</b> ${t('頁面資訊', 'page info')}</div>
-          <div><b>get_rrweb_summary</b> ${t('DOM 軌跡摘要', 'DOM trace summary')}</div>
-          <div><b>get_rrweb_events</b> ${t('DOM 事件細節', 'DOM event details')}</div>
-          <div><b>get_live_errors</b> ${t('即時監控錯誤', 'live monitor errors')}</div>
-          <div><b>get_terminal_logs</b> ${t('CLI 終端機日誌', 'CLI terminal logs')}</div>
-          <div><b>get_usage_stats</b> ${t('Token 用量統計', 'token usage stats')}</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="ai-install-box" style="margin-top:28px;">
-    <h3 style="margin:0 0 8px;color:#a78bfa;font-size:18px;">${t('🐍 後端開發者？試試 Terminal CLI', '🐍 Backend developer? Try the Terminal CLI')}</h3>
-    <p style="color:#9aa3b2;font-size:14px;margin:0 0 14px;">${t('捕捉 Python / Node.js / Go 的終端機錯誤（stderr / traceback / crash），AI 直接讀取分析——不需開瀏覽器。付費功能。', 'Capture terminal errors (stderr / traceback / crash) from Python / Node.js / Go — AI reads and analyzes them directly, no browser needed. Premium feature.')}</p>
-    <pre style="margin:0;padding:14px 16px;background:#0f0f1a;border-radius:8px;color:#7ee0c5;font-family:ui-monospace,monospace;font-size:13px;overflow-x:auto;white-space:pre;line-height:1.7;">$ BUGEZY_TOKEN=&lt;${t('你的 token', 'your token')}&gt; npx bugezy-watch -- python manage.py runserver
-$ BUGEZY_TOKEN=&lt;${t('你的 token', 'your token')}&gt; npx bugezy-watch -- node server.js
-$ BUGEZY_TOKEN=&lt;${t('你的 token', 'your token')}&gt; npx bugezy-watch -- go run main.go</pre>
-    <p style="color:#888;font-size:12px;margin:12px 0 0;">${t('AI 之後用 <code style="background:#2a2a3e;padding:1px 5px;border-radius:4px;color:#7ee0c5;">get_terminal_logs</code> MCP 工具讀取這些錯誤。', 'AI then reads these errors via the <code style="background:#2a2a3e;padding:1px 5px;border-radius:4px;color:#7ee0c5;">get_terminal_logs</code> MCP tool.')}</p>
-  </div>
-
-  <div class="bottom-cta">
-    <a class="cta-btn" href="/features">${t('來看看有哪些功能 →', 'See all features →')}</a>
-  </div>
-
-  <footer>
-    <div class="links">
-      <a href="/">${t('首頁', 'Home')}</a>
-      <a href="/install">${t('安裝指南', 'Install')}</a>
-      <a href="/features">${t('功能說明', 'Features')}</a>
-      <a href="/guide">${t('使用指南', 'Guide')}</a>
-      <a href="/faq">FAQ</a>
-      <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
-      <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
-      <a href="/blog">${t('📝 部落格', '📝 Blog')}</a>
-    <a href="/skill">${t('🤖 AI 客服手冊', '🤖 AI Manual')}</a>
-    <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a>
-    <a href="/reports">${t('📋 我的報告', '📋 My Reports')}</a>
-    </div>
-    <div style="margin-top:8px;">${t('聯絡', 'Contact')}：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
-    <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
-  </footer>
-</div>
-<script>
-  // PM-190（方案 B）：已登入 → 把本頁所有 MCP 設定/網址（.mcp-cfg）的 bugezy.dev/mcp 自動補上 ?token=<session token>，
-  //   AI 端就零操作讀報告。token 來自同源 localStorage（PM-187 存於 bugezy.dev；開「📋 我的報告」即 seed）。
-  //   未登入 → 維持乾淨 /mcp（token 現為 optional，仍可手動帶 session_token 參數）。
-  (function () {
-    try {
-      var token = localStorage.getItem('bugezy_session_token');
-      if (!token) return;
-      var enc = encodeURIComponent(token);
-      document.querySelectorAll('.mcp-cfg').forEach(function (el) {
-        // 只在還沒帶 token 的 /mcp 後面補（冪等，避免重複）
-        // PM-192（四修）：跳過複製按鈕的來源 <pre id="ai-install-prompt">——它的複製走靜態 data-copy-text（跟首頁一樣），
-        //   不讓 token 改寫它的 textContent（避免任何改動影響複製來源；一鍵複製 = server render 的乾淨安裝指令）。
-        if (el.id === 'ai-install-prompt') return;
-        el.textContent = el.textContent.replace(/(bugezy\\.dev\\/mcp)(?!\\?|[\\w])/g, '$1?token=' + enc);
-      });
-    } catch (e) {}
-  })();
-
-    // PM-192（三修）：複製優先從 btn.dataset.copyText（decodeURIComponent）讀，不依賴 DOM textContent，
-    //   徹底解「貼出空白」。clipboard 失敗 → 視窗內 1px textarea + execCommand fallback；按鈕變「✅ 已複製！」2s 恢復。
-    (function () {
-      var btn = document.getElementById('copy-ai-prompt');
-      if (!btn) return;
-      var originalLabel = btn.textContent;
-      var DONE_LABEL = ${JSON.stringify(t('✅ 已複製！', '✅ Copied!'))};
-      function getText() {
-        var d = btn.dataset ? btn.dataset.copyText : null;
-        if (d) { try { return decodeURIComponent(d); } catch (e) {} }
-        var el = document.getElementById('ai-install-prompt');
-        return el ? (el.textContent || '') : '';
-      }
-      function flashDone() {
-        btn.textContent = DONE_LABEL;
-        btn.classList.add('copied');
-        setTimeout(function () { btn.textContent = originalLabel; btn.classList.remove('copied'); }, 2000);
-      }
-      function fallbackCopy(text) {
-        try {
-          var ta = document.createElement('textarea');
-          ta.value = text; ta.setAttribute('readonly', '');
-          ta.style.position = 'fixed'; ta.style.top = '0'; ta.style.left = '0';
-          ta.style.width = '1px'; ta.style.height = '1px'; ta.style.padding = '0';
-          ta.style.border = 'none'; ta.style.outline = 'none'; ta.style.boxShadow = 'none'; ta.style.background = 'transparent';
-          document.body.appendChild(ta); ta.focus(); ta.select();
-          try { ta.setSelectionRange(0, text.length); } catch (e2) {}
-          var ok = document.execCommand('copy');
-          document.body.removeChild(ta);
-          console.log('[BugEzy] home fallback execCommand copy ok=' + ok);
-          if (ok) flashDone();
-          return ok;
-        } catch (e) { console.warn('[BugEzy] home fallback copy failed', e); return false; }
-      }
-      btn.addEventListener('click', function () {
-        var text = getText();
-        console.log('[BugEzy] home copy length=' + text.length);
-        if (!text) { console.warn('[BugEzy] home copy empty'); return; }
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(text).then(
-            function () { console.log('[BugEzy] home clipboard.writeText OK'); flashDone(); },
-            function (err) { console.warn('[BugEzy] home clipboard failed → fallback', err); fallbackCopy(text); },
-          );
-        } else { fallbackCopy(text); }
-      });
-    })();
-</script>
-</body>
-</html>`;
-}
 
 // ── PM-96：功能說明頁（GET /features）— 六種模式 + 語音 + 高畫質 AI 的操作說明 ──
 // PM-151：/features 改為函式（依 lang 中英切換，延續 PM-150 模式）。
@@ -3509,8 +3280,7 @@ ${langSwitchBar(lang)}
       <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
       <a href="/blog">${t('📝 部落格', '📝 Blog')}</a>
       <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
-      <a href="/install">${t('安裝指南', 'Install')}</a>
-      <a href="/faq">FAQ</a>
+            <a href="/faq">FAQ</a>
       <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a>
     </div>
     <div style="margin-top:8px;">${t('聯絡', 'Contact')}：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
@@ -4005,9 +3775,8 @@ ${ogMeta('/changelog', 'Changelog — BugEzy', 'Latest updates and release notes
   <footer>
     <div class="links">
       <a href="/">${t('首頁', 'Home')}</a>
-      <a href="/install">${t('安裝指南', 'Install')}</a>
-      <a href="/features">${t('功能說明', 'Features')}</a>
-      <a href="/guide">${t('使用指南', 'Guide')}</a>
+            <a href="/features">${t('功能說明', 'Features')}</a>
+      <a href="/guide">${t('完整指南', 'Guide')}</a>
       <a href="/faq">FAQ</a>
       <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
       <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
@@ -5690,10 +5459,16 @@ export default {
       res.headers.set('Cache-Control', 'no-store');
       return res;
     }
+    // PM-280：/install 已併入 /guide → 301 永久重導（舊連結、書籤、社群貼文、既有外部連結都不會斷，
+    //   SEO 權重也會轉移到 /guide）。保留 ?lang= 讓多語連結不掉語言。
     if (request.method === 'GET' && path === '/install') {
-      const res = html(installPage(getLang(request))); // PM-96/150
-      res.headers.set('Cache-Control', 'no-store');
-      return res;
+      const to = new URL('/guide', request.url);
+      const q = url.searchParams.get('lang');
+      if (q) to.searchParams.set('lang', q);
+      // ⚠ 不能用 Response.redirect()——它回傳的 headers 是 **immutable**，而本 Worker 在統一出口
+      //   會對每個回應 headers.set() 注入 CORS，碰到不可變 headers 會拋錯 → 整支變 500。
+      //   （檔案最上方 workers.dev→bugezy.dev 那個 redirect 沒事，是因為它在 CORS 包裝之外就 return 了。）
+      return new Response(null, { status: 301, headers: { Location: to.href } });
     }
     if (request.method === 'GET' && path === '/features') {
       const res = html(featuresPage(getLang(request))); // PM-96/151
