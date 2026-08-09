@@ -249,6 +249,14 @@
         margin-top: 8px; background: rgba(245, 158, 11, 0.14); border: 1px solid #f59e0b;
         border-radius: 8px; padding: 8px 10px; font-size: 12px; color: #f59e0b; line-height: 1.6;
       }
+      /* PM-274：啟用二次確認（沿用到期提醒的警示色系，強調不可逆） */
+      .ticket-confirm {
+        margin-top: 8px; background: rgba(245, 158, 11, 0.14); border: 1px solid #f59e0b;
+        border-radius: 8px; padding: 10px 12px; font-size: 13px; color: #f59e0b; line-height: 1.6;
+      }
+      .ticket-confirm-info { margin-top: 2px; font-size: 12px; color: #e0e0e0; }
+      .ticket-confirm-desc { margin-top: 2px; font-size: 11px; color: #d0a45f; }
+      .ticket-confirm-actions { display: flex; gap: 6px; margin-top: 8px; }
       .saved-tickets {
         margin-top: 8px; background: #16162a; border: 1px solid #2a2a3e;
         border-radius: 8px; padding: 8px 12px;
@@ -502,6 +510,17 @@
           <div id="redeemActions" class="redeem-actions hidden">
             <button id="activateNowBtn" class="promo-primary-btn" data-i18n="promo_activate_now">🚀 立即啟用</button>
             <button id="saveForLaterBtn" class="promo-ghost-btn" data-i18n="promo_save">💾 儲存備用</button>
+          </div>
+        </div>
+        <!-- PM-274：啟用二次確認（不可逆操作）。刻意放在折疊區「外面」——庫存票的
+             「啟用」鈕在折疊區內、兌換後的「立即啟用」在折疊區外，放外面兩邊都看得到。 -->
+        <div id="ticketConfirm" class="ticket-confirm hidden">
+          <div data-i18n="promo_confirm_title">⚠ 確認啟用？</div>
+          <div id="ticketConfirmInfo" class="ticket-confirm-info"></div>
+          <div class="ticket-confirm-desc" data-i18n="promo_confirm_desc">啟用後立即開始倒數，無法取消</div>
+          <div class="ticket-confirm-actions">
+            <button id="ticketConfirmYes" class="promo-primary-btn" data-i18n="promo_confirm_btn">✅ 確認啟用</button>
+            <button id="ticketConfirmNo" class="promo-ghost-btn" data-i18n="promo_cancel_btn">取消</button>
           </div>
         </div>
         <!-- PM-273：可折疊區（預設收合，狀態存 localStorage）-->

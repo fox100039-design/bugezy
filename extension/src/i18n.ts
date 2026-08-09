@@ -136,6 +136,11 @@ const dict: Record<string, { zh: string; en: string; ja: string; ko: string; vi:
   promo_months: { zh: '{n} 個月', en: '{n} month(s)', ja: '{n} か月', ko: '{n}개월', vi: '{n} tháng' },
   promo_days: { zh: '{n} 天', en: '{n} days', ja: '{n} 日', ko: '{n}일', vi: '{n} ngày' },
   promo_saved_count: { zh: '💾 你有 {n} 張庫存票券可啟用', en: '💾 You have {n} saved ticket(s) ready', ja: '💾 有効化できるチケットが {n} 枚あります', ko: '💾 활성화 가능한 티켓 {n}장 보유', vi: '💾 Bạn có {n} vé sẵn sàng kích hoạt' },
+  // PM-274：啟用二次確認（不可逆）
+  promo_confirm_title: { zh: '⚠ 確認啟用？', en: '⚠ Confirm activation?', ja: '⚠ 有効化しますか？', ko: '⚠ 활성화할까요?', vi: '⚠ Xác nhận kích hoạt?' },
+  promo_confirm_desc: { zh: '啟用後立即開始倒數，無法取消', en: 'The countdown starts immediately and cannot be undone', ja: '有効化すると即座にカウントダウンが始まり、取り消せません', ko: '활성화하면 즉시 카운트다운이 시작되며 취소할 수 없습니다', vi: 'Bộ đếm bắt đầu ngay lập tức và không thể hoàn tác' },
+  promo_confirm_btn: { zh: '✅ 確認啟用', en: '✅ Confirm', ja: '✅ 有効化する', ko: '✅ 활성화', vi: '✅ Xác nhận' },
+  promo_cancel_btn: { zh: '取消', en: 'Cancel', ja: 'キャンセル', ko: '취소', vi: 'Hủy' },
   promo_need_login: { zh: '請先登入再兌換代碼', en: 'Please sign in to redeem a code', ja: 'コードを引き換えるにはログインしてください', ko: '코드를 교환하려면 로그인하세요', vi: 'Vui lòng đăng nhập để đổi mã' },
   promo_failed: { zh: '兌換失敗，請稍後再試', en: 'Redeem failed, please try again', ja: '引き換えに失敗しました。後でお試しください', ko: '교환 실패, 잠시 후 다시 시도하세요', vi: 'Đổi mã thất bại, vui lòng thử lại' },
   'cancel-sub': { zh: '取消訂閱', en: 'Cancel', ja: '解約', ko: '구독 취소', vi: 'Hủy đăng ký' },

@@ -91,6 +91,11 @@ const ticketArrow = $('ticketArrow');
 const ticketSummary = $('ticketSummary');
 const ticketBadge = $('ticketBadge');
 const ticketBody = $('ticketBody');
+// PM-274：啟用二次確認
+const ticketConfirm = $('ticketConfirm');
+const ticketConfirmInfo = $('ticketConfirmInfo');
+const ticketConfirmYes = $<HTMLButtonElement>('ticketConfirmYes');
+const ticketConfirmNo = $<HTMLButtonElement>('ticketConfirmNo');
 // PM-111：日票升級鈕 + 日票中倒數狀態
 const dayPassBtn = $<HTMLButtonElement>('dayPassBtn');
 const dayPassStatus = $('dayPassStatus');
@@ -795,7 +800,7 @@ interface SavedTicket {
 /** 票券快取（loadPlan 寫入；語言切換時重繪用）。 */
 let ticketState: { active: ActiveTicket | null; saved: SavedTicket[] } = { active: null, saved: [] };
 /** 剛兌換、尚未決定「立即啟用／儲存備用」的票券 id。 */
-let pendingTicketId: string | null = null;
+let pendingTicket: { id: string; code: string; days: number } | null = null;
 const TICKET_WARN_DAYS = 10; // 剩 ≤10 天顯示到期提醒（卡片 2d）
 
 /** duration_days → 「N 個月」或「N 天」（整月才說月，避免 45 天顯示成 1.5 個月）。 */
@@ -963,7 +968,8 @@ function renderTicketWallet() {
       const btn = document.createElement('button');
       btn.className = 'saved-ticket-btn';
       btn.textContent = t('promo_activate', currentUILang);
-      btn.addEventListener('click', () => void activateTicket(s.ticket_id, btn));
+      // PM-274：不直接啟用，先跳確認
+      btn.addEventListener('click', () => askActivate(s.ticket_id, s.code, s.duration_days, btn));
       row.appendChild(label);
       row.appendChild(btn);
       savedTicketsList.appendChild(row);
@@ -994,6 +1000,36 @@ function showRedeemMsg(text: string, ok: boolean, withActions = false) {
   redeemResult.classList.remove('hidden');
 }
 
+// ── PM-274：啟用二次確認（啟用即開始倒數，不可逆，誤觸代價高）────────────────
+/** 待確認的票券；null = 確認區未開啟。 */
+let confirmTarget: {
+  ticketId: string;
+  code: string;
+  days: number;
+  btn?: HTMLButtonElement;
+} | null = null;
+
+/** 顯示確認區並帶入票券資訊（不打 API；真正啟用在使用者按下「確認啟用」後）。 */
+function askActivate(ticketId: string, code: string, days: number, btn?: HTMLButtonElement) {
+  confirmTarget = { ticketId, code, days, btn };
+  ticketConfirmInfo.textContent = `${code}（${fmtDuration(days)}）`;
+  ticketConfirm.classList.remove('hidden');
+  // 觸發鈕可能在折疊區內、位置較低，確認區在其上方——不捲進畫面的話使用者會以為按鈕沒反應
+  ticketConfirm.scrollIntoView({ block: 'nearest' });
+}
+
+function closeActivateConfirm() {
+  confirmTarget = null;
+  ticketConfirm.classList.add('hidden');
+}
+
+ticketConfirmYes.addEventListener('click', () => {
+  const target = confirmTarget;
+  closeActivateConfirm(); // 先關閉，避免連點兩次送出兩個啟用請求
+  if (target) void activateTicket(target.ticketId, target.btn);
+});
+ticketConfirmNo.addEventListener('click', closeActivateConfirm);
+
 /** 啟用一張票券；成功後重新 loadPlan 刷新全部狀態（含三張卡片、JSON 鎖）。 */
 async function activateTicket(ticketId: string, btn?: HTMLButtonElement) {
   if (btn) btn.disabled = true;
@@ -1008,7 +1044,7 @@ async function activateTicket(ticketId: string, btn?: HTMLButtonElement) {
       showRedeemMsg(data.error || t('promo_failed', currentUILang), false);
       return;
     }
-    pendingTicketId = null;
+    pendingTicket = null;
     redeemResult.classList.add('hidden'); // 啟用後結果區收起，狀態改由「使用中」區呈現
     await loadPlan();
   } catch {
@@ -1027,6 +1063,7 @@ promoCodeInput.addEventListener('keydown', (e) => {
 async function redeemPromoCode() {
   const code = promoCodeInput.value.trim();
   if (!code) return;
+  closeActivateConfirm(); // 清掉前一張票殘留的確認框
   redeemBtn.disabled = true;
   try {
     const res = await fetch(`${API_BASE}/api/promo/redeem`, {
@@ -1047,7 +1084,9 @@ async function redeemPromoCode() {
       );
       return;
     }
-    pendingTicketId = data.ticket_id ?? null;
+    pendingTicket = data.ticket_id
+      ? { id: data.ticket_id, code, days: data.duration_days ?? 0 }
+      : null;
     promoCodeInput.value = '';
     showRedeemMsg(
       `${t('promo_success', currentUILang)}${data.duration_days ? ` ${fmtDuration(data.duration_days)}` : ''}`,
@@ -1063,11 +1102,12 @@ async function redeemPromoCode() {
 }
 
 activateNowBtn.addEventListener('click', () => {
-  if (pendingTicketId) void activateTicket(pendingTicketId, activateNowBtn);
+  // PM-274：兌換後的「立即啟用」同樣先確認
+  if (pendingTicket) askActivate(pendingTicket.id, pendingTicket.code, pendingTicket.days, activateNowBtn);
 });
 saveForLaterBtn.addEventListener('click', () => {
   // 「儲存備用」不需打 API——兌換當下票券已是 SAVED，這裡只收起選擇區
-  pendingTicketId = null;
+  pendingTicket = null;
   showRedeemMsg(t('promo_saved_done', currentUILang), true, false);
 });
 
