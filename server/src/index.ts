@@ -2488,6 +2488,35 @@ ${ogMeta('/skill', 'AI Customer Service Guide — BugEzy SKILL.md', 'BugEzy MCP 
 </html>`;
 }
 
+// ── PM-279：/guide 一鍵複製按鈕 ────────────────────────────────────────────
+// 複製內容存在 data-copy-text（encodeURIComponent），**不從 DOM 讀 textContent**——
+// PM-192/199/200 踩過：讀 <pre>/<code> 的 textContent 會受排版縮排與換行影響，複製出來
+// 帶一堆空白甚至整段空白。存 attribute 才能讓「顯示」與「複製內容」各自獨立。
+const MCP_URL = 'https://bugezy.dev/mcp';
+// PM-279：設定不起來時丟給 AI 的萬用提示詞（複製與顯示共用同一份）
+const AI_HELP_PROMPT_ZH = `請幫我設定 BugEzy MCP。
+BugEzy 是 Chrome 擴充功能的 Bug 報告工具。
+MCP 網址：${MCP_URL}
+請根據我使用的 AI 工具，告訴我怎麼設定。`;
+const AI_HELP_PROMPT_EN = `Help me set up the BugEzy MCP server.
+BugEzy is a Chrome extension for reporting bugs.
+MCP URL: ${MCP_URL}
+Tell me how to configure it for the AI tool I am using.`;
+const CLAUDE_CODE_CMD = `claude mcp add --transport http bugezy ${MCP_URL}`;
+// 顯示用的 <pre> 與複製內容共用這一份，兩者永遠一致
+const CLAUDE_DESKTOP_JSON = `{
+  "mcpServers": {
+    "bugezy": {
+      "url": "${MCP_URL}"
+    }
+  }
+}`;
+
+function copyBtn(text: string, label: string, done: string): string {
+  const a = (v: string) => v.replace(/"/g, '&quot;');
+  return `<button type="button" class="copy-btn" data-copy-text="${encodeURIComponent(text)}" data-copy-label="${a(label)}" data-copy-done="${a(done)}">${label}</button>`;
+}
+
 function guidePage(lang: PageLang): string {
   const t = makeT(lang); // PM-232：zh/en/zh-CN 三語（zh-CN 由繁體轉簡體）
   return `<!DOCTYPE html>
@@ -2519,6 +2548,26 @@ ${ogMeta('/guide', 'User Guide — BugEzy', 'Step-by-step guide to using BugEzy 
     margin: 32px 0 0; padding: 22px 24px; background: #1a1a2e;
     border: 1px solid #2a2a3e; border-radius: 14px;
   }
+  /* PM-279：一鍵複製按鈕 */
+  .copy-btn { background:#7c3aed; color:#fff; border:none; border-radius:6px; padding:4px 12px;
+    font-size:12px; font-weight:600; cursor:pointer; margin-left:8px; white-space:nowrap;
+    vertical-align:middle; transition:background 0.2s; }
+  .copy-btn:hover { background:#6d28d9; }
+  .copy-btn.copied { background:#238636; }
+  /* PM-279：⚡ 快速開始卡片 */
+  .quick-start { margin:28px 0 0; padding:22px 24px; border:1px solid #f59e0b;
+    border-radius:14px; background:radial-gradient(ellipse at top left,rgba(245,158,11,0.12),transparent 70%); }
+  .quick-start h2 { margin:0 0 12px; font-size:20px; color:#f59e0b; }
+  .qs-step { margin:8px 0; font-size:15px; color:#e8e8f0; }
+  .qs-step code { background:#12121f; border:1px solid #2a2a3e; border-radius:6px; padding:2px 8px; color:#a78bfa; }
+  .qs-done { margin-top:14px; padding-top:12px; border-top:1px dashed #3a3a52; color:#7ee787; font-size:15px; }
+  /* PM-279：🆘 搞不定？丟給 AI */
+  .ai-help-box { margin:20px 0 0; padding:20px 22px; border:1px solid #3fb950; border-radius:14px;
+    background:radial-gradient(ellipse at top left,rgba(63,185,80,0.12),transparent 70%); }
+  .ai-help-box h3 { margin:0 0 10px; font-size:17px; color:#3fb950; }
+  .ai-help-box pre { margin:0 0 10px; background:#12121f; border:1px solid #2a2a3e; border-radius:10px;
+    padding:12px 14px; font-size:13px; color:#d0d0d8; white-space:pre-wrap; word-break:break-word; }
+  .help-note { margin:10px 0 0; font-size:13px; color:#8b8fa3; }
   .step h2 { font-size: 19px; color: #c4b5fd; margin: 0 0 12px; }
   .step ol { margin: 0; padding-left: 22px; }
   .step ol li { margin: 6px 0; }
@@ -2563,6 +2612,15 @@ ${ogMeta('/guide', 'User Guide — BugEzy', 'Step-by-step guide to using BugEzy 
   <h1>${t('🐛 BugEzy 使用指南', '🐛 BugEzy User Guide')}</h1>
   <p class="lead">${t('讓 AI 幫你修 Bug，只需三步。', 'Let AI fix your bugs in just three steps.')}</p>
   <div class="mcp-box" style="border-color:#2a2a3e;">${t('詳細安裝流程 → <a href="/install">安裝指南</a>　·　完整功能說明 → <a href="/features">功能說明</a>', 'Full install steps → <a href="/install">Install Guide</a>　·　All features → <a href="/features">Features</a>')}</div>
+
+  <!-- PM-279：⚡ 30 秒快速開始（放在第一步之前，讓趕時間的人不用讀完整頁）-->
+  <div class="quick-start">
+    <h2>${t('⚡ 30 秒快速開始', '⚡ Quick start in 30 seconds')}</h2>
+    <div class="qs-step">1️⃣ <a href="https://chromewebstore.google.com/detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj" target="_blank" rel="noopener">${t('安裝 BugEzy', 'Install BugEzy')}</a></div>
+    <div class="qs-step">2️⃣ ${t('點 🐛 圖示 → Google 登入', 'Click the 🐛 icon → sign in with Google')}</div>
+    <div class="qs-step">3️⃣ ${t('在你的 AI 工具 MCP 設定貼上：', 'Paste this into your AI tool MCP settings:')} <code>${MCP_URL}</code>${copyBtn(MCP_URL, t('📋 複製', '📋 Copy'), t('✅ 已複製', '✅ Copied'))}</div>
+    <div class="qs-done">${t('✅ 然後問 AI：「讀我最新的 BugEzy 報告」', '✅ Then ask your AI: "Read my latest BugEzy report"')}</div>
+  </div>
 
   <div class="step">
     <h2>${t('🚀 第一步：安裝與登入', '🚀 Step 1: Install & Sign in')}</h2>
@@ -2639,21 +2697,29 @@ ${ogMeta('/guide', 'User Guide — BugEzy', 'Step-by-step guide to using BugEzy 
     <div class="mcp-box">
       <b>${t('🔌 MCP 連接設定', '🔌 MCP connection setup')}</b><br />
       ${t('BugEzy MCP 網址（所有工具通用）：', 'BugEzy MCP URL (same for all tools):')}<br />
-      <code>https://bugezy.dev/mcp</code>
+      <code>${MCP_URL}</code>${copyBtn(MCP_URL, t('📋 複製', '📋 Copy'), t('✅ 已複製', '✅ Copied'))}
       <div class="mcp-warn">${t('⚠ 注意：這個網址<b>不能用瀏覽器開</b>，它是專給 AI 工具連接的協議。用瀏覽器開只會看到一段錯誤訊息，屬正常現象——請依下方步驟在 AI 工具裡設定。', '⚠ Note: <b>do not open this URL in a browser</b> — it is a protocol endpoint for AI tools. Opening it in a browser just shows an error, which is normal. Set it up in your AI tool per the steps below.')}</div>
 
-      <div class="mcp-tool"><div class="tname">Claude.ai</div><div class="tstep">${t('Settings → Connectors → Add → 貼上網址 → 連接', 'Settings → Connectors → Add → paste the URL → Connect')}</div></div>
+      <div class="mcp-tool"><div class="tname">Claude.ai</div><div class="tstep">${t('Settings → Connectors → Add → 貼上網址 → 連接', 'Settings → Connectors → Add → paste the URL → Connect')}${copyBtn(MCP_URL, t('📋 複製', '📋 Copy'), t('✅ 已複製', '✅ Copied'))}</div></div>
       <div class="mcp-tool"><div class="tname">Claude Desktop</div><div class="tstep">${t('編輯 claude_desktop_config.json，加入：', 'Edit claude_desktop_config.json, add:')}</div><pre>{
   "mcpServers": {
     "bugezy": {
       "url": "https://bugezy.dev/mcp"
     }
   }
-}</pre></div>
-      <div class="mcp-tool"><div class="tname">Cursor</div><div class="tstep">${t('Settings → MCP → Add Server → 貼上網址', 'Settings → MCP → Add Server → paste the URL')}</div></div>
-      <div class="mcp-tool"><div class="tname">VS Code</div><div class="tstep">${t('Settings → 搜尋 MCP → Add Server → 貼上網址', 'Settings → search MCP → Add Server → paste the URL')}</div></div>
-      <div class="mcp-tool"><div class="tname">${t('Claude Code（終端機）', 'Claude Code (terminal)')}</div><div class="tstep">${t('執行：', 'Run:')} <code>claude mcp add --transport http bugezy https://bugezy.dev/mcp</code></div></div>
-      <div class="mcp-tool"><div class="tname">Zed</div><div class="tstep">${t('設定檔加 context_servers', 'Add context_servers to the config file')}</div></div>
+}</pre>${copyBtn(CLAUDE_DESKTOP_JSON, t('📋 複製 JSON', '📋 Copy JSON'), t('✅ 已複製', '✅ Copied'))}</div>
+      <div class="mcp-tool"><div class="tname">Cursor</div><div class="tstep">${t('Settings → MCP → Add Server → 貼上網址', 'Settings → MCP → Add Server → paste the URL')}${copyBtn(MCP_URL, t('📋 複製', '📋 Copy'), t('✅ 已複製', '✅ Copied'))}</div></div>
+      <div class="mcp-tool"><div class="tname">VS Code</div><div class="tstep">${t('Settings → 搜尋 MCP → Add Server → 貼上網址', 'Settings → search MCP → Add Server → paste the URL')}${copyBtn(MCP_URL, t('📋 複製', '📋 Copy'), t('✅ 已複製', '✅ Copied'))}</div></div>
+      <div class="mcp-tool"><div class="tname">${t('Claude Code（終端機）', 'Claude Code (terminal)')}</div><div class="tstep">${t('執行：', 'Run:')} <code>${CLAUDE_CODE_CMD}</code>${copyBtn(CLAUDE_CODE_CMD, t('📋 複製指令', '📋 Copy command'), t('✅ 已複製', '✅ Copied'))}</div></div>
+      <div class="mcp-tool"><div class="tname">Zed</div><div class="tstep">${t('設定檔加 context_servers', 'Add context_servers to the config file')}${copyBtn(MCP_URL, t('📋 複製', '📋 Copy'), t('✅ 已複製', '✅ Copied'))}</div></div>
+
+      <!-- PM-279：🆘 設定不起來就把提示詞丟給 AI，讓 AI 依使用者實際的工具引導 -->
+      <div class="ai-help-box">
+        <h3>${t('🆘 搞不定？把這段話丟給你的 AI', '🆘 Stuck? Paste this to your AI')}</h3>
+        <pre>${escHtml(t(AI_HELP_PROMPT_ZH, AI_HELP_PROMPT_EN))}</pre>
+        ${copyBtn(t(AI_HELP_PROMPT_ZH, AI_HELP_PROMPT_EN), t('📋 複製這段話', '📋 Copy this prompt'), t('✅ 已複製', '✅ Copied'))}
+        <p class="help-note">${t('不管你用 Claude、ChatGPT、Cursor 還是 VS Code，AI 都能根據這段話引導你完成設定。', 'Whether you use Claude, ChatGPT, Cursor or VS Code, your AI can walk you through the setup from this prompt.')}</p>
+      </div>
 
       <div style="margin-top:14px;color:#ccc;font-size:13px;">${t('連接成功後，直接問 AI：', 'Once connected, just ask your AI:')}<br /><b style="color:#a78bfa;">${t('「讀我最新的 BugEzy 報告，告訴我怎麼修」', '"Read my latest BugEzy report and tell me how to fix it"')}</b><br />${t('AI 就會透過 MCP 自動讀取你的 Bug 報告。', 'The AI will read your bug report automatically via MCP.')}</div>
     </div>
@@ -2686,6 +2752,39 @@ ${ogMeta('/guide', 'User Guide — BugEzy', 'Step-by-step guide to using BugEzy 
     <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
   </footer>
 </div>
+<script>
+// PM-279：一鍵複製（事件委派，內容一律從 data-copy-text 讀，不碰 DOM 排版文字）
+(function () {
+  function fallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;padding:0;border:0;background:transparent;';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    try { ta.setSelectionRange(0, text.length); } catch (e) {}
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+  document.addEventListener('click', function (e) {
+    var btn = e.target && e.target.closest ? e.target.closest('[data-copy-text]') : null;
+    if (!btn) return;
+    var text = decodeURIComponent(btn.getAttribute('data-copy-text') || '');
+    if (!text) return;
+    function flash() {
+      btn.textContent = btn.getAttribute('data-copy-done') || 'OK';
+      btn.classList.add('copied');
+      setTimeout(function () {
+        btn.textContent = btn.getAttribute('data-copy-label') || '';
+        btn.classList.remove('copied');
+      }, 1500);
+    }
+    // clipboard API 在部分情境（非安全來源、權限拒絕）會失敗 → 退回 execCommand
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(flash, function () { fallbackCopy(text); flash(); });
+    } else { fallbackCopy(text); flash(); }
+  });
+})();
+</script>
 </body>
 </html>`;
 }
