@@ -201,6 +201,22 @@
 
       /* PM-267：🎫 票券錢包（深色卡片，與付費徽章同一視覺語彙）*/
       .ticket-wallet { margin-bottom: 8px; }
+      /* PM-273：票券錢包折疊標題列 */
+      .ticket-toggle {
+        display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;
+        font-size: 12px; color: #a78bfa; padding: 4px 0 6px;
+      }
+      .ticket-toggle:hover { color: #c4b5fd; }
+      .ticket-arrow { font-size: 10px; width: 10px; flex-shrink: 0; }
+      /* 摘要可能較長（🟢 CODE 剩 N 天），讓它吃掉剩餘空間並在過長時省略，避免把 badge 擠掉 */
+      .ticket-summary {
+        flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        font-size: 11px; color: #3fb950;
+      }
+      .ticket-badge {
+        flex-shrink: 0; background: #2a2a3e; border-radius: 999px;
+        padding: 1px 8px; font-size: 11px; color: #ccc;
+      }
       .promo-input { display: flex; gap: 6px; }
       .promo-input input {
         flex: 1; min-width: 0; background: #12121f; border: 1px solid #2a2a3e; border-radius: 8px;
@@ -468,6 +484,14 @@
       </div>
       <!-- PM-267：🎫 票券錢包（輸入活動代碼 → 兌換 → 儲存/啟用；到期提醒）-->
       <div id="ticketWallet" class="ticket-wallet hidden">
+        <!-- PM-273：折疊標題列（點擊展開/收合票券內容；輸入代碼欄位刻意留在外面，隨時可見）
+             收合時在同一行顯示「使用中票券」摘要 + 庫存數 badge，展開時交由下方完整區塊呈現。 -->
+        <div id="ticketToggle" class="ticket-toggle hidden">
+          <span id="ticketArrow" class="ticket-arrow">▶</span>
+          <span data-i18n="promo_wallet_title">🎫 票券錢包</span>
+          <span id="ticketSummary" class="ticket-summary hidden"></span>
+          <span id="ticketBadge" class="ticket-badge hidden"></span>
+        </div>
         <div id="promoInput" class="promo-input">
           <input id="promoCode" type="text" maxlength="30" data-i18n-ph="promo_placeholder" placeholder="輸入活動代碼" />
           <button id="redeemBtn" class="promo-redeem-btn" data-i18n="promo_redeem">兌換</button>
@@ -480,15 +504,18 @@
             <button id="saveForLaterBtn" class="promo-ghost-btn" data-i18n="promo_save">💾 儲存備用</button>
           </div>
         </div>
-        <!-- 使用中的票券 -->
-        <div id="activeTicket" class="active-ticket hidden">
-          <div id="activeTicketInfo"></div>
-          <div id="ticketExpireWarn" class="ticket-expire-warn hidden"></div>
-        </div>
-        <!-- 庫存票券 -->
-        <div id="savedTickets" class="saved-tickets hidden">
-          <div id="savedTicketsTitle" class="saved-tickets-title"></div>
-          <div id="savedTicketsList"></div>
+        <!-- PM-273：可折疊區（預設收合，狀態存 localStorage）-->
+        <div id="ticketBody">
+          <!-- 使用中的票券 -->
+          <div id="activeTicket" class="active-ticket hidden">
+            <div id="activeTicketInfo"></div>
+            <div id="ticketExpireWarn" class="ticket-expire-warn hidden"></div>
+          </div>
+          <!-- 庫存票券 -->
+          <div id="savedTickets" class="saved-tickets hidden">
+            <div id="savedTicketsTitle" class="saved-tickets-title"></div>
+            <div id="savedTicketsList"></div>
+          </div>
         </div>
       </div>
       <!-- PM-122：進階設定 accordion（四個 toggle 折疊收納，預設收合，狀態存 storage） -->

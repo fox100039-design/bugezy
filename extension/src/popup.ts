@@ -85,6 +85,12 @@ const ticketExpireWarn = $('ticketExpireWarn');
 const savedTicketsBox = $('savedTickets');
 const savedTicketsTitle = $('savedTicketsTitle');
 const savedTicketsList = $('savedTicketsList');
+// PM-273：票券錢包折疊
+const ticketToggle = $('ticketToggle');
+const ticketArrow = $('ticketArrow');
+const ticketSummary = $('ticketSummary');
+const ticketBadge = $('ticketBadge');
+const ticketBody = $('ticketBody');
 // PM-111：日票升級鈕 + 日票中倒數狀態
 const dayPassBtn = $<HTMLButtonElement>('dayPassBtn');
 const dayPassStatus = $('dayPassStatus');
@@ -885,6 +891,28 @@ function confirmJsonDisclaimer(): Promise<boolean> {
 // PM-63/75：查方案 → 依 plan 狀態（source of truth）控制 UI。
 // paid：隱藏升級提示 + ✨ + 管理訂閱（含取消）；cancelled：隱藏升級提示 + 顯示到期日；free：剩餘次數 + 升級提示。
 // ── PM-267：🎫 票券錢包 UI ────────────────────────────────────────────────
+// ── PM-273：票券錢包折疊（預設收合；狀態存 localStorage）──────────────────
+// 用 localStorage 而非 PM-122 accordion 的 chrome.storage.local：後者是非同步的，
+// popup 開啟瞬間會先套預設值再被覆蓋，展開狀態會閃一下；localStorage 同步讀取沒這問題。
+const TICKET_OPEN_KEY = 'bugezy:ticket-open';
+let ticketOpen = localStorage.getItem(TICKET_OPEN_KEY) === '1'; // 預設收合
+
+/** 依 ticketOpen 更新箭頭、內容顯示，以及「收合才顯示」的摘要/庫存 badge。 */
+function updateTicketFold() {
+  ticketArrow.textContent = ticketOpen ? '▼' : '▶';
+  ticketBody.style.display = ticketOpen ? 'block' : 'none';
+  // 展開後下方已有完整的「使用中票券」與「庫存票券（N）」，標題列不再重複顯示
+  ticketSummary.classList.toggle('hidden', ticketOpen || !ticketSummary.textContent);
+  ticketBadge.classList.toggle('hidden', ticketOpen || !ticketBadge.textContent);
+}
+
+ticketToggle.addEventListener('click', () => {
+  ticketOpen = !ticketOpen;
+  localStorage.setItem(TICKET_OPEN_KEY, ticketOpen ? '1' : '0');
+  updateTicketFold();
+});
+updateTicketFold(); // 初始套用（渲染前先收合，避免開 popup 閃一下完整內容）
+
 /** 依 ticketState 重繪「使用中／到期提醒／庫存」三區（純渲染，不打 API）。 */
 function renderTicketWallet() {
   const { active, saved } = ticketState;
@@ -944,6 +972,18 @@ function renderTicketWallet() {
   } else {
     savedTicketsBox.classList.add('hidden');
   }
+
+  // PM-273：折疊標題列——完全沒有票券（無使用中、無庫存）時整列隱藏，
+  // 免得留下一個點開來是空的區塊；此時只剩「輸入活動代碼」欄位。
+  const hasAny = !!active || saved.length > 0;
+  ticketToggle.classList.toggle('hidden', !hasAny);
+  ticketSummary.textContent = active
+    ? `🟢 ${active.code} ${t('promo_days_left', currentUILang, { n: active.days_left })}`
+    : '';
+  ticketBadge.textContent = saved.length
+    ? t('promo_stock', currentUILang, { n: saved.length })
+    : '';
+  updateTicketFold();
 }
 
 /** 顯示兌換結果訊息；ok=true 時一併給「立即啟用／儲存備用」兩顆按鈕。 */
