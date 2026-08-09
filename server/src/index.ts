@@ -34,6 +34,9 @@ export interface Env {
   // PM-270：Discord Webhook URL（`wrangler secret put DISCORD_WEBHOOK_URL`）。未設定 → 靜默跳過。
   // 取代 PM-268 的 ntfy：ntfy.sh 按來源 IP 計配額，Workers 共用 IP 額度已滿 → 永遠 429（PM-269）。
   DISCORD_WEBHOOK_URL?: string;
+  // PM-276：管理端安裝碼反查用（`wrangler secret put ADMIN_TOKEN`）。
+  // **未設定時 /api/admin/verify-install 一律 404**——否則會變成任何人都能用安裝碼查到 email。
+  ADMIN_TOKEN?: string;
   // PM-268：per-request ExecutionContext，供 notifyFox 用 waitUntil 送出非阻塞推播（見 notifyFox 註解）。
   __ctx?: ExecutionContext;
 }
@@ -314,6 +317,63 @@ function notifyFoxForUser(
   }
 }
 
+// ── PM-276：安裝碼（BZ-XXXX）——綁 user_id、永不變，供 FOX 在推廣活動驗證身份 ──────
+// 刻意排除易混淆字元（0/O、1/I/L）：這組碼會被口頭唸、手打、在 FB 私訊裡貼來貼去，
+// 少一個「這是 0 還是 O」的往返比多幾萬組合更有價值。剩 31 字元 → 31^4 ≈ 92 萬組。
+const INSTALL_CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+
+function randomInstallCode(): string {
+  // 用 crypto.getRandomValues 而非 Math.random——這組碼等同用戶識別碼，不該可預測
+  const buf = new Uint8Array(4);
+  crypto.getRandomValues(buf);
+  let s = '';
+  for (const b of buf) s += INSTALL_CODE_ALPHABET[b % INSTALL_CODE_ALPHABET.length];
+  return `BZ-${s}`;
+}
+
+/**
+ * PM-276：取得（必要時產生）用戶的安裝碼。同一個 user_id 永遠拿到同一組——只有欄位為空時才寫入。
+ * 任何失敗（欄位未建、連續碰撞）都回 null 而非拋錯：安裝碼只是輔助資訊，不該讓登入失敗。
+ */
+async function ensureInstallCode(userId: string, env: Env): Promise<string | null> {
+  const { data, error: selErr } = await supa(env)
+    .from('users')
+    .select('install_code')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (selErr) {
+    console.error('install_code 查詢失敗（欄位可能尚未建立）:', selErr.message);
+    return null;
+  }
+  const current = (data as { install_code?: string | null } | null)?.install_code ?? null;
+  if (current) return current;
+
+  // 碰撞極少見，但 UNIQUE 約束是最終防線 → 撞到就換一組重試
+  for (let i = 0; i < 5; i++) {
+    const code = randomInstallCode();
+    const { error } = await supa(env)
+      .from('users')
+      .update({ install_code: code })
+      .eq('user_id', userId)
+      .is('install_code', null); // 併發時只有第一個請求會寫成功
+    if (!error) {
+      // 條件式 update 可能 0 列（另一個請求剛寫入）→ 回讀確認實際存的值
+      const { data } = await supa(env)
+        .from('users')
+        .select('install_code')
+        .eq('user_id', userId)
+        .maybeSingle();
+      return (data as { install_code?: string | null } | null)?.install_code ?? code;
+    }
+    if (error.code !== '23505') {
+      console.error('install_code 產生失敗:', error.message);
+      return null; // 欄位還沒建（FOX 未跑 ALTER）等情況 → 不要讓登入失敗
+    }
+  }
+  console.error('install_code 連續碰撞 5 次');
+  return null;
+}
+
 async function createSession(request: Request, env: Env): Promise<Response> {
   const body = (await request.json().catch(() => null)) as
     | { google_token?: string; name?: string }
@@ -331,16 +391,25 @@ async function createSession(request: Request, env: Env): Promise<Response> {
   const email = verified.email;
 
   // user 不存在則建立
+  // PM-276：這支查詢刻意**不**一起 select install_code。若 FOX 尚未跑 ALTER（欄位不存在），
+  //   PostgREST 會讓整筆查詢失敗 → data 為 null → 既有用戶被誤判成新用戶 → 重複 INSERT +
+  //   每次登入都推一則假的「🆕 新用戶」。安裝碼交給 ensureInstallCode 自己查（失敗只回 null）。
   const { data: user } = await supa(env)
     .from('users')
     .select('user_id')
     .eq('user_id', userId)
     .maybeSingle();
-  if (!user) {
+  const isNewUser = !user;
+  if (isNewUser) {
     await supa(env)
       .from('users')
       .insert({ user_id: userId, email, name: body.name || '', plan: 'free' });
-    notifyFox(env, '🆕 新用戶', `${email} 剛註冊了 BugEzy`, 4); // PM-268
+  }
+  // PM-276：舊用戶（本功能上線前就註冊的）第一次登入時補發，之後不再變動
+  const installCode = await ensureInstallCode(userId, env);
+  if (isNewUser) {
+    // PM-276：通知帶上安裝碼，FOX 之後可用安裝碼在 Discord 反查是哪位用戶
+    notifyFox(env, '🆕 新用戶', `${email} 剛註冊了 BugEzy\n安裝碼：${installCode ?? '（產生失敗）'}`, 4);
   }
 
   // 產生不可猜測的 session token（雙 UUID）
@@ -5750,6 +5819,13 @@ export default {
       if (request.method === 'GET' && path === '/api/promo/wallet') {
         return await getTicketWallet(request, env);
       }
+      // PM-276：安裝碼——用戶查自己的（需登入）／FOX 反查歸屬（需 ADMIN_TOKEN）
+      if (request.method === 'GET' && path === '/api/user/install-code') {
+        return await getInstallCode(request, env);
+      }
+      if (request.method === 'GET' && path === '/api/admin/verify-install') {
+        return await verifyInstallCode(request, env, url);
+      }
       if (request.method === 'POST' && path === '/api/user/cancel') {
         return await ecpayCancel(request, env); // PM-73：取消訂閱
       }
@@ -6542,6 +6618,48 @@ async function getUserPlan(request: Request, env: Env): Promise<Response> {
     console.error('plan error:', err);
     return jsonNoStore({ error: GENERIC_500 }, 500);
   }
+}
+
+// GET /api/user/install-code — 用戶查自己的安裝碼（popup 顯示用；沒有就當場產一組）
+async function getInstallCode(request: Request, env: Env): Promise<Response> {
+  const userId = await getAuthUserId(request, env);
+  if (!userId) return jsonNoStore({ error: 'unauthorized' }, 401);
+  const code = await ensureInstallCode(userId, env);
+  return jsonNoStore({ install_code: code });
+}
+
+/**
+ * GET /api/admin/verify-install?code=BZ-XXXX — FOX 用安裝碼反查用戶（推廣活動驗身份）。
+ *
+ * ⚠ 這支會吐出 email，等於「知道安裝碼就能拿到信箱」。安裝碼只有 ~92 萬組合，
+ *   沒有保護的話是可以暴力枚舉的，所以：**未設 ADMIN_TOKEN 就整支當作不存在（404）**，
+ *   而不是預設開放。回應也一律 404 而非 401/403，避免這支端點的存在本身被探測出來。
+ */
+async function verifyInstallCode(request: Request, env: Env, url: URL): Promise<Response> {
+  const admin = env.ADMIN_TOKEN?.trim();
+  const provided = (request.headers.get('x-admin-token') || extractBearer(request) || '').trim();
+  if (!admin || provided !== admin) return jsonNoStore({ error: 'not found' }, 404);
+
+  const code = (url.searchParams.get('code') || '').trim().toUpperCase();
+  if (!code) return jsonNoStore({ error: 'missing code' }, 400);
+  const { data, error } = await supa(env)
+    .from('users')
+    .select('email, install_code, created_at, plan')
+    .eq('install_code', code)
+    .maybeSingle();
+  if (error) {
+    console.error('verify-install 查詢失敗:', error.message);
+    return jsonNoStore({ error: GENERIC_500 }, 500);
+  }
+  if (!data) return jsonNoStore({ found: false });
+  const u = data as { email: string; install_code: string; created_at: string; plan: string | null };
+  return jsonNoStore({
+    found: true,
+    email: u.email,
+    install_code: u.install_code,
+    created_at: u.created_at,
+    plan: u.plan ?? 'free',
+  });
 }
 
 // ── PM-266：活動代碼兌換 + 票券錢包 ─────────────────────────────────────────

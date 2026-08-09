@@ -157,3 +157,7 @@ ALTER TABLE payments  ENABLE ROW LEVEL SECURITY; -- PM-145：只有 service_role
 ALTER TABLE feedback  ENABLE ROW LEVEL SECURITY; -- PM-174：只有 service_role 能存取
 ALTER TABLE promo_codes  ENABLE ROW LEVEL SECURITY; -- PM-265：只有 service_role 能存取
 ALTER TABLE user_tickets ENABLE ROW LEVEL SECURITY; -- PM-265：只有 service_role 能存取
+
+-- ── PM-276：安裝碼（推廣活動驗證身份用，綁 user_id 永不變；完整版見 install-code.sql）──
+ALTER TABLE users ADD COLUMN IF NOT EXISTS install_code VARCHAR(8);
+-- UNIQUE 約束（Worker 產碼靠它擋碰撞）：users_install_code_key

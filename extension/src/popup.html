@@ -201,6 +201,23 @@
 
       /* PM-267：🎫 票券錢包（深色卡片，與付費徽章同一視覺語彙）*/
       .ticket-wallet { margin-bottom: 8px; }
+      /* PM-276：安裝碼列 */
+      .install-code {
+        display: flex; align-items: center; gap: 6px; margin-bottom: 8px;
+        background: #16162a; border: 1px solid #2a2a3e; border-radius: 8px; padding: 6px 10px;
+      }
+      .install-code-label { font-size: 11px; color: #8b8fa3; flex-shrink: 0; }
+      /* 等寬字：安裝碼會被口頭唸/手打，等寬比較好逐字對照 */
+      .install-code-value {
+        flex: 1; min-width: 0; font-family: ui-monospace, monospace; font-size: 13px;
+        font-weight: 700; color: #a78bfa; letter-spacing: 0.5px;
+      }
+      .install-code-btn {
+        width: auto; margin: 0; flex-shrink: 0; padding: 3px 10px; font-size: 11px;
+        background: #2a2a3e; border-radius: 6px;
+      }
+      .install-code-btn.copied { background: #16a34a; }
+
       /* PM-273：票券錢包折疊標題列 */
       .ticket-toggle {
         display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;
@@ -493,6 +510,13 @@
         <a id="resubBtn" class="cancel-link" data-i18n="resub">重新訂閱</a>
       </div>
       <!-- PM-267：🎫 票券錢包（輸入活動代碼 → 兌換 → 儲存/啟用；到期提醒）-->
+      <!-- PM-276：安裝碼（綁帳號、永不變，推廣活動驗證身份用）。獨立於票券錢包之外，
+           不受 PM-273 折疊影響，登入後隨時可見。 -->
+      <div id="installCodeRow" class="install-code hidden">
+        <span class="install-code-label" data-i18n="install_code_label">📋 我的安裝碼</span>
+        <span id="installCodeValue" class="install-code-value"></span>
+        <button id="installCodeCopy" class="install-code-btn" data-i18n="install_code_copy">複製</button>
+      </div>
       <div id="ticketWallet" class="ticket-wallet hidden">
         <!-- PM-273：折疊標題列（點擊展開/收合票券內容；輸入代碼欄位刻意留在外面，隨時可見）
              收合時在同一行顯示「使用中票券」摘要 + 庫存數 badge，展開時交由下方完整區塊呈現。 -->

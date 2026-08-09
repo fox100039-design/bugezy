@@ -91,6 +91,10 @@ const ticketArrow = $('ticketArrow');
 const ticketSummary = $('ticketSummary');
 const ticketBadge = $('ticketBadge');
 const ticketBody = $('ticketBody');
+// PM-276：安裝碼
+const installCodeRow = $('installCodeRow');
+const installCodeValue = $('installCodeValue');
+const installCodeCopy = $<HTMLButtonElement>('installCodeCopy');
 // PM-274：啟用二次確認
 const ticketConfirm = $('ticketConfirm');
 const ticketConfirmInfo = $('ticketConfirmInfo');
@@ -901,6 +905,34 @@ function confirmJsonDisclaimer(): Promise<boolean> {
 // PM-63/75：查方案 → 依 plan 狀態（source of truth）控制 UI。
 // paid：隱藏升級提示 + ✨ + 管理訂閱（含取消）；cancelled：隱藏升級提示 + 顯示到期日；free：剩餘次數 + 升級提示。
 // ── PM-267：🎫 票券錢包 UI ────────────────────────────────────────────────
+// ── PM-276：安裝碼 ────────────────────────────────────────────────────────
+/** 查自己的安裝碼並顯示；未登入或欄位尚未建立（FOX 未跑 ALTER）→ 整列不顯示，不干擾其他功能。 */
+async function loadInstallCode() {
+  try {
+    const res = await fetch(`${API_BASE}/api/user/install-code`, { headers: await getAuthHeaders() });
+    if (!res.ok) return;
+    const data = (await res.json()) as { install_code?: string | null };
+    if (!data.install_code) return;
+    installCodeValue.textContent = data.install_code;
+    installCodeRow.classList.remove('hidden');
+  } catch {
+    /* 靜默失敗——安裝碼只是輔助資訊，不該影響 popup 其他區塊 */
+  }
+}
+
+installCodeCopy.addEventListener('click', () => {
+  const code = installCodeValue.textContent ?? '';
+  if (!code) return;
+  void navigator.clipboard.writeText(code).then(() => {
+    installCodeCopy.textContent = t('install_code_copied', currentUILang);
+    installCodeCopy.classList.add('copied');
+    setTimeout(() => {
+      installCodeCopy.textContent = t('install_code_copy', currentUILang);
+      installCodeCopy.classList.remove('copied');
+    }, 1500);
+  });
+});
+
 // ── PM-273：票券錢包折疊（預設收合；狀態存 localStorage）──────────────────
 // 用 localStorage 而非 PM-122 accordion 的 chrome.storage.local：後者是非同步的，
 // popup 開啟瞬間會先套預設值再被覆蓋，展開狀態會閃一下；localStorage 同步讀取沒這問題。
@@ -1150,6 +1182,7 @@ async function loadPlan() {
     // PM-267：票券狀態快取 + 重繪錢包（登入成功才顯示整個票券區）
     ticketState = { active: plan.tickets?.active ?? null, saved: plan.tickets?.saved ?? [] };
     isEcpayPaid = plan.plan === 'paid' || plan.plan === 'cancelled'; // PM-275（需在重繪前設定）
+    void loadInstallCode(); // PM-276：走到這裡代表已登入；不 await，避免拖慢方案渲染
     ticketWallet.classList.remove('hidden');
     renderTicketWallet();
 

@@ -119,6 +119,10 @@ const dict: Record<string, { zh: string; en: string; ja: string; ko: string; vi:
   // PM-273：票券錢包折疊標題列
   promo_wallet_title: { zh: '🎫 票券錢包', en: '🎫 Ticket wallet', ja: '🎫 チケットウォレット', ko: '🎫 티켓 지갑', vi: '🎫 Ví vé' },
   promo_stock: { zh: '庫存 {n}', en: '{n} saved', ja: '在庫 {n}', ko: '보관 {n}', vi: 'Lưu {n}' },
+  // PM-276：安裝碼
+  install_code_label: { zh: '📋 我的安裝碼', en: '📋 My Install Code', ja: '📋 インストールコード', ko: '📋 설치 코드', vi: '📋 Mã cài đặt' },
+  install_code_copy: { zh: '複製', en: 'Copy', ja: 'コピー', ko: '복사', vi: 'Sao chép' },
+  install_code_copied: { zh: '✅ 已複製', en: '✅ Copied', ja: '✅ コピー済み', ko: '✅ 복사됨', vi: '✅ Đã sao chép' },
   promo_placeholder: { zh: '輸入活動代碼', en: 'Enter promo code', ja: 'プロモコードを入力', ko: '프로모션 코드 입력', vi: 'Nhập mã khuyến mãi' },
   promo_redeem: { zh: '兌換', en: 'Redeem', ja: '引き換え', ko: '교환', vi: 'Đổi' },
   promo_success: { zh: '🎁 兌換成功！', en: '🎁 Redeemed!', ja: '🎁 引き換え完了！', ko: '🎁 교환 완료!', vi: '🎁 Đổi thành công!' },
