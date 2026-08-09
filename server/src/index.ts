@@ -404,6 +404,11 @@ const CSP_VALUE =
   "script-src 'self' 'unsafe-inline'; " +
   "style-src 'self' 'unsafe-inline'; " +
   "connect-src 'self' https://bugezy.dev https://bugezy-api.bugezy-api.workers.dev; " +
+  // PM-272：放行 YouTube 隱私增強網域，供 /testimonials 嵌入用戶心得影片。
+  //   ⚠ 沒有這行的話 frame-src 會回退到 default-src 'self'，iframe 直接被 CSP 擋掉（畫面只剩空白框）。
+  //   只放行 youtube-nocookie（不放 youtube.com），且 frame-ancestors 'none' 不受影響——
+  //   這是「我們可以嵌入誰」，與「誰可以嵌入我們」是兩回事。
+  "frame-src https://www.youtube-nocookie.com; " +
   'form-action ' +
   "'self' https://payment.ecpay.com.tw https://payment-stage.ecpay.com.tw; " +
   "base-uri 'self'; " +
@@ -503,7 +508,7 @@ const T2S_TERMS: Array<[string, string]> = [
   ['程式', '程序'],
   ['檔案', '文件'],
 ];
-const T2S_CHARS: Record<string, string> = {"丟":"丢","並":"并","乾":"干","亂":"乱","亞":"亚","佈":"布","佔":"占","併":"并","來":"来","個":"个","們":"们","側":"侧","偵":"侦","偽":"伪","備":"备","傳":"传","僅":"仅","價":"价","優":"优","儲":"储","兒":"儿","內":"内","兩":"两","冊":"册","冪":"幂","別":"别","刪":"删","則":"则","剛":"刚","劃":"划","動":"动","務":"务","勝":"胜","勢":"势","匯":"汇","區":"区","協":"协","卻":"却","參":"参","員":"员","問":"问","啟":"启","單":"单","嗎":"吗","嘗":"尝","噴":"喷","嚴":"严","國":"国","圍":"围","圓":"圆","圖":"图","團":"团","執":"执","報":"报","場":"场","塊":"块","塗":"涂","壇":"坛","壞":"坏","夠":"够","夾":"夹","學":"学","實":"实","審":"审","寫":"写","寬":"宽","將":"将","專":"专","尋":"寻","對":"对","導":"导","層":"层","屬":"属","師":"师","帳":"帐","帶":"带","幀":"帧","幫":"帮","幾":"几","庫":"库","廠":"厂","廣":"广","廳":"厅","張":"张","強":"强","彈":"弹","彙":"汇","後":"后","徑":"径","從":"从","復":"复","徹":"彻","恆":"恒","態":"态","慣":"惯","憑":"凭","應":"应","戶":"户","拋":"抛","捨":"舍","捲":"卷","掃":"扫","掛":"挂","採":"采","換":"换","損":"损","搶":"抢","撐":"撑","擁":"拥","擇":"择","擊":"击","擋":"挡","擔":"担","據":"据","擬":"拟","擴":"扩","擷":"撷","擾":"扰","攔":"拦","敗":"败","數":"数","斂":"敛","斷":"断","於":"于","時":"时","暫":"暂","書":"书","會":"会","條":"条","棄":"弃","業":"业","極":"极","構":"构","標":"标","樣":"样","橋":"桥","機":"机","橫":"横","檔":"档","檢":"检","檻":"槛","欄":"栏","權":"权","歷":"历","歸":"归","殘":"残","殺":"杀","汙":"污","決":"决","沒":"没","況":"况","洩":"泄","淨":"净","測":"测","準":"准","溝":"沟","滿":"满","漸":"渐","濃":"浓","濫":"滥","濾":"滤","瀏":"浏","灣":"湾","為":"为","無":"无","燈":"灯","爭":"争","牆":"墙","狀":"状","獨":"独","現":"现","環":"环","產":"产","畫":"画","異":"异","當":"当","疊":"叠","癒":"愈","發":"发","盡":"尽","監":"监","盤":"盘","確":"确","碼":"码","禦":"御","種":"种","稱":"称","積":"积","穩":"稳","竄":"窜","競":"竞","筆":"笔","節":"节","範":"范","簡":"简","簽":"签","籤":"签","粵":"粤","紀":"纪","約":"约","紅":"红","納":"纳","純":"纯","級":"级","細":"细","紹":"绍","終":"终","組":"组","結":"结","絕":"绝","絡":"络","給":"给","統":"统","綁":"绑","經":"经","綠":"绿","維":"维","網":"网","綴":"缀","緊":"紧","緒":"绪","線":"线","緣":"缘","編":"编","緩":"缓","縫":"缝","縮":"缩","縱":"纵","總":"总","繞":"绕","繪":"绘","繼":"继","續":"续","義":"义","聯":"联","聲":"声","職":"职","聽":"听","脈":"脉","脫":"脱","脹":"胀","腦":"脑","臨":"临","與":"与","舉":"举","舊":"旧","蓋":"盖","薦":"荐","藍":"蓝","處":"处","虛":"虚","號":"号","螢":"萤","術":"术","衝":"冲","補":"补","裝":"装","裡":"里","製":"制","複":"复","見":"见","規":"规","視":"视","覺":"觉","覽":"览","觸":"触","訂":"订","計":"计","訊":"讯","記":"记","訪":"访","設":"设","許":"许","訴":"诉","診":"诊","註":"注","評":"评","詞":"词","詢":"询","試":"试","話":"话","該":"该","詳":"详","誌":"志","認":"认","語":"语","誤":"误","說":"说","誰":"谁","調":"调","請":"请","論":"论","講":"讲","謝":"谢","謹":"谨","證":"证","識":"识","譯":"译","議":"议","護":"护","讀":"读","變":"变","讓":"让","負":"负","責":"责","貴":"贵","買":"买","費":"费","貼":"贴","資":"资","賣":"卖","賦":"赋","質":"质","賴":"赖","購":"购","賽":"赛","贅":"赘","跡":"迹","蹤":"踪","躍":"跃","軌":"轨","軸":"轴","較":"较","載":"载","輕":"轻","輪":"轮","輯":"辑","輸":"输","轉":"转","辦":"办","迴":"回","這":"这","連":"连","週":"周","進":"进","運":"运","過":"过","達":"达","遞":"递","遠":"远","適":"适","遲":"迟","選":"选","遺":"遗","還":"还","邊":"边","邏":"逻","釋":"释","釘":"钉","鈕":"钮","銷":"销","錄":"录","錢":"钱","錯":"错","鍵":"键","鎖":"锁","鏈":"链","鏡":"镜","鐘":"钟","鑰":"钥","長":"长","門":"门","閃":"闪","閉":"闭","開":"开","閒":"闲","間":"间","閱":"阅","關":"关","陣":"阵","隊":"队","階":"阶","際":"际","隨":"随","險":"险","隱":"隐","雖":"虽","雙":"双","雜":"杂","離":"离","雲":"云","電":"电","靜":"静","韓":"韩","響":"响","頁":"页","頂":"顶","項":"项","順":"顺","須":"须","預":"预","頓":"顿","頭":"头","頻":"频","題":"题","額":"额","顏":"颜","類":"类","顯":"显","風":"风","餘":"余","饋":"馈","馬":"马","駐":"驻","驅":"驱","驗":"验","驟":"骤","體":"体","鮮":"鲜","麥":"麦","麵":"面","麼":"么","點":"点","齊":"齐"};
+const T2S_CHARS: Record<string, string> = {"丟":"丢","並":"并","乾":"干","亂":"乱","亞":"亚","佈":"布","佔":"占","併":"并","來":"来","個":"个","們":"们","側":"侧","偵":"侦","偽":"伪","備":"备","傳":"传","僅":"仅","價":"价","優":"优","儲":"储","兒":"儿","內":"内","兩":"两","冊":"册","冪":"幂","別":"别","刪":"删","則":"则","剛":"刚","劃":"划","動":"动","務":"务","勝":"胜","勢":"势","匯":"汇","區":"区","協":"协","卻":"却","參":"参","員":"员","問":"问","啟":"启","單":"单","嗎":"吗","嘗":"尝","噴":"喷","嚴":"严","國":"国","圍":"围","圓":"圆","圖":"图","團":"团","執":"执","報":"报","場":"场","塊":"块","塗":"涂","壇":"坛","壞":"坏","夠":"够","夾":"夹","學":"学","實":"实","審":"审","寫":"写","寬":"宽","將":"将","專":"专","尋":"寻","對":"对","導":"导","層":"层","屬":"属","師":"师","帳":"帐","帶":"带","幀":"帧","幫":"帮","幾":"几","庫":"库","廠":"厂","廣":"广","廳":"厅","張":"张","強":"强","彈":"弹","彙":"汇","後":"后","徑":"径","從":"从","復":"复","徹":"彻","恆":"恒","態":"态","慣":"惯","憑":"凭","應":"应","戶":"户","拋":"抛","捨":"舍","捲":"卷","掃":"扫","掛":"挂","採":"采","換":"换","損":"损","搶":"抢","撐":"撑","擁":"拥","擇":"择","擊":"击","擋":"挡","擔":"担","據":"据","擬":"拟","擴":"扩","擷":"撷","擾":"扰","攔":"拦","敗":"败","數":"数","斂":"敛","斷":"断","於":"于","時":"时","暫":"暂","書":"书","會":"会","條":"条","棄":"弃","業":"业","極":"极","構":"构","標":"标","樣":"样","橋":"桥","機":"机","橫":"横","檔":"档","檢":"检","檻":"槛","欄":"栏","權":"权","歡":"欢","歷":"历","歸":"归","殘":"残","殺":"杀","汙":"污","決":"决","沒":"没","況":"况","洩":"泄","淨":"净","測":"测","準":"准","溝":"沟","滿":"满","漸":"渐","濃":"浓","濫":"滥","濾":"滤","瀏":"浏","灣":"湾","為":"为","無":"无","燈":"灯","爭":"争","牆":"墙","狀":"状","獨":"独","現":"现","環":"环","產":"产","畫":"画","異":"异","當":"当","疊":"叠","癒":"愈","發":"发","盡":"尽","監":"监","盤":"盘","確":"确","碼":"码","禦":"御","種":"种","稱":"称","積":"积","穩":"稳","竄":"窜","競":"竞","筆":"笔","節":"节","範":"范","簡":"简","簽":"签","籤":"签","粵":"粤","紀":"纪","約":"约","紅":"红","納":"纳","純":"纯","級":"级","細":"细","紹":"绍","終":"终","組":"组","結":"结","絕":"绝","絡":"络","給":"给","統":"统","綁":"绑","經":"经","綠":"绿","維":"维","網":"网","綴":"缀","緊":"紧","緒":"绪","線":"线","緣":"缘","編":"编","緩":"缓","縫":"缝","縮":"缩","縱":"纵","總":"总","繞":"绕","繪":"绘","繼":"继","續":"续","義":"义","聯":"联","聲":"声","職":"职","聽":"听","脈":"脉","脫":"脱","脹":"胀","腦":"脑","臨":"临","與":"与","舉":"举","舊":"旧","蓋":"盖","薦":"荐","藍":"蓝","處":"处","虛":"虚","號":"号","螢":"萤","術":"术","衝":"冲","補":"补","裝":"装","裡":"里","製":"制","複":"复","見":"见","規":"规","視":"视","覺":"觉","覽":"览","觸":"触","訂":"订","計":"计","訊":"讯","記":"记","訪":"访","設":"设","許":"许","訴":"诉","診":"诊","註":"注","評":"评","詞":"词","詢":"询","試":"试","話":"话","該":"该","詳":"详","誌":"志","認":"认","語":"语","誤":"误","說":"说","誰":"谁","調":"调","請":"请","論":"论","講":"讲","謝":"谢","謹":"谨","證":"证","識":"识","譯":"译","議":"议","護":"护","讀":"读","變":"变","讓":"让","負":"负","責":"责","貴":"贵","買":"买","費":"费","貼":"贴","資":"资","賣":"卖","賦":"赋","質":"质","賴":"赖","購":"购","賽":"赛","贅":"赘","跡":"迹","蹤":"踪","躍":"跃","軌":"轨","軸":"轴","較":"较","載":"载","輕":"轻","輪":"轮","輯":"辑","輸":"输","轉":"转","辦":"办","迴":"回","這":"这","連":"连","週":"周","進":"进","運":"运","過":"过","達":"达","遞":"递","遠":"远","適":"适","遲":"迟","選":"选","遺":"遗","還":"还","邊":"边","邏":"逻","釋":"释","釘":"钉","鈕":"钮","銷":"销","錄":"录","錢":"钱","錯":"错","鍵":"键","鎖":"锁","鏈":"链","鏡":"镜","鐘":"钟","鑰":"钥","長":"长","門":"门","閃":"闪","閉":"闭","開":"开","閒":"闲","間":"间","閱":"阅","關":"关","陣":"阵","隊":"队","階":"阶","際":"际","隨":"随","險":"险","隱":"隐","雖":"虽","雙":"双","雜":"杂","離":"离","雲":"云","電":"电","靜":"静","韓":"韩","響":"响","頁":"页","頂":"顶","項":"项","順":"顺","須":"须","預":"预","頓":"顿","頭":"头","頻":"频","題":"题","額":"额","顏":"颜","類":"类","顯":"显","風":"风","餘":"余","饋":"馈","馬":"马","駐":"驻","驅":"驱","驗":"验","驟":"骤","體":"体","鮮":"鲜","麥":"麦","麵":"面","麼":"么","點":"点","齊":"齐"};
 function toSimplified(s: string): string {
   let out = s;
   for (const [tw, cn] of T2S_TERMS) {
@@ -1324,6 +1329,7 @@ function sitemapXml(): Response {
     { path: '/guide', langs: LANGS_3, freq: 'monthly', pri: '0.6' },
     { path: '/skill', langs: LANGS_3, freq: 'monthly', pri: '0.5' }, // PM-201：AI 客服手冊
     { path: '/blog', langs: LANGS_ZH, freq: 'weekly', pri: '0.6' }, // PM-256：部落格列表
+    { path: '/testimonials', langs: LANGS_3, freq: 'monthly', pri: '0.6' }, // PM-272：用戶心得
     { path: '/feedback', langs: LANGS_3, freq: 'monthly', pri: '0.4' }, // PM-174
     { path: '/privacy', langs: LANGS_3, freq: 'yearly', pri: '0.3' },
     // PM-256：部落格文章（SEO）
@@ -1814,6 +1820,13 @@ function homePage(lang: PageLang, _request: Request): string {
         <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
       </div>
     </div>
+  </section>
+
+  <!-- PM-272：用戶心得入口 -->
+  <section style="text-align:center;padding:40px 20px;">
+    <p style="font-size:18px;color:#c9c9d6;margin:0;">
+      💬 <a href="/testimonials">${t('看看其他開發者怎麼說 →', 'See what other developers say →')}</a>
+    </p>
   </section>
 
   <!-- §7 Footer -->
@@ -3595,6 +3608,111 @@ ${bodyHtml}
   </nav>
   <footer>
     <a href="/blog">${t('← 返回部落格列表', '← Back to blog list')}</a>
+  </footer>
+</div>
+</body>
+</html>`;
+}
+
+// ── PM-272：用戶心得頁（GET /testimonials）——文字引言 + YouTube 影片，資料手動維護 ──
+interface Testimonial {
+  name: string;
+  /** 引言。zh 為繁體原文；zh-CN 由 makeT 自動繁轉簡，ja/ko/vi 無對照表 → 回退英文。 */
+  text: { zh: string; en: string };
+  /** YouTube 連結（watch / youtu.be / shorts / embed 皆可）；純文字心得填 null。 */
+  videoUrl: string | null;
+}
+
+// FOX 日後在此新增。有影片的範例：
+//   { name: '王小明', text: { zh: '…', en: '…' }, videoUrl: 'https://youtu.be/dQw4w9WgXcQ' },
+const TESTIMONIALS: Testimonial[] = [
+  {
+    name: 'BugEzy 團隊',
+    text: {
+      zh: '歡迎分享你的 debug 體驗！拍一段影片或寫幾句心得，讓其他開發者知道 BugEzy 幫你省下了多少時間。',
+      en: 'Share your debug experience! Record a video or write a few lines, and let other developers know how much time BugEzy saved you.',
+    },
+    videoUrl: null,
+  },
+];
+
+/**
+ * PM-272：YouTube 連結 → 16:9 響應式嵌入（youtube-nocookie 保護隱私）。
+ * 取不到 11 碼 video ID 就回空字串（該則心得只顯示文字，不會壞版）。
+ */
+function youtubeEmbed(url: string): string {
+  // 涵蓋 watch?v= / youtu.be/ / shorts/ / embed/ 四種常見形式（FOX 可能直接貼手機分享的 shorts 連結）
+  const id = url.match(/(?:v=|youtu\.be\/|\/shorts\/|\/embed\/)([a-zA-Z0-9_-]{11})/)?.[1];
+  if (!id) return '';
+  return `      <div class="t-video">
+        <iframe src="https://www.youtube-nocookie.com/embed/${id}" title="BugEzy testimonial"
+          loading="lazy" allow="accelerometer;clipboard-write;encrypted-media;gyroscope;picture-in-picture"
+          allowfullscreen></iframe>
+      </div>`;
+}
+
+const TESTIMONIALS_CSS = `
+  .t-item { padding:24px; margin:0 0 20px; background:#1a1a2e; border:1px solid #2a2a3e; border-radius:14px; }
+  .t-video { position:relative; padding-bottom:56.25%; height:0; overflow:hidden; border-radius:12px; margin-bottom:18px; background:#000; }
+  .t-video iframe { position:absolute; top:0; left:0; width:100%; height:100%; border:0; }
+  .t-quote { position:relative; color:#d0d0d8; font-size:16px; margin:0; padding-left:28px; }
+  .t-quote::before { content:"\\201C"; position:absolute; left:0; top:-6px; font-size:40px; line-height:1; color:#7c3aed; }
+  .t-name { margin:14px 0 0; color:#a78bfa; font-size:14px; font-weight:600; }
+  .cta-feedback { margin:40px 0 0; padding:28px 24px; background:radial-gradient(ellipse at center,rgba(124,58,237,0.16),transparent 70%); border:1px solid #7c3aed; border-radius:14px; }
+  .cta-feedback h3 { margin:0 0 14px; color:#fff; font-size:20px; }
+  .cta-feedback ul { margin:0 0 14px; padding-left:22px; color:#d0d0d8; }
+  .cta-feedback li { margin:6px 0; }
+  .cta-feedback .reward { color:#7ee787; font-weight:700; }
+  .cta-feedback .note { color:#8b8fa3; font-size:14px; margin:0; }
+`;
+
+function testimonialsPage(lang: PageLang): string {
+  const t = makeT(lang);
+  const items = TESTIMONIALS.map((item) => {
+    const video = item.videoUrl ? youtubeEmbed(item.videoUrl) + '\n' : '';
+    return `    <li class="t-item">
+${video}      <p class="t-quote">${escHtml(t(item.text.zh, item.text.en))}</p>
+      <p class="t-name">— ${escHtml(item.name)}</p>
+    </li>`;
+  }).join('\n');
+  const title = t('用戶心得 — 開發者怎麼用 BugEzy', 'Testimonials — How Developers Use BugEzy');
+  const desc = t(
+    '真實開發者分享用 BugEzy 回報 Bug 的體驗，含影片與文字心得。',
+    'Real developers share their experience reporting bugs with BugEzy — videos and written reviews.',
+  );
+  return `<!DOCTYPE html>
+<html lang="${htmlLang(lang)}">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${title} · BugEzy</title>
+<meta name="description" content="${desc}">
+<meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
+${canonicalTag('/testimonials', lang, LANGS_3)}
+${hreflangTags('/testimonials', LANGS_3)}
+${ogMeta('/testimonials', 'BugEzy Testimonials', 'Real developers share how BugEzy speeds up their debugging.')}
+<style>${BLOG_CSS}${TESTIMONIALS_CSS}</style>
+</head>
+<body>
+<div class="wrap">
+  <header><a class="brand" href="/">🐛 BugEzy</a></header>
+  <h1>${t('用戶心得', 'Testimonials')}</h1>
+  <p class="lead">${t('看看其他開發者怎麼用 BugEzy 回報 Bug。', 'See how other developers report bugs with BugEzy.')}</p>
+  <ul class="post-list">
+${items}
+  </ul>
+
+  <section class="cta-feedback">
+    <h3>${t('📢 分享你的使用體驗', '📢 Share Your Experience')}</h3>
+    <ul>
+      <li>${t('拍一段 debug 影片分享 → ', 'Share a debugging video → ')}<span class="reward">${t('免費 30 天', '30 days free')}</span></li>
+      <li>${t('寫 50 字使用心得 → ', 'Write a 50-word review → ')}<span class="reward">${t('免費 10 天', '10 days free')}</span></li>
+    </ul>
+    <p class="note">${t('寄到 ', 'Send to ')}<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a>${t('，附上你的 BugEzy 帳號 email。', ', and include the email of your BugEzy account.')}</p>
+  </section>
+
+  <footer>
+    <a href="/">${t('← 返回首頁', '← Back to home')}</a>
   </footer>
 </div>
 </body>
@@ -5433,6 +5551,12 @@ export default {
     if (request.method === 'GET' && path === '/api/version') {
       // 每次上新版到 Chrome Web Store 時，同步改 latest + deploy
       return json({ latest: '1.1.4', changelog_url: 'https://bugezy.dev/changelog' }); // PM-252：v1.1.4 送審
+    }
+    // PM-272：用戶心得頁（文字 + YouTube 嵌入）
+    if (request.method === 'GET' && path === '/testimonials') {
+      const res = html(testimonialsPage(getLang(request)));
+      res.headers.set('Cache-Control', 'no-store'); // 與其他多語頁一致，防邊緣快取跨語言誤送
+      return res;
     }
     if (request.method === 'GET' && path === '/changelog') {
       const res = html(changelogPage(getLang(request))); // PM-126/151
