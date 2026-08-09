@@ -1,5 +1,33 @@
 # BugEzy Changelog
 
+## 2026-08-09
+
+Day 37（PM-272~282）。**票券體驗打磨 + 安裝碼 + 官網指南大整併 → v1.1.5 送審**。extension `manifest` 1.1.4→**1.1.5**、產出 `bugezy-v1.1.5.zip`（33 entries，待 FOX 上傳）；server 多次 deploy（`fa5ca8c5`→`d1e1f383`→`5d3991c5`→`3945fad8`）。
+
+- **PM-272 用戶心得頁**（`server/index.ts` + `extension/t2s.ts`）。新增 `/testimonials`（`TESTIMONIALS` 陣列 + 引號卡片 + `youtubeEmbed` 16:9 圓角 `youtube-nocookie`）+ 首頁入口 + CTA（影片 30 天 / 心得 10 天）+ canonical/hreflang + sitemap。**修卡片兩個會讓功能失效的問題**：①全站 CSP 沒有 `frame-src`，會回退 `default-src 'self'` **把 iframe 整個擋掉**（只剩黑框，錯誤僅在 console）→ 補 `frame-src https://www.youtube-nocookie.com`；②`T2S_CHARS` 是 414 字子集，新文案帶進表外字使簡體版顯示「**歡**迎…」→ 補「歡→欢」（server 與 extension 兩表同步到 415）。`youtubeEmbed` 另支援 `/shorts/`、`/embed/`。
+
+- **PM-273 票券錢包折疊**（`popup.html/.ts` + `i18n.ts`）。`#ticketToggle` 標題列 + `#ticketBody` 折疊區，狀態存 `localStorage`（同步讀取，避免 `chrome.storage` 非同步造成的展開狀態閃動）；收合時標題列顯示「🟢 代碼 剩 N 天」+「庫存 N」badge，展開後收起避免重複。輸入代碼欄位刻意留在折疊區外；**完全沒有票券時整條折疊列隱藏**（否則點開是空的）。
+
+- **PM-274 啟用二次確認**（`popup.html/.ts` + `i18n.ts`）。庫存票「啟用」與兌換後「立即啟用」**兩條路徑都改走 `askActivate()`**，`activateTicket()` 全檔只剩「確認啟用」一個呼叫點，無法繞過。確認框放折疊區外（兩條路徑都看得到）+ `scrollIntoView`（否則可能在畫面外）+ 先關閉再啟用（防連點送兩次）+ 重新兌換時清掉殘留確認框。
+
+- **PM-275 付費會員隱藏啟用鈕**（`popup.ts`）。另開 `isEcpayPaid`（`plan === 'paid' | 'cancelled'`）而**不是**沿用 `plan.isPaid`——後者在 server 端把「持有有效票券」也算付費，誤用會把票券用戶的啟用鈕一起藏掉。付費會員的庫存列改「✨ 已是會員」標籤（不建立按鈕）、標題加「備用額度」，兌換後只留「💾 儲存備用」。
+
+- **PM-276 安裝碼**（`server/index.ts` + `install-code.sql` + popup）。`users.install_code`（`BZ-XXXX`，綁 user_id 永不變）；`randomInstallCode` 用 `crypto.getRandomValues`、**字母表排除 0/O/1/I/L**（這碼要口頭唸與手打）；`ensureInstallCode` 用條件式 update（`.is('install_code', null)`）讓併發只寫一次 + 碰撞重試 5 次，**任何失敗只回 null 絕不影響登入**。`GET /api/user/install-code`（含舊用戶補發）、`GET /api/admin/verify-install`（**未設 `ADMIN_TOKEN` 一律 404，不預設開放**；token 不符也回 404 避免端點被探測）。Discord「🆕 新用戶」通知帶上安裝碼。popup 安裝碼列放在折疊區外 + 複製鈕。**自查修掉**：原本把 `install_code` 併進 `createSession` 的查詢，欄位未建時整筆查詢會失敗 → 既有用戶被判成新用戶 → 每次登入都推假的「新用戶」通知。
+
+- **PM-277 popup 初次載入未渲染修復**（`popup.ts` + `server/index.ts`）。四個症狀（次數/升級鈕/安裝碼/票券錢包）恰好都只在 `loadPlan()` 成功路徑渲染 → 整支沒跑完。popup 開啟時併發打多支 `/api/`（`loadPlan` 被呼叫**兩次** + PM-276 新增的 install-code），而 `/api/` 有 rate limit；失敗又被兩條靜默路徑吞掉。修：**`planInflight` 併發去重**、**安裝碼併進 `/api/user/plan`**（`/api/user/*` 請求 **3 支降為 1 支**）、失敗改 `console.warn` 並重試一次（401 視為未登入不重試）、失敗時 `renderPlanFallback()` 渲染安全預設不留白、抽出 `renderPlanUI()` 讓初次載入與語言切換走同一條路徑。
+
+- **PM-278 到期提醒文案修正**（`popup.ts` + `i18n.ts`）。到期只是回到 free，不會自動扣款，但文案寫「到期後以月費 NT$80 計算」與「啟用庫存票可**避免扣月費**」。改為「⚠ 免費體驗將於 N 天後結束」+「如需保持完整功能，可升級為訂閱會員」／「💾 你有 N 張庫存票券可啟用，延長免費使用」，並**移除**三個誤導性 key（留著空殼只會讓月費字眼被貼回來）。
+
+- **PM-279 /guide 一鍵複製**（`server/index.ts`）。9 顆複製鈕（MCP 網址 ×2、六個工具、AI 提示詞；Claude Desktop 複製 JSON、Claude Code 複製指令）+ ⚡ 30 秒快速開始 + 🆘「搞不定？把這段話丟給你的 AI」。**不用卡片的 `onclick` + 讀 `textContent`**（PM-192/199/200 踩過會複製到排版空白），改 `data-copy-text` + 事件委派 + `execCommand` fallback（卡片版無 fallback，失敗仍顯示「已複製」會騙使用者）；顯示與複製共用同一份來源常數。
+
+- **PM-280 /install 併入 /guide**（`server/index.ts`，移除 `installPage` 324 行）。`/guide` 重組為：🤖 複製貼給 AI → ⚡ 30 秒快速開始 → 📖 詳細五步（安裝/登入/六模式/編輯上傳/MCP）→ 🆘 求助 → 💡 小技巧；`/install` **301** 到 `/guide`（保留 `?lang=`）。**修卡片的 `Response.redirect()` 會回 500**——它的 headers 是 immutable，而統一出口會 `headers.set()` 注入 CORS。**搬移 PM-190/191 的 token 自動補齊**（卡片沒提，直接 301 會靜默弄丟），並一併改寫 `data-copy-text`（否則畫面帶 token、複製到的沒有）；修 template literal 吞掉 regex 反斜線。首頁加 `.btn-guide` 入口；7 處站內連結改寫；sitemap 移除 `/install`、`/guide` 權重 0.6→0.9。**取捨**：原 `/install` 為 6 語，`/guide` 僅 3 語，日韓越使用者會回退英文。
+
+- **PM-281 v1.1.5 打包**。`manifest` 1.1.4→1.1.5 + `bugezy-v1.1.5.zip`（33 entries，**排除 build 遞迴帶入的 7 個設計原稿**；與已過審的 1.1.3 逐檔比對零差異）；permissions 無新增（不觸發權限重審）；6 項新功能逐一在 zip 內驗證。
+
+- **PM-282 版號同步 + 收工**：`/api/version`→1.1.5、首頁/features footer→v1.1.5、`/changelog` 新增 v1.1.5 中英區塊、`SKILL_MD`+`SKILL.md` 版本與 `/install`→`/guide` 連結同步、CHANGELOG + ARCHITECTURE + git push。
+
+> **待 FOX**：① 上傳 `bugezy-v1.1.5.zip` 送審 ② `wrangler secret put ADMIN_TOKEN`（要用安裝碼反查才需要）③ Discord webhook 與票券 UI 實機驗收
+
 ## 2026-08-08
 
 Day 36（PM-265~270）。**活動代碼 + 票券錢包系統上線 + FOX 即時推播**。新增「兌換代碼 → 存進錢包 → 想用才啟用」的免費期發放機制（DB + API + popup UI），並替 7 個重要事件接上即時推播。server 多次 deploy（`27f3a1c8`→`7a998663`→`62459098`→`eb09b632`→`e0b74201`）；extension 待重上架（仍 v1.1.4）。

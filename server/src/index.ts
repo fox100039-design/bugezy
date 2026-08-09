@@ -1913,7 +1913,7 @@ function homePage(lang: PageLang, _request: Request): string {
       <p>📧 Email：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></p>
     </div>
     <div style="margin-top:8px;"><a href="/features">${t('功能說明', 'Features')}</a> | <a href="/guide">${t('完整指南', 'Guide')}</a> | <a href="/faq">${t('常見問題', 'FAQ')}</a> | <a href="/privacy">${t('隱私政策', 'Privacy')}</a> | <a href="/changelog">${t('更新日誌', 'Changelog')}</a> | <a href="/blog">${t('📝 部落格', '📝 Blog')}</a> | <a href="/skill">${t('🤖 AI 客服手冊', '🤖 AI Manual')}</a> | <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a> | <a href="/reports">${t('📋 我的報告', '📋 My Reports')}</a></div>
-    <div style="margin-top:8px;color:#555;">© 2026 BugEzy · v1.1.4 · ${t('亞洲平價 MCP 語音除錯工具', 'Affordable MCP voice debugging for Asia')}</div>
+    <div style="margin-top:8px;color:#555;">© 2026 BugEzy · v1.1.5 · ${t('亞洲平價 MCP 語音除錯工具', 'Affordable MCP voice debugging for Asia')}</div>
   </footer>
 </body>
 </html>`;
@@ -2107,11 +2107,11 @@ const SKILL_MD = `# BugEzy — AI 除錯工具使用指南
 
 BugEzy 是一個 Chrome 擴充工具 + MCP server，讓開發者用語音 + 一鍵錄製 Bug，AI 透過 MCP 直接讀取報告並修復。
 
-**最新版本：v1.1.4（2026-07-19）**
+**最新版本：v1.1.5（2026-08-09）**
 
 - 官網：https://bugezy.dev
 - Chrome Web Store：https://chromewebstore.google.com/detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj
-- 安裝教學：https://bugezy.dev/install
+- 完整指南（安裝 + 使用 + MCP）：https://bugezy.dev/guide
 - 功能說明：https://bugezy.dev/features
 - FAQ：https://bugezy.dev/faq
 - 隱私政策：https://bugezy.dev/privacy
@@ -2179,6 +2179,13 @@ BugEzy 是一個 Chrome 擴充工具 + MCP server，讓開發者用語音 + 一�
 ### 支援語言（v1.1.4 起七語全支援）
 - ✅ 繁體中文（zh-TW）、簡體中文（zh-CN）、粵語（yue-Hant-HK）、English（en-US）、日本語（ja）、한국어（ko）、Tiếng Việt（vi）
 - popup 語言下拉可切換；UI、即時字幕、Whisper 辨識、AI 校正/精簡、官網頁面皆隨語言切換
+
+### v1.1.5 新功能
+
+- **免費體驗票券**：輸入活動代碼解鎖付費功能；票券可先儲存、需要時再啟用（啟用前有二次確認，啟用即開始倒數）。
+- **安裝碼**：登入後自動取得專屬安裝碼（BZ-XXXX），popup 可一鍵複製，供社群活動驗證身份。
+- **官網完整指南**：\`/install\` 已併入 \`/guide\`，安裝 + 使用 + MCP 設定一頁完成，每個設定都有複製按鈕。
+- **用戶心得頁**：\`/testimonials\`（影片與文字分享）。
 
 ### v1.1.4 語音體驗更新
 - **即時字幕 interim**：說話當下底部字幕就即時顯示辨識中的文字（像 YouTube 字幕），說完才轉為確認文字
@@ -3284,7 +3291,7 @@ ${langSwitchBar(lang)}
       <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a>
     </div>
     <div style="margin-top:8px;">${t('聯絡', 'Contact')}：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
-    <div style="margin-top:8px;color:#555;">© 2026 BugEzy · v1.1.4</div>
+    <div style="margin-top:8px;color:#555;">© 2026 BugEzy · v1.1.5</div>
   </footer>
 </div>
 </body>
@@ -3700,6 +3707,32 @@ ${ogMeta('/changelog', 'Changelog — BugEzy', 'Latest updates and release notes
 
   <h1>${t('📋 BugEzy 更新日誌', '📋 BugEzy Changelog')}</h1>
   <p class="lead">${t('每次更新做了什麼，都記在這裡。', 'What changed in each update, all here.')}</p>
+
+  <section class="changelog-entry">
+    <h3>v1.1.5 — 2026-08-09</h3>
+    <p style="color:#a78bfa;font-weight:600;margin:0 0 4px;">${t('🎫 免費體驗票券', '🎫 Free Trial Tickets')}</p>
+    <ul>
+      <li>${t('輸入活動代碼即可解鎖付費功能，體驗完整的 BugEzy', 'Enter a promo code to unlock paid features')}</li>
+      <li>${t('票券可先儲存、需要時再啟用，不浪費任何一天', 'Save tickets and activate them only when you need them')}</li>
+      <li>${t('啟用前會二次確認（啟用即開始倒數，不可取消）', 'Confirmation before activating (the countdown starts immediately)')}</li>
+      <li>${t('票券錢包可折疊收合，popup 更精簡', 'Collapsible ticket wallet keeps the popup compact')}</li>
+    </ul>
+    <p style="color:#a78bfa;font-weight:600;margin:12px 0 4px;">${t('📋 安裝碼', '📋 Install Code')}</p>
+    <ul>
+      <li>${t('登入後自動獲得專屬安裝碼（BZ-XXXX），參加社群活動時一鍵複製', 'Get a unique install code (BZ-XXXX) after signing in — one-click copy for community events')}</li>
+    </ul>
+    <p style="color:#a78bfa;font-weight:600;margin:12px 0 4px;">${t('📖 官網改版', '📖 Website Updates')}</p>
+    <ul>
+      <li>${t('安裝指南與使用指南合併為一頁「完整指南」，每個 MCP 設定都有複製按鈕', 'Install and usage guides merged into one page, with copy buttons on every MCP config')}</li>
+      <li>${t('新增「用戶心得」頁面（支援影片與文字分享）', 'New testimonials page (video and written reviews)')}</li>
+      <li>${t('指南新增「搞不定？把這段話丟給你的 AI」萬用提示詞', 'Added a universal "stuck? paste this to your AI" prompt')}</li>
+    </ul>
+    <p style="color:#a78bfa;font-weight:600;margin:12px 0 4px;">${t('🔧 修復', '🔧 Fixes')}</p>
+    <ul>
+      <li>${t('修復免費版開啟 popup 時次數、升級按鈕偶爾不顯示', 'Fixed free-tier popup sometimes not showing usage counts and the upgrade button')}</li>
+      <li>${t('票券到期提醒文案修正（到期只是回到免費版，不會自動扣款）', 'Clarified trial-expiry wording (it returns to the free plan; nothing is charged automatically)')}</li>
+    </ul>
+  </section>
 
   <section class="changelog-entry">
     <h3>v1.1.4 — 2026-07-19</h3>
@@ -5493,7 +5526,7 @@ export default {
     // PM-126：版本檢查（popup 亮燈用）+ 更新日誌頁
     if (request.method === 'GET' && path === '/api/version') {
       // 每次上新版到 Chrome Web Store 時，同步改 latest + deploy
-      return json({ latest: '1.1.4', changelog_url: 'https://bugezy.dev/changelog' }); // PM-252：v1.1.4 送審
+      return json({ latest: '1.1.5', changelog_url: 'https://bugezy.dev/changelog' }); // PM-282：v1.1.5 送審
     }
     // PM-272：用戶心得頁（文字 + YouTube 嵌入）
     if (request.method === 'GET' && path === '/testimonials') {

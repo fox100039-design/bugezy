@@ -10,7 +10,7 @@ BugEzy 是一個 Chrome 擴充工具 + MCP server，讓開發者用語音 + 一�
 
 - 官網：https://bugezy.dev
 - Chrome Web Store：https://chromewebstore.google.com/detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj
-- 安裝教學：https://bugezy.dev/install
+- 完整指南（安裝 + 使用 + MCP）：https://bugezy.dev/guide
 - 功能說明：https://bugezy.dev/features
 - FAQ：https://bugezy.dev/faq
 - 隱私政策：https://bugezy.dev/privacy
