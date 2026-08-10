@@ -56,7 +56,9 @@ const options = {
   bundle: true,
   format: 'esm',
   target: 'chrome110',
-  sourcemap: true,
+  // PM-283：正式打包不產 source map——`.map` 會被一起打包上架，等於公開原始 TypeScript。
+  //   dev（--watch）仍保留，本機除錯才對得回原始碼。
+  sourcemap: watch,
   logLevel: 'info',
   plugins: [staticPlugin],
 };
