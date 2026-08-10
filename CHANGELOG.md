@@ -1,5 +1,17 @@
 # BugEzy Changelog
 
+## 2026-08-10
+
+Day 38（PM-283~285）。**商店包瘦身 + 票券到期自動提醒**。extension 版號不動（仍 v1.1.5，尚未上架）；server deploy `5ff89d71`。
+
+- **PM-283 正式打包不再產 source map**（`extension/build.mjs` 一行）。`sourcemap: true` → `sourcemap: watch`——正式打包不產 `.map`（上架等於**公開原始 TypeScript**，自 v1.1.0 起每版皆然），`--watch`（dev）保留以便本機除錯。**並重新打包 v1.1.5**：PM-281 的 zip 已含 11 個 `.map` 且 FOX 尚未上傳，只改 build 設定的話送審的仍是舊包 → 重打後 **33 entries / 1148.8 KB → 22 / 407.8 KB（−741 KB，−64%）**。已驗證：`dist/` 零個 `.map`、無指向 404 的殘留 `sourceMappingURL` 註解、無內嵌 data URI map、`manifest.json` 與各 HTML 引用的檔案皆在包內、PM-273~278 六項新功能仍在。（全文搜尋仍會命中 `sourceMappingURL`/`sourcesContent`/`src/*.ts`，逐一查證皆非外洩——前兩者在 rrweb 打包進來的 postcss 程式碼內部，後者是 esbuild 的模組分隔註解，只有檔名。）
+
+- **PM-284 票券到期前 Discord 提醒**（`server/index.ts` + `ticket-expiry-notify.sql`）。`notifyExpiringTickets()` 掃 ACTIVE 且 10 天內到期、尚未通知的票券 → 推 Discord（帶 email、剩餘天數、到期日、庫存票數）→ 標記 `expiry_notified`，掛進每日 cron（`0 3 * * *`）。**修掉卡片三個問題**：①**未設 `DISCORD_WEBHOOK_URL` 就整段跳過**——否則 `sendDiscord` 靜默 return，卻仍把票標成已通知，等於在推播開通前把提醒全部消耗掉且無聲無息；②**cron 用 `await sendDiscord()` 而非 `notifyFox()`**——後者靠 `env.__ctx.waitUntil`，而 `__ctx` 只在 `fetch()` 入口設定，在 `scheduled()` 裡不存在或是同 isolate 前次 fetch 留下的過期 ctx，推播送不出去；③**消掉 N+1**（每張票各查 email/庫存 → 兩次 `.in()` 後記憶體分組）。另加 partial index（只索引未通知的 ACTIVE 票）、查詢與標記失敗皆 `console.error`（欄位未建時不再看起來像「沒有票」）。
+
+- **PM-285 Day 38 收工**：CHANGELOG + ARCHITECTURE + git push。
+
+> **待 FOX**：① 上傳**重新打包後**的 `bugezy-v1.1.5.zip`（407.8 KB）② Supabase 跑 `ticket-expiry-notify.sql` ③ **`wrangler secret put DISCORD_WEBHOOK_URL`**（至今未設，PM-270 的 7 個事件推播與本卡的到期提醒都還沒生效）
+
 ## 2026-08-09
 
 Day 37（PM-272~282）。**票券體驗打磨 + 安裝碼 + 官網指南大整併 → v1.1.5 送審**。extension `manifest` 1.1.4→**1.1.5**、產出 `bugezy-v1.1.5.zip`（33 entries，待 FOX 上傳）；server 多次 deploy（`fa5ca8c5`→`d1e1f383`→`5d3991c5`→`3945fad8`）。
