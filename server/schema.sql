@@ -161,3 +161,9 @@ ALTER TABLE user_tickets ENABLE ROW LEVEL SECURITY; -- PM-265：只有 service_r
 -- ── PM-276：安裝碼（推廣活動驗證身份用，綁 user_id 永不變；完整版見 install-code.sql）──
 ALTER TABLE users ADD COLUMN IF NOT EXISTS install_code VARCHAR(8);
 -- UNIQUE 約束（Worker 產碼靠它擋碰撞）：users_install_code_key
+
+-- ── PM-284：票券到期前 Discord 提醒（cron 掃描；完整版見 ticket-expiry-notify.sql）──
+ALTER TABLE user_tickets ADD COLUMN IF NOT EXISTS expiry_notified BOOLEAN NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS idx_user_tickets_expiry_notify
+  ON user_tickets (expires_at)
+  WHERE status = 'ACTIVE' AND expiry_notified = false;

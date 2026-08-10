@@ -5428,6 +5428,86 @@ ${Array.from(
   </div>`,
 );
 
+/**
+ * PM-284：每日掃描即將到期的票券（ACTIVE 且 10 天內到期）→ 推 Discord 給 FOX。
+ * 每張票只推一次（`expiry_notified`）。
+ *
+ * ⚠ 兩個 cron 專屬的注意事項：
+ * 1. **用 `await sendDiscord()` 而不是 `notifyFox()`**——後者靠 `env.__ctx.waitUntil` 送出，
+ *    但 `__ctx` 只在 `fetch()` 入口設定。在 `scheduled()` 裡它要嘛不存在、要嘛是**同一個 isolate
+ *    先前某次 fetch 留下的過期 ctx**，兩種情況推播都可能送不出去。cron 沒有延遲壓力，直接 await。
+ * 2. **沒設 `DISCORD_WEBHOOK_URL` 就整段跳過**——否則 `sendDiscord` 會靜默 return，
+ *    但下面仍會把票券標成「已通知」，等於**在還沒開通推播前就把所有提醒消耗掉**，
+ *    之後就再也不會通知了。
+ */
+async function notifyExpiringTickets(env: Env): Promise<void> {
+  if (!env.DISCORD_WEBHOOK_URL) return; // 見上方註解 2
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+  const tenDaysLater = new Date(now + 10 * 86_400_000).toISOString();
+
+  const { data, error } = await supa(env)
+    .from('user_tickets')
+    .select('id, user_id, code, expires_at')
+    .eq('status', 'ACTIVE')
+    .eq('expiry_notified', false)
+    .gt('expires_at', nowIso) // 還沒過期（已過期的由 expireDueTickets 處理）
+    .lte('expires_at', tenDaysLater)
+    .order('expires_at', { ascending: true });
+  if (error) {
+    // 欄位尚未建立（FOX 未跑 ALTER）等情況——留下痕跡，不要靜默
+    console.error('[Cron] 票券到期查詢失敗:', error.message);
+    return;
+  }
+  const rows = (data ?? []) as Array<{
+    id: string;
+    user_id: string;
+    code: string;
+    expires_at: string;
+  }>;
+  if (!rows.length) return; // 沒有即將到期的票 → 靜默跳過
+
+  // email 與庫存數各用一次查詢取回（不要每張票各打兩次，那是 N+1）
+  const userIds = [...new Set(rows.map((r) => r.user_id))];
+  const { data: users } = await supa(env)
+    .from('users')
+    .select('user_id, email')
+    .in('user_id', userIds);
+  const emailOf = new Map(
+    ((users ?? []) as Array<{ user_id: string; email: string }>).map((u) => [u.user_id, u.email]),
+  );
+  const { data: saved } = await supa(env)
+    .from('user_tickets')
+    .select('user_id')
+    .eq('status', 'SAVED')
+    .in('user_id', userIds);
+  const savedCount = new Map<string, number>();
+  for (const row of (saved ?? []) as Array<{ user_id: string }>) {
+    savedCount.set(row.user_id, (savedCount.get(row.user_id) ?? 0) + 1);
+  }
+
+  let sent = 0;
+  for (const t of rows) {
+    const daysLeft = Math.ceil((new Date(t.expires_at).getTime() - now) / 86_400_000);
+    const n = savedCount.get(t.user_id) ?? 0;
+    const savedInfo = n > 0 ? `\n💾 庫存 ${n} 張票券可啟用` : '\n📭 無庫存票券';
+    await sendDiscord(
+      env,
+      '⏰ 票券即將到期',
+      `${emailOf.get(t.user_id) ?? t.user_id}\n${t.code} 剩 ${daysLeft} 天（到期 ${t.expires_at.slice(0, 10)}）${savedInfo}`,
+      4,
+    );
+    // 推播之後才標記：先標記的話，推播失敗就永遠不會再提醒了
+    const { error: upErr } = await supa(env)
+      .from('user_tickets')
+      .update({ expiry_notified: true })
+      .eq('id', t.id);
+    if (upErr) console.error('[Cron] 標記 expiry_notified 失敗:', t.id, upErr.message);
+    else sent++;
+  }
+  console.log(`[Cron] 票券到期提醒：${sent}/${rows.length} 筆`);
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     env.__ctx = ctx; // PM-268：供 notifyFox 用 waitUntil 送非阻塞推播（回應後 isolate 才回收）
@@ -5813,6 +5893,12 @@ export default {
       else console.log(`[Cron] Cleaned ${count ?? 0} expired sessions`);
     } catch (err) {
       console.error('[Cron] Session cleanup failed:', err);
+    }
+    // PM-284：票券到期前 10 天推 Discord 提醒（每張票只推一次）
+    try {
+      await notifyExpiringTickets(env);
+    } catch (err) {
+      console.error('[Cron] 票券到期提醒失敗:', err);
     }
   },
 };
