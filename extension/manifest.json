@@ -4,7 +4,7 @@
   "name": "BugEzy — AI Bug Reporter | 語音除錯工具",
   "version": "1.1.5",
   "description": "Voice-powered bug reporter with MCP AI — record bugs, AI analyzes and fixes. 6 modes, 13 tools. 語音 Bug 回報，AI 一鍵修復。",
-  "permissions": ["activeTab", "scripting", "storage", "downloads", "identity", "offscreen"],
+  "permissions": ["activeTab", "storage", "downloads", "identity", "offscreen"],
   "oauth2": {
     "client_id": "610395663887-piqtrs4bvbj738iimbk3bre2ij78rvdl.apps.googleusercontent.com",
     "scopes": ["openid", "email", "profile"]
