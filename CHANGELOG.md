@@ -1,5 +1,15 @@
 # BugEzy Changelog
 
+## 2026-08-12
+
+Day 39（PM-286~287）。**Chrome Web Store 審核修正**——v1.1.5 首次送審被以「要求但未使用 `scripting` 權限」退件。版號不動（仍 v1.1.5），server 未改動。
+
+- **PM-286 移除未使用的 `scripting` 權限**（`extension/manifest.json` 一行）。`permissions` 由 6 項減為 5 項（`activeTab` / `storage` / `downloads` / `identity` / `offscreen`）。**沒有直接照改，先自行查證**：`chrome.scripting` 在 `extension/src`、`extension/dist`、`cli`、`mcp-server` **0 次命中**，擴大掃 `executeScript`/`insertCSS`/`registerContentScripts` **同樣 0 次**——因為兩個 content script 都是 **manifest 宣告式注入**（`content.js` ISOLATED、`inject.js` MAIN 皆在 `content_scripts` 宣告），這條路徑本就不需要該權限。**另把其餘 5 個權限也逐一驗過確有使用**（避免改完再被以別的權限退件）：`activeTab`→`tabs.query`+`captureVisibleTab`、`storage`→112 處、`downloads`→JSON 匯出、`identity`→Google 登入/登出清 token、`offscreen`→Whisper 錄音；另 10 處 `chrome.tabs.create` 不需宣告 `tabs` 權限，目前也確實沒宣告。重新打包 `bugezy-v1.1.5.zip`（**22 entries / 407.8 KB，與前一版逐檔零差異**，僅 manifest 內容變動；`.map` 仍 0、未含設計原稿）。
+
+- **PM-287 Day 39 補收工**：CHANGELOG + git push。
+
+> **待 FOX**：上傳 `bugezy-v1.1.5.zip` **重新送審**；其餘待辦不變（`DISCORD_WEBHOOK_URL`、`ticket-expiry-notify.sql`、`ADMIN_TOKEN`、popup 實機驗收、兩支 verify 腳本）。
+
 ## 2026-08-10
 
 Day 38（PM-283~285）。**商店包瘦身 + 票券到期自動提醒**。extension 版號不動（仍 v1.1.5，尚未上架）；server deploy `5ff89d71`。
