@@ -1,5 +1,21 @@
 # BugEzy Changelog
 
+## 2026-08-13
+
+Day 40（PM-288~290）。**SEO 審計 + P0 修復**——找出並修掉兩個會讓 Google 誤判的 Critical。extension 未動（仍 v1.1.5 待審），server deploy `55f9208f`。
+
+- **PM-288 SEO 審計**（唯讀，未改任何程式碼）。`claude-seo` v2.2.4 已 clone 到 `C:\dev\claude-seo`，但**執行 `install.ps1` 被 Claude Code 權限分類器擋下**（安裝腳本已完成安全性檢視：pin 在 tag、只做 venv + pip + playwright、不動 PATH/憑證；副作用是裝進 `~/.claude/` 全域、下載數百 MB）。改為**讀其檢查清單、依同一方法論實跑三份掃描**：
+  - **完整網站審計 — B 級**。基礎紮實（10 頁全 200、每頁 canonical + 9 og、圖片 6/6 有 alt 且 lazy、robots/sitemap 正確且無遺漏頁、首頁 15.6 KB/466 ms、零外部 JS）。Critical：`http://` 直接回 200 未導向 HTTPS 且無 HSTS。Warning：`og:image` 只有 128×128（社群分享無大圖卡）、8/10 頁 description 長度不合、6/10 頁 title 長度不合、`/skill` 有 2 個 H1、無 `Content-Language`。
+  - **Schema — A− 級**。`SoftwareApplication`+`Organization`（首頁）、`Article`（5 篇文章）皆有效。建議補 `BreadcrumbList`；**明確不建議**加 `HowTo`（Google 2023-09 已棄用）或自家 `Review`/`AggregateRating`（self-serving 不採計）；`/faq` 的 `FAQPage` 保留但**已無 SERP 效果**（Google 2026-05-07 對所有網站停用 FAQ 複合式結果）。
+  - **hreflang — C 級**。self-referencing／x-default／語言代碼／return tag 雙向互指**全數正確**（PM-263/264 的底子沒問題），但踩到下述 canonical 矛盾。
+
+- **PM-289 SEO P0 修復**（`server/index.ts`）。**根因**：`canonicalTag` 吃的是「偵測後的語言」，導致 ①裸網址永遠 canonical 到 `?lang=xx`，而 sitemap `<loc>` 與 hreflang `x-default` 指的都是裸網址 → **x-default 的目標自我否定、失效**（極可能就是 GSC 通知的來源）；②**canonical 隨 `Accept-Language` 變動**，Googlebot 以不同語言爬同一 URL 會拿到矛盾訊號。**修法**：新增 `explicitLang(request)`（只讀 query、**完全不做偵測**），`canonicalTag` 改為回顯請求上的 `?lang=`——canonical 是 URL 的屬性，不該受請求標頭影響；語言偵測（`getLang`）完全未動。另加 `langs.includes()` 守門，讓該頁不支援的語言（如 `/blog?lang=ja`）併回裸網址，避免產生**沒有任何 hreflang 指向的孤兒 canonical**。`canonLang` 由路由一路傳進 11 個頁面函式（不用 module 級變數暫存 request——同 isolate 併發有風險），全由 TypeScript 把關。並補 `Vary: Accept-Language, Origin`，**必須放在統一出口的 CORS 注入之後**（否則會被 `getCorsHeaders` 的 `Vary: Origin` 覆寫），且只加在 HTML（API 不隨語言變動）。**實測**：7 種 `Accept-Language` canonical 一律裸網址而 `<html lang>` 仍正確跟著變、6 語各自 self-canonical、**10 頁的 x-default 與 canonical 完全一致**（修前全部不一致）、return tag 仍雙向互指、13 路由無回歸。FOX 已於 Cloudflare 開啟 Always Use HTTPS（實測 301 生效）。
+
+- **PM-290 Day 40 收工**：CHANGELOG + ARCHITECTURE + git push。
+
+> **待 FOX**：① 開啟 **HSTS**（C-1 剩下的一半）② GSC 按「驗證修正」③ 其餘不變（v1.1.5 送審、`DISCORD_WEBHOOK_URL`、`ticket-expiry-notify.sql`、`ADMIN_TOKEN`）
+> **未做的 P1/P2**：1200×630 OG 圖、title/description 校正、文章頁 `BreadcrumbList`、`/skill` 多餘 H1。
+
 ## 2026-08-12
 
 Day 39（PM-286~287）。**Chrome Web Store 審核修正**——v1.1.5 首次送審被以「要求但未使用 `scripting` 權限」退件。版號不動（仍 v1.1.5），server 未改動。
