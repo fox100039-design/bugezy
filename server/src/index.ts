@@ -529,6 +529,13 @@ function getLang(request: Request): PageLang {
   if (param === 'en' || param === 'zh' || param === 'zh-CN' || param === 'ja' || param === 'ko' || param === 'vi') return param; // 手動覆蓋優先
   return detectLang(request);
 }
+/** PM-289：只取 query 上明示的 `?lang=`（沒帶回 null）。canonical 用，**不做 Accept-Language 偵測**。 */
+function explicitLang(request: Request): PageLang | null {
+  const p = new URL(request.url).searchParams.get('lang');
+  return p === 'en' || p === 'zh' || p === 'zh-CN' || p === 'ja' || p === 'ko' || p === 'vi'
+    ? p
+    : null;
+}
 // PM-232~235：<html lang> 屬性——zh→zh-Hant、zh-CN→zh-Hans、ja→ja、ko→ko、vi→vi、en→en（BCP-47，利 SEO/螢幕閱讀器）。
 function htmlLang(lang: PageLang): string {
   if (lang === 'zh') return 'zh-Hant';
@@ -1497,9 +1504,22 @@ function hreflangTags(path: string, langs: PageLang[]): string {
   return alts.join('\n');
 }
 /** PM-263：canonical 指向「自己這個語言版本」；該頁沒有此語言版本時收斂到主版本（langs[0]）。 */
-function canonicalTag(path: string, lang: PageLang, langs: PageLang[]): string {
-  const self = langs.includes(lang) ? lang : langs[0];
-  return `<link rel="canonical" href="https://bugezy.dev${path}?lang=${self}" />`;
+/**
+ * PM-289：canonical **必須等於當前 URL**——有 `?lang=` 就回顯它，沒有就是裸網址。
+ *
+ * 修正前是依「偵測到的語言」產生 canonical，造成兩個問題：
+ *  1. 裸網址永遠 canonical 到 `?lang=xx`，但 sitemap 的 <loc> 與 hreflang 的 x-default
+ *     指的都是裸網址 → x-default 的目標自己說「我不是正規版」→ **x-default 失效**（GSC 報錯）。
+ *  2. canonical 會隨 `Accept-Language` 變動——同一個 URL 對不同 crawler 吐出不同 canonical，
+ *     Googlebot 以多種語言設定爬取時會拿到互相矛盾的訊號。
+ *
+ * @param explicit 請求 query 中的 `?lang=`（`explicitLang()` 取得）；沒有帶就是 null。
+ *                 **刻意不吃偵測結果**——canonical 是 URL 的屬性，不該受請求標頭影響。
+ */
+function canonicalTag(path: string, explicit: PageLang | null, langs: PageLang[]): string {
+  // 該頁不支援的語言（例如 /blog?lang=ja，blog 只有繁中）→ 併回裸網址，避免產生孤兒 canonical
+  const q = explicit && langs.includes(explicit) ? `?lang=${explicit}` : '';
+  return `<link rel="canonical" href="https://bugezy.dev${path}${q}" />`;
 }
 
 // PM-211：og:image 用的品牌 icon（128×128 PNG，內嵌 base64 = extension/icons/icon-128.png），
@@ -1709,7 +1729,7 @@ async function isActiveUserId(userId: string, env: Env): Promise<boolean> {
 // PM-150：首頁改為函式（依 lang 中英切換）。CSS/script 不變，只切換文字 + <html lang> + meta。
 // PM-222：小白友善重構——漸進式揭露（Hero 講人話 → 三步驟 → 截圖展示 → 賣點 → 語言 → CTA）。
 //   技術細節（六模式/MCP/rrweb/框架）移到 /features。截圖存 R2，經 GET /screenshots/*.png serve。
-function homePage(lang: PageLang, _request: Request): string {
+function homePage(lang: PageLang, _request: Request, canonLang: PageLang | null): string {
   const t = makeT(lang); // PM-232：zh/en/zh-CN 三語（zh-CN 由繁體轉簡體）
   const CWS = 'https://chromewebstore.google.com/detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj';
   return `<!DOCTYPE html>
@@ -1724,7 +1744,7 @@ function homePage(lang: PageLang, _request: Request): string {
   ${jsonLd(SOFTWARE_APP_LD)}
   ${jsonLd(ORGANIZATION_LD)}
   <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
-  ${canonicalTag('/', lang, LANGS_6)}
+  ${canonicalTag('/', canonLang, LANGS_6)}
   ${hreflangTags('/', LANGS_6)}
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
@@ -1922,7 +1942,7 @@ function homePage(lang: PageLang, _request: Request): string {
 // ── PM-64：隱私政策頁（Chrome Web Store 上架 + 綠界審核要求可訪問的隱私政策 URL）──
 // 中英雙語，深色主題與首頁/報告頁統一（#0f0f1a / #7c3aed / #a78bfa），一頁式無 JS、RWD。
 // PM-152：/privacy 改為函式（依 lang 只顯示對應語言區塊；原本中英雙語堆疊 → 改語言切換）。
-function privacyPage(lang: PageLang): string {
+function privacyPage(lang: PageLang, canonLang: PageLang | null): string {
   const t = makeT(lang); // PM-232：zh/en/zh-CN 三語（zh-CN 由繁體轉簡體）
   return `<!DOCTYPE html>
 <html lang="${htmlLang(lang)}">
@@ -1932,7 +1952,7 @@ function privacyPage(lang: PageLang): string {
 <title>${t('隱私政策 · BugEzy', 'Privacy Policy · BugEzy')}</title>
 <meta name="description" content="${t('BugEzy 隱私政策：我們收集什麼資料、如何使用與保護。', 'BugEzy privacy policy — what data we collect, how we use it, and how we protect your information.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
-${canonicalTag('/privacy', lang, LANGS_3)}
+${canonicalTag('/privacy', canonLang, LANGS_3)}
 ${hreflangTags('/privacy', LANGS_3)}
 ${ogMeta('/privacy', 'Privacy Policy — BugEzy', 'How BugEzy handles your data.')}
 <style>
@@ -2377,7 +2397,7 @@ function renderMarkdown(md: string): string {
 }
 
 // PM-201：/skill AI 客服手冊檢視頁（渲染 SKILL.md + 一鍵複製 + 下載 + Claude Desktop 安裝步驟）。
-function skillPage(lang: PageLang): string {
+function skillPage(lang: PageLang, canonLang: PageLang | null): string {
   const t = makeT(lang); // PM-232：zh/en/zh-CN 三語（zh-CN 由繁體轉簡體）
   const bodyHtml = renderMarkdown(SKILL_MD);
   return `<!DOCTYPE html>
@@ -2388,7 +2408,7 @@ function skillPage(lang: PageLang): string {
 <title>${t('🤖 AI 客服手冊 · BugEzy', '🤖 AI Support Manual · BugEzy')}</title>
 <meta name="description" content="${t('把 BugEzy AI 客服手冊放進你的專案，AI 就會教你怎麼用 BugEzy、幫你讀報告、排除故障。', 'Add the BugEzy AI support manual to your project and your AI will teach you how to use BugEzy, read reports, and troubleshoot.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
-${canonicalTag('/skill', lang, LANGS_3)}
+${canonicalTag('/skill', canonLang, LANGS_3)}
 ${hreflangTags('/skill', LANGS_3)}
 ${ogMeta('/skill', 'AI Customer Service Guide — BugEzy SKILL.md', 'BugEzy MCP tool documentation for AI assistants. 13 tools including get_timeline.')}
 <style>
@@ -2533,7 +2553,7 @@ function copyBtn(text: string, label: string, done: string, isStatic = false): s
   return `<button type="button" class="copy-btn"${st} data-copy-text="${encodeURIComponent(text)}" data-copy-label="${a(label)}" data-copy-done="${a(done)}">${label}</button>`;
 }
 
-function guidePage(lang: PageLang): string {
+function guidePage(lang: PageLang, canonLang: PageLang | null): string {
   const t = makeT(lang); // PM-232：zh/en/zh-CN 三語（zh-CN 由繁體轉簡體）
   // PM-280：從 /install 併過來的「複製貼給 AI」提示詞（/install 已 301 到本頁）
   const aiPrompt = t(
@@ -2578,7 +2598,7 @@ Full guide: https://bugezy.dev/guide`,
 <title>${t('使用指南 · BugEzy', 'User Guide · BugEzy')}</title>
 <meta name="description" content="${t('BugEzy 使用指南：安裝登入、六種錄製模式、編輯上傳、讓 AI 透過 MCP 讀報告修 Bug。', 'Learn how to use BugEzy to record bugs, annotate screenshots, and connect with AI via MCP.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
-${canonicalTag('/guide', lang, LANGS_3)}
+${canonicalTag('/guide', canonLang, LANGS_3)}
 ${hreflangTags('/guide', LANGS_3)}
 ${ogMeta('/guide', 'User Guide — BugEzy', 'Step-by-step guide to using BugEzy for bug reporting.')}
 <style>
@@ -2896,7 +2916,7 @@ ${ogMeta('/guide', 'User Guide — BugEzy', 'Step-by-step guide to using BugEzy 
 
 // ── PM-66：FAQ 頁（四大類問答，手風琴點擊展開/收合，單一展開）──
 // PM-152：/faq 改為函式（依 lang 中英切換）。🔴 英文版禁止提及任何競品名稱（延續 PM-130 去競品）。
-function faqPage(lang: PageLang): string {
+function faqPage(lang: PageLang, canonLang: PageLang | null): string {
   const t = makeT(lang); // PM-232：zh/en/zh-CN 三語（zh-CN 由繁體轉簡體）
   // PM-213：FAQPage JSON-LD ——問題/答案文字與下方可見手風琴逐字一致（Google 要求 FAQ markup 為頁面可見內容）。
   //   依 lang 動態產生：zh 頁配 zh 文字、en 頁配 en 文字，兩者都 match 各自可見內容。
@@ -2933,7 +2953,7 @@ function faqPage(lang: PageLang): string {
 <title>${t('常見問題 · BugEzy', 'FAQ · BugEzy')}</title>
 <meta name="description" content="${t('BugEzy 常見問題：安裝、錄製、語音辨識、MCP 設定、付費方案等問答。', 'Frequently asked questions about BugEzy — pricing, AI tool support, data security, and more.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
-${canonicalTag('/faq', lang, LANGS_6)}
+${canonicalTag('/faq', canonLang, LANGS_6)}
 ${hreflangTags('/faq', LANGS_6)}
 ${ogMeta('/faq', 'FAQ — BugEzy', 'Frequently asked questions about BugEzy.')}
 ${jsonLd(faqLd)}
@@ -3063,7 +3083,7 @@ document.querySelectorAll('.faq-q').forEach(function (q) {
 
 // ── PM-96：功能說明頁（GET /features）— 六種模式 + 語音 + 高畫質 AI 的操作說明 ──
 // PM-151：/features 改為函式（依 lang 中英切換，延續 PM-150 模式）。
-function featuresPage(lang: PageLang): string {
+function featuresPage(lang: PageLang, canonLang: PageLang | null): string {
   const t = makeT(lang); // PM-232：zh/en/zh-CN 三語（zh-CN 由繁體轉簡體）
   return `<!DOCTYPE html>
 <html lang="${htmlLang(lang)}">
@@ -3073,7 +3093,7 @@ function featuresPage(lang: PageLang): string {
 <title>${t('BugEzy 功能 — 六種錄製模式、Whisper 語音、即時監控', 'BugEzy Features — Six Recording Modes, Whisper Voice, Live Monitor')}</title>
 <meta name="description" content="${t('BugEzy 六種除錯模式：錄製、回溯 30 秒、截圖標注、即時監控、終端機 CLI、MCP AI 讀取。Whisper 精準語音轉錄。', 'BugEzy offers six debugging modes: Record, Rewind, Screenshot, Live Monitor, Terminal CLI, and MCP AI. Whisper voice transcription for premium users.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
-${canonicalTag('/features', lang, LANGS_6)}
+${canonicalTag('/features', canonLang, LANGS_6)}
 ${hreflangTags('/features', LANGS_6)}
 ${ogMeta('/features', 'Features — BugEzy', 'Voice recording, DOM replay, console capture, network errors, MCP integration, and more.')}
 <style>
@@ -3455,7 +3475,7 @@ const BLOG_CSS = `
   @media (max-width:640px) { .wrap { padding:32px 16px 60px; } h1 { font-size:24px; } }
 `;
 
-function blogListPage(lang: PageLang): string {
+function blogListPage(lang: PageLang, canonLang: PageLang | null): string {
   const t = makeT(lang);
   const items = [...BLOG_POSTS]
     .sort((a, b) => b.date.localeCompare(a.date)) // 日期新→舊；同日期由 stable sort 保留陣列順序
@@ -3475,7 +3495,7 @@ function blogListPage(lang: PageLang): string {
 <title>${t('BugEzy 部落格 — 除錯、Vibe Coding 與 AI 開發', 'BugEzy Blog — Debugging, Vibe Coding & AI Development')}</title>
 <meta name="description" content="${t('關於除錯、Vibe Coding、AI 寫程式的實用文章。BugEzy 讓你用說的就能回報 Bug。', 'Practical articles on debugging, vibe coding, and AI development. BugEzy lets you report bugs by talking.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
-${canonicalTag('/blog', lang, LANGS_ZH)}
+${canonicalTag('/blog', canonLang, LANGS_ZH)}
 ${hreflangTags('/blog', LANGS_ZH)}
 ${ogMeta('/blog', 'BugEzy Blog — Debugging & AI Development', 'Practical articles on debugging, vibe coding, and AI development.')}
 <style>${BLOG_CSS}</style>
@@ -3496,7 +3516,7 @@ ${items}
 </html>`;
 }
 
-function blogPostPage(post: BlogPost, lang: PageLang): string {
+function blogPostPage(post: BlogPost, lang: PageLang, canonLang: PageLang | null): string {
   const t = makeT(lang);
   const idx = BLOG_POSTS.findIndex((p) => p.slug === post.slug);
   const prev = idx > 0 ? BLOG_POSTS[idx - 1] : null; // 陣列前一篇（較新）
@@ -3528,7 +3548,7 @@ function blogPostPage(post: BlogPost, lang: PageLang): string {
 <title>${escHtml(post.title)} · BugEzy</title>
 <meta name="description" content="${post.description.replace(/"/g, '&quot;')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
-${canonicalTag(`/blog/${post.slug}`, lang, LANGS_ZH)}
+${canonicalTag(`/blog/${post.slug}`, canonLang, LANGS_ZH)}
 ${hreflangTags(`/blog/${post.slug}`, LANGS_ZH)}
 ${ogMeta(`/blog/${post.slug}`, post.title, post.description)}
 ${jsonLd(articleLd)}
@@ -3611,7 +3631,7 @@ const TESTIMONIALS_CSS = `
   .cta-feedback .note { color:#8b8fa3; font-size:14px; margin:0; }
 `;
 
-function testimonialsPage(lang: PageLang): string {
+function testimonialsPage(lang: PageLang, canonLang: PageLang | null): string {
   const t = makeT(lang);
   const items = TESTIMONIALS.map((item) => {
     const video = item.videoUrl ? youtubeEmbed(item.videoUrl) + '\n' : '';
@@ -3633,7 +3653,7 @@ ${video}      <p class="t-quote">${escHtml(t(item.text.zh, item.text.en))}</p>
 <title>${title} · BugEzy</title>
 <meta name="description" content="${desc}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
-${canonicalTag('/testimonials', lang, LANGS_3)}
+${canonicalTag('/testimonials', canonLang, LANGS_3)}
 ${hreflangTags('/testimonials', LANGS_3)}
 ${ogMeta('/testimonials', 'BugEzy Testimonials', 'Real developers share how BugEzy speeds up their debugging.')}
 <style>${BLOG_CSS}${TESTIMONIALS_CSS}</style>
@@ -3666,7 +3686,7 @@ ${items}
 
 // ── PM-126：更新日誌頁（GET /changelog）——深色主題與其他頁一致 ──
 // PM-151：/changelog 改為函式（依 lang 中英切換）。版號/日期不翻，只翻功能描述。
-function changelogPage(lang: PageLang): string {
+function changelogPage(lang: PageLang, canonLang: PageLang | null): string {
   const t = makeT(lang); // PM-232：zh/en/zh-CN 三語（zh-CN 由繁體轉簡體）
   return `<!DOCTYPE html>
 <html lang="${htmlLang(lang)}">
@@ -3676,7 +3696,7 @@ function changelogPage(lang: PageLang): string {
 <title>${t('更新日誌 · BugEzy', 'Changelog · BugEzy')}</title>
 <meta name="description" content="${t('BugEzy 每次更新做了什麼，都記在這裡。', 'What changed in each BugEzy update, all in one place.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
-${canonicalTag('/changelog', lang, LANGS_3)}
+${canonicalTag('/changelog', canonLang, LANGS_3)}
 ${hreflangTags('/changelog', LANGS_3)}
 ${ogMeta('/changelog', 'Changelog — BugEzy', 'Latest updates and release notes.')}
 <style>
@@ -3826,7 +3846,7 @@ ${ogMeta('/changelog', 'Changelog — BugEzy', 'Latest updates and release notes
 }
 
 // ── PM-174：問題回報頁（GET /feedback）+ POST /api/feedback（存 Supabase feedback 表，不需登入）──
-function feedbackPage(lang: PageLang): string {
+function feedbackPage(lang: PageLang, canonLang: PageLang | null): string {
   const t = makeT(lang); // PM-232：zh/en/zh-CN 三語（zh-CN 由繁體轉簡體）
   return `<!DOCTYPE html>
 <html lang="${htmlLang(lang)}">
@@ -3836,7 +3856,7 @@ function feedbackPage(lang: PageLang): string {
 <title>${t('問題回報 · BugEzy', 'Feedback · BugEzy')}</title>
 <meta name="description" content="${t('回報 BugEzy 的問題或提出功能建議。', 'Report bugs or suggest features for BugEzy.')}">
 <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
-${canonicalTag('/feedback', lang, LANGS_3)}
+${canonicalTag('/feedback', canonLang, LANGS_3)}
 ${hreflangTags('/feedback', LANGS_3)}
 ${ogMeta('/feedback', 'Feedback — BugEzy', 'Share your feedback and help improve BugEzy.')}
 <style>
@@ -5552,23 +5572,23 @@ export default {
     // PM-62：產品首頁（根目錄）— 放在所有路由之前
     // PM-150：首頁依語言變動——no-store 避免 CF 邊緣快取把某語言版本跨語言誤送（?lang 覆蓋另有獨立 URL）
     if (request.method === 'GET' && path === '/') {
-      const res = html(homePage(getLang(request), request)); // PM-172：傳 request 供 IP 國家判斷
+      const res = html(homePage(getLang(request), request, explicitLang(request))); // PM-172：傳 request 供 IP 國家判斷
       res.headers.set('Cache-Control', 'no-store');
       return res;
     }
     // PM-152：guide/faq/privacy 依語言變動——no-store 避免 CF 跨語言快取誤送
     if (request.method === 'GET' && path === '/privacy') {
-      const res = html(privacyPage(getLang(request))); // PM-64/152
+      const res = html(privacyPage(getLang(request), explicitLang(request))); // PM-64/152
       res.headers.set('Cache-Control', 'no-store');
       return res;
     }
     if (request.method === 'GET' && path === '/guide') {
-      const res = html(guidePage(getLang(request))); // PM-66/152
+      const res = html(guidePage(getLang(request), explicitLang(request))); // PM-66/152
       res.headers.set('Cache-Control', 'no-store');
       return res;
     }
     if (request.method === 'GET' && path === '/faq') {
-      const res = html(faqPage(getLang(request))); // PM-66/152
+      const res = html(faqPage(getLang(request), explicitLang(request))); // PM-66/152
       res.headers.set('Cache-Control', 'no-store');
       return res;
     }
@@ -5584,13 +5604,13 @@ export default {
       return new Response(null, { status: 301, headers: { Location: to.href } });
     }
     if (request.method === 'GET' && path === '/features') {
-      const res = html(featuresPage(getLang(request))); // PM-96/151
+      const res = html(featuresPage(getLang(request), explicitLang(request))); // PM-96/151
       res.headers.set('Cache-Control', 'no-store');
       return res;
     }
     // PM-201：AI 客服手冊（SKILL.md）——檢視頁 + 下載檔案
     if (request.method === 'GET' && path === '/skill') {
-      const res = html(skillPage(getLang(request)));
+      const res = html(skillPage(getLang(request), explicitLang(request)));
       res.headers.set('Cache-Control', 'no-store'); // 依語言變動
       return res;
     }
@@ -5610,18 +5630,18 @@ export default {
     }
     // PM-272：用戶心得頁（文字 + YouTube 嵌入）
     if (request.method === 'GET' && path === '/testimonials') {
-      const res = html(testimonialsPage(getLang(request)));
+      const res = html(testimonialsPage(getLang(request), explicitLang(request)));
       res.headers.set('Cache-Control', 'no-store'); // 與其他多語頁一致，防邊緣快取跨語言誤送
       return res;
     }
     if (request.method === 'GET' && path === '/changelog') {
-      const res = html(changelogPage(getLang(request))); // PM-126/151
+      const res = html(changelogPage(getLang(request), explicitLang(request))); // PM-126/151
       res.headers.set('Cache-Control', 'no-store');
       return res;
     }
     // PM-256：部落格列表 + 單篇文章（SEO）。/blog 列表；/blog/{slug} 單篇（找不到 → 404）。
     if (request.method === 'GET' && path === '/blog') {
-      const res = html(blogListPage(getLang(request)));
+      const res = html(blogListPage(getLang(request), explicitLang(request)));
       res.headers.set('Cache-Control', 'no-store'); // 依語言變動
       return res;
     }
@@ -5629,7 +5649,7 @@ export default {
       const slug = path.slice('/blog/'.length);
       const post = BLOG_POSTS.find((p) => p.slug === slug);
       if (post) {
-        const res = html(blogPostPage(post, getLang(request)));
+        const res = html(blogPostPage(post, getLang(request), explicitLang(request)));
         res.headers.set('Cache-Control', 'no-store');
         return res;
       }
@@ -5637,7 +5657,7 @@ export default {
     }
     // PM-174：問題回報頁 + 提交端點（不需登入）
     if (request.method === 'GET' && path === '/feedback') {
-      const res = html(feedbackPage(getLang(request)));
+      const res = html(feedbackPage(getLang(request), explicitLang(request)));
       res.headers.set('Cache-Control', 'no-store'); // 依語言變動
       return res;
     }
@@ -5869,6 +5889,13 @@ export default {
 
     // PM-130：統一出口注入動態 CORS（覆蓋 json()/html() 預設）
     for (const [k, v] of Object.entries(cors)) response.headers.set(k, v);
+    // PM-289：HTML 內容會依 Accept-Language 變動（getLang → detectLang），必須宣告 Vary，
+    //   否則中介快取／CDN 可能把某語言版本服給其他語言的使用者。放在 CORS 注入「之後」——
+    //   上面那行會把 getCorsHeaders 的 `Vary: Origin` 覆寫回去，這裡要保留 Origin 再補上 Accept-Language。
+    //   只加在 HTML：API 的 JSON 回應不隨語言變動，宣告了反而會不必要地切分快取。
+    if ((response.headers.get('Content-Type') || '').startsWith('text/html')) {
+      response.headers.set('Vary', 'Accept-Language, Origin');
+    }
     return response;
   },
 
