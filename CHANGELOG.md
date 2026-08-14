@@ -1,5 +1,27 @@
 # BugEzy Changelog
 
+## 2026-08-14
+
+Day 41（PM-291~293）。**Chrome Web Store 隱私合規 + 報告保留期限落地**。extension 未動（v1.1.5 待審），server deploy `e1353035`→`c808becb`。
+
+> PM-288~290（SEO 審計與 P0 修復）已記於下方 `2026-08-13` 區塊，依實際完成日歸檔，此處不重複。
+
+- **PM-291 隱私政策全面升級**（`server/index.ts` `privacyPage` 3232→13571 字元 + `extension/t2s.ts`）。因「隱私權政策未包含必要資訊」被 Chrome Web Store 退件，改寫為 **§1~§11**：聯絡資訊、**權限對照表**、資料用途、6 家第三方（各附隱私政策連結）、儲存與保留、使用者權利、資料分享、Cookie、**Limited Use 聲明（中英）**、兒童隱私、政策變更。
+
+  **動筆前逐項核對原始碼，抓到卡片 3 處事實錯誤**——這份政策才剛被退，照抄會再退一次：
+  ① 卡片列了 `host permission (https://bugezy.dev/*)`，但 **manifest 根本沒有 `host_permissions` 欄位**（宣告不存在的權限＝新的三方矛盾）；而卡片**漏了真正該說明的 content_scripts `<all_urls>`**，那才是審核員最在意的。
+  ② 卡片寫「AI 語音校正（Cloudflare Workers AI）」，實際**語音轉文字是 Groq**（`api.groq.com`，`whisper-large-v3-turbo`，美國公司），只有文字校正／精簡才是 Workers AI；**舊版政策更寫著「不會將資料傳送給其他 AI 服務商」——這是不實敘述**，已刪除並將 Groq 列入第三方。
+  ③ 卡片要寫「報告保留 7/90 天」，但全庫**查無任何刪除 `reports` 的程式碼**——在隱私政策承諾不存在的自動刪除比不寫更糟，故先依實際行為撰寫（PM-292 實作後才改回）。
+  另據實補上卡片未提的三項：**Discord webhook 會送出使用者 email**、由 IP 推得國家代碼（不儲存 IP）、CLI 記錄上傳前於本機遮蔽機密字串。
+  繁簡：依 §4-11 整句比對 opencc 掃 **119 句**，補 5 字（`兌歲營練訓`，server 與 extension 兩表同步 414→**420**）；`蒐集→收集`、`回覆→回應`（**`覆` 是上下文相依**，加通用對照會把「覆蓋」轉錯）。
+
+- **PM-292 報告自動清理 cron**（`server/index.ts`）。免費 **7 天**／付費（含有效票券）**90 天**，逾期報告連同 R2 附件每日清除並推 Discord 摘要；`/privacy` §5 中英簡同步改回明確期限。
+  **安全設計（多數為卡片未要求）**：**`REPORT_CLEANUP` 未設 = dry-run**，只統計不刪——不可逆的資料刪除不該因為一次 deploy 就默默開跑；**先刪 R2 再刪 DB**（反過來 DB 一刪就查不到 R2 key，檔案永久孤兒化）；**`user_id` 為 null 的舊報告一律不刪**並在摘要標明筆數（PM-133 前的報告無擁有者，無法判定方案就不做無主刪除）；單次上限 500 筆且達上限時摘要明講；消掉卡片的 N+1（每筆各查一次 plan）→ **查詢固定 4 次不隨筆數增長**。另在 `/privacy` 多寫一句誠實揭露：保留期依**刪除當下**方案判定，降級後付費期間的舊報告會改以 7 天計算，請先匯出。
+
+- **PM-293 Day 41 收工**：CHANGELOG + ARCHITECTURE + git push。
+
+> **待 FOX**：① Dashboard 更新 Privacy practices（勾選建議見 job-0813 DONE-291）+ 重新送審 ② 先設 `DISCORD_WEBHOOK_URL` 才看得到 dry-run 摘要 ③ 觀察數天後再 `wrangler secret put REPORT_CLEANUP` = `on` ④ HSTS ⑤ GSC 驗證修正
+
 ## 2026-08-13
 
 Day 40（PM-288~290）。**SEO 審計 + P0 修復**——找出並修掉兩個會讓 Google 誤判的 Critical。extension 未動（仍 v1.1.5 待審），server deploy `55f9208f`。
