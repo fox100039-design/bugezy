@@ -584,7 +584,7 @@ const T2S_TERMS: Array<[string, string]> = [
   ['程式', '程序'],
   ['檔案', '文件'],
 ];
-const T2S_CHARS: Record<string, string> = {"丟":"丢","並":"并","乾":"干","亂":"乱","亞":"亚","佈":"布","佔":"占","併":"并","來":"来","個":"个","們":"们","側":"侧","偵":"侦","偽":"伪","備":"备","傳":"传","僅":"仅","價":"价","優":"优","儲":"储","兒":"儿","內":"内","兩":"两","冊":"册","冪":"幂","別":"别","刪":"删","則":"则","剛":"刚","劃":"划","動":"动","務":"务","勝":"胜","勢":"势","匯":"汇","區":"区","協":"协","卻":"却","參":"参","員":"员","問":"问","啟":"启","單":"单","嗎":"吗","嘗":"尝","噴":"喷","嚴":"严","國":"国","圍":"围","圓":"圆","圖":"图","團":"团","執":"执","報":"报","場":"场","塊":"块","塗":"涂","壇":"坛","壞":"坏","夠":"够","夾":"夹","學":"学","實":"实","審":"审","寫":"写","寬":"宽","將":"将","專":"专","尋":"寻","對":"对","導":"导","層":"层","屬":"属","師":"师","帳":"帐","帶":"带","幀":"帧","幫":"帮","幾":"几","庫":"库","廠":"厂","廣":"广","廳":"厅","張":"张","強":"强","彈":"弹","彙":"汇","後":"后","徑":"径","從":"从","復":"复","徹":"彻","恆":"恒","態":"态","慣":"惯","憑":"凭","應":"应","戶":"户","拋":"抛","捨":"舍","捲":"卷","掃":"扫","掛":"挂","採":"采","換":"换","損":"损","搶":"抢","撐":"撑","擁":"拥","擇":"择","擊":"击","擋":"挡","擔":"担","據":"据","擬":"拟","擴":"扩","擷":"撷","擾":"扰","攔":"拦","敗":"败","數":"数","斂":"敛","斷":"断","於":"于","時":"时","暫":"暂","書":"书","會":"会","條":"条","棄":"弃","業":"业","極":"极","構":"构","標":"标","樣":"样","橋":"桥","機":"机","橫":"横","檔":"档","檢":"检","檻":"槛","欄":"栏","權":"权","歡":"欢","歷":"历","歸":"归","殘":"残","殺":"杀","汙":"污","決":"决","沒":"没","況":"况","洩":"泄","淨":"净","測":"测","準":"准","溝":"沟","滿":"满","漸":"渐","濃":"浓","濫":"滥","濾":"滤","瀏":"浏","灣":"湾","為":"为","無":"无","燈":"灯","爭":"争","牆":"墙","狀":"状","獨":"独","現":"现","環":"环","產":"产","畫":"画","異":"异","當":"当","疊":"叠","癒":"愈","發":"发","盡":"尽","監":"监","盤":"盘","確":"确","碼":"码","禦":"御","種":"种","稱":"称","積":"积","穩":"稳","竄":"窜","競":"竞","筆":"笔","節":"节","範":"范","簡":"简","簽":"签","籤":"签","粵":"粤","紀":"纪","約":"约","紅":"红","納":"纳","純":"纯","級":"级","細":"细","紹":"绍","終":"终","組":"组","結":"结","絕":"绝","絡":"络","給":"给","統":"统","綁":"绑","經":"经","綠":"绿","維":"维","網":"网","綴":"缀","緊":"紧","緒":"绪","線":"线","緣":"缘","編":"编","緩":"缓","縫":"缝","縮":"缩","縱":"纵","總":"总","繞":"绕","繪":"绘","繼":"继","續":"续","義":"义","聯":"联","聲":"声","職":"职","聽":"听","脈":"脉","脫":"脱","脹":"胀","腦":"脑","臨":"临","與":"与","舉":"举","舊":"旧","蓋":"盖","薦":"荐","藍":"蓝","處":"处","虛":"虚","號":"号","螢":"萤","術":"术","衝":"冲","補":"补","裝":"装","裡":"里","製":"制","複":"复","見":"见","規":"规","視":"视","覺":"觉","覽":"览","觸":"触","訂":"订","計":"计","訊":"讯","記":"记","訪":"访","設":"设","許":"许","訴":"诉","診":"诊","註":"注","評":"评","詞":"词","詢":"询","試":"试","話":"话","該":"该","詳":"详","誌":"志","認":"认","語":"语","誤":"误","說":"说","誰":"谁","調":"调","請":"请","論":"论","講":"讲","謝":"谢","謹":"谨","證":"证","識":"识","譯":"译","議":"议","護":"护","讀":"读","變":"变","讓":"让","負":"负","責":"责","貴":"贵","買":"买","費":"费","貼":"贴","資":"资","賣":"卖","賦":"赋","質":"质","賴":"赖","購":"购","賽":"赛","贅":"赘","跡":"迹","蹤":"踪","躍":"跃","軌":"轨","軸":"轴","較":"较","載":"载","輕":"轻","輪":"轮","輯":"辑","輸":"输","轉":"转","辦":"办","迴":"回","這":"这","連":"连","週":"周","進":"进","運":"运","過":"过","達":"达","遞":"递","遠":"远","適":"适","遲":"迟","選":"选","遺":"遗","還":"还","邊":"边","邏":"逻","釋":"释","釘":"钉","鈕":"钮","銷":"销","錄":"录","錢":"钱","錯":"错","鍵":"键","鎖":"锁","鏈":"链","鏡":"镜","鐘":"钟","鑰":"钥","長":"长","門":"门","閃":"闪","閉":"闭","開":"开","閒":"闲","間":"间","閱":"阅","關":"关","陣":"阵","隊":"队","階":"阶","際":"际","隨":"随","險":"险","隱":"隐","雖":"虽","雙":"双","雜":"杂","離":"离","雲":"云","電":"电","靜":"静","韓":"韩","響":"响","頁":"页","頂":"顶","項":"项","順":"顺","須":"须","預":"预","頓":"顿","頭":"头","頻":"频","題":"题","額":"额","顏":"颜","類":"类","顯":"显","風":"风","餘":"余","饋":"馈","馬":"马","駐":"驻","驅":"驱","驗":"验","驟":"骤","體":"体","鮮":"鲜","麥":"麦","麵":"面","麼":"么","點":"点","齊":"齐"};
+const T2S_CHARS: Record<string, string> = {"丟":"丢","並":"并","乾":"干","亂":"乱","亞":"亚","佈":"布","佔":"占","併":"并","來":"来","個":"个","們":"们","側":"侧","偵":"侦","偽":"伪","備":"备","傳":"传","僅":"仅","價":"价","優":"优","儲":"储","兌":"兑","兒":"儿","內":"内","兩":"两","冊":"册","冪":"幂","別":"别","刪":"删","則":"则","剛":"刚","劃":"划","動":"动","務":"务","勝":"胜","勢":"势","匯":"汇","區":"区","協":"协","卻":"却","參":"参","員":"员","問":"问","啟":"启","單":"单","嗎":"吗","嘗":"尝","噴":"喷","嚴":"严","國":"国","圍":"围","圓":"圆","圖":"图","團":"团","執":"执","報":"报","場":"场","塊":"块","塗":"涂","壇":"坛","壞":"坏","夠":"够","夾":"夹","學":"学","實":"实","審":"审","寫":"写","寬":"宽","將":"将","專":"专","尋":"寻","對":"对","導":"导","層":"层","屬":"属","師":"师","帳":"帐","帶":"带","幀":"帧","幫":"帮","幾":"几","庫":"库","廠":"厂","廣":"广","廳":"厅","張":"张","強":"强","彈":"弹","彙":"汇","後":"后","徑":"径","從":"从","復":"复","徹":"彻","恆":"恒","態":"态","慣":"惯","憑":"凭","應":"应","戶":"户","拋":"抛","捨":"舍","捲":"卷","掃":"扫","掛":"挂","採":"采","換":"换","損":"损","搶":"抢","撐":"撑","擁":"拥","擇":"择","擊":"击","擋":"挡","擔":"担","據":"据","擬":"拟","擴":"扩","擷":"撷","擾":"扰","攔":"拦","敗":"败","數":"数","斂":"敛","斷":"断","於":"于","時":"时","暫":"暂","書":"书","會":"会","條":"条","棄":"弃","業":"业","極":"极","構":"构","標":"标","樣":"样","橋":"桥","機":"机","橫":"横","檔":"档","檢":"检","檻":"槛","欄":"栏","權":"权","歡":"欢","歲":"岁","歷":"历","歸":"归","殘":"残","殺":"杀","汙":"污","決":"决","沒":"没","況":"况","洩":"泄","淨":"净","測":"测","準":"准","溝":"沟","滿":"满","漸":"渐","濃":"浓","濫":"滥","濾":"滤","瀏":"浏","灣":"湾","為":"为","無":"无","燈":"灯","營":"营","爭":"争","牆":"墙","狀":"状","獨":"独","現":"现","環":"环","產":"产","畫":"画","異":"异","當":"当","疊":"叠","癒":"愈","發":"发","盡":"尽","監":"监","盤":"盘","確":"确","碼":"码","禦":"御","種":"种","稱":"称","積":"积","穩":"稳","竄":"窜","競":"竞","筆":"笔","節":"节","範":"范","簡":"简","簽":"签","籤":"签","粵":"粤","紀":"纪","約":"约","紅":"红","納":"纳","純":"纯","級":"级","細":"细","紹":"绍","終":"终","練":"练","組":"组","結":"结","絕":"绝","絡":"络","給":"给","統":"统","綁":"绑","經":"经","綠":"绿","維":"维","網":"网","綴":"缀","緊":"紧","緒":"绪","線":"线","緣":"缘","編":"编","緩":"缓","縫":"缝","縮":"缩","縱":"纵","總":"总","繞":"绕","繪":"绘","繼":"继","續":"续","義":"义","聯":"联","聲":"声","職":"职","聽":"听","脈":"脉","脫":"脱","脹":"胀","腦":"脑","臨":"临","與":"与","舉":"举","舊":"旧","蓋":"盖","薦":"荐","藍":"蓝","處":"处","虛":"虚","號":"号","螢":"萤","術":"术","衝":"冲","補":"补","裝":"装","裡":"里","製":"制","複":"复","見":"见","規":"规","視":"视","覺":"觉","覽":"览","觸":"触","訂":"订","計":"计","訊":"讯","記":"记","訓":"训","訪":"访","設":"设","許":"许","訴":"诉","診":"诊","註":"注","評":"评","詞":"词","詢":"询","試":"试","話":"话","該":"该","詳":"详","誌":"志","認":"认","語":"语","誤":"误","說":"说","誰":"谁","調":"调","請":"请","論":"论","講":"讲","謝":"谢","謹":"谨","證":"证","識":"识","譯":"译","議":"议","護":"护","讀":"读","變":"变","讓":"让","負":"负","責":"责","貴":"贵","買":"买","費":"费","貼":"贴","資":"资","賣":"卖","賦":"赋","質":"质","賴":"赖","購":"购","賽":"赛","贅":"赘","跡":"迹","蹤":"踪","躍":"跃","軌":"轨","軸":"轴","較":"较","載":"载","輕":"轻","輪":"轮","輯":"辑","輸":"输","轉":"转","辦":"办","迴":"回","這":"这","連":"连","週":"周","進":"进","運":"运","過":"过","達":"达","遞":"递","遠":"远","適":"适","遲":"迟","選":"选","遺":"遗","還":"还","邊":"边","邏":"逻","釋":"释","釘":"钉","鈕":"钮","銷":"销","錄":"录","錢":"钱","錯":"错","鍵":"键","鎖":"锁","鏈":"链","鏡":"镜","鐘":"钟","鑰":"钥","長":"长","門":"门","閃":"闪","閉":"闭","開":"开","閒":"闲","間":"间","閱":"阅","關":"关","陣":"阵","隊":"队","階":"阶","際":"际","隨":"随","險":"险","隱":"隐","雖":"虽","雙":"双","雜":"杂","離":"离","雲":"云","電":"电","靜":"静","韓":"韩","響":"响","頁":"页","頂":"顶","項":"项","順":"顺","須":"须","預":"预","頓":"顿","頭":"头","頻":"频","題":"题","額":"额","顏":"颜","類":"类","顯":"显","風":"风","餘":"余","饋":"馈","馬":"马","駐":"驻","驅":"驱","驗":"验","驟":"骤","體":"体","鮮":"鲜","麥":"麦","麵":"面","麼":"么","點":"点","齊":"齐"};
 function toSimplified(s: string): string {
   let out = s;
   for (const [tw, cn] of T2S_TERMS) {
@@ -1978,6 +1978,13 @@ ${ogMeta('/privacy', 'Privacy Policy — BugEzy', 'How BugEzy handles your data.
   .lang-divider {
     margin: 56px 0 0; padding-top: 8px; border-top: 1px dashed #2a2a3e; color: #8b8fa3;
   }
+  /* PM-291：權限對照表（審核員會逐項比對 manifest / Dashboard / 本頁三方是否一致） */
+  table.perm { width:100%; border-collapse:collapse; margin:10px 0 0; font-size:14px; }
+  table.perm th, table.perm td { border:1px solid #2a2a3e; padding:8px 10px; vertical-align:top; text-align:left; }
+  table.perm th { background:#1a1a2e; color:#c4b5fd; font-weight:600; }
+  table.perm code { color:#a78bfa; }
+  .limited-use { margin:10px 0 0; padding:12px 14px; background:#12121f;
+    border:1px solid #7c3aed; border-radius:10px; font-size:14px; line-height:1.7; }
   footer {
     margin-top: 48px; padding-top: 20px; border-top: 1px solid #2a2a3e;
     color: #8b8fa3; font-size: 13px;
@@ -1994,106 +2001,222 @@ ${ogMeta('/privacy', 'Privacy Policy — BugEzy', 'How BugEzy handles your data.
 ${t(
     `
   <h1>隱私政策</h1>
-  <div class="updated">最後更新：2026 年 6 月 25 日</div>
+  <div class="updated">最後更新：2026 年 8 月 14 日　·　開發者：FOX Chang</div>
 
-  <h2>1. 我們收集什麼資料</h2>
+  <h2>1. 聯絡資訊</h2>
   <ul>
-    <li>Google 帳號資訊（email、姓名、頭像）用於登入</li>
-    <li>Bug 報告內容（Console logs、Network errors、DOM 快照、語音記錄、截圖）</li>
-    <li>使用量統計（MCP AI 讀取次數、Token 估算）</li>
+    <li>開發者：FOX Chang</li>
+    <li>Email：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></li>
+    <li>電話：0983-101-085</li>
+    <li>本政策適用於 BugEzy Chrome 擴充功能與 bugezy.dev 網站。</li>
   </ul>
 
-  <h2>2. 我們如何使用資料</h2>
+  <h2>2. 我們收集哪些資料</h2>
+  <p>下表逐一對照本擴充功能在 <code>manifest.json</code> 中宣告的權限，說明各項權限實際存取的資料與用途。</p>
+  <table class="perm">
+    <tr><th>權限</th><th>存取的資料</th><th>為什麼需要</th></tr>
+    <tr><td><code>identity</code></td><td>Google 帳號的 email、姓名、頭像（OAuth 範圍：<code>openid</code>、<code>email</code>、<code>profile</code>）</td><td>登入驗證與識別您的帳號</td></tr>
+    <tr><td><code>activeTab</code></td><td>當前分頁的網址與可見畫面截圖</td><td>錄製 Bug 報告與截圖標注</td></tr>
+    <tr><td><code>storage</code></td><td>裝置本機設定（登入憑證、語言、麥克風與模式偏好、票券錢包展開狀態）</td><td>保持登入、記住偏好設定</td></tr>
+    <tr><td><code>downloads</code></td><td>不額外收集資料</td><td>將報告匯出成 JSON 檔到您的電腦</td></tr>
+    <tr><td><code>offscreen</code></td><td>麥克風音訊串流（僅在您開啟麥克風並錄製時）</td><td>背景錄音以進行語音轉文字</td></tr>
+    <tr><td>內容指令碼<br><code>&lt;all_urls&gt;</code></td><td>您<b>啟動錄製的分頁</b>之 DOM 變化、Console 訊息、網路請求的失敗狀態（4xx/5xx）</td><td>擴充功能需在任意網站上運作，因此宣告全網域比對。<b>未按下錄製時不會收集或上傳任何頁面內容</b>；僅擷取 Console 錯誤與 4xx/5xx，不記錄成功的請求內容。</td></tr>
+  </table>
+
+  <p>除上述權限外，使用本服務時我們另會處理：</p>
   <ul>
-    <li>提供 Bug 報告服務</li>
-    <li>AI 分析（Cloudflare Workers AI）用於語音精簡和校正</li>
-    <li>使用量追蹤用於方案管理</li>
+    <li><b>Bug 報告內容</b>：Console 訊息、網路錯誤、DOM 操作軌跡（rrweb）、頁面網址與標題、瀏覽器與螢幕資訊、語音錄音與其轉出的文字、截圖、您輸入的補充說明。</li>
+    <li><b>終端機記錄</b>（選用，僅在您使用 CLI 工具時）：程式錯誤輸出與執行環境資訊。上傳前會在您的裝置先行遮蔽常見的機密字串（資料庫連線字串、API 金鑰、token、email、手機號碼、身分證字號、信用卡號等）。</li>
+    <li><b>使用量統計</b>：錄製次數、回溯次數、MCP AI 讀取次數與 Token 估算，用於免費額度計算。</li>
+    <li><b>付款與方案紀錄</b>：綠界訂單編號、付款金額與時間、方案到期日。<b>我們不會接觸或儲存您的信用卡號碼</b>。</li>
+    <li><b>活動代碼與票券紀錄</b>：您兌換的代碼、票券狀態與到期日。</li>
+    <li><b>問題回報內容</b>（選用）：您在回報表單填寫的內容，以及由 IP 推得的國家代碼。</li>
+    <li><b>國家代碼</b>：由 Cloudflare 依連線 IP 推得（例如 <code>TW</code>），用於判斷可否使用金流。<b>我們不儲存您的 IP 位址</b>。</li>
   </ul>
 
-  <h2>3. 資料儲存</h2>
+  <h2>3. 我們如何使用這些資料</h2>
   <ul>
-    <li>報告資料儲存在 Cloudflare R2（全球 CDN）</li>
-    <li>使用者資料儲存在 Supabase（PostgreSQL）</li>
-    <li>免費版報告保留 7 天，付費版保留 90 天</li>
+    <li>提供 Bug 報告的錄製、儲存、檢視與分享服務。</li>
+    <li>語音轉文字（Groq Whisper）與 AI 文字校正／精簡（Cloudflare Workers AI）。</li>
+    <li>計算免費額度與管理付費方案。</li>
+    <li>透過綠界（ECPay）處理付款。</li>
+    <li>將重要事件（新用戶註冊、新報告、代碼兌換、付款成功）以 Discord Webhook 通知開發者，內容包含您的帳號 email。</li>
+    <li>我們<b>不會</b>將您的資料用於廣告、不出售資料、也不用於訓練任何 AI 模型。</li>
   </ul>
 
-  <h2>4. 資料分享</h2>
+  <h2>4. 第三方服務</h2>
+  <p>我們將資料交由下列服務商處理。點擊可查看其隱私政策。</p>
   <ul>
-    <li>我們不會將您的資料出售給第三方</li>
-    <li>報告列表僅限您本人查看（需登入驗證）；單份報告可透過報告連結查看——持有連結者即可存取，類似 Google Docs「知道連結的人皆可檢視」模式，故請謹慎分享、避免在公開場合張貼</li>
-    <li>AI 分析由 Cloudflare Workers AI 處理，不會將資料傳送給其他 AI 服務商</li>
+    <li><b>Cloudflare</b>（Workers／R2／Workers AI）—— API 運算、報告與截圖儲存、AI 文字校正與精簡：<a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">隱私政策</a></li>
+    <li><b>Groq</b>（美國）—— <b>語音轉文字</b>；您的音訊會傳送至 Groq 的 Whisper 服務進行辨識：<a href="https://groq.com/privacy-policy/" target="_blank" rel="noopener">隱私政策</a></li>
+    <li><b>Supabase</b> —— 帳號、方案、票券與報告中繼資料的資料庫：<a href="https://supabase.com/privacy" target="_blank" rel="noopener">隱私政策</a></li>
+    <li><b>綠界科技 ECPay</b> —— 付款處理（信用卡資料由綠界直接收取，不經過本服務）：<a href="https://www.ecpay.com.tw/Content/files/ecpay_privacy.pdf" target="_blank" rel="noopener">隱私政策</a></li>
+    <li><b>Google</b> —— OAuth 登入驗證與帳號基本資料：<a href="https://policies.google.com/privacy" target="_blank" rel="noopener">隱私政策</a></li>
+    <li><b>Discord</b> —— 開發者營運通知（含您的帳號 email）：<a href="https://discord.com/privacy" target="_blank" rel="noopener">隱私政策</a></li>
   </ul>
 
-  <h2>5. 您的權利</h2>
+  <h2>5. 資料儲存、保留與安全</h2>
   <ul>
-    <li>您可以隨時刪除您的報告</li>
-    <li>您可以要求刪除您的帳號和所有相關資料</li>
-    <li>聯絡 <a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a> 提出請求</li>
+    <li>所有資料傳輸一律使用 HTTPS 加密。</li>
+    <li>報告的大型檔案（DOM 軌跡、截圖）儲存於 Cloudflare R2；帳號與中繼資料儲存於 Supabase（PostgreSQL）。兩者皆於靜態時加密。</li>
+    <li>資料庫啟用資料列層級安全性（RLS）並全面拒絕匿名存取，僅由本服務的伺服器以受管金鑰讀寫。</li>
+    <li>設定與登入憑證存放於您裝置上的 <code>chrome.storage.local</code>，不會離開您的電腦。</li>
+    <li><b>保留期間</b>：報告會保留至您主動刪除、或您要求刪除帳號為止。您可隨時在擴充功能中刪除單筆或批次刪除報告。</li>
+    <li>登入工作階段有效期為 90 天，過期後由系統自動清除。</li>
+    <li>移除擴充功能會一併清除所有存放於您裝置上的本機資料。</li>
   </ul>
 
-  <h2>6. Cookie 和追蹤</h2>
+  <h2>6. 您的權利</h2>
   <ul>
-    <li>我們不使用第三方追蹤 Cookie</li>
-    <li>Chrome 擴充使用 chrome.storage.local 儲存登入狀態</li>
+    <li><b>存取與匯出</b>：可在擴充功能中將報告匯出為 JSON 檔。</li>
+    <li><b>更正</b>：可在上傳前於編輯頁修改語音文字與補充說明。</li>
+    <li><b>刪除</b>：可隨時刪除個別報告；亦可來信要求刪除帳號及所有相關資料。</li>
+    <li><b>撤回同意</b>：可在擴充功能中登出，或至 Google 帳戶設定移除本應用程式的授權。</li>
+    <li>行使上述權利請聯絡 <a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a> 或 0983-101-085，我們將於 30 天內回應。</li>
   </ul>
 
-  <h2>7. 變更通知</h2>
+  <h2>7. 資料分享</h2>
   <ul>
-    <li>隱私政策變更時，我們會在首頁公告</li>
+    <li>我們<b>不會</b>出售您的資料。</li>
+    <li>報告清單僅限您本人登入後檢視。</li>
+    <li><b>單份報告採「持有連結即可檢視」模式</b>（類似 Google 文件的「知道連結的人」）—— 取得連結者即可開啟，請謹慎分享、避免公開張貼。</li>
+    <li>僅在法律要求時，我們才會依法配合揭露資料。</li>
   </ul>
 
-  <p>聯絡方式：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></p>`,
+  <h2>8. Cookie 與追蹤</h2>
+  <ul>
+    <li>我們<b>不使用</b>第三方追蹤 Cookie、廣告像素、Google Analytics 或任何跨站追蹤技術。</li>
+    <li>擴充功能使用 <code>chrome.storage.local</code> 保存登入狀態與偏好設定。</li>
+  </ul>
+
+  <h2>9. Google API 使用者資料政策（Limited Use）</h2>
+  <div class="limited-use">
+    BugEzy 對於透過 Google API 取得之資訊的使用與轉移，遵守 <a href="https://developer.chrome.com/docs/webstore/program-policies/limited-use/" target="_blank" rel="noopener">Chrome Web Store 使用者資料政策</a>，包含其中的「有限用途」（Limited Use）要求。
+  </div>
+
+  <h2>10. 兒童隱私</h2>
+  <ul>
+    <li>BugEzy 並非為 13 歲以下兒童設計，我們不會刻意收集兒童的個人資料。</li>
+    <li>若您認為兒童向我們提供了個人資料，請來信告知，我們會予以刪除。</li>
+  </ul>
+
+  <h2>11. 政策變更</h2>
+  <ul>
+    <li>本政策若有變更，我們會更新本頁上方的「最後更新」日期。</li>
+    <li>重大變更將於官網首頁公告。</li>
+  </ul>
+
+  <p>聯絡方式：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a>　·　0983-101-085</p>
+`,
     `
   <h1>Privacy Policy</h1>
-  <div class="updated">Last updated: June 25, 2026</div>
+  <div class="updated">Last updated: August 14, 2026　·　Developer: FOX Chang</div>
 
-  <h2>1. What We Collect</h2>
+  <h2>1. Contact</h2>
   <ul>
-    <li>Google account info (email, name, avatar) for sign-in</li>
-    <li>Bug report contents (console logs, network errors, DOM snapshots, voice notes, screenshots)</li>
-    <li>Usage statistics (MCP AI read counts, token estimates)</li>
+    <li>Developer: FOX Chang</li>
+    <li>Email: <a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></li>
+    <li>Phone: +886 983-101-085</li>
+    <li>This policy covers the BugEzy Chrome extension and the bugezy.dev website.</li>
   </ul>
 
-  <h2>2. How We Use Data</h2>
+  <h2>2. What We Collect</h2>
+  <p>The table below maps every permission declared in the extension's <code>manifest.json</code> to the data it accesses and why.</p>
+  <table class="perm">
+    <tr><th>Permission</th><th>Data accessed</th><th>Why it is needed</th></tr>
+    <tr><td><code>identity</code></td><td>Google account email, name and avatar (OAuth scopes: <code>openid</code>, <code>email</code>, <code>profile</code>)</td><td>Sign-in and account identification</td></tr>
+    <tr><td><code>activeTab</code></td><td>URL of the active tab and a screenshot of its visible area</td><td>Recording bug reports and screenshot annotation</td></tr>
+    <tr><td><code>storage</code></td><td>Local settings on your device (session token, language, microphone and mode preferences, ticket wallet state)</td><td>Keeping you signed in and remembering preferences</td></tr>
+    <tr><td><code>downloads</code></td><td>No additional data collected</td><td>Exporting a report as a JSON file to your computer</td></tr>
+    <tr><td><code>offscreen</code></td><td>Microphone audio stream (only while you have the microphone enabled and are recording)</td><td>Background audio capture for speech-to-text</td></tr>
+    <tr><td>Content scripts<br><code>&lt;all_urls&gt;</code></td><td>DOM changes, console messages and failed network requests (4xx/5xx) on <b>the tab you start recording on</b></td><td>The extension must work on any website, so it declares an all-URLs match. <b>Nothing is collected or uploaded until you press record</b>; only console errors and 4xx/5xx are captured — successful request bodies are not.</td></tr>
+  </table>
+
+  <p>In addition to the permissions above, using the service involves:</p>
   <ul>
-    <li>To provide the bug-reporting service</li>
-    <li>AI analysis (Cloudflare Workers AI) for voice cleanup and correction</li>
-    <li>Usage tracking for plan management</li>
+    <li><b>Bug report contents</b>: console messages, network errors, DOM interaction traces (rrweb), page URL and title, browser and screen information, voice recordings and their transcripts, screenshots, and any notes you type.</li>
+    <li><b>Terminal logs</b> (optional, only if you use the CLI tool): program error output and runtime environment details. Common secrets (database URLs, API keys, tokens, emails, phone numbers, national ID numbers, card numbers) are masked <b>on your machine before upload</b>.</li>
+    <li><b>Usage counters</b>: recordings, rewinds, MCP AI reads and token estimates, used to enforce free-plan limits.</li>
+    <li><b>Payment and plan records</b>: ECPay order number, amount, timestamp and plan expiry. <b>We never see or store your card number.</b></li>
+    <li><b>Promo code and ticket records</b>: codes you redeem, ticket status and expiry.</li>
+    <li><b>Feedback submissions</b> (optional): what you write in the feedback form, plus a country code derived from your IP.</li>
+    <li><b>Country code</b>: derived by Cloudflare from your connection (e.g. <code>TW</code>) to determine payment availability. <b>We do not store your IP address.</b></li>
   </ul>
 
-  <h2>3. Data Storage</h2>
+  <h2>3. How We Use It</h2>
   <ul>
-    <li>Report data is stored on Cloudflare R2 (global CDN)</li>
-    <li>User data is stored on Supabase (PostgreSQL)</li>
-    <li>Free-plan reports are kept for 7 days; paid-plan reports for 90 days</li>
+    <li>To record, store, display and share your bug reports.</li>
+    <li>Speech-to-text (Groq Whisper) and AI text correction/summarisation (Cloudflare Workers AI).</li>
+    <li>To enforce free-plan limits and manage paid subscriptions.</li>
+    <li>To process payments through ECPay.</li>
+    <li>To notify the developer of key events (new sign-up, new report, code redemption, successful payment) via a Discord webhook; these notifications include your account email.</li>
+    <li>We do <b>not</b> use your data for advertising, do not sell it, and do not use it to train any AI model.</li>
   </ul>
 
-  <h2>4. Data Sharing</h2>
+  <h2>4. Third-Party Services</h2>
+  <p>We rely on the following processors. Each links to its own privacy policy.</p>
   <ul>
-    <li>We do not sell your data to third parties</li>
-    <li>Your report list is private (login required); individual report content can be accessed via the report link — anyone with the link can view it, similar to Google Docs' "anyone with the link can view" model, so share report links carefully and avoid posting them publicly</li>
-    <li>AI analysis is processed by Cloudflare Workers AI and is not sent to any other AI provider</li>
+    <li><b>Cloudflare</b> (Workers / R2 / Workers AI) — API compute, report and screenshot storage, AI text correction and summarisation: <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">privacy policy</a></li>
+    <li><b>Groq</b> (United States) — <b>speech-to-text</b>; your audio is sent to Groq's Whisper service for transcription: <a href="https://groq.com/privacy-policy/" target="_blank" rel="noopener">privacy policy</a></li>
+    <li><b>Supabase</b> — database for accounts, plans, tickets and report metadata: <a href="https://supabase.com/privacy" target="_blank" rel="noopener">privacy policy</a></li>
+    <li><b>ECPay</b> — payment processing (card details are collected by ECPay directly and never pass through our servers): <a href="https://www.ecpay.com.tw/Content/files/ecpay_privacy.pdf" target="_blank" rel="noopener">privacy policy</a></li>
+    <li><b>Google</b> — OAuth sign-in and basic account details: <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">privacy policy</a></li>
+    <li><b>Discord</b> — operational notifications to the developer (including your account email): <a href="https://discord.com/privacy" target="_blank" rel="noopener">privacy policy</a></li>
   </ul>
 
-  <h2>5. Your Rights</h2>
+  <h2>5. Storage, Retention and Security</h2>
   <ul>
-    <li>You may delete your reports at any time</li>
-    <li>You may request deletion of your account and all related data</li>
-    <li>Contact <a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a> to make a request</li>
+    <li>All data is transmitted over HTTPS.</li>
+    <li>Large report assets (DOM traces, screenshots) are stored in Cloudflare R2; accounts and metadata in Supabase (PostgreSQL). Both are encrypted at rest.</li>
+    <li>The database has Row Level Security enabled and denies all anonymous access; only our server can read or write, using a managed key.</li>
+    <li>Settings and your session token live in <code>chrome.storage.local</code> on your own device and never leave it.</li>
+    <li><b>Retention</b>: reports are kept until you delete them or request deletion of your account. You can delete reports individually or in bulk from the extension at any time.</li>
+    <li>Sign-in sessions expire after 90 days and are then purged automatically.</li>
+    <li>Uninstalling the extension removes all locally stored data from your device.</li>
   </ul>
 
-  <h2>6. Cookies & Tracking</h2>
+  <h2>6. Your Rights</h2>
   <ul>
-    <li>We do not use third-party tracking cookies</li>
-    <li>The Chrome extension uses chrome.storage.local to store sign-in state</li>
+    <li><b>Access &amp; export</b>: export any report as JSON from the extension.</li>
+    <li><b>Correction</b>: edit the transcript and notes in the editor before uploading.</li>
+    <li><b>Deletion</b>: delete individual reports at any time, or email us to delete your account and all associated data.</li>
+    <li><b>Withdraw consent</b>: sign out in the extension, or revoke the app from your Google Account settings.</li>
+    <li>To exercise these rights contact <a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a> or +886 983-101-085. We respond within 30 days.</li>
   </ul>
 
-  <h2>7. Change Notice</h2>
+  <h2>7. Data Sharing</h2>
   <ul>
-    <li>When this policy changes, we will announce it on the homepage</li>
+    <li>We do <b>not</b> sell your data.</li>
+    <li>Your report list is visible only to you after signing in.</li>
+    <li><b>An individual report link is "anyone with the link can view"</b> (similar to Google Docs link sharing) — share it carefully and avoid posting it publicly.</li>
+    <li>We disclose data only where required by law.</li>
   </ul>
 
-  <p>Contact: <a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></p>`,
+  <h2>8. Cookies and Tracking</h2>
+  <ul>
+    <li>We use <b>no</b> third-party tracking cookies, advertising pixels, Google Analytics, or any cross-site tracking.</li>
+    <li>The extension uses <code>chrome.storage.local</code> to keep your sign-in state and preferences.</li>
+  </ul>
+
+  <h2>9. Google API Services User Data Policy (Limited Use)</h2>
+  <div class="limited-use">
+    BugEzy's use and transfer of information received from Google APIs adheres to the <a href="https://developer.chrome.com/docs/webstore/program-policies/limited-use/" target="_blank" rel="noopener">Chrome Web Store User Data Policy</a>, including the Limited Use requirements.
+  </div>
+
+  <h2>10. Children's Privacy</h2>
+  <ul>
+    <li>BugEzy is not directed at children under 13, and we do not knowingly collect personal information from them.</li>
+    <li>If you believe a child has provided us with personal data, please contact us and we will delete it.</li>
+  </ul>
+
+  <h2>11. Changes to This Policy</h2>
+  <ul>
+    <li>If this policy changes we will update the "Last updated" date at the top of this page.</li>
+    <li>Material changes will be announced on the site's home page.</li>
+  </ul>
+
+  <p>Contact: <a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a>　·　+886 983-101-085</p>
+`,
   )}
 
   <footer>
