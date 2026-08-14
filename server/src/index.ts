@@ -37,6 +37,9 @@ export interface Env {
   // PM-276：管理端安裝碼反查用（`wrangler secret put ADMIN_TOKEN`）。
   // **未設定時 /api/admin/verify-install 一律 404**——否則會變成任何人都能用安裝碼查到 email。
   ADMIN_TOKEN?: string;
+  // PM-292：報告自動清理的開關（`wrangler secret put REPORT_CLEANUP`，值為 'on' 才會真的刪）。
+  // **未設定 = dry-run**：只統計並回報，不刪任何東西。刪除不可逆，絕不能因為一次 deploy 就默默開始清資料。
+  REPORT_CLEANUP?: string;
   // PM-268：per-request ExecutionContext，供 notifyFox 用 waitUntil 送出非阻塞推播（見 notifyFox 註解）。
   __ctx?: ExecutionContext;
 }
@@ -2061,7 +2064,8 @@ ${t(
     <li>報告的大型檔案（DOM 軌跡、截圖）儲存於 Cloudflare R2；帳號與中繼資料儲存於 Supabase（PostgreSQL）。兩者皆於靜態時加密。</li>
     <li>資料庫啟用資料列層級安全性（RLS）並全面拒絕匿名存取，僅由本服務的伺服器以受管金鑰讀寫。</li>
     <li>設定與登入憑證存放於您裝置上的 <code>chrome.storage.local</code>，不會離開您的電腦。</li>
-    <li><b>保留期間</b>：報告會保留至您主動刪除、或您要求刪除帳號為止。您可隨時在擴充功能中刪除單筆或批次刪除報告。</li>
+    <li><b>保留期間</b>：免費版報告保留 <b>7 天</b>，付費版（含使用中活動票券者）保留 <b>90 天</b>；逾期報告及其附件（DOM 軌跡、語音、截圖）由系統每日自動刪除，刪除後無法復原。您也可以隨時在擴充功能中自行刪除單筆或批次刪除報告。</li>
+    <li>保留期間依<b>刪除當下</b>的方案判定。若您從付費降回免費，先前於付費期間產生的報告將改以 7 天標準計算——如需保留，請在降級前自行匯出。</li>
     <li>登入工作階段有效期為 90 天，過期後由系統自動清除。</li>
     <li>移除擴充功能會一併清除所有存放於您裝置上的本機資料。</li>
   </ul>
@@ -2170,7 +2174,8 @@ ${t(
     <li>Large report assets (DOM traces, screenshots) are stored in Cloudflare R2; accounts and metadata in Supabase (PostgreSQL). Both are encrypted at rest.</li>
     <li>The database has Row Level Security enabled and denies all anonymous access; only our server can read or write, using a managed key.</li>
     <li>Settings and your session token live in <code>chrome.storage.local</code> on your own device and never leave it.</li>
-    <li><b>Retention</b>: reports are kept until you delete them or request deletion of your account. You can delete reports individually or in bulk from the extension at any time.</li>
+    <li><b>Retention</b>: reports are kept for <b>7 days</b> on the free plan and <b>90 days</b> on paid plans (including users with an active promo ticket). Expired reports and their attachments (DOM traces, voice, screenshots) are deleted automatically by a daily job and cannot be recovered. You can also delete reports individually or in bulk from the extension at any time.</li>
+    <li>Retention is evaluated against your plan <b>at the time of deletion</b>. If you downgrade from paid to free, reports created while you were paying will then fall under the 7-day rule — export anything you want to keep before downgrading.</li>
     <li>Sign-in sessions expire after 90 days and are then purged automatically.</li>
     <li>Uninstalling the extension removes all locally stored data from your device.</li>
   </ul>
@@ -5651,6 +5656,136 @@ async function notifyExpiringTickets(env: Env): Promise<void> {
   console.log(`[Cron] 票券到期提醒：${sent}/${rows.length} 筆`);
 }
 
+// ── PM-292：報告自動清理（免費 7 天 / 付費 90 天）─────────────────────────
+const RETENTION_FREE_DAYS = 7;
+const RETENTION_PAID_DAYS = 90;
+const CLEANUP_BATCH = 500; // 單次上限，避免一次 cron 做太久；未清完的下次繼續
+
+/**
+ * 每日掃過期報告 → 刪 R2 附件 → 刪 DB 記錄 → Discord 回報摘要。
+ *
+ * ⚠ **預設 dry-run**：`REPORT_CLEANUP` 不等於 'on' 時只統計不刪除。
+ *   這是不可逆的資料刪除，不該因為一次部署就自動開始跑；先看幾天摘要確認數字合理再開。
+ *
+ * 判定用**當前身分**（卡片 §5 的建議做法）：付費/日票/有效票券 → 90 天，其餘 → 7 天。
+ * 代價是「降級後，付費期間產生的舊報告會依 7 天標準被清掉」——這點已寫進隱私政策。
+ */
+async function cleanupExpiredReports(env: Env): Promise<void> {
+  const live = env.REPORT_CLEANUP?.trim() === 'on';
+  const now = Date.now();
+  const freeCutoff = new Date(now - RETENTION_FREE_DAYS * 86_400_000).toISOString();
+
+  // 只撈「連免費標準都超過」的，付費的再用 90 天二次過濾——一次查詢就夠
+  const { data, error } = await supa(env)
+    .from('reports')
+    .select('report_id, user_id, created_at, rrweb_r2_key, screenshots_r2_key')
+    .lt('created_at', freeCutoff)
+    .order('created_at', { ascending: true })
+    .limit(CLEANUP_BATCH);
+  if (error) {
+    console.error('[Cron] 報告清理查詢失敗:', error.message);
+    return;
+  }
+  const rows = (data ?? []) as Array<{
+    report_id: string;
+    user_id: string | null;
+    created_at: string;
+    rrweb_r2_key: string | null;
+    screenshots_r2_key: string | null;
+  }>;
+  if (!rows.length) return; // 沒有過期報告 → 靜默結束
+
+  // 一次查完所有相關用戶的方案與有效票券（不要每筆報告各查一次）
+  const userIds = [...new Set(rows.map((r) => r.user_id).filter((x): x is string => !!x))];
+  const paid = new Set<string>();
+  if (userIds.length) {
+    const { data: users } = await supa(env)
+      .from('users')
+      .select('user_id, plan, day_pass_expires_at')
+      .in('user_id', userIds);
+    for (const u of (users ?? []) as Array<{
+      user_id: string;
+      plan?: string | null;
+      day_pass_expires_at?: string | null;
+    }>) {
+      if (isActiveUser(u)) paid.add(u.user_id);
+    }
+    const { data: tickets } = await supa(env)
+      .from('user_tickets')
+      .select('user_id')
+      .eq('status', 'ACTIVE')
+      .gt('expires_at', new Date(now).toISOString())
+      .in('user_id', userIds);
+    for (const t of (tickets ?? []) as Array<{ user_id: string }>) paid.add(t.user_id);
+  }
+
+  const paidCutoff = now - RETENTION_PAID_DAYS * 86_400_000;
+  const doomed: typeof rows = [];
+  let freeCount = 0;
+  let paidCount = 0;
+  let orphan = 0;
+  for (const r of rows) {
+    if (!r.user_id) {
+      // 沒有 user_id（PM-133 認證上線前的舊報告）→ 無法判定方案，**不刪**。
+      // 寧可留著也不要無主刪除；數量會回報給 FOX 另行處理。
+      orphan++;
+      continue;
+    }
+    if (paid.has(r.user_id)) {
+      if (new Date(r.created_at).getTime() < paidCutoff) {
+        doomed.push(r);
+        paidCount++;
+      }
+    } else {
+      doomed.push(r);
+      freeCount++;
+    }
+  }
+
+  if (!doomed.length) {
+    if (orphan) console.log(`[Cron] 報告清理：無可刪項目（略過 ${orphan} 筆無 user_id）`);
+    return;
+  }
+
+  let r2Deleted = 0;
+  if (live) {
+    // 先刪 R2 再刪 DB：反過來的話 DB 一旦刪掉，R2 檔案就再也查不到 key，永遠成為孤兒。
+    // R2 delete 是冪等的，這一步失敗下次 cron 會重試。
+    for (const r of doomed) {
+      for (const key of [r.rrweb_r2_key, r.screenshots_r2_key]) {
+        if (!key) continue;
+        try {
+          await env.R2.delete(key);
+          r2Deleted++;
+        } catch (e) {
+          console.error('[Cron] R2 刪除失敗:', key, String(e));
+        }
+      }
+    }
+    const { error: delErr } = await supa(env)
+      .from('reports')
+      .delete()
+      .in('report_id', doomed.map((r) => r.report_id));
+    if (delErr) {
+      console.error('[Cron] 報告刪除失敗:', delErr.message);
+      return;
+    }
+  }
+
+  const mode = live ? '' : '（dry-run，未實際刪除）';
+  const capped = rows.length >= CLEANUP_BATCH ? `\n⚠ 本次掃描達單次上限 ${CLEANUP_BATCH} 筆，剩餘明天繼續` : '';
+  const orphanLine = orphan ? `\n⏭ 略過 ${orphan} 筆無 user_id 的舊報告（無法判定方案）` : '';
+  console.log(
+    `[Cron] 報告清理${mode}：免費 ${freeCount} 筆、付費 ${paidCount} 筆、R2 ${r2Deleted} 個檔案、略過 ${orphan} 筆`,
+  );
+  await sendDiscord(
+    env,
+    `🧹 報告清理${mode}`,
+    `免費版：${freeCount} 筆（超過 ${RETENTION_FREE_DAYS} 天）\n付費版：${paidCount} 筆（超過 ${RETENTION_PAID_DAYS} 天）\nR2 附件：${r2Deleted} 個${orphanLine}${capped}`,
+    3,
+  );
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     env.__ctx = ctx; // PM-268：供 notifyFox 用 waitUntil 送非阻塞推播（回應後 isolate 才回收）
@@ -6049,6 +6184,12 @@ export default {
       await notifyExpiringTickets(env);
     } catch (err) {
       console.error('[Cron] 票券到期提醒失敗:', err);
+    }
+    // PM-292：報告自動清理（免費 7 天 / 付費 90 天）——預設 dry-run，見函式註解
+    try {
+      await cleanupExpiredReports(env);
+    } catch (err) {
+      console.error('[Cron] 報告清理失敗:', err);
     }
   },
 };
