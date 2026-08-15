@@ -51,6 +51,9 @@ code{background:rgba(255,255,255,0.07);padding:2px 6px;border-radius:4px;font-si
 .ok-box p,.ok-box li{font-size:11px;color:var(--text-dim);margin-bottom:3px}
 .decision{background:rgba(255,200,50,0.05);border:1px solid rgba(255,200,50,0.15);border-radius:10px;padding:20px;margin:16px 0}
 .decision-title{font-size:13px;font-weight:700;color:var(--gold);margin-bottom:12px}
+.decision.settled{background:rgba(50,180,120,0.06);border-color:rgba(50,180,120,0.25)}
+.decision.settled .decision-title{color:var(--success)}
+.settled-badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;background:rgba(50,180,120,0.18);color:var(--success);margin-left:8px}
 .decision p,.decision li{font-size:12px;color:var(--text-dim);margin-bottom:5px}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media(max-width:800px){.two-col{grid-template-columns:1fr}.content{padding:20px}.header{padding:20px}}
@@ -82,7 +85,7 @@ details .details-body{padding:4px 18px 18px}
   <div>
     <div class="header-title">BugEzy v2/v3 產品規格書</div>
     <div class="header-sub">From Bug Reporter to AI Debug Partner · FOX + Claude 共同規劃</div>
-    <div class="header-date">📌 v0.2 · 2026-08-15 · 程式 &gt; ARCHITECTURE.md &gt; 本文</div>
+    <div class="header-date">📌 v0.3 · 2026-08-15 · 三項決策已定案 · 程式 &gt; ARCHITECTURE.md &gt; 本文</div>
   </div>
 </div>
 
@@ -148,13 +151,18 @@ details .details-body{padding:4px 18px 18px}
 
   <div class="sub-title">定價分層</div>
   <table>
-    <tr><th>方案</th><th>價格</th><th>功能</th></tr>
-    <tr><td class="hl-green">Free</td><td>免費</td><td>錄製 10 次/月</td></tr>
-    <tr><td class="hl-blue">Pro</td><td>NT$80/月</td><td>無限錄製 + 雲端模式</td></tr>
-    <tr><td class="hl">Max</td><td>NT$200/月</td><td>Pro + 圖釘大招 + 極速模式</td></tr>
-    <tr><td class="hl-orange">Agent</td><td>NT$500/月</td><td>Max + AI 自動化偵測</td></tr>
+    <tr><th>方案</th><th>價格</th><th>可用範圍</th></tr>
+    <tr><td class="hl-green">Free</td><td>免費</td><td>v1 錄製 10 次/月</td></tr>
+    <tr><td class="hl-cyan">票券 / 日票</td><td>活動兌換 · NT$20（24hr）</td><td><span class="hl-cyan">v1 無限錄製</span>（<span class="hl-red">不含 v2 功能</span>）</td></tr>
+    <tr><td class="hl-blue">Pro</td><td>NT$80/月</td><td>v1 全功能 + <span class="hl-blue">v2 全功能</span>（圖釘 / bridge / 即時偵測 / 雲端模式）</td></tr>
+    <tr><td class="hl">Max</td><td>NT$200/月</td><td>Pro + <span class="hl">AI 自動化 debug（v3）</span></td></tr>
+    <tr><td class="hl-orange">Agent</td><td>NT$500/月</td><td>Max + <span class="hl-orange">全棧自動閉環</span></td></tr>
   </table>
-  <p style="font-size:11px;color:var(--text-dim)">⚠ v1 現行還有 <code>NT$20 日票（24hr）</code> 與活動票券未列入此表，對應層級待決策 —— 見 <a href="#s12" style="color:var(--cyan)">§12 A-5</a>。</p>
+  <div class="ok-box">
+    <div class="ok-box-title">✅ 已定案（2026-08-15）：v2 功能只給訂閱用戶</div>
+    <p>活動票券與日票<strong>只解鎖 v1 的無限錄製</strong>，不含圖釘、bridge、即時偵測等 v2 功能。理由：票券是拉新用的免費額度，v2 是要付月費才有的差異化價值。</p>
+    <p>→ 實作影響見 <a href="#s12" style="color:var(--cyan)">§12 A-5</a>（<code>isActiveUserId()</code> 必須從布林值改成回傳方案等級）。</p>
+  </div>
 
   <div class="sub-title">AI 算力成本策略</div>
   <div class="ok-box">
@@ -238,40 +246,50 @@ BugEzy Extension
 <div class="section" id="s5">
   <div class="section-title"><span class="num">§5</span>MCP 工具擴充（v2 新增）</div>
 
+  <div class="ok-box">
+    <div class="ok-box-title">✅ 命名慣例已定案（2026-08-15）</div>
+    <p>新工具<strong>一律 snake_case、不加 <code>bugezy:</code> 前綴</strong>，與現有 13 個工具一致。MCP 用戶端本來就會用 server 名稱做命名空間，工具名再加前綴會變成 <code>bugezy - bugezy:navigate</code>。</p>
+  </div>
+
   <div class="sub-title">瀏覽器操作類</div>
   <table>
     <tr><th>工具</th><th>說明</th></tr>
-    <tr><td><code>bugezy:navigate(url)</code></td><td>開啟網頁</td></tr>
-    <tr><td><code>bugezy:click(selector)</code></td><td>點擊元素</td></tr>
-    <tr><td><code>bugezy:type(selector, text)</code></td><td>輸入文字</td></tr>
-    <tr><td><code>bugezy:screenshot()</code></td><td>截取頁面截圖</td></tr>
-    <tr><td><code>bugezy:readPage()</code></td><td>讀取頁面結構（文字，非截圖，<span class="hl-green">省 95% token</span>）</td></tr>
+    <tr><td><code>navigate_to(url)</code></td><td>開啟網頁</td></tr>
+    <tr><td><code>click_element(selector)</code></td><td>點擊元素</td></tr>
+    <tr><td><code>type_text(selector, text)</code></td><td>輸入文字</td></tr>
+    <tr><td><code>take_screenshot()</code></td><td>截取頁面截圖</td></tr>
+    <tr><td><code>read_page()</code></td><td>讀取頁面結構（文字，非截圖，<span class="hl-green">省 95% token</span>）</td></tr>
   </table>
 
   <div class="sub-title">偵測類（BugEzy 獨有優勢，Claude in Chrome 做不到）</div>
   <table>
     <tr><th>工具</th><th>說明</th></tr>
-    <tr><td><code>bugezy:getLiveErrors()</code></td><td>即時 Console errors，含嚴重度分類</td></tr>
-    <tr><td><code>bugezy:getNetworkFails()</code></td><td>即時 Network 4xx/5xx</td></tr>
-    <tr><td><code>bugezy:analyzeElement(selector)</code></td><td>深度分析：DOM + CSS + event listeners</td></tr>
-    <tr><td><code>bugezy:getWebVitals()</code></td><td>效能指標</td></tr>
-    <tr><td><code>bugezy:getPageHealth()</code></td><td>整體健康報告</td></tr>
+    <tr><td><code>get_live_errors(source='browser')</code></td><td><span class="hl-green">沿用既有工具、加 <code>source</code> 參數</span>：即時讀瀏覽器的 Console <strong>與 Network</strong> 錯誤，含嚴重度分類</td></tr>
+    <tr><td><code>get_live_errors(source='cache')</code></td><td><strong>預設值</strong>，維持 v1 現有行為（讀 R2 快取）—— 向下相容</td></tr>
+    <tr><td><code>analyze_element(selector)</code></td><td>深度分析：DOM + CSS + event listeners</td></tr>
+    <tr><td><code>get_web_vitals()</code></td><td>效能指標</td></tr>
+    <tr><td><code>get_page_health()</code></td><td>整體健康報告</td></tr>
   </table>
+  <div class="ok-box">
+    <div class="ok-box-title">✅ get_live_errors 命名已定案（2026-08-15）· 決策 1</div>
+    <p>不新增工具，改為<strong>一個工具兩種模式</strong>：<code>source='cache'</code>（預設，讀 R2 快取）／<code>source='browser'</code>（v2 新增，即時讀瀏覽器）。AI 不需要知道 bridge 裝了沒；bridge 不可用時可自動退回 cache。</p>
+    <p class="hl-orange">⚠ 原規劃的 <code>getNetworkFails()</code> 已<strong>併入本工具而非獨立成新工具</strong>——查證既有 <code>get_live_errors</code> 的描述為「取得某使用者當前頁面的即時 <strong>Console/Network</strong> 錯誤」，本來就同時涵蓋兩者，另開一支會功能重疊。（此為依決策 1 推得，若你仍想拆成獨立的 <code>get_network_fails()</code>，說一聲即可改。）</p>
+  </div>
 
   <div class="sub-title">圖釘類</div>
   <table>
     <tr><th>工具</th><th>說明</th></tr>
-    <tr><td><code>bugezy:pin(selector, description)</code></td><td>釘選元素 + 描述</td></tr>
-    <tr><td><code>bugezy:pinAnalyze(selector)</code></td><td>釘選 + 自動深度分析</td></tr>
-    <tr><td><code>bugezy:getPinResults()</code></td><td>取得所有圖釘的檢查結果</td></tr>
+    <tr><td><code>pin_element(selector, description)</code></td><td>釘選元素 + 描述</td></tr>
+    <tr><td><code>pin_analyze(selector)</code></td><td>釘選 + 自動深度分析</td></tr>
+    <tr><td><code>get_pin_results()</code></td><td>取得所有圖釘的檢查結果</td></tr>
   </table>
 
   <div class="sub-title">監控類</div>
   <table>
     <tr><th>工具</th><th>說明</th></tr>
-    <tr><td><code>bugezy:startMonitor()</code></td><td>開始即時監控</td></tr>
-    <tr><td><code>bugezy:stopMonitor()</code></td><td>停止監控</td></tr>
-    <tr><td><code>bugezy:getMonitorReport()</code></td><td>取得監控期間的所有異常</td></tr>
+    <tr><td><code>start_monitor()</code></td><td>開始即時監控</td></tr>
+    <tr><td><code>stop_monitor()</code></td><td>停止監控</td></tr>
+    <tr><td><code>get_monitor_report()</code></td><td>取得監控期間的所有異常</td></tr>
   </table>
 
   <div class="sub-title">原有報告類（13 個工具，全保留不動）</div>
@@ -279,9 +297,9 @@ BugEzy Extension
     <div class="ok-box-title">已對照 server/src/index.ts 確認的完整清單</div>
     <p><code>list_reports</code> · <code>get_report_overview</code> · <code>get_console_logs</code> · <code>get_network_errors</code> · <code>get_voice_transcript</code> · <code>get_page_info</code> · <code>get_rrweb_summary</code> · <code>get_rrweb_events</code> · <code>get_live_errors</code> · <code>get_terminal_logs</code> · <code>get_usage_stats</code> · <code>get_screenshots</code> · <code>get_timeline</code></p>
   </div>
-  <div class="rule-box">
-    <div class="rule-box-title">⚠ 命名與重複問題</div>
-    <p><code>get_live_errors</code> <strong>已經存在</strong>，與 §5 規劃的 <code>bugezy:getLiveErrors()</code> 不是同一條路徑；工具命名慣例也尚未統一 —— 見 <a href="#s12" style="color:var(--cyan)">§12 A-1、A-2</a>，<strong>PM-C 之前必須定案</strong>。</p>
+  <div class="ok-box">
+    <div class="ok-box-title">✅ 原本的兩個未決問題皆已解決</div>
+    <p>「<code>get_live_errors</code> 重複」與「命名慣例不一致」已於 2026-08-15 定案（見 <a href="#s12" style="color:var(--cyan)">§12 A-1、A-2</a>），<strong>PM-C 可以直接開工</strong>。</p>
   </div>
 </div>
 
@@ -404,8 +422,9 @@ BugEzy Extension
     <ul>
       <li><span class="hl">PM-A</span>：bugezy-bridge 骨架（localhost MCP + Native Messaging）<span class="hl-red">＋ host manifest 註冊/清除（見 §12 A-3）</span></li>
       <li><span class="hl">PM-B</span>：Extension 接收 bridge 指令</li>
-      <li><span class="hl">PM-C</span>：MCP 第一批（navigate / click / readPage / getLiveErrors）<span class="hl-red">＋ 命名慣例定案（§12 A-2）</span></li>
-      <li><span class="hl">PM-D</span>：MCP 第二批（analyzeElement / getPageHealth / screenshot）</li>
+      <li><span class="hl-orange">PM-B2</span>：<span class="hl-orange">方案等級判斷雛形</span>（決策 3 使 v2 工具必須擋住票券／日票用戶，<code>isActiveUserId</code> 需回傳等級而非布林值）</li>
+      <li><span class="hl">PM-C</span>：MCP 第一批（<code>navigate_to</code> / <code>click_element</code> / <code>read_page</code> / <code>get_live_errors(source='browser')</code>）<span class="hl-green">＋ 命名已定案 ✅</span></li>
+      <li><span class="hl">PM-D</span>：MCP 第二批（<code>analyze_element</code> / <code>get_page_health</code> / <code>take_screenshot</code> / <code>get_web_vitals</code>）</li>
       <li><span class="hl-cyan">PM-D2</span>：<span class="hl-cyan">bugezy-watch 即時化</span>（<code>start_terminal_monitor</code> / <code>get_terminal_live_errors</code>，見 §11.2）</li>
     </ul>
   </div>
@@ -449,7 +468,7 @@ BugEzy Extension
   <div class="card">
     <div class="card-title">Phase 6：Max / Agent 方案上線</div>
     <ul>
-      <li><span class="hl">PM-P</span>：方案分層 + 功能閘門<span class="hl-red">＋ isActiveUserId 要改回傳方案等級（§12 A-5）</span></li>
+      <li><span class="hl">PM-P</span>：方案分層完整上線（Max / Agent）<span class="hl-red">＋ 注意：閘門雛形因決策 3 已提前到 Phase 1，見 §12 A-5</span></li>
       <li><span class="hl">PM-Q</span>：戰略夥伴推薦碼系統</li>
     </ul>
   </div>
@@ -462,6 +481,7 @@ BugEzy Extension
     <tr><th>日期</th><th>版本</th><th>說明</th></tr>
     <tr><td>2026-08-15</td><td>v0.1</td><td>初版（Markdown），FOX + Claude 共同規劃</td></tr>
     <tr><td>2026-08-15</td><td class="hl">v0.2</td><td>升級為 HTML 知識庫；新增 §11 全棧 debug、§12 附錄查證與待決策</td></tr>
+    <tr><td>2026-08-15</td><td class="hl-green">v0.3</td><td><strong>三項決策定案</strong>：<code>get_live_errors</code> 加 <code>source</code> 參數、工具全 snake_case、v2 功能只給訂閱用戶；§2 定價表與 §5 工具名同步更新</td></tr>
   </table>
 </div>
 
@@ -490,9 +510,9 @@ BugEzy Extension
   <div class="sub-title">§11.2　第三層整合（v2）</div>
   <table>
     <tr><th>新 MCP 工具</th><th>說明</th></tr>
-    <tr><td><code>bugezy:start_terminal_monitor</code></td><td>即時監控後端 process</td></tr>
-    <tr><td><code>bugezy:get_terminal_live_errors</code></td><td>取得即時後端錯誤（含嚴重度）</td></tr>
-    <tr><td><code>bugezy:correlate_errors</code></td><td>前後端錯誤自動關聯</td></tr>
+    <tr><td><code>start_terminal_monitor()</code></td><td>即時監控後端 process</td></tr>
+    <tr><td><code>get_terminal_live_errors()</code></td><td>取得即時後端錯誤（含嚴重度）</td></tr>
+    <tr><td><code>correlate_errors()</code></td><td>前後端錯誤自動關聯</td></tr>
   </table>
 
   <div class="scenario">
@@ -537,22 +557,28 @@ Claude 開瀏覽器測  ──►  Extension 掛著（攔截 console/network）<
   <p style="font-size:12px;color:var(--text-dim);margin-bottom:16px">以下為撰寫規格時<strong>實際比對 <code>server/src/index.ts</code>、<code>extension/manifest.json</code>、<code>cli/src</code> 與現行方案設定</strong>的結果。§1~§11 是願景；<strong>這一節是動工前必須先知道的現實條件</strong>。</p>
 
   <details open>
-    <summary>A-1　<code>get_live_errors</code> 已經存在，v2 的 <code>getLiveErrors</code> 是「另一條路」</summary>
+    <summary>A-1　<code>get_live_errors</code> 的兩種模式　<span class="settled-badge">✅ 已定案</span></summary>
     <div class="details-body">
-      <p style="font-size:12px;color:var(--text-dim)">現有 MCP 已有 <code>get_live_errors</code>，資料來源是 <strong>R2 上由 extension 即時監控寫入的快取</strong>（需 <code>user_email</code> + <code>session_token</code>），屬「非同步落地後再讀」。§5 規劃的是<strong>透過 bridge 直接向當前分頁要資料</strong>的同步路徑。兩者行為不同，<strong>不要當成同一個工具</strong>。</p>
-      <ul>
-        <li><strong>方案 A</strong>：新工具改名（<code>live_errors_now</code> 等）並存 — 語意清楚，工具數量變多</li>
-        <li><strong>方案 B</strong>：<code>get_live_errors</code> 加參數 <code>source: 'cache' | 'live'</code>，bridge 可用走即時、否則退回 R2 — 使用者體驗較好，但要處理降級</li>
-      </ul>
-      <p style="font-size:12px;color:var(--gold)">建議方案 B（「AI 不需要知道 bridge 裝了沒」才是好體驗），但屬產品決策，留給 FOX 拍板。</p>
+      <div class="ok-box">
+        <div class="ok-box-title">定案（2026-08-15）：加 <code>source</code> 參數，一個工具兩種模式</div>
+        <p><code>get_live_errors(source='cache')</code> → 現有行為，讀 R2 快取（歷史）；<strong>預設值，向下相容</strong></p>
+        <p><code>get_live_errors(source='browser')</code> → v2 新增，即時讀瀏覽器 Console／Network</p>
+      </div>
+      <p style="font-size:12px;color:var(--text-dim)"><strong>背景</strong>：v1 已有 <code>get_live_errors</code>，資料來源是 <strong>R2 上由 extension 即時監控寫入的快取</strong>（需 <code>user_email</code> + <code>session_token</code>），屬「非同步落地後再讀」；v2 要的是<strong>透過 bridge 直接向當前分頁要資料</strong>的同步路徑。兩者行為不同但語意相同，故合併為同一工具的兩種 <code>source</code>。</p>
+      <p style="font-size:12px;color:var(--text-dim)"><strong>實作要點</strong>：bridge 未安裝或連不上時，<code>source='browser'</code> 應<strong>自動退回 cache 並在回應中註明</strong>，而不是報錯——這正是選這個方案的理由（AI 不需要知道 bridge 裝了沒）。</p>
+      <p style="font-size:12px;color:var(--orange)"><strong>連帶決定</strong>：原規劃的 <code>getNetworkFails()</code> 併入本工具，不另開新工具——既有 <code>get_live_errors</code> 的描述本來就是「即時 <strong>Console/Network</strong> 錯誤」，涵蓋兩者。此點為依決策 1 推得，若要拆成獨立 <code>get_network_fails()</code> 需另行指示。</p>
     </div>
   </details>
 
   <details open>
-    <summary>A-2　工具命名慣例要先統一（PM-C 之前）</summary>
+    <summary>A-2　工具命名慣例　<span class="settled-badge">✅ 已定案</span></summary>
     <div class="details-body">
-      <p style="font-size:12px;color:var(--text-dim)">現有 13 個工具皆為 <strong>snake_case 無前綴</strong>（<code>get_report_overview</code>）；§5 新工具寫成 <code>bugezy:camelCase</code>。MCP 用戶端通常會<strong>自動以 server 名稱作命名空間</strong>，工具名再加 <code>bugezy:</code> 會出現 <code>bugezy - bugezy:navigate</code> 這種重複。</p>
-      <p style="font-size:12px;color:var(--gold)">建議新工具沿用 snake_case 無前綴（<code>navigate</code>、<code>read_page</code>、<code>analyze_element</code>），文件裡的 <code>bugezy:</code> 只當說明用前綴。<strong>PM-C 之前定案，之後改名等於破壞相容性。</strong></p>
+      <div class="ok-box">
+        <div class="ok-box-title">定案（2026-08-15）：全用 snake_case，不加前綴</div>
+        <p><code>navigate_to</code> · <code>click_element</code> · <code>type_text</code> · <code>read_page</code> · <code>take_screenshot</code> · <code>analyze_element</code> · <code>get_page_health</code> · <code>get_web_vitals</code> · <code>pin_element</code> · <code>pin_analyze</code> · <code>get_pin_results</code> · <code>start_monitor</code> · <code>stop_monitor</code> · <code>get_monitor_report</code> · <code>start_terminal_monitor</code> · <code>get_terminal_live_errors</code> · <code>correlate_errors</code></p>
+      </div>
+      <p style="font-size:12px;color:var(--text-dim)"><strong>理由</strong>：與現有 13 個工具一致；MCP 用戶端通常已用 server 名稱作命名空間，工具名再加 <code>bugezy:</code> 會出現 <code>bugezy - bugezy:navigate</code> 這種重複。</p>
+      <p style="font-size:12px;color:var(--text-dim)">加上既有 13 個與 <code>get_live_errors</code> 的新模式，v2 完成後 MCP 共 <strong>13 + 17 = 30 個工具</strong>（<code>get_live_errors</code> 不重複計）。</p>
     </div>
   </details>
 
@@ -586,12 +612,23 @@ Claude 開瀏覽器測  ──►  Extension 掛著（攔截 console/network）<
   </details>
 
   <details open>
-    <summary>A-5　現行還有「日票」與活動票券，§2 表格未列</summary>
+    <summary>A-5　日票與活動票券的層級　<span class="settled-badge">✅ 已定案</span></summary>
     <div class="details-body">
-      <p style="font-size:12px;color:var(--text-dim)">v1 實際在賣：<strong>Free</strong> / <strong>NT$80 月費</strong> / <strong>NT$20 日票（24hr）</strong>，另有活動票券（兌換碼換免費天數，PM-265~267）。新分層上線時要決定它們對應哪一層（目前兩者都給「等同 Pro」的無限額度）。</p>
+      <div class="ok-box">
+        <div class="ok-box-title">定案（2026-08-15）：v2 功能只給訂閱用戶</div>
+        <table>
+          <tr><th>身分</th><th>可用範圍</th></tr>
+          <tr><td>Free</td><td>v1 錄製 10 次/月</td></tr>
+          <tr><td>票券 / 日票</td><td>v1 無限錄製（<span class="hl-red">不含 v2 功能</span>）</td></tr>
+          <tr><td>Pro NT$80</td><td>v1 全功能 + v2 全功能（圖釘 / bridge / 即時偵測）</td></tr>
+          <tr><td>Max NT$200</td><td>Pro + AI 自動化 debug（v3）</td></tr>
+          <tr><td>Agent NT$500</td><td>Max + 全棧自動閉環</td></tr>
+        </table>
+      </div>
       <div class="rule-box">
-        <div class="rule-box-title">⚠ 影響 PM-P 的實作</div>
-        <p><code>isActiveUserId()</code> 目前只回傳「是否付費」的<strong>布林值</strong>，要做四層分級必須改成回傳<strong>方案等級</strong>。改動時務必分清 <code>isActiveUserId</code>（含票券）與 <code>isEcpayActiveUserId</code>（僅 ECPay）—— 見 ARCHITECTURE §4-8，<strong>誤用會導致收錢不開通</strong>。</p>
+        <div class="rule-box-title">⚠ 這個決策讓 PM-P 變成必要的前置，而不是收尾</div>
+        <p><code>isActiveUserId()</code> 目前只回傳「是否付費」的<strong>布林值</strong>，無法區分「票券用戶」與「Pro 訂閱者」。既然 v2 功能要擋住票券用戶，<strong>每一個 v2 的 MCP 工具都需要方案等級判斷</strong>——這代表分層閘門必須在 Phase 1 就有雛形，不能等到 Phase 6。</p>
+        <p>改動時務必分清 <code>isActiveUserId</code>（含票券）與 <code>isEcpayActiveUserId</code>（僅 ECPay）—— 見 ARCHITECTURE §4-8，<strong>誤用會導致收錢不開通</strong>。</p>
       </div>
     </div>
   </details>
@@ -620,13 +657,14 @@ Claude 開瀏覽器測  ──►  Extension 掛著（攔截 console/network）<
     </div>
   </details>
 
-  <div class="decision">
-    <div class="decision-title">🔴 開 Phase 1 之前，需要 FOX 決定的三件事</div>
+  <div class="decision settled">
+    <div class="decision-title">✅ 三項決策已於 2026-08-15 由 FOX 定案</div>
     <ul>
-      <li><strong>1. <code>getLiveErrors</code> 怎麼與既有的 <code>get_live_errors</code> 共存</strong>（A-1：改名並存，或加 <code>source</code> 參數自動降級）</li>
-      <li><strong>2. 新工具的命名慣例</strong>（A-2：snake_case 無前綴 vs <code>bugezy:</code> 前綴）—— <span class="hl-red">PM-C 之前必須定案</span></li>
-      <li><strong>3. 日票與活動票券對應到哪一層方案</strong>（A-5）—— 影響 PM-P 的閘門實作</li>
+      <li><strong>1. <code>get_live_errors</code> 加 <code>source</code> 參數</strong>（<code>'cache'</code> 預設 / <code>'browser'</code> 即時），不新增工具 — 見 A-1</li>
+      <li><strong>2. 新工具一律 snake_case、不加前綴</strong>（<code>navigate_to</code>、<code>read_page</code>…共 17 支）— 見 A-2</li>
+      <li><strong>3. v2 功能只給訂閱用戶</strong>，票券／日票僅解鎖 v1 無限錄製 — 見 A-5</li>
     </ul>
+    <p style="color:var(--gold);margin-top:10px"><strong>→ Phase 1 可以開工。</strong>唯一新增的前置條件：決策 3 使方案等級判斷提前成為必要（見 A-5 的紅框），PM-A/PM-C 就需要能區分票券用戶與 Pro 訂閱者。</p>
   </div>
 
   <div class="card">
@@ -642,7 +680,7 @@ Claude 開瀏覽器測  ──►  Extension 掛著（攔截 console/network）<
 </div>
 
 <div class="footer">
-  BugEzy v2/v3 產品規格書 · v0.2 · 2026-08-15 · FOX + Claude<br>
+  BugEzy v2/v3 產品規格書 · v0.3 · 2026-08-15 · FOX + Claude<br>
   程式 &gt; ARCHITECTURE.md &gt; 本文
 </div>
 

@@ -6,6 +6,8 @@
 
 > **這份文件的用途**：給未來任何 session 的 AI 接手時，一次看懂 BugEzy 要往哪裡走。
 > §1~§10 是產品願景與規劃；**附錄 A 是對照現有程式碼的查證結果**，動工前務必一併讀。
+> **v0.3 起，A-1／A-2／A-5 三項已由 FOX 定案**，Phase 1 可以開工。
+> 完整版（含 §11 全棧 debug、§12 附錄）請看 `bugezy_v2_v3_product_spec.html`。
 
 ---
 
@@ -21,8 +23,8 @@
 - 圖釘標注系統
 - bugezy-bridge（Native Messaging 極速模式）
 - 雲端模式（WebSocket 備用）
-- MCP 新增即時操作工具（navigate / click / readPage / analyzeElement）
-- MCP 新增即時偵測工具（getLiveErrors / getNetworkFails / getPageHealth）
+- MCP 新增即時操作工具（`navigate_to` / `click_element` / `read_page` / `analyze_element`）
+- MCP 新增即時偵測工具（`get_live_errors(source='browser')` / `get_page_health` / `get_web_vitals`）
 - Bug 嚴重度分類（🔴 Critical 立即通知 / 🟡 Minor 稍後處理）
 - AI Debug 過程視覺化（藍框巡察 + 圖釘變色 + 即時面板）
 - 定位：**AI Debug Partner**
@@ -40,12 +42,15 @@
 
 ### 定價分層
 
-| 方案 | 價格 | 功能 |
+| 方案 | 價格 | 可用範圍 |
 |---|---|---|
-| Free | 免費 | 錄製 10 次/月 |
-| Pro | NT$80/月 | 無限錄製 + 雲端模式 |
-| Max | NT$200/月 | Pro + 圖釘大招 + 極速模式 |
-| Agent | NT$500/月 | Max + AI 自動化偵測 |
+| Free | 免費 | v1 錄製 10 次/月 |
+| **票券 / 日票** | 活動兌換 · NT$20（24hr） | **v1 無限錄製（不含 v2 功能）** |
+| Pro | NT$80/月 | v1 全功能 + **v2 全功能**（圖釘 / bridge / 即時偵測 / 雲端模式） |
+| Max | NT$200/月 | Pro + **AI 自動化 debug（v3）** |
+| Agent | NT$500/月 | Max + **全棧自動閉環** |
+
+> ✅ **已定案（2026-08-15）**：v2 功能只給訂閱用戶。票券與日票只解鎖 v1 無限錄製——票券是拉新用的免費額度，v2 是付月費才有的差異化價值。實作影響見附錄 A-5。
 
 ### AI 算力成本策略
 - BugEzy **不購買 AI API** — AI 算力用戶自己的 Claude/ChatGPT 訂閱額度
@@ -122,41 +127,43 @@ BugEzy Extension
 
 ## §5 MCP 工具擴充（v2 新增）
 
+> ✅ **命名慣例已定案（2026-08-15）**：新工具一律 **snake_case、不加 `bugezy:` 前綴**，與現有 13 個工具一致。MCP 用戶端本來就以 server 名稱做命名空間，再加前綴會變成 `bugezy - bugezy:navigate`。
+
 ### 瀏覽器操作類
 
 | 工具 | 說明 |
 |---|---|
-| `bugezy:navigate(url)` | 開啟網頁 |
-| `bugezy:click(selector)` | 點擊元素 |
-| `bugezy:type(selector, text)` | 輸入文字 |
-| `bugezy:screenshot()` | 截取頁面截圖 |
-| `bugezy:readPage()` | 讀取頁面結構（文字，非截圖，省 95% token）|
+| `navigate_to(url)` | 開啟網頁 |
+| `click_element(selector)` | 點擊元素 |
+| `type_text(selector, text)` | 輸入文字 |
+| `take_screenshot()` | 截取頁面截圖 |
+| `read_page()` | 讀取頁面結構（文字，非截圖，省 95% token）|
 
 ### 偵測類（BugEzy 獨有優勢，Claude in Chrome 做不到）
 
 | 工具 | 說明 |
 |---|---|
-| `bugezy:getLiveErrors()` | 即時 Console errors，含嚴重度分類 |
-| `bugezy:getNetworkFails()` | 即時 Network 4xx/5xx |
-| `bugezy:analyzeElement(selector)` | 深度分析：DOM + CSS + event listeners |
-| `bugezy:getWebVitals()` | 效能指標 |
-| `bugezy:getPageHealth()` | 整體健康報告 |
+| `get_live_errors(source='browser')` | **沿用既有工具加 `source` 參數**：即時讀瀏覽器 Console **與 Network** 錯誤，含嚴重度分類 |
+| `get_live_errors(source='cache')` | **預設值**，維持 v1 行為（讀 R2 快取），向下相容 |
+| `analyze_element(selector)` | 深度分析：DOM + CSS + event listeners |
+| `get_web_vitals()` | 效能指標 |
+| `get_page_health()` | 整體健康報告 |
 
 ### 圖釘類
 
 | 工具 | 說明 |
 |---|---|
-| `bugezy:pin(selector, description)` | 釘選元素 + 描述 |
-| `bugezy:pinAnalyze(selector)` | 釘選 + 自動深度分析 |
-| `bugezy:getPinResults()` | 取得所有圖釘的檢查結果 |
+| `pin_element(selector, description)` | 釘選元素 + 描述 |
+| `pin_analyze(selector)` | 釘選 + 自動深度分析 |
+| `get_pin_results()` | 取得所有圖釘的檢查結果 |
 
 ### 監控類
 
 | 工具 | 說明 |
 |---|---|
-| `bugezy:startMonitor()` | 開始即時監控 |
-| `bugezy:stopMonitor()` | 停止監控 |
-| `bugezy:getMonitorReport()` | 取得監控期間的所有異常 |
+| `start_monitor()` | 開始即時監控 |
+| `stop_monitor()` | 停止監控 |
+| `get_monitor_report()` | 取得監控期間的所有異常 |
 
 ### 原有報告類（13 個工具，全保留不動）
 
@@ -265,12 +272,13 @@ BugEzy Extension
 ### Phase 1：bugezy-bridge + 基礎 MCP 工具
 - **PM-A**：bugezy-bridge 骨架（localhost MCP + Native Messaging）
 - **PM-B**：Extension 接收 bridge 指令
-- **PM-C**：MCP 第一批（navigate / click / readPage / getLiveErrors）
-- **PM-D**：MCP 第二批（analyzeElement / getPageHealth / screenshot）
+- **PM-B2**：**方案等級判斷雛形** —— 決策 3 使 v2 工具必須擋住票券／日票用戶，`isActiveUserId` 需回傳等級而非布林值（見 A-5）
+- **PM-C**：MCP 第一批（`navigate_to` / `click_element` / `read_page` / `get_live_errors(source='browser')`）✅ 命名已定案
+- **PM-D**：MCP 第二批（`analyze_element` / `get_page_health` / `take_screenshot` / `get_web_vitals`）
 
 ### Phase 2：圖釘系統
 - **PM-E**：圖釘 UI（content script 注入 + 釘選元素 + 描述）
-- **PM-F**：pinAnalyze MCP 工具
+- **PM-F**：`pin_analyze` MCP 工具
 - **PM-G**：圖釘巡察模式（多圖釘順序檢查）
 
 ### Phase 3：視覺化
@@ -284,11 +292,11 @@ BugEzy Extension
 
 ### Phase 5：Bug 嚴重度 + 自動化
 - **PM-M**：嚴重度自動分類
-- **PM-N**：AI 自動偵測模式（startMonitor / getMonitorReport）
+- **PM-N**：AI 自動偵測模式（`start_monitor` / `get_monitor_report`）
 - **PM-O**：自訂規則
 
 ### Phase 6：Max / Agent 方案上線
-- **PM-P**：方案分層 + 功能閘門
+- **PM-P**：方案分層完整上線（Max / Agent）—— 閘門雛形因決策 3 已提前到 PM-B2
 - **PM-Q**：戰略夥伴推薦碼系統
 
 ---
@@ -298,6 +306,8 @@ BugEzy Extension
 | 日期 | 版本 | 說明 |
 |---|---|---|
 | 2026-08-15 | v0.1 | 初版，FOX + Claude 共同規劃 |
+| 2026-08-15 | v0.2 | HTML 知識庫版本 `bugezy_v2_v3_product_spec.html`（新增 §11 全棧 debug、§12 附錄） |
+| 2026-08-15 | **v0.3** | **三項決策定案**：`get_live_errors` 加 `source` 參數、工具全 snake_case、v2 功能只給訂閱用戶 |
 
 ---
 
@@ -306,22 +316,30 @@ BugEzy Extension
 > 以下是撰寫本文件時**實際比對 `server/src/index.ts`、`extension/manifest.json` 與現行方案設定**得到的結果。
 > §1~§10 是願景；這裡是動工前必須先知道的現實條件。**開 Phase 1 的卡片前請先讀完這一節。**
 
-## A-1　`get_live_errors` 已經存在，v2 的 `getLiveErrors` 是「另一條路」
+## A-1　`get_live_errors` 的兩種模式　✅ **已定案（2026-08-15）**
 
-現有 MCP 已有 **`get_live_errors`**，但它的資料來源是 **R2 上由 extension 即時監控模式寫入的快取**（需 `user_email` + `session_token` 驗證），屬於「非同步落地後再讀」。
+**定案**：加 `source` 參數，一個工具兩種模式。
 
-§5 規劃的 `bugezy:getLiveErrors()` 則是**透過 bridge 直接向當前分頁要資料**的同步路徑。兩者行為不同，**不要當成同一個工具**。動工時要先決定：
+```
+get_live_errors(source='cache')    → 現有行為，讀 R2 快取（歷史）；預設值，向下相容
+get_live_errors(source='browser')  → v2 新增，即時讀瀏覽器 Console／Network
+```
 
-- **方案 A**：新工具改名（例如 `live_errors_now` / `bridge_get_errors`），與既有工具並存 —— 語意清楚，但工具數量變多。
-- **方案 B**：`get_live_errors` 加參數（如 `source: 'cache' | 'live'`），bridge 可用時走即時、否則退回 R2 快取 —— 對使用者較友善，但要處理 bridge 未安裝的降級。
+**背景**：v1 已有 `get_live_errors`，資料來源是 R2 上由 extension 即時監控寫入的快取（需 `user_email` + `session_token`），屬「非同步落地後再讀」；v2 要的是透過 bridge 直接向當前分頁要資料的同步路徑。兩者行為不同但語意相同，故合併。
 
-**建議方案 B**，因為「AI 不需要知道 bridge 裝了沒」才是好體驗；但這是產品決策，留給 FOX 拍板。
+**實作要點**：bridge 未安裝或連不上時，`source='browser'` 應**自動退回 cache 並在回應中註明**，而不是報錯——這正是選這個方案的理由（AI 不需要知道 bridge 裝了沒）。
 
-## A-2　工具命名慣例要先統一
+**連帶決定**：原規劃的 `getNetworkFails()` **併入本工具，不另開新工具**——既有 `get_live_errors` 的描述本來就是「即時 **Console/Network** 錯誤」，涵蓋兩者，另開一支會功能重疊。此點為依決策 1 推得，若要拆成獨立 `get_network_fails()` 需另行指示。
 
-現有 13 個工具都是 **snake_case 無前綴**（`get_report_overview`）；§5 的新工具寫成 **`bugezy:camelCase`**（`bugezy:getLiveErrors`）。
+## A-2　工具命名慣例　✅ **已定案（2026-08-15）**
 
-MCP 用戶端通常會**自動以 server 名稱作為命名空間**，工具名裡再加 `bugezy:` 會出現 `bugezy - bugezy:navigate` 這種重複。建議新工具沿用 **snake_case 無前綴**（`navigate`、`read_page`、`analyze_element`），文件裡的 `bugezy:` 只當作說明用的前綴。**這件事要在 PM-C 之前定案**，之後改名等於破壞相容性。
+**定案**：全用 snake_case，不加前綴，與現有 13 個工具一致。
+
+`navigate_to` · `click_element` · `type_text` · `read_page` · `take_screenshot` · `analyze_element` · `get_page_health` · `get_web_vitals` · `pin_element` · `pin_analyze` · `get_pin_results` · `start_monitor` · `stop_monitor` · `get_monitor_report` · `start_terminal_monitor` · `get_terminal_live_errors` · `correlate_errors`
+
+**理由**：MCP 用戶端通常已用 server 名稱作命名空間，工具名再加 `bugezy:` 會出現 `bugezy - bugezy:navigate` 這種重複。
+
+v2 完成後 MCP 共 **13 + 17 = 30 個工具**（`get_live_errors` 不重複計）。
 
 ## A-3　`npm install -g bugezy-bridge` **不足以**接通 Native Messaging
 
@@ -345,11 +363,21 @@ Chrome Native Messaging 除了裝 CLI，還必須：
 
 這與 §2「BugEzy 伺服器成本 = 0」的敘述有出入——**極速模式（bridge）確實接近零成本，但雲端模式不是**。定價時要把這筆固定成本算進 Pro 方案（雲端模式列在 Pro）。
 
-## A-5　現行方案還有一個「日票」，§2 表格未列
+## A-5　日票與活動票券的層級　✅ **已定案（2026-08-15）**
 
-v1 目前實際在賣的是：**Free**／**NT$80 月費**／**NT$20 日票（24 小時）**，另有 PM-265~267 的**活動票券**（兌換碼換免費天數）。
+**定案**：v2 功能只給訂閱用戶。
 
-§2 的新分層若上線，要決定：日票與活動票券**對應到哪一層**（目前兩者都給「等同 Pro」的無限額度）。這會直接影響 PM-P 的功能閘門實作——`isActiveUserId()` 目前只回傳「是否付費」的**布林值**，要做四層分級必須改成回傳**方案等級**（見 ARCHITECTURE §4-8 對兩種付費判定的說明，改動時務必分清 `isActiveUserId` 與 `isEcpayActiveUserId`）。
+| 身分 | 可用範圍 |
+|---|---|
+| Free | v1 錄製 10 次/月 |
+| 票券 / 日票 | v1 無限錄製（**不含 v2 功能**）|
+| Pro NT$80 | v1 全功能 + v2 全功能（圖釘 / bridge / 即時偵測）|
+| Max NT$200 | Pro + AI 自動化 debug（v3）|
+| Agent NT$500 | Max + 全棧自動閉環 |
+
+> ⚠ **這個決策讓分層閘門變成 Phase 1 的前置，而不是收尾。**
+> `isActiveUserId()` 目前只回傳「是否付費」的**布林值**，無法區分「票券用戶」與「Pro 訂閱者」。既然 v2 功能要擋住票券用戶，**每一個 v2 的 MCP 工具都需要方案等級判斷** → 已在 §9 Phase 1 增列 **PM-B2**。
+> 改動時務必分清 `isActiveUserId`（含票券）與 `isEcpayActiveUserId`（僅 ECPay）—— 見 ARCHITECTURE §4-8，**誤用會導致收錢不開通**。
 
 ## A-6　§5 有幾個工具在 v1 已有部分基礎
 
