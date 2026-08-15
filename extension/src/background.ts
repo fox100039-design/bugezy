@@ -820,3 +820,120 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summ
   })();
   return true; // 非同步回應
 });
+
+// ── PM-297：bugezy-bridge 連線（localhost WebSocket，選用功能）─────────────
+//
+// 為什麼是 WebSocket 而不是 Native Messaging 或 HTTP 輪詢：
+//   · Native Messaging 需要 `nativeMessaging` 權限 → 會觸發 Chrome Web Store 重新審核。
+//   · HTTP 輪詢（每 500ms）撐不過 MV3：service worker 閒置 30 秒就被回收，
+//     `setInterval` 隨之消失且沒有事件能喚醒它 → 半分鐘後就靜默失效。
+//   · WebSocket 不受 CORS 限制、連 localhost 不需要任何 host 權限；
+//     且 **Chrome 116 起 WebSocket 活動會重置 service worker 的閒置計時器**，
+//     所以固定心跳＝官方認可的保活方式。
+//
+// 這是**選用**功能：bridge 沒開就靜默重試，完全不影響既有流程。
+const BRIDGE_URL = 'ws://127.0.0.1:19850';
+const BRIDGE_RETRY_MIN_MS = 5_000;
+const BRIDGE_RETRY_MAX_MS = 60_000;
+let bridgeSocket: WebSocket | null = null;
+let bridgeRetryMs = BRIDGE_RETRY_MIN_MS;
+let bridgeRetryTimer: number | undefined;
+
+interface BridgeCommandMsg {
+  id: string;
+  command: string;
+  params?: Record<string, unknown>;
+}
+
+/** 對「當前作用中分頁」發訊息；沒有可用分頁時回 null（不拋錯）。 */
+async function activeTab(): Promise<chrome.tabs.Tab | null> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  return tab ?? null;
+}
+
+/** 執行一則 bridge 指令，回傳要送回去的 data；失敗請 throw，由呼叫端包成 error。 */
+async function runBridgeCommand(cmd: BridgeCommandMsg): Promise<unknown> {
+  switch (cmd.command) {
+    case 'ping':
+      return { pong: true, version: chrome.runtime.getManifest().version, t: Date.now() };
+
+    case 'get_page_url': {
+      const tab = await activeTab();
+      if (!tab) throw new Error('找不到作用中的分頁');
+      return { url: tab.url ?? '', title: tab.title ?? '', tab_id: tab.id ?? null };
+    }
+
+    case 'get_live_errors': {
+      const tab = await activeTab();
+      if (!tab?.id) throw new Error('找不到作用中的分頁');
+      // 沿用 PM-51 既有通道：content script 向 inject 要背景 buffer 的即時 errors
+      const res = (await chrome.tabs.sendMessage(tab.id, { type: 'GET_LIVE_ERRORS' }).catch(() => null)) as
+        | { consoleLogs?: unknown[]; networkErrors?: unknown[] }
+        | null;
+      if (!res) {
+        throw new Error('當前分頁沒有 BugEzy content script（可能是 chrome:// 或商店頁面，或需要重新整理該分頁）');
+      }
+      return { consoleLogs: res.consoleLogs ?? [], networkErrors: res.networkErrors ?? [], url: tab.url ?? '' };
+    }
+
+    default:
+      throw new Error(`未知的指令：${cmd.command}`);
+  }
+}
+
+function scheduleBridgeReconnect(): void {
+  if (bridgeRetryTimer !== undefined) return;
+  bridgeRetryTimer = setTimeout(() => {
+    bridgeRetryTimer = undefined;
+    connectBridge();
+  }, bridgeRetryMs) as unknown as number;
+  // 指數退避（上限 60 秒）：bridge 通常沒在跑，不該一直重試
+  bridgeRetryMs = Math.min(bridgeRetryMs * 2, BRIDGE_RETRY_MAX_MS);
+}
+
+function connectBridge(): void {
+  if (bridgeSocket && bridgeSocket.readyState <= WebSocket.OPEN) return;
+  let ws: WebSocket;
+  try {
+    ws = new WebSocket(BRIDGE_URL);
+  } catch {
+    scheduleBridgeReconnect();
+    return;
+  }
+  bridgeSocket = ws;
+
+  ws.onopen = () => {
+    bridgeRetryMs = BRIDGE_RETRY_MIN_MS; // 連上就重設退避
+    console.log('[BugEzy bridge] 已連上 bugezy-bridge');
+  };
+
+  ws.onmessage = (ev) => {
+    let msg: unknown;
+    try {
+      msg = JSON.parse(String(ev.data));
+    } catch {
+      return;
+    }
+    // 心跳：回 pong（同時讓 service worker 的閒置計時器歸零）
+    if (typeof msg === 'object' && msg !== null && (msg as { type?: string }).type === 'ping') {
+      ws.send(JSON.stringify({ type: 'pong', t: Date.now() }));
+      return;
+    }
+    const cmd = msg as BridgeCommandMsg;
+    if (!cmd || typeof cmd.id !== 'string' || typeof cmd.command !== 'string') return;
+    void runBridgeCommand(cmd)
+      .then((data) => ws.send(JSON.stringify({ id: cmd.id, ok: true, data })))
+      .catch((e: unknown) =>
+        ws.send(JSON.stringify({ id: cmd.id, ok: false, error: e instanceof Error ? e.message : String(e) })),
+      );
+  };
+
+  ws.onclose = () => {
+    if (bridgeSocket === ws) bridgeSocket = null;
+    scheduleBridgeReconnect();
+  };
+  // bridge 沒在跑時每次都會觸發 onerror——這是預期情形，不要吵使用者
+  ws.onerror = () => {};
+}
+
+connectBridge();
