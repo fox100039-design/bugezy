@@ -35,6 +35,28 @@ Cloudflare Workers（API，server/src/index.ts）
          └── Day 20 get_timeline（時序麵包屑：所有資料合成一條故事線）+ generateBugSummary 規則引擎（AI Bug 導航摘要，貼在 get_timeline / get_report_overview 最前面，零 API 成本）
 ```
 
+### §2b bugezy-bridge：本機即時通道（v2，PM-296~299）
+
+雲端 MCP（`/mcp`）讀的是**已上傳的歷史報告**；bridge 讓任何 MCP 相容的 AI 讀**當前這一刻的分頁**，且資料完全不經過 BugEzy 伺服器。
+
+```
+任何 AI（Claude Code / Desktop / Cursor…）
+    │  MCP stdio
+    ▼
+bugezy-bridge（本機 Node，npm 套件，bridge/）
+    ├── mcp-server.ts     3 個 tool：ping / get_page_url / get_live_errors
+    ├── extension-link.ts WebSocketServer 127.0.0.1:19850 + id 對應 + 20s 心跳
+    └── types.ts          線上協定（**與 extension/src/background.ts 的 bridge 區塊必須一致**）
+    │  WebSocket ws://127.0.0.1:19850
+    ▼
+BugEzy Extension background.ts（bridge client）
+    │  chrome.tabs.sendMessage
+    ▼
+content.ts（GET_PAGE_INFO / 即時 console 與網路錯誤）→ 目標網頁
+```
+
+**為什麼是 localhost WebSocket**：Native Messaging 需 `nativeMessaging` 權限（**會觸發 Web Store 重新審核**）＋各 OS 註冊 host manifest；HTTP 輪詢撐不過 MV3（service worker 閒置 30 秒回收，`setInterval` 隨之消失，`chrome.alarms` 最短 30 秒補不上）。**Chrome 116 起 WebSocket 活動會重置 service worker 閒置計時器**，連 localhost 不需任何新權限。
+
 ### §2a 語音雙引擎架構（PM-85~91）
 
 ```
@@ -54,6 +76,7 @@ popup 麥克風 toggle（預設 OFF）→ 開啟需一次授權（mic-permission
 
 ```
 extension/     Chrome 擴充（Manifest V3 + TypeScript）
+bridge/        bugezy-bridge：本機 MCP↔Extension 通道（npm 套件，見 §2b）
 server/        Cloudflare Workers API
 web/           React 報告頁 + 分享連結
 mcp-server/    MCP Server（8 個 Tool，Pull 模式）
@@ -142,6 +165,18 @@ job/           每日任務檔
    > - **無法判定歸屬就不刪**：`reports.user_id` 可為 null（PM-133 認證上線前的舊資料），無法判定方案即無法判定保留期，一律略過並在摘要回報筆數。
    > - **單次設上限並明講**（500 筆／次），達上限時在通知裡寫明「剩餘明天繼續」，不做無聲截斷。
    > - 用 `.in()` 批次刪除 + 一次查完所有相關用戶方案，**查詢數固定**；逐筆查會撞 Workers 的 subrequest 上限。
+17. **MCP stdio：stdout 專屬於協定（PM-297）**：
+   > bridge 跑在 stdio 模式下，**任何 `console.log` 都會污染 JSON-RPC 讓 AI 端解析失敗**。所有人看的訊息一律走 `log()`→stderr。
+18. **MV3 service worker 不能靠 `setTimeout` 活著（PM-298）**：
+   > bridge 重連原本用 `setTimeout` 指數退避——但 service worker 閒置 30 秒就被回收，計時器一併消失，**擴充功能會在半分鐘後靜默失聯且永不恢復**。
+   > 正解是**搭便車**：把 `ensureBridge()` 掛在本來就會喚醒 service worker 的事件上（`onStartup`/`onInstalled`/`onMessage`/`tabs.onActivated`/`tabs.onUpdated`），
+   > service worker 一被喚醒就順手檢查連線。連上之後由 20 秒心跳維持（Chrome 116+ WebSocket 活動會重置閒置計時器）。
+19. **`activeTab` 不給你分頁網址（PM-298）**：
+   > `chrome.tabs.query({active:true})` 在只有 `activeTab` 權限時**不報錯，而是回傳 `url`/`title` 為空的物件**——要拿到值得加 `tabs` 權限（＝重新審核）。
+   > 改走 `chrome.tabs.sendMessage(tabId, {type:'GET_PAGE_INFO'})` 由 content script 回報 `location.href`／`document.title`：不需新權限，順帶天然驗證了該分頁有沒有 content script。
+20. **本機服務 port 被占用時不要 exit（PM-298）**：
+   > 多個 AI 工具會各自 spawn 一個 bridge，只有第一個綁得到 port。後起的若直接死掉，AI 端只看到空白的「Failed to connect」查不出原因。
+   > 保持 MCP server 活著並 `link.disable(reason)`，讓每個工具呼叫都回一句人看得懂的話。
 
 ## §5 MCP Server Tool Schema
 

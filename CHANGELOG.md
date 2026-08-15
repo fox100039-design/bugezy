@@ -1,5 +1,30 @@
 # BugEzy Changelog
 
+## 2026-08-15
+
+Day 42（PM-294~299）。**v2 里程碑：從 Bug Reporter 走向 AI Debug Partner**——規格書定案 + `bugezy-bridge` 骨架落地並通過實機驗收。extension 改動未重新打包（仍 v1.1.5 送審中），server 未動、未 deploy。新增 `bridge/`。
+
+- **PM-294 v2/v3 規格書（md）**（`docs/BugEzy_v2_v3_規格書.md`）。定義 v2「即時本機通道」與 v3「主動式 debug 夥伴」。**逐條對照現有程式碼查證後寫下 A-1~A-7 七條更正**，避免規格書建在錯誤前提上；同時列出三個必須由 FOX 拍板的決策。
+
+- **PM-295 升級為 HTML 知識庫**（`docs/bugezy_v2_v3_product_spec.html`，§1~§12）。補上全棧 debug 章節；§12 附錄收錄 A-1~A-7 與三個決策（金色決策框）。
+
+- **PM-296 三項決策定案**（HTML + md 兩份同步）。①`get_live_errors` 加 `source` 參數（`cache` 預設／`browser` 即時），並補上**「bridge 連不上要自動退回 cache 並註明，而不是報錯」**——這正是選它而非「改名並存」的理由，不寫下來實作時很容易做成拋錯。②工具名全 snake_case 不加前綴（17/17 命中，舊 camelCase 零殘留）。③定價分層。
+  順帶處理一個決策清單漏掉的工具：`getNetworkFails` 沒有對應的新名——查證後認定不是遺漏，`get_live_errors` 的描述本來就同時涵蓋 Console 與 Network，故併入而非另開一支（已在文件標明此為推得）。
+  > 檔案裡有**兩個 PM-296**：後者標題移除「收工」且明寫「不動 CHANGELOG」，判定為修訂版並照後者執行——故 PM-294~296 的 CHANGELOG 補在此處。
+
+- **PM-297 `bugezy-bridge` 骨架**（新增 `bridge/`：`index.ts`／`mcp-server.ts`／`extension-link.ts`／`types.ts`／README；`extension/background.ts` 加 bridge client）。任何 MCP 相容 AI ──stdio──► bridge ──WebSocket 127.0.0.1:19850──► Extension ──► 目標網頁，**資料完全不經過 BugEzy 伺服器**。3 個工具：`ping`／`get_page_url`／`get_live_errors`。
+  **選 localhost WebSocket 而非 Native Messaging 或 HTTP 輪詢**：前者需 `nativeMessaging` 權限（**會觸發 Web Store 重新審核**）＋各 OS 註冊 host manifest；後者撐不過 MV3（service worker 閒置 30 秒回收，`setInterval` 隨之消失，`chrome.alarms` 最短 30 秒補不上）。WebSocket 連 localhost 不需任何新權限，且 **Chrome 116 起 WebSocket 活動會重置 service worker 閒置計時器**。端到端 14/14 通過，延遲 8~14 ms。
+
+- **PM-298 實機驗收 + port 占用小修**。port 被占用時**不再 exit**：多個 AI 工具會各自 spawn 一個 bridge，只有第一個綁得到 port，後起的若直接死掉，AI 端只看到空白的「Failed to connect」查不出原因；改為保持 MCP server 活著並 `disable(reason)`，讓每次呼叫都回一句人看得懂的話。
+  **接上真實 Chrome 後抓到兩個假測試測不到的缺陷**：
+  ① `get_page_url` 回空字串——`chrome.tabs.query({active:true})` 在只有 `activeTab` 權限時**不報錯、而是回傳 `url`/`title` 為空的物件**。加 `tabs` 權限＝重新審核，故改走 `chrome.tabs.sendMessage(tabId,{type:'GET_PAGE_INFO'})` 由 content script 回報 `location.href`／`document.title`，不需新權限且順帶驗證該分頁有無 content script。**根因是我的假 extension 回了假網址，把我的假設而不是 Chrome 的真實行為寫進了測試。**
+  ② 重連的 `setTimeout` 指數退避**會跟著 service worker 一起被回收**——正是我當初用來否決 HTTP 輪詢的同一個陷阱。改為**搭便車**：把 `ensureBridge()` 掛在本來就會喚醒 service worker 的事件上（`onStartup`/`onInstalled`/`onMessage`/`tabs.onActivated`/`tabs.onUpdated`）。
+
+- **PM-299 複驗 + 收工**。真實 Chrome + 真 MCP JSON-RPC 全數通過（6/6）：`get_page_url` → `{"url":"https://bugezy.dev/guide","title":"使用指南 · BugEzy"}`（修前為空）、bridge 顯示「✅ Extension 已連線」（搭便車重連生效，由開啟分頁喚醒 service worker 觸發）、`ping` 延遲 2 ms、`get_live_errors` 讀到當前分頁的真實 console 警告。CHANGELOG + ARCHITECTURE（§2b bridge 架構、§3 目錄、§4 原則 17~20）+ git push。
+
+> **待 FOX**：① 前述所有既有待辦不變（v1.1.5 重新送審、`DISCORD_WEBHOOK_URL`、`ticket-expiry-notify.sql`、`REPORT_CLEANUP`、`ADMIN_TOKEN`、HSTS、GSC）② bridge 若要對外發布需 `npm publish`（目前僅本機可用）。
+> **已知限制**：Extension 端的 bridge port 固定 19850，`BUGEZY_BRIDGE_PORT` 只換得動 bridge 這一側。
+
 ## 2026-08-14
 
 Day 41（PM-291~293）。**Chrome Web Store 隱私合規 + 報告保留期限落地**。extension 未動（v1.1.5 待審），server deploy `e1353035`→`c808becb`。
