@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BugEzy v2/v3 產品規格書</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0e1a;--grid:rgba(255,255,255,0.03);--primary:hsl(265,75%,60%);--gold:hsl(42,90%,55%);--success:hsl(152,60%,48%);--blue:hsl(210,80%,58%);--red:hsl(0,75%,58%);--orange:hsl(28,85%,55%);--cyan:hsl(185,70%,48%);--yellow:hsl(48,90%,60%);--text:rgba(255,255,255,0.9);--text-dim:rgba(255,255,255,0.45);--font:'JetBrains Mono',monospace}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;line-height:1.7}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+.header{position:relative;z-index:10;padding:32px 40px 20px;border-bottom:1px solid rgba(255,255,255,0.08)}
+.header-title{font-family:'Outfit',sans-serif;font-size:28px;font-weight:900;letter-spacing:-1px;background:linear-gradient(135deg,var(--cyan),var(--primary));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.header-sub{font-size:11px;color:var(--text-dim);margin-top:4px;letter-spacing:2px;text-transform:uppercase}
+.header-date{font-size:11px;color:var(--gold);margin-top:8px}
+.content{position:relative;z-index:5;max-width:1200px;margin:0 auto;padding:40px}
+.section{margin-bottom:48px}
+.section-title{font-family:'Outfit',sans-serif;font-size:22px;font-weight:800;margin-bottom:20px;padding-bottom:10px;border-bottom:2px solid rgba(255,255,255,0.08)}
+.section-title .num{color:var(--cyan);margin-right:8px}
+.sub-title{font-size:15px;font-weight:700;color:var(--cyan);margin:24px 0 12px}
+.card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:20px 24px;margin-bottom:16px}
+.card-title{font-size:14px;font-weight:700;margin-bottom:10px;color:var(--gold)}
+.card p{font-size:12px;color:var(--text-dim);margin-bottom:6px}
+.card ul{margin:6px 0 6px 18px}
+.card li{font-size:12px;color:var(--text-dim);margin-bottom:4px}
+ul{margin-left:18px}
+li{font-size:12px;color:var(--text-dim);margin-bottom:4px}
+table{width:100%;border-collapse:collapse;font-size:12px;margin:12px 0}
+th{text-align:left;padding:8px 12px;background:rgba(255,255,255,0.05);border-bottom:2px solid rgba(255,255,255,0.1);font-weight:700;color:var(--gold);font-size:11px;letter-spacing:.5px}
+td{padding:8px 12px;border-bottom:1px solid rgba(255,255,255,0.05);color:var(--text-dim)}
+tr:nth-child(even) td{background:rgba(255,255,255,0.015)}
+tr:hover td{background:rgba(255,255,255,0.04)}
+.hl{color:var(--gold);font-weight:700}.hl-blue{color:var(--blue);font-weight:700}.hl-green{color:var(--success);font-weight:700}.hl-red{color:var(--red);font-weight:700}.hl-orange{color:var(--orange);font-weight:700}.hl-cyan{color:var(--cyan);font-weight:700}
+code{background:rgba(255,255,255,0.07);padding:2px 6px;border-radius:4px;font-size:11px;color:var(--cyan)}
+.flow{display:flex;align-items:center;gap:8px;margin:12px 0;flex-wrap:wrap}
+.flow-box{background:rgba(101,60,200,0.15);border:1px solid rgba(101,60,200,0.4);border-radius:8px;padding:6px 12px;font-size:11px;font-weight:600;white-space:nowrap}
+.flow-box.active{background:rgba(30,140,210,0.15);border-color:rgba(30,140,210,0.5);color:var(--blue)}
+.flow-box.pending{background:rgba(255,200,50,0.1);border-color:rgba(255,200,50,0.4);color:var(--gold)}
+.flow-box.result{background:rgba(50,180,120,0.12);border-color:rgba(50,180,120,0.4);color:var(--success)}
+.flow-box.danger{background:rgba(200,50,50,0.12);border-color:rgba(200,50,50,0.4);color:var(--red)}
+.flow-arrow{color:var(--text-dim);font-size:14px}
+.scenario{background:rgba(255,255,255,0.02);border-left:3px solid var(--primary);padding:16px 20px;margin:16px 0;border-radius:0 8px 8px 0}
+.scenario-title{font-size:13px;font-weight:700;color:var(--primary);margin-bottom:8px}
+.scenario p{font-size:12px;color:var(--text-dim);margin-bottom:4px}
+.rule-box{background:rgba(200,50,50,0.08);border:1px solid rgba(200,50,50,0.2);border-radius:8px;padding:14px 18px;margin:12px 0}
+.rule-box-title{font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px}
+.rule-box p,.rule-box li{font-size:11px;color:var(--text-dim);margin-bottom:3px}
+.ok-box{background:rgba(50,180,120,0.08);border:1px solid rgba(50,180,120,0.2);border-radius:8px;padding:14px 18px;margin:12px 0}
+.ok-box-title{font-size:12px;font-weight:700;color:var(--success);margin-bottom:6px}
+.ok-box p,.ok-box li{font-size:11px;color:var(--text-dim);margin-bottom:3px}
+.decision{background:rgba(255,200,50,0.05);border:1px solid rgba(255,200,50,0.15);border-radius:10px;padding:20px;margin:16px 0}
+.decision-title{font-size:13px;font-weight:700;color:var(--gold);margin-bottom:12px}
+.decision p,.decision li{font-size:12px;color:var(--text-dim);margin-bottom:5px}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:800px){.two-col{grid-template-columns:1fr}.content{padding:20px}.header{padding:20px}}
+.toc{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:20px 24px;margin-bottom:32px}
+.toc-title{font-size:13px;font-weight:700;color:var(--cyan);margin-bottom:10px}
+.toc a{display:block;color:var(--text-dim);text-decoration:none;font-size:12px;padding:3px 0;transition:color .2s}
+.toc a:hover{color:var(--cyan)}
+.wire{background:#050810;border:1px dashed rgba(255,255,255,0.15);border-radius:10px;padding:16px;margin:12px 0;font-size:11px;color:var(--text-dim);white-space:pre;overflow-x:auto;line-height:1.5}
+.tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;margin:1px}
+.tag-in{background:rgba(50,180,120,0.15);color:var(--success)}
+.tag-out{background:rgba(200,50,50,0.15);color:var(--red)}
+.tag-pass{background:rgba(150,150,150,0.15);color:#aaa}
+.tag-v1{background:rgba(50,180,120,0.15);color:var(--success)}
+.tag-v2{background:rgba(30,140,210,0.15);color:var(--blue)}
+.tag-v3{background:rgba(101,60,200,0.2);color:var(--primary)}
+details{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:0;margin:12px 0;overflow:hidden}
+details summary{cursor:pointer;padding:12px 18px;font-size:13px;font-weight:700;color:var(--cyan);list-style:none;user-select:none;transition:background .2s}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:'▶ ';font-size:10px;color:var(--text-dim)}
+details[open] summary::before{content:'▼ '}
+details summary:hover{background:rgba(255,255,255,0.03)}
+details .details-body{padding:4px 18px 18px}
+.footer{text-align:center;padding:32px 20px 48px;font-size:11px;color:var(--text-dim);border-top:1px solid rgba(255,255,255,0.08);margin-top:32px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header-title">BugEzy v2/v3 產品規格書</div>
+    <div class="header-sub">From Bug Reporter to AI Debug Partner · FOX + Claude 共同規劃</div>
+    <div class="header-date">📌 v0.2 · 2026-08-15 · 程式 &gt; ARCHITECTURE.md &gt; 本文</div>
+  </div>
+</div>
+
+<div class="content">
+
+<div class="toc">
+  <div class="toc-title">目錄</div>
+  <a href="#s1">§1 產品演進路線 — v1 / v2 / v3</a>
+  <a href="#s2">§2 商業模式 — 定價分層、AI 算力策略、戰略夥伴</a>
+  <a href="#s3">§3 技術架構 — bugezy-bridge（極速模式）</a>
+  <a href="#s4">§4 技術架構 — 雲端模式（WebSocket）</a>
+  <a href="#s5">§5 MCP 工具擴充（v2 新增）</a>
+  <a href="#s6">§6 Bug 嚴重度分類</a>
+  <a href="#s7">§7 AI Debug 視覺化</a>
+  <a href="#s8">§8 跨 AI 平台支援</a>
+  <a href="#s9">§9 開發順序（Phase 1~6）</a>
+  <a href="#s10">§10 版本記錄</a>
+  <a href="#s11">§11 全棧 Debug — bugezy-watch 整合 ★新增</a>
+  <a href="#s12">§12 附錄 — 實作查證與待決策 ★新增</a>
+</div>
+
+<!-- ══════════ §1 ══════════ -->
+<div class="section" id="s1">
+  <div class="section-title"><span class="num">§1</span>產品演進路線</div>
+
+  <div class="card">
+    <div class="card-title"><span class="tag tag-v1">v1</span> 現在，已上線 — 定位：Bug Reporter</div>
+    <ul>
+      <li>Chrome Extension：6 種錄製模式</li>
+      <li>MCP Server：13 個工具（讀歷史報告）</li>
+      <li>人工錄製 → AI 事後分析</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="tag tag-v2">v2</span> 近期 — 定位：AI Debug Partner</div>
+    <ul>
+      <li>圖釘標注系統</li>
+      <li>bugezy-bridge（Native Messaging 極速模式）</li>
+      <li>雲端模式（WebSocket 備用）</li>
+      <li>MCP 新增即時操作工具（navigate / click / readPage / analyzeElement）</li>
+      <li>MCP 新增即時偵測工具（getLiveErrors / getNetworkFails / getPageHealth）</li>
+      <li>Bug 嚴重度分類（<span class="hl-red">🔴 Critical 立即通知</span> / <span class="hl">🟡 Minor 稍後處理</span>）</li>
+      <li>AI Debug 過程視覺化（藍框巡察 + 圖釘變色 + 即時面板）</li>
+      <li><span class="hl-cyan">全棧 debug：bugezy-watch 即時化 + 前後端錯誤關聯</span>（見 §11）</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="tag tag-v3">v3</span> 中期 — 定位：AI Debug 自動駕駛</div>
+    <ul>
+      <li>AI 自動化 debug 閉環：AI 寫代碼 → 開瀏覽器 → BugEzy 自動偵測 → AI 自動修</li>
+      <li>用戶只說「做一個購物網站」→ 全自動完成含 debug</li>
+      <li>BugEzy 成為 AI 開發流程的<span class="hl">自動體檢站</span></li>
+      <li><span class="hl-cyan">前端 + 後端同時掛載，聯合診斷</span>（見 §11.3）</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ══════════ §2 ══════════ -->
+<div class="section" id="s2">
+  <div class="section-title"><span class="num">§2</span>商業模式</div>
+
+  <div class="sub-title">定價分層</div>
+  <table>
+    <tr><th>方案</th><th>價格</th><th>功能</th></tr>
+    <tr><td class="hl-green">Free</td><td>免費</td><td>錄製 10 次/月</td></tr>
+    <tr><td class="hl-blue">Pro</td><td>NT$80/月</td><td>無限錄製 + 雲端模式</td></tr>
+    <tr><td class="hl">Max</td><td>NT$200/月</td><td>Pro + 圖釘大招 + 極速模式</td></tr>
+    <tr><td class="hl-orange">Agent</td><td>NT$500/月</td><td>Max + AI 自動化偵測</td></tr>
+  </table>
+  <p style="font-size:11px;color:var(--text-dim)">⚠ v1 現行還有 <code>NT$20 日票（24hr）</code> 與活動票券未列入此表，對應層級待決策 —— 見 <a href="#s12" style="color:var(--cyan)">§12 A-5</a>。</p>
+
+  <div class="sub-title">AI 算力成本策略</div>
+  <div class="ok-box">
+    <div class="ok-box-title">核心：BugEzy 不買 AI</div>
+    <ul>
+      <li>BugEzy <span class="hl-green">不購買 AI API</span> — AI 算力用戶自己的 Claude/ChatGPT 訂閱額度</li>
+      <li>BugEzy 只收工具費（MCP 橋接 + 偵測 + 視覺化）</li>
+      <li>用戶越多，BugEzy 的 AI 成本 = <span class="hl-green">0</span></li>
+    </ul>
+  </div>
+
+  <div class="sub-title">戰略夥伴模式</div>
+  <div class="card">
+    <ul>
+      <li>區域夥伴負責<span class="hl">行銷推廣</span>，不參與開發</li>
+      <li>夥伴獲利佔該區域營收 <span class="hl-green">65%</span>，FOX 佔 <span class="hl">35%</span></li>
+      <li>核心工作：持續產出當地語言的 debug 教學影片</li>
+      <li>推薦碼追蹤用戶歸屬</li>
+      <li>先在<span class="hl-cyan">台灣</span>驗證模式，再擴展<span class="hl-cyan">日本、韓國、越南</span></li>
+    </ul>
+  </div>
+</div>
+
+<!-- ══════════ §3 ══════════ -->
+<div class="section" id="s3">
+  <div class="section-title"><span class="num">§3</span>技術架構 — bugezy-bridge（極速模式）</div>
+
+  <div class="wire">任何 AI（Claude / ChatGPT / Cursor / Gemini）
+    │
+    MCP 標準協議
+    │
+bugezy-bridge（localhost Node.js）
+    │
+    Chrome Native Messaging
+    │
+BugEzy Extension（content.ts）
+    │
+    目標網頁</div>
+
+  <div class="sub-title">安裝方式</div>
+  <div class="wire">npm install -g bugezy-bridge</div>
+  <p style="font-size:11px;color:var(--text-dim)">⚠ 這行<strong>不足以</strong>接通 Native Messaging，還需註冊 host manifest 與新增權限 —— 見 <a href="#s12" style="color:var(--cyan)">§12 A-3</a>。</p>
+
+  <div class="sub-title">運作方式</div>
+  <ul>
+    <li>bugezy-bridge 跑一個 localhost MCP server</li>
+    <li>透過 Chrome Native Messaging 連接 Extension</li>
+    <li>AI 呼叫 MCP → bridge 轉發給 Extension → 拿結果回傳</li>
+    <li>延遲 <span class="hl-green">&lt; 50ms</span></li>
+    <li>全部在用戶電腦上跑，BugEzy 伺服器成本 = <span class="hl-green">0</span></li>
+  </ul>
+</div>
+
+<!-- ══════════ §4 ══════════ -->
+<div class="section" id="s4">
+  <div class="section-title"><span class="num">§4</span>技術架構 — 雲端模式（WebSocket）</div>
+
+  <div class="wire">任何 AI
+    │
+    MCP 標準協議
+    │
+Cloudflare Workers
+    │
+    WebSocket（Durable Objects）
+    │
+BugEzy Extension
+    │
+    目標網頁</div>
+
+  <div class="sub-title">運作方式</div>
+  <ul>
+    <li>Extension 啟動時建立 WebSocket 長連線</li>
+    <li>AI 呼叫 MCP → Workers 透過 WebSocket 推給 Extension</li>
+    <li>延遲 <span class="hl-blue">~200ms</span></li>
+    <li>用戶<span class="hl-green">零安裝成本</span></li>
+  </ul>
+  <p style="font-size:11px;color:var(--text-dim)">⚠ Durable Objects 需 Workers <strong>付費</strong>方案，與「伺服器成本 = 0」有出入 —— 見 <a href="#s12" style="color:var(--cyan)">§12 A-4</a>。</p>
+</div>
+
+<!-- ══════════ §5 ══════════ -->
+<div class="section" id="s5">
+  <div class="section-title"><span class="num">§5</span>MCP 工具擴充（v2 新增）</div>
+
+  <div class="sub-title">瀏覽器操作類</div>
+  <table>
+    <tr><th>工具</th><th>說明</th></tr>
+    <tr><td><code>bugezy:navigate(url)</code></td><td>開啟網頁</td></tr>
+    <tr><td><code>bugezy:click(selector)</code></td><td>點擊元素</td></tr>
+    <tr><td><code>bugezy:type(selector, text)</code></td><td>輸入文字</td></tr>
+    <tr><td><code>bugezy:screenshot()</code></td><td>截取頁面截圖</td></tr>
+    <tr><td><code>bugezy:readPage()</code></td><td>讀取頁面結構（文字，非截圖，<span class="hl-green">省 95% token</span>）</td></tr>
+  </table>
+
+  <div class="sub-title">偵測類（BugEzy 獨有優勢，Claude in Chrome 做不到）</div>
+  <table>
+    <tr><th>工具</th><th>說明</th></tr>
+    <tr><td><code>bugezy:getLiveErrors()</code></td><td>即時 Console errors，含嚴重度分類</td></tr>
+    <tr><td><code>bugezy:getNetworkFails()</code></td><td>即時 Network 4xx/5xx</td></tr>
+    <tr><td><code>bugezy:analyzeElement(selector)</code></td><td>深度分析：DOM + CSS + event listeners</td></tr>
+    <tr><td><code>bugezy:getWebVitals()</code></td><td>效能指標</td></tr>
+    <tr><td><code>bugezy:getPageHealth()</code></td><td>整體健康報告</td></tr>
+  </table>
+
+  <div class="sub-title">圖釘類</div>
+  <table>
+    <tr><th>工具</th><th>說明</th></tr>
+    <tr><td><code>bugezy:pin(selector, description)</code></td><td>釘選元素 + 描述</td></tr>
+    <tr><td><code>bugezy:pinAnalyze(selector)</code></td><td>釘選 + 自動深度分析</td></tr>
+    <tr><td><code>bugezy:getPinResults()</code></td><td>取得所有圖釘的檢查結果</td></tr>
+  </table>
+
+  <div class="sub-title">監控類</div>
+  <table>
+    <tr><th>工具</th><th>說明</th></tr>
+    <tr><td><code>bugezy:startMonitor()</code></td><td>開始即時監控</td></tr>
+    <tr><td><code>bugezy:stopMonitor()</code></td><td>停止監控</td></tr>
+    <tr><td><code>bugezy:getMonitorReport()</code></td><td>取得監控期間的所有異常</td></tr>
+  </table>
+
+  <div class="sub-title">原有報告類（13 個工具，全保留不動）</div>
+  <div class="ok-box">
+    <div class="ok-box-title">已對照 server/src/index.ts 確認的完整清單</div>
+    <p><code>list_reports</code> · <code>get_report_overview</code> · <code>get_console_logs</code> · <code>get_network_errors</code> · <code>get_voice_transcript</code> · <code>get_page_info</code> · <code>get_rrweb_summary</code> · <code>get_rrweb_events</code> · <code>get_live_errors</code> · <code>get_terminal_logs</code> · <code>get_usage_stats</code> · <code>get_screenshots</code> · <code>get_timeline</code></p>
+  </div>
+  <div class="rule-box">
+    <div class="rule-box-title">⚠ 命名與重複問題</div>
+    <p><code>get_live_errors</code> <strong>已經存在</strong>，與 §5 規劃的 <code>bugezy:getLiveErrors()</code> 不是同一條路徑；工具命名慣例也尚未統一 —— 見 <a href="#s12" style="color:var(--cyan)">§12 A-1、A-2</a>，<strong>PM-C 之前必須定案</strong>。</p>
+  </div>
+</div>
+
+<!-- ══════════ §6 ══════════ -->
+<div class="section" id="s6">
+  <div class="section-title"><span class="num">§6</span>Bug 嚴重度分類</div>
+
+  <div class="sub-title">自動判定規則</div>
+  <table>
+    <tr><th>嚴重度</th><th>條件</th><th>AI 行為</th></tr>
+    <tr><td class="hl-red">🔴 Critical</td><td>Uncaught Error / TypeError / ReferenceError</td><td>立即中斷，馬上修</td></tr>
+    <tr><td class="hl-red">🔴 Critical</td><td>Network 500</td><td>立即中斷</td></tr>
+    <tr><td class="hl-red">🔴 Critical</td><td>Promise rejection 未處理</td><td>立即中斷</td></tr>
+    <tr><td class="hl">🟡 Minor</td><td><code>console.warn</code></td><td>記錄，稍後處理</td></tr>
+    <tr><td class="hl">🟡 Minor</td><td>Network 404</td><td>記錄，稍後處理</td></tr>
+    <tr><td class="hl">🟡 Minor</td><td>Web Vitals 超標</td><td>記錄，稍後處理</td></tr>
+    <tr><td>⚪ Info</td><td><code>console.log</code> / <code>info</code></td><td>忽略</td></tr>
+  </table>
+
+  <div class="sub-title">MCP 回傳格式</div>
+  <div class="wire">{
+  "critical": [{ "type": "TypeError", "message": "...", "file": "cart.js", "line": 42 }],
+  "minor": [{ "type": "warning", "message": "..." }],
+  "summary": "🔴 1 critical, 🟡 2 minor"
+}</div>
+
+  <div class="sub-title">用戶可自訂規則</div>
+  <ul>
+    <li><code>/api/</code> 開頭的 404 → 升級為 <span class="hl-red">🔴</span></li>
+    <li>含 <code>deprecated</code> 的 warn → 降級為 ⚪</li>
+  </ul>
+
+  <div class="ok-box">
+    <div class="ok-box-title">✅ 可接既有實作</div>
+    <p>v1 已有 <code>generateBugSummary()</code> 規則引擎（PM-153~159），本節的分級可<strong>擴充</strong>它，不必另起爐灶。</p>
+  </div>
+</div>
+
+<!-- ══════════ §7 ══════════ -->
+<div class="section" id="s7">
+  <div class="section-title"><span class="num">§7</span>AI Debug 視覺化</div>
+
+  <div class="sub-title">藍框巡察動畫</div>
+  <ul>
+    <li>AI 操作/偵測時，頁面上出現藍色方框</li>
+    <li>方框移動到 AI 正在檢查的元素位置</li>
+    <li>CSS transition 平滑移動（<code>300ms</code>）</li>
+    <li>呼吸光暈效果表示「檢查中」</li>
+  </ul>
+
+  <div class="sub-title">圖釘狀態顏色</div>
+  <table>
+    <tr><th>顏色</th><th>狀態</th></tr>
+    <tr><td>⚪ 白色</td><td>剛放上去，等待檢查</td></tr>
+    <tr><td class="hl-blue">🔵 藍色</td><td>AI 正在檢查中</td></tr>
+    <tr><td class="hl-green">✅ 綠色</td><td>檢查完畢，沒問題</td></tr>
+    <tr><td class="hl-orange">⚠ 橘色</td><td>輕微問題</td></tr>
+    <tr><td class="hl-red">🔴 紅色</td><td>嚴重問題</td></tr>
+  </table>
+
+  <div class="sub-title">圖釘巡察模式</div>
+  <div class="flow">
+    <div class="flow-box">用戶放置多個圖釘</div><span class="flow-arrow">→</span>
+    <div class="flow-box pending">① 待檢查</div><span class="flow-arrow">→</span>
+    <div class="flow-box active">藍框移動 + 檢查</div><span class="flow-arrow">→</span>
+    <div class="flow-box result">變色</div><span class="flow-arrow">→</span>
+    <div class="flow-box pending">② 下一個</div>
+  </div>
+  <ul>
+    <li>用戶放置多個圖釘並指定順序</li>
+    <li>AI 按順序巡察：藍框跑到 ① → 檢查 → 變色 → 跑到 ② → …</li>
+    <li>每個圖釘旁浮出小標籤：「正在分析 DOM 結構…」</li>
+  </ul>
+
+  <div class="sub-title">右下角即時面板</div>
+  <div class="wire">┌──────────────────────────────┐
+│ 🐛 BugEzy AI Debug          │
+│ 📍 巡察進度：2/3             │
+│ ├ ① 登入按鈕      ✅ 正常    │
+│ ├ ② 購物車        ⚠ 問題    │
+│ └ ③ 結帳表單      🔵 檢查中  │
+│ ⏱ 已用時間：12 秒            │
+│ 📊 Token：~1,200             │
+└──────────────────────────────┘</div>
+</div>
+
+<!-- ══════════ §8 ══════════ -->
+<div class="section" id="s8">
+  <div class="section-title"><span class="num">§8</span>跨 AI 平台支援</div>
+
+  <div class="sub-title">為什麼不綁 Claude</div>
+  <ul>
+    <li>Claude in Chrome 只給 Claude 用，市場受限</li>
+    <li>BugEzy MCP 支援<span class="hl-green">所有 MCP 相容的 AI 工具</span></li>
+    <li>ChatGPT / Cursor / Gemini / Copilot / Claude 都能用</li>
+    <li>市場大 <span class="hl">10 倍</span></li>
+  </ul>
+
+  <div class="sub-title">與 Claude in Chrome 的差異</div>
+  <table>
+    <tr><th></th><th>Claude in Chrome</th><th>BugEzy MCP</th></tr>
+    <tr><td>操作速度</td><td>~500ms</td><td class="hl-green">極速 &lt;50ms / 雲端 ~200ms</td></tr>
+    <tr><td>讀 DOM</td><td>截圖（貴）</td><td class="hl-green">文字（省 95%）</td></tr>
+    <tr><td>Console errors</td><td class="hl-red">❌ 看不到</td><td class="hl-green">✅ 完整攔截</td></tr>
+    <tr><td>Network errors</td><td class="hl-red">❌ 看不到</td><td class="hl-green">✅ 完整攔截</td></tr>
+    <tr><td>後端錯誤</td><td class="hl-red">❌</td><td class="hl-green">✅ bugezy-watch（見 §11）</td></tr>
+    <tr><td>歷史報告</td><td class="hl-red">❌</td><td class="hl-green">✅ 13 工具</td></tr>
+    <tr><td>跨 AI 平台</td><td class="hl-red">❌ 只有 Claude</td><td class="hl-green">✅ 全部</td></tr>
+    <tr><td>Token 消耗</td><td class="hl-red">🔥 截圖很貴</td><td class="hl-green">💰 文字省 95%</td></tr>
+    <tr><td>視覺化</td><td>滑鼠亂飄</td><td class="hl-cyan">藍框巡察 + 圖釘變色</td></tr>
+  </table>
+</div>
+
+<!-- ══════════ §9 ══════════ -->
+<div class="section" id="s9">
+  <div class="section-title"><span class="num">§9</span>開發順序</div>
+
+  <div class="card">
+    <div class="card-title">Phase 1：bugezy-bridge + 基礎 MCP 工具</div>
+    <ul>
+      <li><span class="hl">PM-A</span>：bugezy-bridge 骨架（localhost MCP + Native Messaging）<span class="hl-red">＋ host manifest 註冊/清除（見 §12 A-3）</span></li>
+      <li><span class="hl">PM-B</span>：Extension 接收 bridge 指令</li>
+      <li><span class="hl">PM-C</span>：MCP 第一批（navigate / click / readPage / getLiveErrors）<span class="hl-red">＋ 命名慣例定案（§12 A-2）</span></li>
+      <li><span class="hl">PM-D</span>：MCP 第二批（analyzeElement / getPageHealth / screenshot）</li>
+      <li><span class="hl-cyan">PM-D2</span>：<span class="hl-cyan">bugezy-watch 即時化</span>（<code>start_terminal_monitor</code> / <code>get_terminal_live_errors</code>，見 §11.2）</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Phase 2：圖釘系統</div>
+    <ul>
+      <li><span class="hl">PM-E</span>：圖釘 UI（content script 注入 + 釘選元素 + 描述）</li>
+      <li><span class="hl">PM-F</span>：pinAnalyze MCP 工具</li>
+      <li><span class="hl">PM-G</span>：圖釘巡察模式（多圖釘順序檢查）</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Phase 3：視覺化</div>
+    <ul>
+      <li><span class="hl">PM-H</span>：藍框巡察動畫</li>
+      <li><span class="hl">PM-I</span>：圖釘狀態顏色</li>
+      <li><span class="hl">PM-J</span>：右下角即時面板</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Phase 4：雲端模式</div>
+    <ul>
+      <li><span class="hl">PM-K</span>：WebSocket 通道（Durable Objects）<span class="hl-red">＋ 需 Workers 付費方案（§12 A-4）</span></li>
+      <li><span class="hl">PM-L</span>：Extension WebSocket 連線管理</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Phase 5：Bug 嚴重度 + 自動化</div>
+    <ul>
+      <li><span class="hl">PM-M</span>：嚴重度自動分類（擴充既有 <code>generateBugSummary()</code>）</li>
+      <li><span class="hl">PM-N</span>：AI 自動偵測模式（startMonitor / getMonitorReport）</li>
+      <li><span class="hl">PM-O</span>：自訂規則</li>
+      <li><span class="hl-cyan">PM-O2</span>：<span class="hl-cyan">前後端關聯診斷</span>（<code>correlate_errors</code>，見 §11.2）</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Phase 6：Max / Agent 方案上線</div>
+    <ul>
+      <li><span class="hl">PM-P</span>：方案分層 + 功能閘門<span class="hl-red">＋ isActiveUserId 要改回傳方案等級（§12 A-5）</span></li>
+      <li><span class="hl">PM-Q</span>：戰略夥伴推薦碼系統</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ══════════ §10 ══════════ -->
+<div class="section" id="s10">
+  <div class="section-title"><span class="num">§10</span>版本記錄</div>
+  <table>
+    <tr><th>日期</th><th>版本</th><th>說明</th></tr>
+    <tr><td>2026-08-15</td><td>v0.1</td><td>初版（Markdown），FOX + Claude 共同規劃</td></tr>
+    <tr><td>2026-08-15</td><td class="hl">v0.2</td><td>升級為 HTML 知識庫；新增 §11 全棧 debug、§12 附錄查證與待決策</td></tr>
+  </table>
+</div>
+
+<!-- ══════════ §11 ══════════ -->
+<div class="section" id="s11">
+  <div class="section-title"><span class="num">§11</span>全棧 Debug — bugezy-watch 整合 <span style="font-size:12px;color:var(--cyan)">★新增</span></div>
+
+  <div class="sub-title">§11.1　現狀</div>
+  <div class="ok-box">
+    <div class="ok-box-title">bugezy-watch（CLI）已具備 — 已對照 cli/src 原始碼確認</div>
+    <ul>
+      <li>已發布至 npm：<code>bugezy-watch@1.1.0</code>（<span class="hl-green">已可安裝</span>）</li>
+      <li>攔截子程序的 <code>stderr</code> / throw / crash（<code>spawn</code> 後 pipe stderr）</li>
+      <li><strong>PII 遮罩在本機完成</strong>（<code>pii-mask.ts</code> 的 <code>maskStderr</code>）：DB 連線字串保 scheme+host 遮密碼、env 保 KEY 遮值、token 整遮</li>
+      <li>結構化解析（<code>parse-traceback.ts</code>）：Python traceback / Node Error stack → <code>{type, message, frames[file,line,func,code]}</code></li>
+      <li>環境偵測（<code>detect-env.ts</code>）：語言/版本/OS/套件快照</li>
+      <li>上傳 <code>POST /api/terminal-logs</code>，帶 <code>parsed_errors</code> + <code>runtime</code>，以 <code>BUGEZY_TOKEN</code> 認證</li>
+      <li><span class="hl">已是每 10 秒批次推送</span>（<code>BUFFER_INTERVAL = 10_000</code>），非僅結束才送</li>
+    </ul>
+  </div>
+  <div class="rule-box">
+    <div class="rule-box-title">缺口</div>
+    <p>與前端 Extension <strong>完全獨立</strong>：兩邊資料分別落在 <code>terminal_logs</code>（R2，per-user）與報告表，<strong>AI 無法交叉比對</strong>。MCP 只有 <code>get_terminal_logs</code> 讀既有落地資料，沒有「即時」與「關聯」。</p>
+  </div>
+
+  <div class="sub-title">§11.2　第三層整合（v2）</div>
+  <table>
+    <tr><th>新 MCP 工具</th><th>說明</th></tr>
+    <tr><td><code>bugezy:start_terminal_monitor</code></td><td>即時監控後端 process</td></tr>
+    <tr><td><code>bugezy:get_terminal_live_errors</code></td><td>取得即時後端錯誤（含嚴重度）</td></tr>
+    <tr><td><code>bugezy:correlate_errors</code></td><td>前後端錯誤自動關聯</td></tr>
+  </table>
+
+  <div class="scenario">
+    <div class="scenario-title">關聯分析邏輯</div>
+    <p>同一時間窗口（<span class="hl">±2 秒</span>）內的<strong>前端 Network fail</strong> + <strong>後端 crash</strong> → 自動配對</p>
+    <p>AI 看到完整鏈條：</p>
+  </div>
+  <div class="flow">
+    <div class="flow-box danger">前端 POST /api/cart → 500</div>
+    <span class="flow-arrow">←</span>
+    <div class="flow-box danger">後端 TypeError cart.ts:42</div>
+  </div>
+  <div class="ok-box">
+    <div class="ok-box-title">✅ 實作起點比想像中近</div>
+    <p>CLI 已有 10 秒批次推送與結構化解析，<strong>「即時化」主要是縮短間隔 + 開一條讀取通道</strong>（bridge 或既有 R2 快取），不需重寫攔截層。時間戳對齊是關鍵——前端 rrweb/network 事件與 CLI 的 <code>parsed_errors</code> 都要有可比對的絕對時間。</p>
+  </div>
+
+  <div class="sub-title">§11.3　第四層整合（v3）</div>
+  <div class="wire">Claude Code 寫後端  ──►  bugezy-watch 掛著（攔截 crash）
+                              │
+                              ├──► 聯合診斷 ──► 自動修復
+                              │
+Claude 開瀏覽器測  ──►  Extension 掛著（攔截 console/network）</div>
+  <ul>
+    <li>AI 自動開發時，兩邊同時偵測 → 聯合診斷 → 自動修復</li>
+    <li><span class="hl-cyan">全棧自動 debug 閉環</span></li>
+  </ul>
+
+  <div class="sub-title">§11.4　與現有工具的差異</div>
+  <table>
+    <tr><th>工具</th><th>前端</th><th>後端</th><th>關聯</th><th>AI 即時讀取</th></tr>
+    <tr><td>Sentry</td><td class="hl-green">✅</td><td class="hl-green">✅</td><td class="hl-red">❌</td><td class="hl-red">❌</td></tr>
+    <tr><td>LogRocket</td><td class="hl-green">✅</td><td class="hl-red">❌</td><td class="hl-red">❌</td><td class="hl-red">❌</td></tr>
+    <tr><td class="hl">BugEzy v2</td><td class="hl-green">✅</td><td class="hl-green">✅</td><td class="hl-green">✅</td><td class="hl-green">✅</td></tr>
+  </table>
+</div>
+
+<!-- ══════════ §12 ══════════ -->
+<div class="section" id="s12">
+  <div class="section-title"><span class="num">§12</span>附錄 — 實作查證與待決策 <span style="font-size:12px;color:var(--cyan)">★新增</span></div>
+
+  <p style="font-size:12px;color:var(--text-dim);margin-bottom:16px">以下為撰寫規格時<strong>實際比對 <code>server/src/index.ts</code>、<code>extension/manifest.json</code>、<code>cli/src</code> 與現行方案設定</strong>的結果。§1~§11 是願景；<strong>這一節是動工前必須先知道的現實條件</strong>。</p>
+
+  <details open>
+    <summary>A-1　<code>get_live_errors</code> 已經存在，v2 的 <code>getLiveErrors</code> 是「另一條路」</summary>
+    <div class="details-body">
+      <p style="font-size:12px;color:var(--text-dim)">現有 MCP 已有 <code>get_live_errors</code>，資料來源是 <strong>R2 上由 extension 即時監控寫入的快取</strong>（需 <code>user_email</code> + <code>session_token</code>），屬「非同步落地後再讀」。§5 規劃的是<strong>透過 bridge 直接向當前分頁要資料</strong>的同步路徑。兩者行為不同，<strong>不要當成同一個工具</strong>。</p>
+      <ul>
+        <li><strong>方案 A</strong>：新工具改名（<code>live_errors_now</code> 等）並存 — 語意清楚，工具數量變多</li>
+        <li><strong>方案 B</strong>：<code>get_live_errors</code> 加參數 <code>source: 'cache' | 'live'</code>，bridge 可用走即時、否則退回 R2 — 使用者體驗較好，但要處理降級</li>
+      </ul>
+      <p style="font-size:12px;color:var(--gold)">建議方案 B（「AI 不需要知道 bridge 裝了沒」才是好體驗），但屬產品決策，留給 FOX 拍板。</p>
+    </div>
+  </details>
+
+  <details open>
+    <summary>A-2　工具命名慣例要先統一（PM-C 之前）</summary>
+    <div class="details-body">
+      <p style="font-size:12px;color:var(--text-dim)">現有 13 個工具皆為 <strong>snake_case 無前綴</strong>（<code>get_report_overview</code>）；§5 新工具寫成 <code>bugezy:camelCase</code>。MCP 用戶端通常會<strong>自動以 server 名稱作命名空間</strong>，工具名再加 <code>bugezy:</code> 會出現 <code>bugezy - bugezy:navigate</code> 這種重複。</p>
+      <p style="font-size:12px;color:var(--gold)">建議新工具沿用 snake_case 無前綴（<code>navigate</code>、<code>read_page</code>、<code>analyze_element</code>），文件裡的 <code>bugezy:</code> 只當說明用前綴。<strong>PM-C 之前定案，之後改名等於破壞相容性。</strong></p>
+    </div>
+  </details>
+
+  <details open>
+    <summary>A-3　<code>npm install -g bugezy-bridge</code> <strong>不足以</strong>接通 Native Messaging</summary>
+    <div class="details-body">
+      <p style="font-size:12px;color:var(--text-dim)">除了裝 CLI，還必須：</p>
+      <ul>
+        <li>產生 <strong>native messaging host manifest</strong>（JSON：host 名稱、執行檔路徑、<code>"type": "stdio"</code>）</li>
+        <li><code>allowed_origins</code> 填入擴充功能 ID — 本專案已用 manifest <code>key</code> 固定為 <code>chrome-extension://hfnkjlbbpehkflgfbjenfmnmjkdjadcj/</code>（PM-187 起）</li>
+        <li>註冊到 OS 指定位置：<br>
+          <strong>Windows</strong> 登錄檔 <code>HKCU\Software\Google\Chrome\NativeMessagingHosts\&lt;host&gt;</code><br>
+          <strong>macOS</strong> <code>~/Library/Application Support/Google/Chrome/NativeMessagingHosts/</code><br>
+          <strong>Linux</strong> <code>~/.config/google-chrome/NativeMessagingHosts/</code></li>
+        <li>Extension manifest 加 <strong><code>nativeMessaging</code> 權限</strong></li>
+      </ul>
+      <div class="rule-box">
+        <div class="rule-box-title">⚠ 這會影響上架</div>
+        <p>新增 <code>nativeMessaging</code> 權限<strong>必然觸發 Chrome Web Store 重新審核</strong>，且要同步更新 Dashboard 與 <code>/privacy</code>（ARCHITECTURE §4-12、§4-15）。<strong>v1.1.5 已因權限問題被退件過一次。</strong></p>
+        <p>→ <strong>PM-A 的範圍必須包含「安裝後自動註冊 host manifest」與「解除安裝時清除」</strong>，而不只是發一個 npm 套件。</p>
+      </div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>A-4　Durable Objects 需要 Workers 付費方案</summary>
+    <div class="details-body">
+      <p style="font-size:12px;color:var(--text-dim)">§4 的雲端模式以 Durable Objects 承載 WebSocket。DO <strong>不在 Workers 免費方案內</strong>（需 Workers Paid，約 $5 USD/月起，另計請求與時長）。</p>
+      <p style="font-size:12px;color:var(--text-dim)">與 §2「BugEzy 伺服器成本 = 0」有出入 —— <strong>極速模式確實接近零成本，雲端模式不是</strong>。定價時要把這筆固定成本算進 Pro（雲端模式列在 Pro）。</p>
+    </div>
+  </details>
+
+  <details open>
+    <summary>A-5　現行還有「日票」與活動票券，§2 表格未列</summary>
+    <div class="details-body">
+      <p style="font-size:12px;color:var(--text-dim)">v1 實際在賣：<strong>Free</strong> / <strong>NT$80 月費</strong> / <strong>NT$20 日票（24hr）</strong>，另有活動票券（兌換碼換免費天數，PM-265~267）。新分層上線時要決定它們對應哪一層（目前兩者都給「等同 Pro」的無限額度）。</p>
+      <div class="rule-box">
+        <div class="rule-box-title">⚠ 影響 PM-P 的實作</div>
+        <p><code>isActiveUserId()</code> 目前只回傳「是否付費」的<strong>布林值</strong>，要做四層分級必須改成回傳<strong>方案等級</strong>。改動時務必分清 <code>isActiveUserId</code>（含票券）與 <code>isEcpayActiveUserId</code>（僅 ECPay）—— 見 ARCHITECTURE §4-8，<strong>誤用會導致收錢不開通</strong>。</p>
+      </div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>A-6　§5/§6 有多項在 v1 已有基礎，可直接接</summary>
+    <div class="details-body">
+      <table>
+        <tr><th>v2 規劃</th><th>v1 現況</th><th>銜接方式</th></tr>
+        <tr><td><code>getWebVitals()</code></td><td><code>inject.ts</code> 已收集 LCP/CLS/FID（PM-153~159）</td><td>直接讀既有結果，不必重寫量測</td></tr>
+        <tr><td><code>getNetworkFails()</code></td><td><code>inject.ts</code> 已攔截 4xx/5xx</td><td>同上</td></tr>
+        <tr><td><code>screenshot()</code></td><td><code>chrome.tabs.captureVisibleTab</code>（已有 <code>activeTab</code>）</td><td>已有權限，但<strong>只能截可見區域</strong>；整頁截圖 v1 是另外拼接</td></tr>
+        <tr><td>§6 嚴重度分類</td><td><code>generateBugSummary()</code> 規則引擎已存在</td><td><strong>擴充</strong>既有引擎，不必另起爐灶</td></tr>
+        <tr><td>§11 後端攔截</td><td><code>bugezy-watch@1.1.0</code> 已上 npm，10 秒批次推送</td><td>「即時化」＝縮短間隔 + 開讀取通道，不需重寫攔截層</td></tr>
+      </table>
+    </div>
+  </details>
+
+  <details open>
+    <summary>A-7　小校正</summary>
+    <div class="details-body">
+      <ul>
+        <li>原稿「原有報告類」範例寫的 <code>get_network_requests</code> <strong>不存在</strong>，實際工具名為 <code>get_network_errors</code>（§5 已更正並補齊 13 個完整名稱）</li>
+        <li>§8 表格「歷史報告 ✅ 13 工具」與實際相符</li>
+      </ul>
+    </div>
+  </details>
+
+  <div class="decision">
+    <div class="decision-title">🔴 開 Phase 1 之前，需要 FOX 決定的三件事</div>
+    <ul>
+      <li><strong>1. <code>getLiveErrors</code> 怎麼與既有的 <code>get_live_errors</code> 共存</strong>（A-1：改名並存，或加 <code>source</code> 參數自動降級）</li>
+      <li><strong>2. 新工具的命名慣例</strong>（A-2：snake_case 無前綴 vs <code>bugezy:</code> 前綴）—— <span class="hl-red">PM-C 之前必須定案</span></li>
+      <li><strong>3. 日票與活動票券對應到哪一層方案</strong>（A-5）—— 影響 PM-P 的閘門實作</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📚 與現有文件的關係</div>
+    <ul>
+      <li><code>ARCHITECTURE.md</code> — <strong>已實作</strong>的架構與 16 條必守設計原則（含踩過的坑）。動工前必讀：§4-8（付費判定兩種來源）、§4-12（上架前權限檢查）、§4-15（隱私政策要對得上程式碼）、§4-16（破壞性排程的安全設計）</li>
+      <li><code>docs/BugEzy_v2_v3_規格書.md</code> — 本文件的 Markdown 版（v0.1），<strong>保留不刪</strong>；本 HTML 為更完整版本</li>
+      <li><strong>兩者衝突時，以 <code>ARCHITECTURE.md</code> 描述的現況為準</strong>，本文件的規劃需據以調整</li>
+    </ul>
+  </div>
+</div>
+
+</div>
+
+<div class="footer">
+  BugEzy v2/v3 產品規格書 · v0.2 · 2026-08-15 · FOX + Claude<br>
+  程式 &gt; ARCHITECTURE.md &gt; 本文
+</div>
+
+</body>
+</html>
