@@ -85,7 +85,7 @@ details .details-body{padding:4px 18px 18px}
   <div>
     <div class="header-title">BugEzy v2/v3 產品規格書</div>
     <div class="header-sub">From Bug Reporter to AI Debug Partner · FOX + Claude 共同規劃</div>
-    <div class="header-date">📌 v0.4 · 2026-08-15 · 三項決策已定案 + §13 雙模式操作 · 程式 &gt; ARCHITECTURE.md &gt; 本文</div>
+    <div class="header-date">📌 v0.5 · 2026-08-15 · 三項決策已定案 + §13 雙模式操作 + 全類別 tab_id · 程式 &gt; ARCHITECTURE.md &gt; 本文</div>
   </div>
 </div>
 
@@ -254,7 +254,8 @@ BugEzy Extension
 
   <div class="ok-box">
     <div class="ok-box-title">📌 所有操作類／偵測類工具都帶可選的 <code>tab_id?: number</code></div>
-    <p><strong>省略</strong> → 作用於當前分頁（<a href="#s13" style="color:var(--cyan)">§13.1 偵察模式</a>）；<strong>指定</strong> → 只作用於該分頁（<a href="#s13" style="color:var(--cyan)">§13.2 出任務模式</a>）。下表為求簡潔一律省略此參數。</p>
+    <p><strong>省略</strong> → 作用於當前分頁（<a href="#s13" style="color:var(--cyan)">§13.1 偵察模式</a>）；<strong>指定</strong> → 只作用於該分頁（<a href="#s13" style="color:var(--cyan)">§13.2 出任務模式</a>）。</p>
+    <p>適用範圍：<strong>操作類 5 個、偵測類 4 個、圖釘類 3 個、監控類 3 個，共 15 個工具</strong>（2026-08-15 定案，圖釘／監控由 PM-301 補上）。唯一例外是 <code>get_live_errors(source='cache')</code>——它讀的是已上傳的歷史報告，與分頁無關。</p>
   </div>
 
   <div class="sub-title">瀏覽器操作類</div>
@@ -285,22 +286,22 @@ BugEzy Extension
   <div class="sub-title">圖釘類</div>
   <table>
     <tr><th>工具</th><th>說明</th></tr>
-    <tr><td><code>pin_element(selector, description)</code></td><td>釘選元素 + 描述</td></tr>
-    <tr><td><code>pin_analyze(selector)</code></td><td>釘選 + 自動深度分析</td></tr>
-    <tr><td><code>get_pin_results()</code></td><td>取得所有圖釘的檢查結果</td></tr>
+    <tr><td><code>pin_element(selector, description, tab_id?)</code></td><td>釘選元素 + 描述</td></tr>
+    <tr><td><code>pin_analyze(selector, tab_id?)</code></td><td>釘選 + 自動深度分析</td></tr>
+    <tr><td><code>get_pin_results(tab_id?)</code></td><td>取得圖釘的檢查結果（<strong>省略＝當前分頁的圖釘</strong>）</td></tr>
   </table>
 
   <div class="sub-title">監控類</div>
   <table>
     <tr><th>工具</th><th>說明</th></tr>
-    <tr><td><code>start_monitor()</code></td><td>開始即時監控</td></tr>
-    <tr><td><code>stop_monitor()</code></td><td>停止監控</td></tr>
-    <tr><td><code>get_monitor_report()</code></td><td>取得監控期間的所有異常</td></tr>
+    <tr><td><code>start_monitor(tab_id?)</code></td><td>開始即時監控</td></tr>
+    <tr><td><code>stop_monitor(tab_id?)</code></td><td>停止監控</td></tr>
+    <tr><td><code>get_monitor_report(tab_id?)</code></td><td>取得監控期間的所有異常</td></tr>
   </table>
-  <div class="rule-box">
-    <div class="rule-box-title">🔴 待決策：圖釘類與監控類要不要也吃 <code>tab_id</code>？</div>
-    <p>PM-300 只指定「操作類／偵測類」加 <code>tab_id</code>，故上面兩張表<strong>維持原樣未改</strong>。但這兩類本質上都<strong>綁定某個分頁</strong>——圖釘是畫在某頁的 DOM 覆蓋層、監控是收某頁的事件流。不補的話會留下一個歧義：出任務模式下 <code>start_monitor()</code> 到底監控誰？</p>
-    <p>建議一併補上，語意與 §13.3 完全相同（省略＝當前分頁）。<strong>這超出本卡片範圍，先標記不動手，等你點頭。</strong></p>
+  <div class="ok-box">
+    <div class="ok-box-title">✅ 已定案（2026-08-15）：圖釘類與監控類也吃 <code>tab_id</code></div>
+    <p>這兩類本質上都<strong>綁定某個分頁</strong>——圖釘是畫在某頁的 DOM 覆蓋層、監控是收某頁的事件流。不帶 <code>tab_id</code> 會留下歧義：出任務模式下 <code>start_monitor()</code> 到底監控誰？語意與 <a href="#s13" style="color:var(--cyan)">§13.3</a> 完全相同（省略＝當前分頁）。</p>
+    <p class="hl-orange">⚠ <strong>連帶影響：監控與圖釘都是有狀態的，因此「每個分頁各自一份」。</strong>同時對多個分頁 <code>start_monitor()</code> 要能各自獨立運作；<code>stop_monitor()</code> 省略 <code>tab_id</code> 時<strong>只停當前分頁，不可一次停光全部</strong>——否則 AI 在偵察模式下隨手停一次，會把出任務模式跑到一半的監控一起殺掉。</p>
   </div>
 
   <div class="sub-title">原有報告類（13 個工具，全保留不動）</div>
@@ -746,6 +747,7 @@ Claude 開瀏覽器測  ──►  Extension 掛著（攔截 console/network）<
       <li><strong><code>tab_id</code> 已關閉／不存在</strong>：應回一則明確錯誤（「分頁 12345 已關閉」），<strong>不可默默退回當前分頁</strong>——那會讓 AI 在用戶的分頁上執行原本要在自己分頁跑的破壞性操作。</li>
       <li><strong>當前分頁沒有 content script</strong>（<code>chrome://</code>、Web Store、PDF）：沿用 bridge 既有的錯誤訊息。</li>
       <li><strong>「當前分頁」的定義</strong>：多視窗時是「最後聚焦視窗的作用中分頁」（<code>chrome.tabs.query({active:true, lastFocusedWindow:true})</code>），需寫死避免各工具解讀不一。</li>
+      <li><strong>有狀態工具的收斂</strong>（監控類、圖釘類）：分頁關閉時必須自動 <code>stop_monitor</code> 並釋放該分頁的圖釘狀態，否則出任務模式跑完關掉分頁就會留下永遠不會結束的監控。</li>
     </ul>
   </div>
 
@@ -786,7 +788,7 @@ Claude 開瀏覽器測  ──►  Extension 掛著（攔截 console/network）<
 </div>
 
 <div class="footer">
-  BugEzy v2/v3 產品規格書 · v0.4 · 2026-08-15 · FOX + Claude<br>
+  BugEzy v2/v3 產品規格書 · v0.5 · 2026-08-15 · FOX + Claude<br>
   程式 &gt; ARCHITECTURE.md &gt; 本文
 </div>
 

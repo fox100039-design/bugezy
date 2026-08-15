@@ -2,7 +2,7 @@
 
 ## 2026-08-15
 
-Day 42（PM-294~299）。**v2 里程碑：從 Bug Reporter 走向 AI Debug Partner**——規格書定案 + `bugezy-bridge` 骨架落地並通過實機驗收。extension 改動未重新打包（仍 v1.1.5 送審中），server 未動、未 deploy。新增 `bridge/`。
+Day 42（PM-294~301）。**v2 里程碑：從 Bug Reporter 走向 AI Debug Partner**——規格書定案 + `bugezy-bridge` 骨架落地並通過實機驗收。extension 改動未重新打包（仍 v1.1.5 送審中），server 未動、未 deploy。新增 `bridge/`。
 
 - **PM-294 v2/v3 規格書（md）**（`docs/BugEzy_v2_v3_規格書.md`）。定義 v2「即時本機通道」與 v3「主動式 debug 夥伴」。**逐條對照現有程式碼查證後寫下 A-1~A-7 七條更正**，避免規格書建在錯誤前提上；同時列出三個必須由 FOX 拍板的決策。
 
@@ -21,6 +21,13 @@ Day 42（PM-294~299）。**v2 里程碑：從 Bug Reporter 走向 AI Debug Partn
   ② 重連的 `setTimeout` 指數退避**會跟著 service worker 一起被回收**——正是我當初用來否決 HTTP 輪詢的同一個陷阱。改為**搭便車**：把 `ensureBridge()` 掛在本來就會喚醒 service worker 的事件上（`onStartup`/`onInstalled`/`onMessage`/`tabs.onActivated`/`tabs.onUpdated`）。
 
 - **PM-299 複驗 + 收工**。真實 Chrome + 真 MCP JSON-RPC 全數通過（6/6）：`get_page_url` → `{"url":"https://bugezy.dev/guide","title":"使用指南 · BugEzy"}`（修前為空）、bridge 顯示「✅ Extension 已連線」（搭便車重連生效，由開啟分頁喚醒 service worker 觸發）、`ping` 延遲 2 ms、`get_live_errors` 讀到當前分頁的真實 console 警告。CHANGELOG + ARCHITECTURE（§2b bridge 架構、§3 目錄、§4 原則 17~20）+ git push。
+
+- **PM-300 §13 雙模式操作**（`docs/bugezy_v2_v3_product_spec.html` v0.3→v0.4 + md 同步）。**偵察模式**（不帶 `tab_id`＝讀用戶當前分頁，不搶焦點，即 bridge 目前行為）／**出任務模式**（`navigate_to` 開背景分頁並回傳 `tab_id`，後續操作都帶著它）。選「可選參數」而非兩套工具，理由同 §5 決策 1：工具數量翻倍會稀釋 AI 的選擇準確度，可選參數則天然向下相容。
+  **§13.4 的比較表 5 項有 4 項與事實不符，查證後重寫**——卡片把 **Claude in Chrome 擴充**跟 Anthropic 另一個**隔離雲端沙箱**產品（Cowork 雲端 session／Claude Code 內建瀏覽器）混為一談：對方**能**讀用戶當前分頁、**共享**真實 Chrome 的登入狀態、**能**同時操作多分頁（需拖進分頁群組），只有「不搶焦點」證據分歧。**這四項若當真，等於把 Phase 1 的行銷主張與開發優先順序全押在對手早就有的能力上。** 真正站得住腳的差異化仍是 §8 那幾項（Console／Network 錯誤攔截、文字讀 DOM、歷史報告、跨 AI 平台），已在 §8 補交叉引用。
+  另補三個卡片未提、但會直接卡住 Phase 1 的實作陷阱：① **`take_screenshot` 截不到背景分頁**（`captureVisibleTab` 只截可見分頁；切過去＝搶焦點，`chrome.debugger` ＝重新審核＋黃色橫幅，**改開 `windows.create({focused:false})` 獨立視窗最划算但需實測**）② 背景分頁會被 Chrome 節流 ③ 共享 session 代表 **AI 以用戶真實身分操作真實帳號**，破壞性動作需防線（留給 v3）。並定義邊界情況，其中最要緊：**`tab_id` 指到已關閉分頁必須明確報錯，絕不可默默退回當前分頁**——那會讓 AI 在用戶的分頁上執行原本要在自己分頁跑的破壞性操作。
+
+- **PM-301 圖釘類／監控類補 `tab_id`**（v0.4→**v0.5**）。PM-300 標記的待決策由 FOX 拍板補上，`tab_id` 適用範圍收斂為**操作 5 + 偵測 4 + 圖釘 3 + 監控 3 ＝ 15 個工具**（唯一例外 `get_live_errors(source='cache')` 讀歷史報告，與分頁無關）。
+  順帶補上這兩類**有狀態**才會有的規則：每個分頁各自一份監控／圖釘；**`stop_monitor()` 省略 `tab_id` 時只停當前分頁、不可一次停光全部**（否則 AI 在偵察模式隨手停一次，會把出任務模式跑到一半的監控一起殺掉）；分頁關閉時須自動收斂，否則出任務跑完關掉分頁會留下永遠不結束的監控。
 
 > **待 FOX**：① 前述所有既有待辦不變（v1.1.5 重新送審、`DISCORD_WEBHOOK_URL`、`ticket-expiry-notify.sql`、`REPORT_CLEANUP`、`ADMIN_TOKEN`、HSTS、GSC）② bridge 若要對外發布需 `npm publish`（目前僅本機可用）。
 > **已知限制**：Extension 端的 bridge port 固定 19850，`BUGEZY_BRIDGE_PORT` 只換得動 bridge 這一側。
