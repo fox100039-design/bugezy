@@ -85,7 +85,7 @@ details .details-body{padding:4px 18px 18px}
   <div>
     <div class="header-title">BugEzy v2/v3 產品規格書</div>
     <div class="header-sub">From Bug Reporter to AI Debug Partner · FOX + Claude 共同規劃</div>
-    <div class="header-date">📌 v0.3 · 2026-08-15 · 三項決策已定案 · 程式 &gt; ARCHITECTURE.md &gt; 本文</div>
+    <div class="header-date">📌 v0.4 · 2026-08-15 · 三項決策已定案 + §13 雙模式操作 · 程式 &gt; ARCHITECTURE.md &gt; 本文</div>
   </div>
 </div>
 
@@ -105,6 +105,7 @@ details .details-body{padding:4px 18px 18px}
   <a href="#s10">§10 版本記錄</a>
   <a href="#s11">§11 全棧 Debug — bugezy-watch 整合 ★新增</a>
   <a href="#s12">§12 附錄 — 實作查證與待決策 ★新增</a>
+  <a href="#s13">§13 雙模式操作 — 偵察模式 + 出任務模式 ★新增</a>
 </div>
 
 <!-- ══════════ §1 ══════════ -->
@@ -251,24 +252,29 @@ BugEzy Extension
     <p>新工具<strong>一律 snake_case、不加 <code>bugezy:</code> 前綴</strong>，與現有 13 個工具一致。MCP 用戶端本來就會用 server 名稱做命名空間，工具名再加前綴會變成 <code>bugezy - bugezy:navigate</code>。</p>
   </div>
 
+  <div class="ok-box">
+    <div class="ok-box-title">📌 所有操作類／偵測類工具都帶可選的 <code>tab_id?: number</code></div>
+    <p><strong>省略</strong> → 作用於當前分頁（<a href="#s13" style="color:var(--cyan)">§13.1 偵察模式</a>）；<strong>指定</strong> → 只作用於該分頁（<a href="#s13" style="color:var(--cyan)">§13.2 出任務模式</a>）。下表為求簡潔一律省略此參數。</p>
+  </div>
+
   <div class="sub-title">瀏覽器操作類</div>
   <table>
     <tr><th>工具</th><th>說明</th></tr>
-    <tr><td><code>navigate_to(url)</code></td><td>開啟網頁</td></tr>
-    <tr><td><code>click_element(selector)</code></td><td>點擊元素</td></tr>
-    <tr><td><code>type_text(selector, text)</code></td><td>輸入文字</td></tr>
-    <tr><td><code>take_screenshot()</code></td><td>截取頁面截圖</td></tr>
-    <tr><td><code>read_page()</code></td><td>讀取頁面結構（文字，非截圖，<span class="hl-green">省 95% token</span>）</td></tr>
+    <tr><td><code>navigate_to(url, tab_id?)</code></td><td>開啟網頁。<strong>省略 <code>tab_id</code> → 開新分頁</strong>（<code>active:false</code>，不搶焦點）並<strong>回傳新分頁的 <code>tab_id</code></strong>；指定則在該分頁內導航</td></tr>
+    <tr><td><code>click_element(selector, tab_id?)</code></td><td>點擊元素</td></tr>
+    <tr><td><code>type_text(selector, text, tab_id?)</code></td><td>輸入文字</td></tr>
+    <tr><td><code>take_screenshot(tab_id?)</code></td><td>截取頁面截圖（<span class="hl-orange">背景分頁有實作限制，見 §13.2</span>）</td></tr>
+    <tr><td><code>read_page(tab_id?)</code></td><td>讀取頁面結構（文字，非截圖，<span class="hl-green">省 95% token</span>）</td></tr>
   </table>
 
   <div class="sub-title">偵測類（BugEzy 獨有優勢，Claude in Chrome 做不到）</div>
   <table>
     <tr><th>工具</th><th>說明</th></tr>
-    <tr><td><code>get_live_errors(source='browser')</code></td><td><span class="hl-green">沿用既有工具、加 <code>source</code> 參數</span>：即時讀瀏覽器的 Console <strong>與 Network</strong> 錯誤，含嚴重度分類</td></tr>
-    <tr><td><code>get_live_errors(source='cache')</code></td><td><strong>預設值</strong>，維持 v1 現有行為（讀 R2 快取）—— 向下相容</td></tr>
-    <tr><td><code>analyze_element(selector)</code></td><td>深度分析：DOM + CSS + event listeners</td></tr>
-    <tr><td><code>get_web_vitals()</code></td><td>效能指標</td></tr>
-    <tr><td><code>get_page_health()</code></td><td>整體健康報告</td></tr>
+    <tr><td><code>get_live_errors(source='browser', tab_id?)</code></td><td><span class="hl-green">沿用既有工具、加 <code>source</code> 參數</span>：即時讀瀏覽器的 Console <strong>與 Network</strong> 錯誤，含嚴重度分類</td></tr>
+    <tr><td><code>get_live_errors(source='cache')</code></td><td><strong>預設值</strong>，維持 v1 現有行為（讀 R2 快取）—— 向下相容。<span class="hl-orange">此模式讀的是已上傳的歷史報告，<code>tab_id</code> 不適用</span></td></tr>
+    <tr><td><code>analyze_element(selector, tab_id?)</code></td><td>深度分析：DOM + CSS + event listeners</td></tr>
+    <tr><td><code>get_web_vitals(tab_id?)</code></td><td>效能指標</td></tr>
+    <tr><td><code>get_page_health(tab_id?)</code></td><td>整體健康報告</td></tr>
   </table>
   <div class="ok-box">
     <div class="ok-box-title">✅ get_live_errors 命名已定案（2026-08-15）· 決策 1</div>
@@ -291,6 +297,11 @@ BugEzy Extension
     <tr><td><code>stop_monitor()</code></td><td>停止監控</td></tr>
     <tr><td><code>get_monitor_report()</code></td><td>取得監控期間的所有異常</td></tr>
   </table>
+  <div class="rule-box">
+    <div class="rule-box-title">🔴 待決策：圖釘類與監控類要不要也吃 <code>tab_id</code>？</div>
+    <p>PM-300 只指定「操作類／偵測類」加 <code>tab_id</code>，故上面兩張表<strong>維持原樣未改</strong>。但這兩類本質上都<strong>綁定某個分頁</strong>——圖釘是畫在某頁的 DOM 覆蓋層、監控是收某頁的事件流。不補的話會留下一個歧義：出任務模式下 <code>start_monitor()</code> 到底監控誰？</p>
+    <p>建議一併補上，語意與 §13.3 完全相同（省略＝當前分頁）。<strong>這超出本卡片範圍，先標記不動手，等你點頭。</strong></p>
+  </div>
 
   <div class="sub-title">原有報告類（13 個工具，全保留不動）</div>
   <div class="ok-box">
@@ -411,6 +422,7 @@ BugEzy Extension
     <tr><td>Token 消耗</td><td class="hl-red">🔥 截圖很貴</td><td class="hl-green">💰 文字省 95%</td></tr>
     <tr><td>視覺化</td><td>滑鼠亂飄</td><td class="hl-cyan">藍框巡察 + 圖釘變色</td></tr>
   </table>
+  <p style="font-size:11px;color:var(--text-dim);margin-top:8px">📌 本表比的是<strong>能力面</strong>。分頁與 session 面向的比較另見 <a href="#s13" style="color:var(--cyan)">§13.4</a>——<strong>那一面向兩者其實高度相似</strong>，別誤把「共享登入狀態」當成差異化賣點。</p>
 </div>
 
 <!-- ══════════ §9 ══════════ -->
@@ -671,16 +683,110 @@ Claude 開瀏覽器測  ──►  Extension 掛著（攔截 console/network）<
     <div class="card-title">📚 與現有文件的關係</div>
     <ul>
       <li><code>ARCHITECTURE.md</code> — <strong>已實作</strong>的架構與 16 條必守設計原則（含踩過的坑）。動工前必讀：§4-8（付費判定兩種來源）、§4-12（上架前權限檢查）、§4-15（隱私政策要對得上程式碼）、§4-16（破壞性排程的安全設計）</li>
-      <li><code>docs/BugEzy_v2_v3_規格書.md</code> — 本文件的 Markdown 版（v0.1），<strong>保留不刪</strong>；本 HTML 為更完整版本</li>
+      <li><code>docs/BugEzy_v2_v3_規格書.md</code> — 本文件的 Markdown 版，<strong>保留不刪</strong>；本 HTML 為更完整版本</li>
       <li><strong>兩者衝突時，以 <code>ARCHITECTURE.md</code> 描述的現況為準</strong>，本文件的規劃需據以調整</li>
     </ul>
   </div>
 </div>
 
+<!-- ══════════ §13 ══════════ -->
+<div class="section" id="s13">
+  <div class="section-title"><span class="num">§13</span>雙模式操作 — 偵察模式 + 出任務模式 <span style="font-size:12px;color:var(--cyan)">★新增</span></div>
+
+  <p style="font-size:12px;color:var(--text-dim);margin-bottom:16px">同一套工具、同一個瀏覽器，靠一個可選的 <code>tab_id</code> 分出兩種完全不同的工作方式：<strong>AI 看你的分頁</strong>，或 <strong>AI 開自己的分頁去跑</strong>。</p>
+
+  <div class="sub-title">§13.1　偵察模式（讀用戶的分頁）</div>
+  <div class="card">
+    <div class="card-title">🔍 「你操作，AI 幫你看」</div>
+    <ul>
+      <li>用戶已經開著網頁在 debug，AI 從旁觀察</li>
+      <li>呼叫工具時<strong>不指定 <code>tab_id</code></strong> → 作用於當前分頁</li>
+      <li><strong>不開新分頁、不搶焦點、不打斷用戶</strong>——用戶完全照自己的節奏操作</li>
+      <li>這是 <strong>v2 的預設模式</strong>，也是目前 <code>bugezy-bridge</code>（PM-297~299）已實作的行為</li>
+    </ul>
+    <p style="font-size:11px;color:var(--text-dim);margin-top:8px">典型對話：「我這頁一直跳錯，你看一下」→ AI 呼叫 <code>get_live_errors(source='browser')</code> 直接讀用戶眼前這一頁。</p>
+  </div>
+
+  <div class="sub-title">§13.2　出任務模式（AI 開新分頁）</div>
+  <div class="card">
+    <div class="card-title">🚀 「AI 自己去測，你忙你的」</div>
+    <ul>
+      <li>AI 呼叫 <code>navigate_to(url)</code> → 開新分頁，<strong><code>active: false</code> 不搶焦點</strong></li>
+      <li>該呼叫<strong>回傳 <code>tab_id</code></strong>，後續所有操作都帶著它 → 只在 AI 自己的分頁裡動作</li>
+      <li><strong>用戶原本的分頁完全不受影響</strong>，可以同時繼續做自己的事</li>
+      <li><span class="hl-green">共享瀏覽器 session（cookie / localStorage）→ 登入狀態自動繼承</span>，不必再餵一次帳密或 token</li>
+      <li>可同時跑多個分頁（各自一個 <code>tab_id</code>）→ 平行測多條流程</li>
+    </ul>
+    <p style="font-size:11px;color:var(--text-dim);margin-top:8px">典型對話：「幫我把結帳流程從頭跑一次」→ AI 開背景分頁自己走完，回報哪一步爆了。</p>
+  </div>
+
+  <div class="rule-box">
+    <div class="rule-box-title">⚠ 出任務模式的實作限制（Chrome 平台層面，非設計選擇）</div>
+    <ul>
+      <li><strong><code>take_screenshot</code> 截不到背景分頁</strong>：<code>chrome.tabs.captureVisibleTab()</code> 顧名思義只截「該視窗當前可見的分頁」。要對背景分頁截圖，只有三條路：① 暫時切過去（<strong>會搶焦點，違背本模式的前提</strong>）② 改用 <code>chrome.debugger</code> 的 <code>Page.captureScreenshot</code>（<strong>需 <code>debugger</code> 權限，會觸發 Web Store 重新審核，且畫面上方會常駐「BugEzy 正在偵錯這個分頁」的黃色橫幅</strong>）③ <strong>改開獨立視窗</strong>（<code>chrome.windows.create({focused:false})</code>）——AI 的分頁在那個視窗裡是「可見分頁」，<code>captureVisibleTab</code> 就能用，且不搶用戶焦點。<span class="hl-orange">③ 看起來是最划算的一條，Phase 1 動工前需實測確認。</span></li>
+      <li><strong>背景分頁會被節流</strong>：Chrome 對非可見分頁大幅降低計時器頻率，閒置久了甚至凍結整個分頁。以「跑完一段流程」為目標的自動化，等待與逾時的判斷不能沿用前景分頁的直覺。獨立視窗方案同樣能緩解這點。</li>
+      <li><strong>共享 session 是雙面刃</strong>：登入狀態自動繼承很方便，但也代表 <strong>AI 是以用戶的真實身分在操作真實帳號</strong>。破壞性動作（送出訂單、刪除資料、寄信）必須有防線——這一項留待 v3 的安全設計處理，此處先標記。</li>
+    </ul>
+  </div>
+
+  <div class="sub-title">§13.3　<code>tab_id</code> 參數設計</div>
+  <table>
+    <tr><th>呼叫方式</th><th>作用對象</th><th>模式</th></tr>
+    <tr><td>不指定 <code>tab_id</code></td><td>當前分頁</td><td>§13.1 偵察模式</td></tr>
+    <tr><td>指定 <code>tab_id</code></td><td>該特定分頁</td><td>§13.2 出任務模式</td></tr>
+    <tr><td><code>navigate_to(url)</code></td><td>開新分頁，<strong>回傳 <code>tab_id</code></strong> 供後續帶入</td><td>§13.2 的入口</td></tr>
+  </table>
+  <div class="ok-box">
+    <div class="ok-box-title">為什麼是「可選參數」而不是兩套工具</div>
+    <p>與 <a href="#s5" style="color:var(--cyan)">§5 決策 1</a>（<code>get_live_errors</code> 加 <code>source</code> 而非另開新工具）同一個邏輯：<strong>工具數量翻倍會稀釋 AI 的選擇準確度</strong>，也讓 v1 既有呼叫全部失效。可選參數則<strong>天然向下相容</strong>——現有不帶 <code>tab_id</code> 的呼叫行為完全不變。</p>
+  </div>
+  <div class="rule-box">
+    <div class="rule-box-title">🔴 需要定義的邊界情況（動工前補齊）</div>
+    <ul>
+      <li><strong><code>tab_id</code> 已關閉／不存在</strong>：應回一則明確錯誤（「分頁 12345 已關閉」），<strong>不可默默退回當前分頁</strong>——那會讓 AI 在用戶的分頁上執行原本要在自己分頁跑的破壞性操作。</li>
+      <li><strong>當前分頁沒有 content script</strong>（<code>chrome://</code>、Web Store、PDF）：沿用 bridge 既有的錯誤訊息。</li>
+      <li><strong>「當前分頁」的定義</strong>：多視窗時是「最後聚焦視窗的作用中分頁」（<code>chrome.tabs.query({active:true, lastFocusedWindow:true})</code>），需寫死避免各工具解讀不一。</li>
+    </ul>
+  </div>
+
+  <div class="sub-title">§13.4　與 Claude in Chrome 的差異（分頁與 session 面向）</div>
+
+  <div class="rule-box">
+    <div class="rule-box-title">🔴 原稿此表 5 項有 4 項與事實不符，已重寫 — 動工前務必看這段</div>
+    <p>PM-300 卡片原本要寫的比較表，把 <strong>Claude in Chrome 瀏覽器擴充</strong>與 <strong>Anthropic 另一個「隔離雲端沙箱」產品（Claude Cowork 雲端 session／Claude Code 內建瀏覽器）</strong>混為一談了。實際查證後：</p>
+    <table style="margin-top:8px">
+      <tr><th>原稿的宣稱</th><th>查證結果</th></tr>
+      <tr><td>讀用戶當前分頁 ❌（只有自己的分頁）</td><td class="hl-red">錯</td></tr>
+      <tr><td>共享登入狀態 ❌（獨立 session）</td><td class="hl-red">錯</td></tr>
+      <tr><td>同時操作多分頁 ❌</td><td class="hl-red">錯</td></tr>
+      <tr><td>不打擾用戶 ❌（會搶焦點）</td><td class="hl-orange">無法證實（分歧）</td></tr>
+      <tr><td>開新分頁 ✅</td><td class="hl-green">正確</td></tr>
+    </table>
+    <p style="margin-top:8px"><strong>為什麼這很要緊</strong>：這四項若當真，等於認定「共享登入狀態」與「讀當前分頁」是 BugEzy 的獨門優勢——那會把 Phase 1 的行銷主張與開發優先順序全押在一個對手其實早就有的能力上。</p>
+  </div>
+
+  <table>
+    <tr><th></th><th>Claude in Chrome（擴充）</th><th>BugEzy</th></tr>
+    <tr><td>開新分頁</td><td>✅</td><td>✅</td></tr>
+    <tr><td>讀用戶當前分頁</td><td>✅ <span style="font-size:10px">側邊欄直接讀當前分頁</span></td><td>✅</td></tr>
+    <tr><td>共享登入狀態</td><td>✅ <span style="font-size:10px">跑在你真實的 Chrome 設定檔</span></td><td>✅ <span style="font-size:10px">同上，兩者皆為瀏覽器擴充</span></td></tr>
+    <tr><td>同時操作多分頁</td><td>✅ <span style="font-size:10px">需把分頁拖進 Claude 的分頁群組</span></td><td class="hl-green">✅ 用 <code>tab_id</code> 區分，<strong>不需用戶手動編組</strong></td></tr>
+    <tr><td>不搶焦點</td><td><span class="hl-orange">分歧</span> <span style="font-size:10px">側邊欄可背景跑；但 MCP 驅動路徑有大量「每次呼叫都把視窗拉到最前」的回報，且無 headless 模式</span></td><td class="hl-green">✅ 設計上即 <code>active:false</code>（<span class="hl-orange">受 §13.2 截圖限制約束</span>）</td></tr>
+  </table>
+
+  <div class="ok-box">
+    <div class="ok-box-title">✅ 真正的差異在別處 — 見 §8</div>
+    <p>分頁／session 這一面向，兩者其實高度相似（都是跑在使用者真實 Chrome 裡的擴充功能，共享登入狀態是<strong>必然結果</strong>而非設計優勢）。BugEzy 站得住腳的差異化在 <a href="#s8" style="color:var(--cyan)">§8</a>：<strong>Console／Network 錯誤完整攔截</strong>（對方看不到）、<strong>文字讀 DOM 而非截圖</strong>（省 95% token）、<strong>13 個歷史報告工具</strong>、<strong>跨 AI 平台</strong>（不綁 Claude）。這幾項才是應該寫進行銷主張的。</p>
+    <p style="margin-top:6px">另一項本表列出的實質差異：<strong>多分頁不需用戶手動把分頁拖進群組</strong>——AI 自己開的分頁天生就帶著 <code>tab_id</code>，零操作成本。</p>
+  </div>
+
+  <p style="font-size:11px;color:var(--text-dim);margin-top:12px">📌 查證日期 <strong>2026-08-15</strong>，依據 Anthropic 官方產品頁／支援文件／Claude Code 文件與 GitHub issue。<strong>對手能力變動快，引用前請重新查證。</strong>另註：Anthropic 於 2026-08-12 起讓 Chrome 側邊欄以 Cowork session 形式運作，此表描述的是該變更後的狀態。</p>
+</div>
+
 </div>
 
 <div class="footer">
-  BugEzy v2/v3 產品規格書 · v0.3 · 2026-08-15 · FOX + Claude<br>
+  BugEzy v2/v3 產品規格書 · v0.4 · 2026-08-15 · FOX + Claude<br>
   程式 &gt; ARCHITECTURE.md &gt; 本文
 </div>
 
