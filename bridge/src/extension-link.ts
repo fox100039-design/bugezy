@@ -30,9 +30,21 @@ export class ExtensionLink {
   private pending = new Map<string, Pending>();
   private heartbeat: NodeJS.Timeout | null = null;
   private seq = 0;
+  /** PM-298：通訊 server 起不來時的原因；設了之後所有指令都直接回這個訊息。 */
+  private disabledReason: string | null = null;
 
   get connected(): boolean {
     return this.socket !== null && this.socket.readyState === WebSocket.OPEN;
+  }
+
+  /**
+   * PM-298：停用 Extension 通道，但**不讓整個 bridge 死掉**。
+   * 典型情境：多個 AI 工具各自 spawn 一個 bridge，只有第一個綁得到 port。
+   * 後起的那些若直接 exit，AI 端只會看到空的「Failed to connect」，完全查不出原因；
+   * 保持 MCP server 活著，至少能把「另一個 bridge 已在運行」這句話送到 AI 面前。
+   */
+  disable(reason: string): void {
+    this.disabledReason = reason;
   }
 
   start(port = BRIDGE_PORT): Promise<void> {
@@ -106,6 +118,9 @@ export class ExtensionLink {
    * 讓 MCP 工具可以回「bridge 沒連上」給 AI，而不是讓整個工具呼叫爆掉。
    */
   send(command: string, params?: Record<string, unknown>): Promise<BridgeResult> {
+    if (this.disabledReason) {
+      return Promise.resolve({ id: '', ok: false, error: this.disabledReason });
+    }
     if (!this.connected) {
       return Promise.resolve({
         id: '',

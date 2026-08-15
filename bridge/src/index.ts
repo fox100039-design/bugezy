@@ -20,11 +20,16 @@ async function main(): Promise<void> {
   const link = new ExtensionLink();
   try {
     await link.start(port);
+    log('   等待 Extension 連線…');
   } catch (e) {
-    log(`❌ 無法啟動 Extension 通訊 server：${(e as Error).message}`);
-    process.exit(1);
+    // PM-298：**不要 exit**。多個 AI 工具會各自 spawn 一個 bridge，只有第一個綁得到 port；
+    //   後起的若直接死掉，AI 端只看到空的「Failed to connect」，看不到原因。
+    //   繼續把 MCP server 起起來，讓工具能回一句人看得懂的話。
+    const reason = `另一個 bugezy-bridge 已在運行（port ${port} 被占用），請關閉後重試。若要同時跑多個，可用環境變數 BUGEZY_BRIDGE_PORT 指定其他 port（Extension 端目前固定連 ${BRIDGE_PORT}）。`;
+    log(`⚠ ${reason}`);
+    log('   MCP server 仍會啟動，但所有瀏覽器指令都會回報這個錯誤。');
+    link.disable(reason);
   }
-  log('   等待 Extension 連線…');
 
   const server = createMcpServer(link);
   await server.connect(new StdioServerTransport());

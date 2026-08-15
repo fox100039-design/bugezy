@@ -277,6 +277,11 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
   } else if (msg.type === 'GET_LIVE_ERRORS') {
     // PM-51：向 inject 要背景 buffer 的即時 errors（PM-181：抽成共用 queryInjectLiveErrors）
     void queryInjectLiveErrors().then(sendResponse);
+  } else if (msg.type === 'GET_PAGE_INFO') {
+    // PM-298：bridge 的 get_page_url 用。**不能用 chrome.tabs.query 的 url/title**——
+    //   那需要 `tabs` 權限（activeTab 只在使用者主動叫用擴充功能後才生效），
+    //   沒有權限時 Chrome 會靜默回空字串。content script 本來就在頁面裡，直接讀最準也不需任何權限。
+    sendResponse({ url: location.href, title: document.title });
   } else if (msg.type === 'SET_MONITOR_BADGE') {
     // PM-52：轉發給 inject 顯示/隱藏頁面浮動 badge
     sendToInject(msg.show ? 'SHOW_MONITOR' : 'HIDE_MONITOR');

@@ -859,8 +859,19 @@ async function runBridgeCommand(cmd: BridgeCommandMsg): Promise<unknown> {
 
     case 'get_page_url': {
       const tab = await activeTab();
-      if (!tab) throw new Error('找不到作用中的分頁');
-      return { url: tab.url ?? '', title: tab.title ?? '', tab_id: tab.id ?? null };
+      if (!tab?.id) throw new Error('找不到作用中的分頁');
+      // PM-298（實機驗收抓到）：`tab.url` / `tab.title` 需要 `tabs` 權限才會有值，
+      //   只有 activeTab 的話 Chrome 會**靜默回空字串**（不是報錯，所以很容易誤以為正常）。
+      //   改問 content script——它本來就宣告式注入在每個頁面，讀 location.href 不需要任何權限。
+      const info = (await chrome.tabs
+        .sendMessage(tab.id, { type: 'GET_PAGE_INFO' })
+        .catch(() => null)) as { url?: string; title?: string } | null;
+      if (!info) {
+        throw new Error(
+          '當前分頁沒有 BugEzy content script（可能是 chrome://、Chrome 線上應用程式商店或 PDF 頁面，或該分頁需要重新整理）',
+        );
+      }
+      return { url: info.url ?? '', title: info.title ?? '', tab_id: tab.id };
     }
 
     case 'get_live_errors': {
@@ -935,5 +946,30 @@ function connectBridge(): void {
   // bridge 沒在跑時每次都會觸發 onerror——這是預期情形，不要吵使用者
   ws.onerror = () => {};
 }
+
+// PM-298（實機驗收抓到）：**`setTimeout` 的重連撐不過 service worker 被回收**。
+//   bridge 關掉後 WebSocket 斷線 → 沒有 WS 活動 → SW 閒置 30 秒被殺 → 重連計時器一起消失，
+//   而且沒有任何事件會喚醒它 → 即使之後 bridge 重新啟動，擴充功能也永遠不會自己連回去。
+//   （這正是我們拒絕「HTTP 輪詢」方案的同一個坑，只是換個地方出現。）
+//
+//   正解是 `chrome.alarms`（能喚醒已被回收的 SW），但那需要新增 `alarms` 權限 →
+//   會觸發 Chrome Web Store 重新審核，違反本階段「不加新權限」的硬條件。
+//   因此改為**搭便車**：在 SW 本來就會被喚醒的事件上順手確保連線。
+//   代價是「bridge 開著但瀏覽器完全閒置」時不會自動連上——只要切個分頁或開一次 popup 就會連。
+const ensureBridge = () => {
+  if (!bridgeSocket || bridgeSocket.readyState > WebSocket.OPEN) {
+    bridgeRetryMs = BRIDGE_RETRY_MIN_MS; // 有人在動 → 重設退避，立刻試
+    connectBridge();
+  }
+};
+chrome.runtime.onMessage.addListener(() => {
+  // popup／content script 來訊＝SW 醒著，順手確保 bridge 連線。回 false 不影響既有處理鏈。
+  ensureBridge();
+  return false;
+});
+chrome.runtime.onStartup.addListener(ensureBridge);
+chrome.runtime.onInstalled.addListener(ensureBridge);
+chrome.tabs.onActivated.addListener(ensureBridge); // 切換分頁（不需 tabs 權限也會觸發）
+chrome.tabs.onUpdated.addListener(ensureBridge); // 分頁載入完成
 
 connectBridge();
