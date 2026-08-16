@@ -621,6 +621,32 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
     sendResponse(bridgeClick(msg.selector));
   } else if (msg.type === 'BRIDGE_TYPE_TEXT') {
     sendResponse(bridgeTypeText(msg.selector, msg.text));
+  } else if (msg.type === 'BRIDGE_GET_BROWSER_ERRORS') {
+    // PM-313：**沿用 inject.ts 既有的攔截機制**（PM-51 的通道），不另外掛一套。
+    //   inject 在 document_start 就開始收，不需要先按錄製。
+    void queryInjectLiveErrors().then(({ consoleLogs, networkErrors }) =>
+      sendResponse({
+        console_errors: consoleLogs
+          // 'info' 是 Web Vitals 之類的中性訊息，產品內部本來就「不計入即時監控錯誤數」，
+          // 一支叫 get_browser_errors 的工具把它們算成錯誤會誤導 AI
+          .filter((c) => c.level !== 'info')
+          .map((c) => ({
+            level: c.level,
+            message: c.message,
+            source: c.source ?? 'console', // source 在既有型別是可選的（'console' 會省略），這裡補齊
+            timestamp: c.timestamp,
+          })),
+        // 🔴 只帶 url/status/method/timestamp：requestBody / responseBody 可能含
+        //    認證 token 或使用者個資，而這份結果會整份進到 AI 的 context（同 PM-309 的考量）
+        network_errors: networkErrors.map((n) => ({
+          url: n.url,
+          status: n.status,
+          method: n.method,
+          timestamp: n.timestamp,
+          duration: n.duration,
+        })),
+      }),
+    );
   } else if (msg.type === 'BRIDGE_READ_PAGE') {
     const { content, truncated } = extractPageContent();
     sendResponse({

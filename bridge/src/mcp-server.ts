@@ -56,7 +56,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
   //   本 bridge 只提供 source='browser'（即時）；'cache'（讀 R2 歷史）在雲端 MCP 上。
   server.tool(
     'get_live_errors',
-    "Read console errors and failed network requests from the user's current tab in real time. 即時讀取當前分頁的 Console 錯誤與失敗的網路請求（4xx/5xx）。",
+    "[Superseded by get_browser_errors — prefer that one] Read console errors and failed network requests from the user's current tab in real time. Kept for backward compatibility with the cloud MCP's source parameter; get_browser_errors returns the same data with richer fields and tab_id support. 【已由 get_browser_errors 取代，請優先用那一支】即時讀取當前分頁的 Console 錯誤與失敗的網路請求（4xx/5xx）。保留是為了與雲端 MCP 的 source 參數相容；get_browser_errors 提供同樣的資料，欄位更完整且支援 tab_id。",
     {
       source: z
         .enum(['browser', 'cache'])
@@ -138,6 +138,25 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     async (args) => {
       const r = await link.send('click_element', { selector: args.selector, tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, selector: args.selector, extension_connected: link.connected });
+      return txt(r.data);
+    },
+  );
+
+  // ── 工具 9：get_browser_errors（PM-313）──────────────────────────────────
+  // 讀的是 inject.ts 既有的背景緩存（PM-50/51），不另外掛一套攔截器。
+  server.tool(
+    'get_browser_errors',
+    "Read console errors and failed network requests (4xx/5xx) from a tab in real time. IMPORTANT: only covers the last ~30 seconds (rolling in-page buffer) — to catch page-load errors, navigate_to or reload the tab and call this immediately after. Returns empty arrays (not an error) when the page is clean. 即時讀取分頁的 Console 錯誤與失敗的網路請求（4xx/5xx）。**注意：只涵蓋最近約 30 秒**（頁面內的滾動緩存）——要抓載入當下的錯誤，請先 navigate_to／重新整理再立刻呼叫。頁面沒問題時回空陣列（不是錯誤）。",
+    {
+      tab_id: z
+        .number()
+        .int()
+        .optional()
+        .describe('省略 → 使用者當前分頁；指定 → 該分頁。分頁已關閉會回報錯誤。'),
+    },
+    async (args) => {
+      const r = await link.send('get_browser_errors', { tab_id: args.tab_id });
+      if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
       return txt(r.data);
     },
   );

@@ -1084,6 +1084,28 @@ async function runBridgeCommand(cmd: BridgeCommandMsg): Promise<unknown> {
       };
     }
 
+    // PM-313
+    case 'get_browser_errors': {
+      const tabId = await resolveTargetTab(cmd.params);
+      const res = await sendToContent<{
+        console_errors?: unknown[];
+        network_errors?: unknown[];
+      }>(tabId, { type: 'BRIDGE_GET_BROWSER_ERRORS' });
+      const consoleErrors = res.console_errors ?? [];
+      const networkErrors = res.network_errors ?? [];
+      return {
+        console_errors: consoleErrors,
+        network_errors: networkErrors,
+        total_count: consoleErrors.length + networkErrors.length,
+        tab_id: tabId,
+        // inject 的背景 buffer 是 30 秒滾動視窗（REWIND_WINDOW），每 5 秒裁一次舊資料。
+        // 不講明的話，「載入時就噴的錯誤」在 AI 過幾十秒才來問時會變成空陣列，
+        // 而空陣列看起來就像「這頁沒問題」——必須讓 AI 知道要重新整理再問。
+        window_seconds: 30,
+        note: '只涵蓋最近 30 秒（頁面內的滾動緩存）。若要抓「頁面載入當下」的錯誤，請先 navigate_to 或重新整理該分頁，再立刻呼叫本工具。',
+      };
+    }
+
     // PM-312：FOX 選方案 B —— 目標分頁不是 active 時暫時切過去截圖，再切回原本那個。
     case 'take_screenshot': {
       const tabId = await resolveTargetTab(cmd.params);
