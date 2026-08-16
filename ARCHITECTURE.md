@@ -57,6 +57,8 @@ content.ts（GET_PAGE_INFO / 即時 console 與網路錯誤）→ 目標網頁
 
 **為什麼是 localhost WebSocket**：Native Messaging 需 `nativeMessaging` 權限（**會觸發 Web Store 重新審核**）＋各 OS 註冊 host manifest；HTTP 輪詢撐不過 MV3（service worker 閒置 30 秒回收，`setInterval` 隨之消失，`chrome.alarms` 最短 30 秒補不上）。**Chrome 116 起 WebSocket 活動會重置 service worker 閒置計時器**，連 localhost 不需任何新權限。
 
+**位址一律寫 `127.0.0.1`，不要寫 `localhost`**：`localhost` 在許多系統上會先解析到 IPv6 的 `::1`，而 bridge 綁的是 IPv4 的 `127.0.0.1`——連線直接失敗，且錯誤訊息只說連不上，看不出是位址族群不合。兩端都已寫死（`extension/src/background.ts` 的 `BRIDGE_URL`、`bridge/src/extension-link.ts` 的 `host`）。
+
 ### §2a 語音雙引擎架構（PM-85~91）
 
 ```

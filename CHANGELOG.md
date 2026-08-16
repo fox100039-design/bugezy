@@ -1,5 +1,28 @@
 # BugEzy Changelog
 
+## 2026-08-16
+
+Day 43（PM-302~306）。**純規格書日**——v2/v3 規格書 v0.5 → **v0.9**，`§1~§15` 完整、**48 個 MCP 工具**、**決策 1~6 全定案**。extension／server／bridge 皆未動，未 deploy。
+
+- **PM-302 §14 The Octa-Memory Matrix（八層記憶矩陣）**（v0.5→v0.6）。L1 Debug 經驗庫／L2 專案知識庫／L3 客服知識庫／L4 商業邏輯庫／L5 外部依賴庫／L6 資安合規庫／L7 效能帳本庫／L8 團隊協作庫，每層「為什麼需要 → 記憶內容 → 實戰威力」三段式；7 個 `memory_*` 工具、自動學習循環、Phase A~D。新增 `.mem` 系列 CSS（每層左側色條 + 分類標籤）。
+  **抓到與已定案規則的衝突**：卡片的 7 個工具全帶 `bugezy:` 前綴，但 **§5 決策 2（PM-296 定案）已明訂工具名一律 snake_case、不加前綴**——照抄會讓同一份文件的 §5 與 §14 互相打臉，且實作時必有人照 §14 寫出帶前綴的工具。7 個全部去掉前綴並留說明。
+
+- **PM-303 §14.12 記憶管理 + 決策 4~6 定案**（v0.6→v0.7）。**決策 4** 記憶混合式儲存（雲端＝L1 匿名＋L3；本機 `.bugezy/`＝L1 原始細節＋L2 L4 L5 L6 L7 L8）、**決策 5** L1 兩層式共享、**決策 6** BugEzy 只建議絕不動使用者程式碼。記憶工具 +6（update／delete／list／clear／export／import）→ 記憶層 13 個。
+  **兩個照抄會做錯的細節**：① **`.bugezy/.gitignore` 放空檔案完全沒用**——目錄內的 `.gitignore` 必須自己排除自己（`*` ＋ `!.gitignore`），否則記憶檔照樣被 `git add -A` 掃進去，而那裡面有 L1 的真實檔名與 L6 的資安鐵律；② **匿名化只清「檔名／變數名」欄位擋不住外洩**——L1 的 symptom 欄位本身就內嵌識別資訊（`Cannot read 'map' of undefined at CheckoutPage.tsx:42`），必須對全文遮蔽。並提醒**匿名 L1 上雲是新的資料蒐集行為**，依 §4-15 `/privacy` 必須在上線前同步更新。另註明匯出檔含 L1 原始細節與 L6 鐵律，**比想像中敏感**，要比照憑證檔對待。
+
+- **PM-304 §15 Zone Grid — AI 的空間座標系統**（v0.7→v0.8）。按 DOM 語意自動分區（語意標籤 → `role` → class/id → 視覺象限四層規則）、Zone 健康狀態與時間軸、半透明覆蓋層、與圖釘／§6 嚴重度整合、5 個 zone 工具；§9 Phase 3 改為「視覺化 ＋ Zone Grid」。
+  **§15.3 的 error 歸類照字面實作會得到一個永遠回 `null` 的歸類器**：**stack trace 裡沒有 DOM 元素**（只有檔名:行:列），`fetch()` 也沒有「發起它的元素」。已改寫為「在錯誤發生的當下抓現場」，四條路徑都對得上專案既有能力（`event.target`／capture 階段的資源 `error` 事件／rrweb 互動軌跡／`Unassigned`）。**`Unassigned` zone 不能省**——§15.8 的規則是「✅ 就跳過，省 token」，被吞掉的 error 會主動讓 AI 跳過一個其實有問題的頁面。另修正兩處矛盾（`pointer-events:none` 與「點擊展開」互斥，需外層 none／badge auto 兩層；覆蓋層須用 DOM API 建，Trusted Types 網站會擋掉 `innerHTML`——PM-69 踩過）與一個漏掉的情境（**SPA 換頁後 selector 全失效，`watch_zones` 會安靜地監控已消失的區域並回報「一切正常」**）。
+
+- **PM-305 §3 ＋ §12 A-3：Native Messaging → localhost WebSocket**（v0.8→**v0.9**）。§3 架構圖、安裝方式、運作方式全面對齊 PM-297~299 的實作，延遲 `<50ms` → **`<10ms`**，新增「為何棄用 Native Messaging」四列對照表；A-3 標為歷史紀錄（**保留不刪**，它記錄了完整的否決理由）。
+  **卡片本身有三處與程式碼不符**：① **WebSocket client 在 `background.ts` 不在 `content.ts`**——這不是名詞之爭，PM-298 搭便車重連機制存在的理由就是連線方為會被回收的 service worker；② **位址是 `127.0.0.1` 不是 `localhost`**，後者在許多系統上先解析到 IPv6 `::1` 而 bridge 綁 IPv4，連線會失敗且錯誤訊息看不出原因；③ 「PM-299 實測 8ms」來源標錯（PM-299 真實 Chrome `ping` **2 ms**；8~14 ms 是 PM-297 模擬 extension 的端到端測試）。順手清掉 §1／§8／§9 三處連帶不一致，全庫 `50ms`、`localhost:19850` 歸零。
+
+- **PM-306 Day 43 收工**：CHANGELOG ＋ ARCHITECTURE ＋ git push。
+
+> **待 FOX**：所有既有待辦不變（v1.1.5 重新送審、`DISCORD_WEBHOOK_URL`、`ticket-expiry-notify.sql`、`REPORT_CLEANUP`、`ADMIN_TOKEN`、HSTS、GSC）。bridge 若要對外發布需 `npm publish`。
+> **Phase 1 動工前需先實測**：出任務模式的截圖走哪條路（`captureVisibleTab` 截不到背景分頁，`chrome.debugger` 要重新審核，獨立視窗方案未實測）。
+> **Phase A（記憶）動工前**：`/privacy` 需先為匿名 L1 上雲補揭露。
+> **Phase 3（Zone Grid）動工順序**：PM-Y 的 error 歸類是地基，要先做完再做覆蓋層。
+
 ## 2026-08-15
 
 Day 42（PM-294~301）。**v2 里程碑：從 Bug Reporter 走向 AI Debug Partner**——規格書定案 + `bugezy-bridge` 骨架落地並通過實機驗收。extension 改動未重新打包（仍 v1.1.5 送審中），server 未動、未 deploy。新增 `bridge/`。
