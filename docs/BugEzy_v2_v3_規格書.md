@@ -356,6 +356,7 @@ BugEzy Extension
 | 2026-08-16 | **v0.7** | **決策 4~6 定案**（記憶混合式儲存／L1 兩層式共享／BugEzy 不碰使用者程式碼）；**新增 §14.12 記憶管理**：CRUD 工具 +6（記憶層共 13、全站 43）、多專案 `.bugezy/` 隔離、容量與智慧淘汰、匯出匯入 |
 | 2026-08-16 | **v0.8** | **新增 §15 Zone Grid 空間座標系統**：智慧分區規則、Zone 健康狀態與時間軸、覆蓋層、與圖釘／嚴重度整合、5 個 `zone` 工具（全站 **48 個**）；§9 Phase 3 納入 Zone Grid |
 | 2026-08-16 | **v0.9** | **§3 改為 localhost WebSocket**（與 PM-297~299 的實作一致）：架構圖、安裝方式、延遲 <10ms、不需新權限；附錄 A-3 標為歷史紀錄；修正原稿兩處事實錯誤（WebSocket client 在 `background.ts` 非 `content.ts`；位址是 `127.0.0.1` 非 `localhost`）|
+| 2026-08-16 | **v1.0** | **§13.2 回填 `take_screenshot` 權限實測結論**（三條路都需 `<all_urls>`）＋ FOX 決策（不急上架、1~3 個月維持 v1.1.5）|
 
 ---
 
@@ -386,9 +387,33 @@ BugEzy Extension
 
 > ⚠ **出任務模式的實作限制（Chrome 平台層面，非設計選擇）**
 >
-> - **`take_screenshot` 截不到背景分頁**：`chrome.tabs.captureVisibleTab()` 顧名思義只截「該視窗當前可見的分頁」。要對背景分頁截圖只有三條路：① 暫時切過去（**會搶焦點，違背本模式的前提**）② 改用 `chrome.debugger` 的 `Page.captureScreenshot`（**需 `debugger` 權限，會觸發 Web Store 重新審核，且畫面上方會常駐「BugEzy 正在偵錯這個分頁」黃色橫幅**）③ **改開獨立視窗**（`chrome.windows.create({focused:false})`）——AI 的分頁在那個視窗裡是「可見分頁」，`captureVisibleTab` 就能用，且不搶用戶焦點。③ 看起來最划算，Phase 1 動工前需實測確認。
+> - **`take_screenshot` 截不到背景分頁**：`chrome.tabs.captureVisibleTab()` 顧名思義只截「該視窗當前可見的分頁」。要對背景分頁截圖只有三條路：① 暫時切過去（**會搶焦點，違背本模式的前提**）② 改用 `chrome.debugger` 的 `Page.captureScreenshot`（**需 `debugger` 權限，會觸發 Web Store 重新審核，且畫面上方會常駐「BugEzy 正在偵錯這個分頁」黃色橫幅**）③ **改開獨立視窗**（`chrome.windows.create({focused:false})`）——AI 的分頁在那個視窗裡是「可見分頁」，`captureVisibleTab` 就能用，且不搶用戶焦點。（原本評估 ③ 最划算並標記「動工前需實測確認」——**已實測，見下方**。）
 > - **背景分頁會被節流**：Chrome 對非可見分頁大幅降低計時器頻率，閒置久了甚至凍結整個分頁。以「跑完一段流程」為目標的自動化，等待與逾時的判斷不能沿用前景分頁的直覺。獨立視窗方案同樣能緩解這點。
 > - **共享 session 是雙面刃**：登入狀態自動繼承很方便，但也代表 **AI 是以用戶的真實身分在操作真實帳號**。破壞性動作（送出訂單、刪除資料、寄信）必須有防線——留待 v3 安全設計處理，此處先標記。
+
+> ✅ **已實測（PM-312，2026-08-16）：三條路都繞不開 `<all_urls>`**
+>
+> **實測方式**：在真實 Chrome 上以 bridge 呼叫 `take_screenshot`，Chrome 回的原話是：
+>
+> ```
+> Either the '<all_urls>' or 'activeTab' permission is required.
+> ```
+>
+> | 路線 | 原本的評估 | 實測結果 |
+> |---|---|---|
+> | ① 暫時切 active 截圖 | 會搶焦點 | **搶焦點不是問題，權限才是**（已實作切換＋切回，仍被權限擋下）|
+> | ② `chrome.debugger` | 需 `debugger` 權限＋黃色橫幅 | 不變 |
+> | ③ 獨立視窗 `windows.create` | 「最划算」，待實測 | **同樣過不了 `activeTab` 這關**——它只解決「分頁可不可見」，沒解決授權 |
+>
+> **根因**：`captureVisibleTab` 的門檻不在「分頁可不可見」，而在**「有沒有使用者手勢」**。`activeTab` 只在使用者主動叫用擴充功能後才授予該分頁，而 **bridge 的呼叫永遠沒有使用者手勢**；且**導航會撤銷 `activeTab`**，所以連「先點圖示再截圖」也只在「點完直接截、中間不 `navigate_to`」時成立。
+>
+> ⚠ **結論：三條路都需要 `<all_urls>` host permission。**
+>
+> - 加 `<all_urls>` ＝ **人工審核 2~4 週**（是排隊，不是退件）
+> - 安裝時會彈出「**可讀取所有網站資料**」警告
+> - 程式碼已寫好（PM-312，含方案 B 的切換與切回），**待送審時機成熟再加入 manifest**
+>
+> **✅ FOX 決策（2026-08-16）**：**不急著上架，1~3 個月內維持 v1.1.5。** 開發版 manifest 可加 `<all_urls>` 讓本機全通；**上架版另議**。
 
 ### §13.3 `tab_id` 參數設計
 
