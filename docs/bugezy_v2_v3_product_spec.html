@@ -94,6 +94,21 @@ details .details-body{padding:4px 18px 18px}
 .mem-bad{color:var(--red)}.mem-good{color:var(--success)}
 .m1{--mc:var(--red)}.m2{--mc:var(--yellow)}.m3{--mc:var(--blue)}.m4{--mc:var(--success)}
 .m5{--mc:var(--blue)}.m6{--mc:var(--red)}.m7{--mc:var(--orange)}.m8{--mc:var(--primary)}
+/* §15 Zone Grid */
+.zone-mock{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;background:#050810;border:1px dashed rgba(255,255,255,0.15);border-radius:10px;padding:14px;margin:12px 0}
+.zg{position:relative;border-radius:6px;padding:16px 10px 10px;min-height:58px;font-size:11px}
+.zg-name{position:absolute;top:4px;left:6px;font-size:10px;font-weight:700}
+.zg-badge{position:absolute;top:4px;right:6px;font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px}
+.zg-ok{background:rgba(50,180,120,0.07);border:1px solid rgba(50,180,120,0.35)}
+.zg-ok .zg-name{color:var(--success)}.zg-ok-b{background:rgba(50,180,120,0.18);color:var(--success)}
+.zg-warn{background:rgba(255,200,50,0.07);border:1px solid rgba(255,200,50,0.4)}
+.zg-warn .zg-name{color:var(--gold)}.zg-warn-b{background:rgba(255,200,50,0.18);color:var(--gold)}
+.zg-err{background:rgba(200,50,50,0.09);border:1px solid rgba(200,50,50,0.5);animation:zgblink 1.4s ease-in-out infinite}
+.zg-err .zg-name{color:var(--red)}.zg-err-b{background:rgba(200,50,50,0.2);color:var(--red)}
+.zg-unk{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.12)}
+.zg-unk .zg-name{color:#888}.zg-unk-b{background:rgba(150,150,150,0.15);color:#888}
+@keyframes zgblink{0%,100%{border-color:rgba(200,50,50,0.5)}50%{border-color:rgba(200,50,50,0.95)}}
+@media(max-width:800px){.zone-mock{grid-template-columns:1fr}.zg{grid-column:1/-1 !important}}
 </style>
 </head>
 <body>
@@ -102,7 +117,7 @@ details .details-body{padding:4px 18px 18px}
   <div>
     <div class="header-title">BugEzy v2/v3 產品規格書</div>
     <div class="header-sub">From Bug Reporter to AI Debug Partner · FOX + Claude 共同規劃</div>
-    <div class="header-date">📌 v0.7 · 2026-08-16 · +§14 八層記憶矩陣 · 決策 4~6 已定案 · 程式 &gt; ARCHITECTURE.md &gt; 本文</div>
+    <div class="header-date">📌 v0.8 · 2026-08-16 · +§14 記憶矩陣 · +§15 Zone Grid · 程式 &gt; ARCHITECTURE.md &gt; 本文</div>
   </div>
 </div>
 
@@ -125,6 +140,7 @@ details .details-body{padding:4px 18px 18px}
   <a href="#s13">§13 雙模式操作 — 偵察模式 + 出任務模式 ★新增</a>
   <a href="#s14">§14 The Octa-Memory Matrix — 八層記憶矩陣 ★新增</a>
   <a href="#s14-12" class="sub">　└ §14.12 記憶管理（存儲／共享／權限已定案）★新增</a>
+  <a href="#s15">§15 Zone Grid — AI 的空間座標系統 ★新增</a>
 </div>
 
 <!-- ══════════ §1 ══════════ -->
@@ -274,7 +290,7 @@ BugEzy Extension
   <div class="ok-box">
     <div class="ok-box-title">📌 所有操作類／偵測類工具都帶可選的 <code>tab_id?: number</code></div>
     <p><strong>省略</strong> → 作用於當前分頁（<a href="#s13" style="color:var(--cyan)">§13.1 偵察模式</a>）；<strong>指定</strong> → 只作用於該分頁（<a href="#s13" style="color:var(--cyan)">§13.2 出任務模式</a>）。</p>
-    <p>適用範圍：<strong>操作類 5 個、偵測類 4 個、圖釘類 3 個、監控類 3 個，共 15 個工具</strong>（2026-08-15 定案，圖釘／監控由 PM-301 補上）。唯一例外是 <code>get_live_errors(source='cache')</code>——它讀的是已上傳的歷史報告，與分頁無關。</p>
+    <p>適用範圍：<strong>操作類 5 個、偵測類 4 個、圖釘類 3 個、監控類 3 個，共 15 個工具</strong>（2026-08-15 定案，圖釘／監控由 PM-301 補上）；<a href="#s15" style="color:var(--cyan)">§15</a> 的 5 個 Zone 工具同樣適用。唯一例外是 <code>get_live_errors(source='cache')</code>——它讀的是已上傳的歷史報告，與分頁無關。</p>
   </div>
 
   <div class="sub-title">瀏覽器操作類</div>
@@ -452,7 +468,7 @@ BugEzy Extension
   <div class="card">
     <div class="card-title">Phase 1：bugezy-bridge + 基礎 MCP 工具</div>
     <ul>
-      <li><span class="hl">PM-A</span>：bugezy-bridge 骨架（localhost MCP + Native Messaging）<span class="hl-red">＋ host manifest 註冊/清除（見 §12 A-3）</span></li>
+      <li><span class="hl">PM-A</span>：bugezy-bridge 骨架（localhost MCP ＋ <s style="color:var(--text-dim)">Native Messaging</s> → <strong>改為 localhost WebSocket</strong>）<span class="hl-green">✅ 已完成（PM-297~299）</span><br><span style="font-size:11px;color:var(--text-dim)">最終未採用 Native Messaging（需 <code>nativeMessaging</code> 權限＝重新審核＋各 OS 註冊 host manifest），改用 localhost WebSocket，<strong>不需任何新權限</strong>。§3 與 §12 A-3 仍描述舊方案，待另開卡片更新。</span></li>
       <li><span class="hl">PM-B</span>：Extension 接收 bridge 指令</li>
       <li><span class="hl-orange">PM-B2</span>：<span class="hl-orange">方案等級判斷雛形</span>（決策 3 使 v2 工具必須擋住票券／日票用戶，<code>isActiveUserId</code> 需回傳等級而非布林值）</li>
       <li><span class="hl">PM-C</span>：MCP 第一批（<code>navigate_to</code> / <code>click_element</code> / <code>read_page</code> / <code>get_live_errors(source='browser')</code>）<span class="hl-green">＋ 命名已定案 ✅</span></li>
@@ -471,11 +487,16 @@ BugEzy Extension
   </div>
 
   <div class="card">
-    <div class="card-title">Phase 3：視覺化</div>
+    <div class="card-title">Phase 3：視覺化 ＋ Zone Grid</div>
     <ul>
       <li><span class="hl">PM-H</span>：藍框巡察動畫</li>
       <li><span class="hl">PM-I</span>：圖釘狀態顏色</li>
       <li><span class="hl">PM-J</span>：右下角即時面板</li>
+      <li><span class="hl-cyan">PM-X</span>：<code>map_page_zones</code> 基礎分區（<a href="#s15" style="color:var(--cyan)">§15</a>）</li>
+      <li><span class="hl-cyan">PM-Y</span>：<code>get_zone_health</code> ＋ error 歸類 <span class="hl-red">＝ Zone Grid 的地基，需先換掉 stack-trace 反推做法（§15.3）</span></li>
+      <li><span class="hl-cyan">PM-Z</span>：視覺化覆蓋層</li>
+      <li><span class="hl-cyan">PM-W</span>：<code>watch_zones</code> 持續監控</li>
+      <li><span class="hl-cyan">PM-V</span>：Zone ＋ 圖釘自動協作</li>
     </ul>
   </div>
 
@@ -610,7 +631,7 @@ Claude 開瀏覽器測  ──►  Extension 掛著（攔截 console/network）<
         <p><code>navigate_to</code> · <code>click_element</code> · <code>type_text</code> · <code>read_page</code> · <code>take_screenshot</code> · <code>analyze_element</code> · <code>get_page_health</code> · <code>get_web_vitals</code> · <code>pin_element</code> · <code>pin_analyze</code> · <code>get_pin_results</code> · <code>start_monitor</code> · <code>stop_monitor</code> · <code>get_monitor_report</code> · <code>start_terminal_monitor</code> · <code>get_terminal_live_errors</code> · <code>correlate_errors</code></p>
       </div>
       <p style="font-size:12px;color:var(--text-dim)"><strong>理由</strong>：與現有 13 個工具一致；MCP 用戶端通常已用 server 名稱作命名空間，工具名再加 <code>bugezy:</code> 會出現 <code>bugezy - bugezy:navigate</code> 這種重複。</p>
-      <p style="font-size:12px;color:var(--text-dim)">加上既有 13 個與 <code>get_live_errors</code> 的新模式，v2 完成後 MCP 共 <strong>13 + 17 = 30 個工具</strong>（<code>get_live_errors</code> 不重複計）。</p>
+      <p style="font-size:12px;color:var(--text-dim)">加上既有 13 個與 <code>get_live_errors</code> 的新模式，v2 完成後 MCP 共 <strong>13 + 17 = 30 個工具</strong>。再加上 <a href="#s14-12" style="color:var(--cyan)">§14.12</a> 記憶層 13 個與 <a href="#s15" style="color:var(--cyan)">§15</a> Zone 5 個，<strong>全部完成後合計 <span class="hl">48 個</span></strong>（<code>get_live_errors</code> 不重複計）。</p>
     </div>
   </details>
 
@@ -948,7 +969,7 @@ L8 🟣 團隊協作庫     ─┴─ 知道「改完之後要負什麼責任」
     <tr><td><code>memory_perf_check(metrics)</code></td><td><strong>L7</strong> 效能比對</td></tr>
     <tr><td><code>memory_biz_validate(output)</code></td><td><strong>L4</strong> 商業邏輯驗證</td></tr>
   </table>
-  <p style="font-size:11px;color:var(--text-dim)">📌 <a href="#s14-12" style="color:var(--cyan)">§14.12.1</a> 再加 6 個管理工具（update／delete／list／clear／export／import）→ 記憶層共 <strong>13 個</strong>，全站合計 <span class="hl">43 個</span>。</p>
+  <p style="font-size:11px;color:var(--text-dim)">📌 <a href="#s14-12" style="color:var(--cyan)">§14.12.1</a> 再加 6 個管理工具（update／delete／list／clear／export／import）→ 記憶層共 <strong>13 個</strong>；連同 <a href="#s15" style="color:var(--cyan)">§15</a> Zone 5 個，全站合計 <span class="hl">48 個</span>。</p>
 
   <div class="sub-title">§14.10　自動學習循環</div>
   <div class="wire">        debug 成功
@@ -1035,7 +1056,7 @@ BugEzy 永遠不碰用戶程式碼</div>
     <tr><td><code>memory_export()</code></td><td>匯出整個 <code>.bugezy/</code></td><td class="hl">新增</td></tr>
     <tr><td><code>memory_import(path)</code></td><td>匯入</td><td class="hl">新增</td></tr>
   </table>
-  <p style="font-size:11px;color:var(--text-dim)">📌 <strong>工具總數連動</strong>：既有 13 ＋ v2 新增 17 ＋ 記憶 <strong>7 ＋ 6 ＝ 13</strong> ＝ <span class="hl">43 個</span>（<code>get_live_errors</code> 不重複計）。§14.9 的另外 5 個（<code>memory_learn</code> / <code>memory_get</code> / <code>memory_audit</code> / <code>memory_perf_check</code> / <code>memory_biz_validate</code>）不變。</p>
+  <p style="font-size:11px;color:var(--text-dim)">📌 <strong>工具總數連動</strong>：既有 13 ＋ v2 新增 17 ＋ 記憶 <strong>7 ＋ 6 ＝ 13</strong> ＝ 43 個；再加 <a href="#s15" style="color:var(--cyan)">§15</a> Zone 5 個 ＝ <span class="hl">48 個</span>（<code>get_live_errors</code> 不重複計）。§14.9 的另外 5 個（<code>memory_learn</code> / <code>memory_get</code> / <code>memory_audit</code> / <code>memory_perf_check</code> / <code>memory_biz_validate</code>）不變。</p>
 
   <div class="ok-box">
     <div class="ok-box-title">✅ <code>memory_import</code> 會寫檔，但不牴觸決策 6</div>
@@ -1149,10 +1170,188 @@ B 專案也接 Stripe             → 搜尋時從雲端撈到
   </div>
 </div>
 
+<!-- ══════════ §15 ══════════ -->
+<div class="section" id="s15">
+  <div class="section-title"><span class="num">§15</span>Zone Grid — AI 的空間座標系統 <span style="font-size:12px;color:var(--cyan)">★新增</span></div>
+
+  <div class="sub-title">§15.1　為什麼需要</div>
+  <div class="wire">圖釘（§7）  = 人指路，AI 去查  → 人機合作
+Zone Grid   = AI 自己有地圖    → AI 自驅動
+
+第三層：人放圖釘   → AI 偵測         （被動）
+第四層：AI 自己切格子 → 自己掃描 → 自己找到問題（主動）</div>
+  <div class="two-col">
+    <div class="card" style="border-color:rgba(200,50,50,0.25)">
+      <div class="card-title" style="color:var(--red)">✗ 沒有 Zone Grid</div>
+      <p>AI 收到 error 只知道<strong>「頁面有問題」</strong></p>
+    </div>
+    <div class="card" style="border-color:rgba(50,180,120,0.25)">
+      <div class="card-title" style="color:var(--success)">✓ 有 Zone Grid</div>
+      <p>AI 知道<strong>「Cart 區域的第三個按鈕有問題」</strong></p>
+    </div>
+  </div>
+
+  <div class="sub-title">§15.2　智慧分區邏輯（不是固定切格子）</div>
+  <p style="font-size:12px;color:var(--text-dim)">按 <strong>DOM 語意結構</strong>自動分區：</p>
+  <div class="wire">&lt;header&gt;             → Zone: Header
+&lt;nav&gt;                → Zone: Navigation
+&lt;main&gt;
+  &lt;aside&gt;            → Zone: Sidebar
+  &lt;section.products&gt; → Zone: Product List
+  &lt;section.cart&gt;     → Zone: Cart
+&lt;footer&gt;             → Zone: Footer
+&lt;div.chat-widget&gt;    → Zone: Chat Widget</div>
+
+  <div class="mem-lbl">分區規則（依序套用，先命中先算）</div>
+  <table>
+    <tr><th>#</th><th>依據</th><th>範例</th></tr>
+    <tr><td class="hl-green">1</td><td><strong>HTML5 語意標籤</strong></td><td><code>header</code> / <code>nav</code> / <code>main</code> / <code>aside</code> / <code>footer</code> / <code>section</code> / <code>article</code></td></tr>
+    <tr><td class="hl-green">2</td><td><code>role</code> 屬性</td><td><code>role="banner"</code> / <code>"navigation"</code> / <code>"main"</code></td></tr>
+    <tr><td class="hl-orange">3</td><td>class／id 命名推測</td><td><code>.sidebar</code> / <code>.cart</code> / <code>.footer</code></td></tr>
+    <tr><td class="hl-orange">4</td><td><strong>視覺位置</strong>（前三項都沒命中時）</td><td>viewport 分象限</td></tr>
+  </table>
+  <p style="font-size:12px;color:var(--text-dim)">每個 zone <strong>自動命名 ＋ 記錄 CSS selector</strong>。</p>
+
+  <div class="rule-box">
+    <div class="rule-box-title">⚠ SPA 換頁後整張地圖會失效</div>
+    <p>規則 1~3 讀的都是<strong>當下的 DOM</strong>。React／Vue 路由切換後 <code>&lt;main&gt;</code> 底下整批換掉，舊的 <code>zone_id</code> 與 selector 全部指向不存在的節點——<code>watch_zones</code> 會安靜地監控一組已經消失的區域，回報「一切正常」。</p>
+    <p><strong>必須在 DOM 大幅變動時重新分區</strong>（<code>MutationObserver</code> ＋ History API 攔截，兩者本專案的 <code>inject.ts</code> 都已具備）。重新分區時 <code>zone_id</code> 應盡量沿用同名 zone，否則 §15.4 的時間軸會在每次換頁斷成兩截。</p>
+  </div>
+
+  <div class="sub-title">§15.3　Zone 健康狀態</div>
+  <table>
+    <tr><th>狀態</th><th>條件</th></tr>
+    <tr><td><span class="hl-green">✅ Healthy</span></td><td>零錯誤</td></tr>
+    <tr><td><span class="hl">🟡 Warning</span></td><td>有 <code>console.warn</code> 或效能警告</td></tr>
+    <tr><td><span class="hl-red">🔴 Error</span></td><td>有 uncaught error 或 network fail</td></tr>
+    <tr><td style="color:#888;font-weight:700">⚫ Unknown</td><td>尚未掃描</td></tr>
+  </table>
+
+  <div class="mem-lbl">Error 歸類邏輯</div>
+  <div class="wire">Console error 的 stack trace  → 找到觸發的 DOM 元素 → 反查屬於哪個 Zone
+Network fail 的觸發源         → 找到發起 fetch 的元素 → 反查 Zone
+
+= 每個 error 都有「地址」</div>
+
+  <div class="rule-box">
+    <div class="rule-box-title">🔴 這是 §15 唯一做不出來的一段，實作前必須換做法</div>
+    <p><strong>stack trace 裡沒有 DOM 元素。</strong>它給的是 <code>檔名:行:列</code> 與函式名，瀏覽器不提供任何「這個 stack frame 對應哪個節點」的 API。同理，<code>fetch()</code> 也沒有「發起它的元素」這種欄位——它就是一個全域函式呼叫。<strong>照字面實作會得到一個永遠回 <code>null</code> 的歸類器。</strong></p>
+    <p><strong>改成在「錯誤發生的當下」抓現場，而不是事後從 stack 反推</strong>：</p>
+    <ul>
+      <li><strong>事件處理器內的錯誤</strong> → 攔截時記下正在派送的事件 <code>event.target</code>（本專案 <code>inject.ts</code> 已在 MAIN world 攔 console 與網路，加掛即可）</li>
+      <li><strong>資源載入失敗</strong>（<code>&lt;img&gt;</code>／<code>&lt;script&gt;</code>）→ capture 階段的 <code>error</code> 事件<strong>本來就帶 <code>event.target</code></strong>，這條最準（Day 20 已在收）</li>
+      <li><strong>fetch／XHR 失敗</strong> → 記錄發起當下的 <code>document.activeElement</code> 與最後一次使用者互動的元素；<strong>rrweb 的互動軌跡已經有這筆資料</strong>，可直接對應節點</li>
+      <li><strong>真的抓不到元素</strong>（setTimeout、模組頂層、Promise 鏈深處）→ 見下方「Unassigned」</li>
+    </ul>
+    <p><strong>必須有一個 <code>Unassigned</code>（全域）zone</strong>，並在 <code>get_zone_health</code> 的 summary 裡如實回報數量。歸不了類的 error 若默默消失，畫面上會是一片令人安心的綠——<strong>那正是最危險的失敗模式</strong>：AI 看到全綠就跳過，而真正的 Critical 就藏在被吞掉的那幾筆裡。</p>
+  </div>
+
+  <div class="sub-title">§15.4　Zone 健康時間軸</div>
+  <div class="wire">Cart Zone：
+  10:00 ✅ → 10:05 ✅ → 10:10 🔴 → 10:15 🔴 → 10:20 ✅（修好了）
+  「10:10 開始出問題，與 10:09 的程式碼變更相關」
+
+Header Zone：
+  一直 ✅
+  「不用查，省 token」</div>
+  <div class="ok-box">
+    <div class="ok-box-title">AI 可以比對時間線</div>
+    <p><strong>程式碼部署時間 ＋ Zone 狀態變化 ＝ 自動定位哪次改動引入了 bug</strong></p>
+  </div>
+
+  <div class="sub-title">§15.5　視覺化 — 半透明網格覆蓋層</div>
+  <p style="font-size:12px;color:var(--text-dim)">AI 自動偵測模式啟動時，頁面上出現覆蓋層：</p>
+  <div class="zone-mock">
+    <div class="zg zg-ok" style="grid-column:1/-1"><span class="zg-name">Header</span><span class="zg-badge zg-ok-b">✅</span></div>
+    <div class="zg zg-ok" style="grid-column:1/-1"><span class="zg-name">Navigation</span><span class="zg-badge zg-ok-b">✅</span></div>
+    <div class="zg zg-warn"><span class="zg-name">Sidebar</span><span class="zg-badge zg-warn-b">🟡 ×1</span></div>
+    <div class="zg zg-ok"><span class="zg-name">Product List</span><span class="zg-badge zg-ok-b">✅</span></div>
+    <div class="zg zg-err"><span class="zg-name">Cart</span><span class="zg-badge zg-err-b">🔴 ×2</span></div>
+    <div class="zg zg-unk"><span class="zg-name">Chat Widget</span><span class="zg-badge zg-unk-b">⚫</span></div>
+    <div class="zg zg-ok" style="grid-column:1/-1"><span class="zg-name">Footer</span><span class="zg-badge zg-ok-b">✅</span></div>
+  </div>
+  <div class="mem-lbl">每個 Zone 有</div>
+  <ul>
+    <li><strong>半透明邊框</strong>（正常＝綠色淡、異常＝<span class="hl-red">紅色閃爍</span>）</li>
+    <li><strong>左上角</strong>區域名稱標籤</li>
+    <li><strong>右上角</strong>錯誤數量 badge（<span class="hl-red">🔴 ×2</span>）</li>
+    <li><strong>點擊可展開</strong>該區域的錯誤詳情</li>
+  </ul>
+
+  <div class="mem-lbl">覆蓋層不影響頁面操作</div>
+  <div class="wire">pointer-events: none（預設）
+用戶可切換：顯示 / 隱藏覆蓋層
+AI 偵測時自動顯示，偵測完可自動隱藏</div>
+
+  <div class="rule-box">
+    <div class="rule-box-title">🔴 兩處實作矛盾</div>
+    <p><strong>① <code>pointer-events:none</code> 與「點擊可展開錯誤詳情」直接互斥。</strong>整層設 <code>none</code> 就收不到任何點擊。正解是<strong>兩層</strong>：外層容器 <code>pointer-events:none</code>（讓點擊穿透到頁面），只有<strong>名稱標籤與 badge</strong> 設 <code>pointer-events:auto</code>。這樣頁面照常操作，而那兩顆小元件仍可點——但要留意它們會<strong>擋住底下同位置的頁面元素</strong>，所以要放在 zone 角落並允許使用者關閉。</p>
+    <p><strong>② 覆蓋層必須用 DOM API 建，不能用 <code>innerHTML</code>。</strong>啟用 Trusted Types 的網站（越來越多）會直接擋掉字串賦值，覆蓋層整個不出現且只在頁面 console 留一行錯誤——<strong>看起來就像功能壞了但查不出原因</strong>。本專案 PM-69 已踩過同一個坑（見 <code>ARCHITECTURE.md</code>）。同理，樣式要用 <code>style</code> 屬性或 <code>CSSStyleSheet</code>，不要注入 <code>&lt;style&gt;</code> 字串。</p>
+  </div>
+
+  <div class="sub-title">§15.6　與圖釘的協作</div>
+  <div class="wire">Zone Grid 找到目標 → 自動在問題區域放圖釘 → 深度分析
+
+AI 自動流程：
+  1. map_page_zones  → 分析頁面結構
+  2. watch_zones     → 持續監控
+  3. Cart Zone 變 🔴 →
+  4. AI 自動呼叫 pin_analyze('section.cart') → 深度分析
+  5. 找到根因 → 提出修復建議
+
+= 網格負責「哪裡有問題」
+= 圖釘負責「問題是什麼」
+= 完美分工</div>
+
+  <div class="sub-title">§15.7　MCP 工具</div>
+  <table>
+    <tr><th>工具</th><th>作用</th><th>回傳</th></tr>
+    <tr><td><code>map_page_zones(tab_id?)</code></td><td>自動分析 DOM → 回傳 zone 列表</td><td><code>[{ zone_id, name, selector, element_count }]</code></td></tr>
+    <tr><td><code>get_zone_health(tab_id?)</code></td><td>所有 zone 的健康狀態</td><td><code>{ zones: [...], summary: { healthy: 5, warning: 1, error: 1 } }</code></td></tr>
+    <tr><td><code>get_zone_errors(zone_id, tab_id?)</code></td><td>某個 zone 的詳細錯誤</td><td><code>{ zone: 'Cart', errors: [...], network_fails: [...] }</code></td></tr>
+    <tr><td><code>get_zone_timeline(zone_id, tab_id?)</code></td><td>某個 zone 的健康時間軸</td><td><code>[{ time, status, event }]</code></td></tr>
+    <tr><td><code>watch_zones(tab_id?)</code></td><td>持續監控所有 zone</td><td>zone 狀態改變時通知 AI（透過<strong>下次 MCP 呼叫</strong>回傳）</td></tr>
+  </table>
+  <div class="ok-box">
+    <div class="ok-box-title">✅ 兩處與既有慣例相符，實作時別改掉</div>
+    <p><strong>① 五支工具都帶 <code>tab_id?</code></strong>，語意同 <a href="#s13" style="color:var(--cyan)">§13.3</a>（省略＝當前分頁）。</p>
+    <p><strong>② <code>watch_zones</code> 明確走「下次呼叫時回傳」＝ Pull 模式</strong>，符合 <code>CLAUDE.md</code>「MCP 用 Pull 模式（按需查詢），不要一次推送全量資料」。MCP 協定本來也沒有 server 主動推播給模型的通道。</p>
+    <p class="hl-orange">⚠ 同 <a href="#s5" style="color:var(--cyan)">§5 監控類</a>：<code>watch_zones</code> 是<strong>有狀態</strong>的，每個分頁各自一份，分頁關閉時要自動收斂。</p>
+  </div>
+  <p style="font-size:11px;color:var(--text-dim)">📌 <strong>工具總數連動</strong>：既有 13 ＋ v2 新增 17 ＋ 記憶 13 ＋ Zone <strong>5</strong> ＝ <span class="hl">48 個</span>（<code>get_live_errors</code> 不重複計）。</p>
+
+  <div class="sub-title">§15.8　與 Bug 嚴重度（§6）整合</div>
+  <div class="wire">Zone 嚴重度繼承最高等級的 error：
+  Cart Zone 有 1 個 🔴 Critical + 2 個 🟡 Minor
+  → Zone 整體 = 🔴 Critical</div>
+  <table>
+    <tr><th>Zone 狀態</th><th>AI 行為</th></tr>
+    <tr><td><span class="hl-red">🔴 Zone</span></td><td><strong>立即停下來</strong>分析這個 Zone</td></tr>
+    <tr><td><span class="hl">🟡 Zone</span></td><td>記錄，階段完成後再看</td></tr>
+    <tr><td><span class="hl-green">✅ Zone</span></td><td><strong>跳過，省 token</strong></td></tr>
+  </table>
+  <p style="font-size:11px;color:var(--text-dim)">📌 <strong>「✅ 就跳過」是整個 Zone Grid 省 token 的來源，也正因如此，§15.3 那個 <code>Unassigned</code> zone 不能省</strong>——歸不了類的 error 一旦被吞掉，AI 會理直氣壯地跳過一個其實有問題的頁面。</p>
+
+  <div class="sub-title">§15.9　開發順序</div>
+  <table>
+    <tr><th>卡片</th><th>內容</th></tr>
+    <tr><td class="hl">PM-X</td><td><code>map_page_zones</code> 基礎分區</td></tr>
+    <tr><td class="hl">PM-Y</td><td><code>get_zone_health</code> ＋ error 歸類</td></tr>
+    <tr><td class="hl">PM-Z</td><td>視覺化覆蓋層</td></tr>
+    <tr><td class="hl">PM-W</td><td><code>watch_zones</code> 持續監控</td></tr>
+    <tr><td class="hl">PM-V</td><td>Zone ＋ 圖釘自動協作</td></tr>
+  </table>
+  <p style="font-size:12px;color:var(--text-dim)">歸入 <a href="#s9" style="color:var(--cyan)">§9 Phase 3</a>（在圖釘之後）。</p>
+  <div class="ok-box">
+    <div class="ok-box-title">建議 PM-Y 先做完 error 歸類再做 PM-Z</div>
+    <p><a href="#s15" style="color:var(--cyan)">§15.3</a> 的歸類機制是整個 Zone Grid 的地基：<code>get_zone_health</code>、覆蓋層的 badge、<code>watch_zones</code> 的狀態變化、§15.8 的「✅ 就跳過」<strong>全部建立在「這個 error 屬於哪個 zone」之上</strong>。歸類若不準，後面四張卡做出來的東西會一致地錯，而且從畫面上看不出來。</p>
+  </div>
+</div>
+
 </div>
 
 <div class="footer">
-  BugEzy v2/v3 產品規格書 · v0.7 · 2026-08-16 · FOX + Claude<br>
+  BugEzy v2/v3 產品規格書 · v0.8 · 2026-08-16 · FOX + Claude<br>
   程式 &gt; ARCHITECTURE.md &gt; 本文
 </div>
 

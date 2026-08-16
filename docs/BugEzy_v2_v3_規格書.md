@@ -131,7 +131,7 @@ BugEzy Extension
 
 > 📌 **所有操作類／偵測類／圖釘類／監控類工具都帶可選的 `tab_id?: number`**：省略 → 當前分頁（§13.1 偵察模式）；指定 → 只作用於該分頁（§13.2 出任務模式）。
 >
-> 適用範圍：**操作類 5 個、偵測類 4 個、圖釘類 3 個、監控類 3 個，共 15 個工具**（2026-08-15 定案，圖釘／監控由 PM-301 補上）。唯一例外是 `get_live_errors(source='cache')`——它讀的是已上傳的歷史報告，與分頁無關。
+> 適用範圍：**操作類 5 個、偵測類 4 個、圖釘類 3 個、監控類 3 個，共 15 個工具**（2026-08-15 定案，圖釘／監控由 PM-301 補上）；§15 的 5 個 Zone 工具同樣適用。唯一例外是 `get_live_errors(source='cache')`——它讀的是已上傳的歷史報告，與分頁無關。
 
 ### 瀏覽器操作類
 
@@ -280,7 +280,8 @@ BugEzy Extension
 ## §9 開發順序
 
 ### Phase 1：bugezy-bridge + 基礎 MCP 工具
-- **PM-A**：bugezy-bridge 骨架（localhost MCP + Native Messaging）
+- **PM-A**：bugezy-bridge 骨架（localhost MCP ＋ ~~Native Messaging~~ → **改為 localhost WebSocket**）**✅ 已完成（PM-297~299）**
+  - 最終未採用 Native Messaging（需 `nativeMessaging` 權限＝重新審核＋各 OS 註冊 host manifest），改用 localhost WebSocket，**不需任何新權限**。§3 與附錄 A-3 仍描述舊方案，待另開卡片更新。
 - **PM-B**：Extension 接收 bridge 指令
 - **PM-B2**：**方案等級判斷雛形** —— 決策 3 使 v2 工具必須擋住票券／日票用戶，`isActiveUserId` 需回傳等級而非布林值（見 A-5）
 - **PM-C**：MCP 第一批（`navigate_to` / `click_element` / `read_page` / `get_live_errors(source='browser')`）✅ 命名已定案
@@ -291,10 +292,15 @@ BugEzy Extension
 - **PM-F**：`pin_analyze` MCP 工具
 - **PM-G**：圖釘巡察模式（多圖釘順序檢查）
 
-### Phase 3：視覺化
+### Phase 3：視覺化 ＋ Zone Grid
 - **PM-H**：藍框巡察動畫
 - **PM-I**：圖釘狀態顏色
 - **PM-J**：右下角即時面板
+- **PM-X**：`map_page_zones` 基礎分區（§15）
+- **PM-Y**：`get_zone_health` ＋ error 歸類 ← **Zone Grid 的地基，需先換掉 stack-trace 反推做法（§15.3）**
+- **PM-Z**：視覺化覆蓋層
+- **PM-W**：`watch_zones` 持續監控
+- **PM-V**：Zone ＋ 圖釘自動協作
 
 ### Phase 4：雲端模式
 - **PM-K**：WebSocket 通道（Durable Objects）
@@ -322,6 +328,7 @@ BugEzy Extension
 | 2026-08-15 | **v0.5** | 圖釘類／監控類**也加可選 `tab_id`**（共 15 個工具）；補有狀態工具的分頁隔離與收斂規則 |
 | 2026-08-16 | **v0.6** | **新增 §14 The Octa-Memory Matrix（八層記憶矩陣）**：L1~L8、7 個 `memory_*` 工具、自動學習循環、Phase A~D；**依 §5 決策 2 去掉原稿的 `bugezy:` 前綴** |
 | 2026-08-16 | **v0.7** | **決策 4~6 定案**（記憶混合式儲存／L1 兩層式共享／BugEzy 不碰使用者程式碼）；**新增 §14.12 記憶管理**：CRUD 工具 +6（記憶層共 13、全站 43）、多專案 `.bugezy/` 隔離、容量與智慧淘汰、匯出匯入 |
+| 2026-08-16 | **v0.8** | **新增 §15 Zone Grid 空間座標系統**：智慧分區規則、Zone 健康狀態與時間軸、覆蓋層、與圖釘／嚴重度整合、5 個 `zone` 工具（全站 **48 個**）；§9 Phase 3 納入 Zone Grid |
 
 ---
 
@@ -525,7 +532,7 @@ AI 修好 code → 自動發 PR → 完美的 commit message → 自動標記 @M
 | **自動守衛** | `memory_perf_check(metrics)` | **L7** 效能比對 |
 | **自動守衛** | `memory_biz_validate(output)` | **L4** 商業邏輯驗證 |
 
-📌 §14.12.1 再加 6 個管理工具（update／delete／list／clear／export／import）→ 記憶層共 **13 個**，全站合計 **43 個**（`get_live_errors` 不重複計）。
+📌 §14.12.1 再加 6 個管理工具（update／delete／list／clear／export／import）→ 記憶層共 **13 個**；連同 §15 Zone 5 個，全站合計 **48 個**（`get_live_errors` 不重複計）。
 
 ### §14.10 自動學習循環
 
@@ -617,7 +624,7 @@ BugEzy 永遠不碰用戶程式碼
 | `memory_export()` | 匯出整個 `.bugezy/` | **新增** |
 | `memory_import(path)` | 匯入 | **新增** |
 
-📌 **工具總數連動**：既有 13 ＋ v2 新增 17 ＋ 記憶 **7 ＋ 6 ＝ 13** ＝ **43 個**（`get_live_errors` 不重複計）。§14.9 的另外 5 個（`memory_learn` / `memory_get` / `memory_audit` / `memory_perf_check` / `memory_biz_validate`）不變。
+📌 **工具總數連動**：既有 13 ＋ v2 新增 17 ＋ 記憶 **7 ＋ 6 ＝ 13** ＝ 43 個；再加 §15 Zone 5 個 ＝ **48 個**（`get_live_errors` 不重複計）。§14.9 的另外 5 個（`memory_learn` / `memory_get` / `memory_audit` / `memory_perf_check` / `memory_biz_validate`）不變。
 
 > ✅ **`memory_import` 會寫檔，但不牴觸決策 6。** 決策 6 的界線是**「不碰使用者的程式碼」**，不是「完全不寫檔」。`memory_import` 只寫進 `.bugezy/`——那是 BugEzy 自己的目錄，且是使用者主動下指令要求的。**專案原始碼一個位元組都不會動。**
 
@@ -769,10 +776,207 @@ B 專案也接 Stripe             → 搜尋時從雲端撈到
 
 ---
 
+## §15 Zone Grid — AI 的空間座標系統
+
+### §15.1 為什麼需要
+
+```
+圖釘（§7）  = 人指路，AI 去查  → 人機合作
+Zone Grid   = AI 自己有地圖    → AI 自驅動
+
+第三層：人放圖釘   → AI 偵測         （被動）
+第四層：AI 自己切格子 → 自己掃描 → 自己找到問題（主動）
+```
+
+- ✗ **沒有 Zone Grid** → AI 收到 error 只知道「頁面有問題」
+- ✓ **有 Zone Grid** → AI 知道「Cart 區域的第三個按鈕有問題」
+
+### §15.2 智慧分區邏輯（不是固定切格子）
+
+按 **DOM 語意結構**自動分區：
+
+```
+<header>             → Zone: Header
+<nav>                → Zone: Navigation
+<main>
+  <aside>            → Zone: Sidebar
+  <section.products> → Zone: Product List
+  <section.cart>     → Zone: Cart
+<footer>             → Zone: Footer
+<div.chat-widget>    → Zone: Chat Widget
+```
+
+**分區規則（依序套用，先命中先算）**
+
+| # | 依據 | 範例 |
+|---|---|---|
+| 1 | **HTML5 語意標籤** | `header` / `nav` / `main` / `aside` / `footer` / `section` / `article` |
+| 2 | `role` 屬性 | `role="banner"` / `"navigation"` / `"main"` |
+| 3 | class／id 命名推測 | `.sidebar` / `.cart` / `.footer` |
+| 4 | **視覺位置**（前三項都沒命中時）| viewport 分象限 |
+
+每個 zone **自動命名 ＋ 記錄 CSS selector**。
+
+> ⚠ **SPA 換頁後整張地圖會失效。** 規則 1~3 讀的都是**當下的 DOM**。React／Vue 路由切換後 `<main>` 底下整批換掉，舊的 `zone_id` 與 selector 全部指向不存在的節點——`watch_zones` 會安靜地監控一組已經消失的區域，回報「一切正常」。
+>
+> **必須在 DOM 大幅變動時重新分區**（`MutationObserver` ＋ History API 攔截，兩者本專案的 `inject.ts` 都已具備）。重新分區時 `zone_id` 應盡量沿用同名 zone，否則 §15.4 的時間軸會在每次換頁斷成兩截。
+
+### §15.3 Zone 健康狀態
+
+| 狀態 | 條件 |
+|---|---|
+| ✅ **Healthy** | 零錯誤 |
+| 🟡 **Warning** | 有 `console.warn` 或效能警告 |
+| 🔴 **Error** | 有 uncaught error 或 network fail |
+| ⚫ **Unknown** | 尚未掃描 |
+
+**Error 歸類邏輯**
+
+```
+Console error 的 stack trace  → 找到觸發的 DOM 元素 → 反查屬於哪個 Zone
+Network fail 的觸發源         → 找到發起 fetch 的元素 → 反查 Zone
+
+= 每個 error 都有「地址」
+```
+
+> 🔴 **這是 §15 唯一做不出來的一段，實作前必須換做法**
+>
+> **stack trace 裡沒有 DOM 元素。** 它給的是 `檔名:行:列` 與函式名，瀏覽器不提供任何「這個 stack frame 對應哪個節點」的 API。同理，`fetch()` 也沒有「發起它的元素」這種欄位——它就是一個全域函式呼叫。**照字面實作會得到一個永遠回 `null` 的歸類器。**
+>
+> **改成在「錯誤發生的當下」抓現場，而不是事後從 stack 反推**：
+>
+> - **事件處理器內的錯誤** → 攔截時記下正在派送的事件 `event.target`（本專案 `inject.ts` 已在 MAIN world 攔 console 與網路，加掛即可）
+> - **資源載入失敗**（`<img>`／`<script>`）→ capture 階段的 `error` 事件**本來就帶 `event.target`**，這條最準（Day 20 已在收）
+> - **fetch／XHR 失敗** → 記錄發起當下的 `document.activeElement` 與最後一次使用者互動的元素；**rrweb 的互動軌跡已經有這筆資料**，可直接對應節點
+> - **真的抓不到元素**（setTimeout、模組頂層、Promise 鏈深處）→ 見下方 Unassigned
+>
+> **必須有一個 `Unassigned`（全域）zone**，並在 `get_zone_health` 的 summary 裡如實回報數量。歸不了類的 error 若默默消失，畫面上會是一片令人安心的綠——**那正是最危險的失敗模式**：AI 看到全綠就跳過，而真正的 Critical 就藏在被吞掉的那幾筆裡。
+
+### §15.4 Zone 健康時間軸
+
+```
+Cart Zone：
+  10:00 ✅ → 10:05 ✅ → 10:10 🔴 → 10:15 🔴 → 10:20 ✅（修好了）
+  「10:10 開始出問題，與 10:09 的程式碼變更相關」
+
+Header Zone：
+  一直 ✅
+  「不用查，省 token」
+```
+
+**AI 可以比對時間線**：程式碼部署時間 ＋ Zone 狀態變化 ＝ 自動定位哪次改動引入了 bug。
+
+### §15.5 視覺化 — 半透明網格覆蓋層
+
+AI 自動偵測模式啟動時，頁面上出現覆蓋層：
+
+```
+┌────────────────────────────────────────────┐
+│ Header                                  ✅ │
+├────────────────────────────────────────────┤
+│ Navigation                              ✅ │
+├──────────────┬──────────────┬──────────────┤
+│ Sidebar   🟡×1│ Product List ✅│ Cart    🔴×2│
+├──────────────┴──────────────┴──────────────┤
+│ Chat Widget                              ⚫ │
+├────────────────────────────────────────────┤
+│ Footer                                  ✅ │
+└────────────────────────────────────────────┘
+```
+
+**每個 Zone 有**
+
+- **半透明邊框**（正常＝綠色淡、異常＝紅色閃爍）
+- **左上角**區域名稱標籤
+- **右上角**錯誤數量 badge（🔴 ×2）
+- **點擊可展開**該區域的錯誤詳情
+
+**覆蓋層不影響頁面操作**
+
+```
+pointer-events: none（預設）
+用戶可切換：顯示 / 隱藏覆蓋層
+AI 偵測時自動顯示，偵測完可自動隱藏
+```
+
+> 🔴 **兩處實作矛盾**
+>
+> **① `pointer-events:none` 與「點擊可展開錯誤詳情」直接互斥。** 整層設 `none` 就收不到任何點擊。正解是**兩層**：外層容器 `pointer-events:none`（讓點擊穿透到頁面），只有**名稱標籤與 badge** 設 `pointer-events:auto`。這樣頁面照常操作，而那兩顆小元件仍可點——但要留意它們會**擋住底下同位置的頁面元素**，所以要放在 zone 角落並允許使用者關閉。
+>
+> **② 覆蓋層必須用 DOM API 建，不能用 `innerHTML`。** 啟用 Trusted Types 的網站（越來越多）會直接擋掉字串賦值，覆蓋層整個不出現且只在頁面 console 留一行錯誤——**看起來就像功能壞了但查不出原因**。本專案 PM-69 已踩過同一個坑（見 `ARCHITECTURE.md`）。同理，樣式要用 `style` 屬性或 `CSSStyleSheet`，不要注入 `<style>` 字串。
+
+### §15.6 與圖釘的協作
+
+```
+Zone Grid 找到目標 → 自動在問題區域放圖釘 → 深度分析
+
+AI 自動流程：
+  1. map_page_zones  → 分析頁面結構
+  2. watch_zones     → 持續監控
+  3. Cart Zone 變 🔴 →
+  4. AI 自動呼叫 pin_analyze('section.cart') → 深度分析
+  5. 找到根因 → 提出修復建議
+
+= 網格負責「哪裡有問題」
+= 圖釘負責「問題是什麼」
+= 完美分工
+```
+
+### §15.7 MCP 工具
+
+| 工具 | 作用 | 回傳 |
+|---|---|---|
+| `map_page_zones(tab_id?)` | 自動分析 DOM → 回傳 zone 列表 | `[{ zone_id, name, selector, element_count }]` |
+| `get_zone_health(tab_id?)` | 所有 zone 的健康狀態 | `{ zones: [...], summary: { healthy: 5, warning: 1, error: 1 } }` |
+| `get_zone_errors(zone_id, tab_id?)` | 某個 zone 的詳細錯誤 | `{ zone: 'Cart', errors: [...], network_fails: [...] }` |
+| `get_zone_timeline(zone_id, tab_id?)` | 某個 zone 的健康時間軸 | `[{ time, status, event }]` |
+| `watch_zones(tab_id?)` | 持續監控所有 zone | zone 狀態改變時通知 AI（透過**下次 MCP 呼叫**回傳）|
+
+> ✅ **兩處與既有慣例相符，實作時別改掉**
+>
+> **①** 五支工具都帶 `tab_id?`，語意同 §13.3（省略＝當前分頁）。
+> **②** `watch_zones` 明確走「下次呼叫時回傳」＝ **Pull 模式**，符合 `CLAUDE.md`「MCP 用 Pull 模式（按需查詢），不要一次推送全量資料」。MCP 協定本來也沒有 server 主動推播給模型的通道。
+>
+> ⚠ 同 §5 監控類：`watch_zones` 是**有狀態**的，每個分頁各自一份，分頁關閉時要自動收斂。
+
+📌 **工具總數連動**：既有 13 ＋ v2 新增 17 ＋ 記憶 13 ＋ Zone **5** ＝ **48 個**（`get_live_errors` 不重複計）。
+
+### §15.8 與 Bug 嚴重度（§6）整合
+
+```
+Zone 嚴重度繼承最高等級的 error：
+  Cart Zone 有 1 個 🔴 Critical + 2 個 🟡 Minor
+  → Zone 整體 = 🔴 Critical
+```
+
+| Zone 狀態 | AI 行為 |
+|---|---|
+| 🔴 Zone | **立即停下來**分析這個 Zone |
+| 🟡 Zone | 記錄，階段完成後再看 |
+| ✅ Zone | **跳過，省 token** |
+
+📌 **「✅ 就跳過」是整個 Zone Grid 省 token 的來源，也正因如此，§15.3 那個 `Unassigned` zone 不能省**——歸不了類的 error 一旦被吞掉，AI 會理直氣壯地跳過一個其實有問題的頁面。
+
+### §15.9 開發順序
+
+歸入 **§9 Phase 3**（在圖釘之後）：
+
+| 卡片 | 內容 |
+|---|---|
+| **PM-X** | `map_page_zones` 基礎分區 |
+| **PM-Y** | `get_zone_health` ＋ error 歸類 |
+| **PM-Z** | 視覺化覆蓋層 |
+| **PM-W** | `watch_zones` 持續監控 |
+| **PM-V** | Zone ＋ 圖釘自動協作 |
+
+> **建議 PM-Y 先做完 error 歸類再做 PM-Z。** §15.3 的歸類機制是整個 Zone Grid 的地基：`get_zone_health`、覆蓋層的 badge、`watch_zones` 的狀態變化、§15.8 的「✅ 就跳過」**全部建立在「這個 error 屬於哪個 zone」之上**。歸類若不準，後面四張卡做出來的東西會一致地錯，而且從畫面上看不出來。
+
+---
+
 # 附錄 A：實作註記（對照現有程式碼的查證）
 
 > 以下是撰寫本文件時**實際比對 `server/src/index.ts`、`extension/manifest.json` 與現行方案設定**得到的結果。
-> §1~§14 是願景；這裡是動工前必須先知道的現實條件。**開 Phase 1 的卡片前請先讀完這一節。**
+> §1~§15 是願景；這裡是動工前必須先知道的現實條件。**開 Phase 1 的卡片前請先讀完這一節。**
 
 ## A-1　`get_live_errors` 的兩種模式　✅ **已定案（2026-08-15）**
 
@@ -797,7 +1001,7 @@ get_live_errors(source='browser')  → v2 新增，即時讀瀏覽器 Console／
 
 **理由**：MCP 用戶端通常已用 server 名稱作命名空間，工具名再加 `bugezy:` 會出現 `bugezy - bugezy:navigate` 這種重複。
 
-v2 完成後 MCP 共 **13 + 17 = 30 個工具**（`get_live_errors` 不重複計）。
+v2 完成後 MCP 共 **13 + 17 = 30 個工具**。再加上 §14.12 記憶層 13 個與 §15 Zone 5 個，**全部完成後合計 48 個**（`get_live_errors` 不重複計）。
 
 ## A-3　`npm install -g bugezy-bridge` **不足以**接通 Native Messaging
 
