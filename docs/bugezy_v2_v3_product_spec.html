@@ -117,7 +117,7 @@ details .details-body{padding:4px 18px 18px}
   <div>
     <div class="header-title">BugEzy v2/v3 產品規格書</div>
     <div class="header-sub">From Bug Reporter to AI Debug Partner · FOX + Claude 共同規劃</div>
-    <div class="header-date">📌 v0.8 · 2026-08-16 · +§14 記憶矩陣 · +§15 Zone Grid · 程式 &gt; ARCHITECTURE.md &gt; 本文</div>
+    <div class="header-date">📌 v0.9 · 2026-08-16 · §3 改為 localhost WebSocket（與實作一致） · 程式 &gt; ARCHITECTURE.md &gt; 本文</div>
   </div>
 </div>
 
@@ -160,7 +160,7 @@ details .details-body{padding:4px 18px 18px}
     <div class="card-title"><span class="tag tag-v2">v2</span> 近期 — 定位：AI Debug Partner</div>
     <ul>
       <li>圖釘標注系統</li>
-      <li>bugezy-bridge（Native Messaging 極速模式）</li>
+      <li>bugezy-bridge（localhost WebSocket 極速模式）</li>
       <li>雲端模式（WebSocket 備用）</li>
       <li>MCP 新增即時操作工具（navigate / click / readPage / analyzeElement）</li>
       <li>MCP 新增即時偵測工具（getLiveErrors / getNetworkFails / getPageHealth）</li>
@@ -228,28 +228,55 @@ details .details-body{padding:4px 18px 18px}
 
   <div class="wire">任何 AI（Claude / ChatGPT / Cursor / Gemini）
     │
-    MCP 標準協議
+    MCP 標準協議（stdio）
     │
 bugezy-bridge（localhost Node.js）
     │
-    Chrome Native Messaging
+    localhost WebSocket（ws://127.0.0.1:19850）
     │
-BugEzy Extension（content.ts）
+BugEzy Extension — background.ts（Service Worker）
+    │
+    chrome.tabs.sendMessage
+    │
+content.ts
     │
     目標網頁</div>
 
+  <div class="ok-box">
+    <div class="ok-box-title">✅ 已定案（PM-297~299）：棄用 Native Messaging，改用 localhost WebSocket</div>
+    <p><strong>本節原本描述的是 Native Messaging 方案，已於 PM-297 改掉並實作完成、PM-298~299 通過真實 Chrome 驗收。</strong>被棄用的理由（原方案的完整代價保留在 <a href="#s12" style="color:var(--cyan)">§12 A-3</a> 作為歷史紀錄）：</p>
+    <table>
+      <tr><th></th><th>Native Messaging</th><th>localhost WebSocket</th></tr>
+      <tr><td>Chrome 權限</td><td class="hl-red">需 <code>nativeMessaging</code> → <strong>觸發 CWS 重新審核</strong>（v1.1.5 才因宣告了未使用的 <code>scripting</code> 權限被退件過）</td><td class="hl-green">✅ <strong>不需任何新權限</strong>（連 localhost 本來就允許）</td></tr>
+      <tr><td>OS 層級設定</td><td class="hl-red">需各 OS 註冊 host manifest：Windows 登錄檔／macOS／Linux <strong>三條不同的路</strong></td><td class="hl-green">✅ 無，<code>npm install</code> 就結束</td></tr>
+      <tr><td>跨平台</td><td class="hl-orange">三套安裝與解除安裝邏輯要各自維護</td><td class="hl-green">✅ 完全一致</td></tr>
+      <tr><td>MV3 存活</td><td>—</td><td class="hl-green">✅ <strong>Chrome 116 起 WebSocket 活動會重置 service worker 閒置計時器</strong>，20 秒心跳即為官方認可的保活方式</td></tr>
+    </table>
+  </div>
+
   <div class="sub-title">安裝方式</div>
-  <div class="wire">npm install -g bugezy-bridge</div>
-  <p style="font-size:11px;color:var(--text-dim)">⚠ 這行<strong>不足以</strong>接通 Native Messaging，還需註冊 host manifest 與新增權限 —— 見 <a href="#s12" style="color:var(--cyan)">§12 A-3</a>。</p>
+  <div class="wire">npm install -g bugezy-bridge
+
+# Claude Code
+claude mcp add bugezy-bridge -- bugezy-bridge
+
+# Claude Desktop（claude_desktop_config.json）
+{ "mcpServers": { "bugezy-bridge": { "command": "bugezy-bridge" } } }</div>
+  <p style="font-size:11px;color:var(--text-dim)">✅ <strong>就這樣，沒有第二步。</strong>不需註冊 host manifest、不需改 Extension 權限。AI 工具會自己以 stdio 啟動 bridge，使用者不必手動先跑它。</p>
 
   <div class="sub-title">運作方式</div>
   <ul>
-    <li>bugezy-bridge 跑一個 localhost MCP server</li>
-    <li>透過 Chrome Native Messaging 連接 Extension</li>
+    <li>bugezy-bridge 跑一個 localhost MCP server（<strong>stdio</strong>）</li>
+    <li>透過 <strong>localhost WebSocket</strong>（<code>ws://127.0.0.1:19850</code>）連接 Extension 的 <strong><code>background.ts</code>（Service Worker）</strong>；需要頁面資料時再由它 <code>chrome.tabs.sendMessage</code> 給 <code>content.ts</code></li>
     <li>AI 呼叫 MCP → bridge 轉發給 Extension → 拿結果回傳</li>
-    <li>延遲 <span class="hl-green">&lt; 50ms</span></li>
+    <li>延遲 <span class="hl-green">&lt; 10ms</span><span style="font-size:11px;color:var(--text-dim)">（PM-299 真實 Chrome 實測 <code>ping</code> <strong>2 ms</strong>；PM-297 端到端測試 8~14 ms）</span></li>
+    <li><span class="hl-green">不需任何額外 Chrome 權限</span></li>
     <li>全部在用戶電腦上跑，BugEzy 伺服器成本 = <span class="hl-green">0</span></li>
   </ul>
+  <div class="rule-box">
+    <div class="rule-box-title">⚠ 位址寫 <code>127.0.0.1</code>，不要寫 <code>localhost</code></div>
+    <p><code>localhost</code> 在許多系統上會先解析到 <strong>IPv6 的 <code>::1</code></strong>，而 bridge 綁的是 IPv4 的 <code>127.0.0.1</code>——連線會直接失敗，且錯誤訊息只會說連不上，看不出是位址族群不合。程式碼兩端目前都寫死 <code>127.0.0.1</code>（<code>extension/src/background.ts</code> 的 <code>BRIDGE_URL</code>、<code>bridge/src/extension-link.ts</code> 的 <code>host</code>），文件請保持一致。</p>
+  </div>
 </div>
 
 <!-- ══════════ §4 ══════════ -->
@@ -448,7 +475,7 @@ BugEzy Extension
   <div class="sub-title">與 Claude in Chrome 的差異</div>
   <table>
     <tr><th></th><th>Claude in Chrome</th><th>BugEzy MCP</th></tr>
-    <tr><td>操作速度</td><td>~500ms</td><td class="hl-green">極速 &lt;50ms / 雲端 ~200ms</td></tr>
+    <tr><td>操作速度</td><td>~500ms</td><td class="hl-green">極速 &lt;10ms<span style="font-size:10px">（實測 2ms）</span> / 雲端 ~200ms</td></tr>
     <tr><td>讀 DOM</td><td>截圖（貴）</td><td class="hl-green">文字（省 95%）</td></tr>
     <tr><td>Console errors</td><td class="hl-red">❌ 看不到</td><td class="hl-green">✅ 完整攔截</td></tr>
     <tr><td>Network errors</td><td class="hl-red">❌ 看不到</td><td class="hl-green">✅ 完整攔截</td></tr>
@@ -468,7 +495,7 @@ BugEzy Extension
   <div class="card">
     <div class="card-title">Phase 1：bugezy-bridge + 基礎 MCP 工具</div>
     <ul>
-      <li><span class="hl">PM-A</span>：bugezy-bridge 骨架（localhost MCP ＋ <s style="color:var(--text-dim)">Native Messaging</s> → <strong>改為 localhost WebSocket</strong>）<span class="hl-green">✅ 已完成（PM-297~299）</span><br><span style="font-size:11px;color:var(--text-dim)">最終未採用 Native Messaging（需 <code>nativeMessaging</code> 權限＝重新審核＋各 OS 註冊 host manifest），改用 localhost WebSocket，<strong>不需任何新權限</strong>。§3 與 §12 A-3 仍描述舊方案，待另開卡片更新。</span></li>
+      <li><span class="hl">PM-A</span>：bugezy-bridge 骨架（localhost MCP ＋ <s style="color:var(--text-dim)">Native Messaging</s> → <strong>改為 localhost WebSocket</strong>）<span class="hl-green">✅ 已完成（PM-297~299）</span><br><span style="font-size:11px;color:var(--text-dim)">最終未採用 Native Messaging（需 <code>nativeMessaging</code> 權限＝重新審核＋各 OS 註冊 host manifest），改用 localhost WebSocket，<strong>不需任何新權限</strong>。<a href="#s3" style="color:var(--cyan)">§3</a> 已更新為此方案，<a href="#s12" style="color:var(--cyan)">§12 A-3</a> 標為歷史紀錄（PM-305）。</span></li>
       <li><span class="hl">PM-B</span>：Extension 接收 bridge 指令</li>
       <li><span class="hl-orange">PM-B2</span>：<span class="hl-orange">方案等級判斷雛形</span>（決策 3 使 v2 工具必須擋住票券／日票用戶，<code>isActiveUserId</code> 需回傳等級而非布林值）</li>
       <li><span class="hl">PM-C</span>：MCP 第一批（<code>navigate_to</code> / <code>click_element</code> / <code>read_page</code> / <code>get_live_errors(source='browser')</code>）<span class="hl-green">＋ 命名已定案 ✅</span></li>
@@ -636,9 +663,14 @@ Claude 開瀏覽器測  ──►  Extension 掛著（攔截 console/network）<
   </details>
 
   <details open>
-    <summary>A-3　<code>npm install -g bugezy-bridge</code> <strong>不足以</strong>接通 Native Messaging</summary>
+    <summary><s style="color:var(--text-dim)">A-3　<code>npm install -g bugezy-bridge</code> <strong>不足以</strong>接通 Native Messaging</s> <span class="settled-badge">✅ 已過時</span></summary>
     <div class="details-body">
-      <p style="font-size:12px;color:var(--text-dim)">除了裝 CLI，還必須：</p>
+      <div class="ok-box">
+        <div class="ok-box-title">✅ 本節為歷史紀錄，問題已不存在</div>
+        <p>本節描述的是<strong>早期的 Native Messaging 方案</strong>，已於 <strong>PM-297 改用 localhost WebSocket</strong> 並實作完成（PM-298~299 通過真實 Chrome 驗收）。<strong>下列所有代價都不再適用</strong>——現在 <code>npm install -g bugezy-bridge</code> 就是完整的安裝步驟。見 <a href="#s3" style="color:var(--cyan)">§3</a>。</p>
+        <p>內容<strong>保留不刪</strong>：它記錄了「為什麼不選 Native Messaging」的完整理由，日後若有人再提出這個方案，這一節就是答案。</p>
+      </div>
+      <p style="font-size:12px;color:var(--text-dim)">（以下為當時的評估）除了裝 CLI，還必須：</p>
       <ul>
         <li>產生 <strong>native messaging host manifest</strong>（JSON：host 名稱、執行檔路徑、<code>"type": "stdio"</code>）</li>
         <li><code>allowed_origins</code> 填入擴充功能 ID — 本專案已用 manifest <code>key</code> 固定為 <code>chrome-extension://hfnkjlbbpehkflgfbjenfmnmjkdjadcj/</code>（PM-187 起）</li>
@@ -648,10 +680,10 @@ Claude 開瀏覽器測  ──►  Extension 掛著（攔截 console/network）<
           <strong>Linux</strong> <code>~/.config/google-chrome/NativeMessagingHosts/</code></li>
         <li>Extension manifest 加 <strong><code>nativeMessaging</code> 權限</strong></li>
       </ul>
-      <div class="rule-box">
-        <div class="rule-box-title">⚠ 這會影響上架</div>
-        <p>新增 <code>nativeMessaging</code> 權限<strong>必然觸發 Chrome Web Store 重新審核</strong>，且要同步更新 Dashboard 與 <code>/privacy</code>（ARCHITECTURE §4-12、§4-15）。<strong>v1.1.5 已因權限問題被退件過一次。</strong></p>
-        <p>→ <strong>PM-A 的範圍必須包含「安裝後自動註冊 host manifest」與「解除安裝時清除」</strong>，而不只是發一個 npm 套件。</p>
+      <div class="ok-box">
+        <div class="ok-box-title">✅ 這個上架風險已經解除</div>
+        <p>當時的顧慮是：新增 <code>nativeMessaging</code> 權限<strong>必然觸發 Chrome Web Store 重新審核</strong>，且要同步更新 Dashboard 與 <code>/privacy</code>（ARCHITECTURE §4-12、§4-15）——而 v1.1.5 才剛因為宣告了未使用的 <code>scripting</code> 權限被退件過。</p>
+        <p><strong>改用 localhost WebSocket 後，Extension 的權限清單完全沒有變動</strong>，不觸發重新審核，也不需要「安裝後自動註冊 host manifest／解除安裝時清除」那一整套跨 OS 邏輯。</p>
       </div>
     </div>
   </details>
@@ -1351,7 +1383,7 @@ AI 自動流程：
 </div>
 
 <div class="footer">
-  BugEzy v2/v3 產品規格書 · v0.8 · 2026-08-16 · FOX + Claude<br>
+  BugEzy v2/v3 產品規格書 · v0.9 · 2026-08-16 · FOX + Claude<br>
   程式 &gt; ARCHITECTURE.md &gt; 本文
 </div>
 

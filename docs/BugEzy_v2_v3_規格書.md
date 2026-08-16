@@ -21,7 +21,7 @@
 
 ### v2（近期）
 - 圖釘標注系統
-- bugezy-bridge（Native Messaging 極速模式）
+- bugezy-bridge（localhost WebSocket 極速模式）
 - 雲端模式（WebSocket 備用）
 - MCP 新增即時操作工具（`navigate_to` / `click_element` / `read_page` / `analyze_element`）
 - MCP 新增即時偵測工具（`get_live_errors(source='browser')` / `get_page_health` / `get_web_vitals`）
@@ -73,29 +73,55 @@
 ```
 任何 AI（Claude / ChatGPT / Cursor / Gemini）
     │
-    MCP 標準協議
+    MCP 標準協議（stdio）
     │
 bugezy-bridge（localhost Node.js）
     │
-    Chrome Native Messaging
+    localhost WebSocket（ws://127.0.0.1:19850）
     │
-BugEzy Extension（content.ts）
+BugEzy Extension — background.ts（Service Worker）
+    │
+    chrome.tabs.sendMessage
+    │
+content.ts
     │
     目標網頁
 ```
+
+> ✅ **已定案（PM-297~299）：棄用 Native Messaging，改用 localhost WebSocket**
+>
+> 本節原本描述的是 Native Messaging 方案，已於 **PM-297 改掉並實作完成**、PM-298~299 通過真實 Chrome 驗收。被棄用的理由（原方案的完整代價保留在附錄 A-3 作為歷史紀錄）：
+>
+> | | Native Messaging | localhost WebSocket |
+> |---|---|---|
+> | Chrome 權限 | 需 `nativeMessaging` → **觸發 CWS 重新審核**（v1.1.5 才因宣告了未使用的 `scripting` 權限被退件過）| ✅ **不需任何新權限**（連 localhost 本來就允許）|
+> | OS 層級設定 | 需各 OS 註冊 host manifest：Windows 登錄檔／macOS／Linux **三條不同的路** | ✅ 無，`npm install` 就結束 |
+> | 跨平台 | 三套安裝與解除安裝邏輯要各自維護 | ✅ 完全一致 |
+> | MV3 存活 | — | ✅ **Chrome 116 起 WebSocket 活動會重置 service worker 閒置計時器**，20 秒心跳即為官方認可的保活方式 |
 
 ### 安裝方式
 
 ```bash
 npm install -g bugezy-bridge
+
+# Claude Code
+claude mcp add bugezy-bridge -- bugezy-bridge
+
+# Claude Desktop（claude_desktop_config.json）
+{ "mcpServers": { "bugezy-bridge": { "command": "bugezy-bridge" } } }
 ```
 
+✅ **就這樣，沒有第二步。** 不需註冊 host manifest、不需改 Extension 權限。AI 工具會自己以 stdio 啟動 bridge，使用者不必手動先跑它。
+
 ### 運作方式
-- bugezy-bridge 跑一個 localhost MCP server
-- 透過 Chrome Native Messaging 連接 Extension
+- bugezy-bridge 跑一個 localhost MCP server（**stdio**）
+- 透過 **localhost WebSocket**（`ws://127.0.0.1:19850`）連接 Extension 的 **`background.ts`（Service Worker）**；需要頁面資料時再由它 `chrome.tabs.sendMessage` 給 `content.ts`
 - AI 呼叫 MCP → bridge 轉發給 Extension → 拿結果回傳
-- 延遲 **< 50ms**
+- 延遲 **< 10ms**（PM-299 真實 Chrome 實測 `ping` **2 ms**；PM-297 端到端測試 8~14 ms）
+- **不需任何額外 Chrome 權限**
 - 全部在用戶電腦上跑，BugEzy 伺服器成本 = 0
+
+> ⚠ **位址寫 `127.0.0.1`，不要寫 `localhost`。** `localhost` 在許多系統上會先解析到 **IPv6 的 `::1`**，而 bridge 綁的是 IPv4 的 `127.0.0.1`——連線會直接失敗，且錯誤訊息只會說連不上，看不出是位址族群不合。程式碼兩端目前都寫死 `127.0.0.1`（`extension/src/background.ts` 的 `BRIDGE_URL`、`bridge/src/extension-link.ts` 的 `host`），文件請保持一致。
 
 ---
 
@@ -264,7 +290,7 @@ BugEzy Extension
 
 | | Claude in Chrome | BugEzy MCP |
 |---|---|---|
-| 操作速度 | ~500ms | 極速 <50ms / 雲端 ~200ms |
+| 操作速度 | ~500ms | 極速 <10ms（實測 2ms）/ 雲端 ~200ms |
 | 讀 DOM | 截圖（貴） | 文字（省 95%）|
 | Console errors | ❌ 看不到 | ✅ 完整攔截 |
 | Network errors | ❌ 看不到 | ✅ 完整攔截 |
@@ -281,7 +307,7 @@ BugEzy Extension
 
 ### Phase 1：bugezy-bridge + 基礎 MCP 工具
 - **PM-A**：bugezy-bridge 骨架（localhost MCP ＋ ~~Native Messaging~~ → **改為 localhost WebSocket**）**✅ 已完成（PM-297~299）**
-  - 最終未採用 Native Messaging（需 `nativeMessaging` 權限＝重新審核＋各 OS 註冊 host manifest），改用 localhost WebSocket，**不需任何新權限**。§3 與附錄 A-3 仍描述舊方案，待另開卡片更新。
+  - 最終未採用 Native Messaging（需 `nativeMessaging` 權限＝重新審核＋各 OS 註冊 host manifest），改用 localhost WebSocket，**不需任何新權限**。§3 已更新為此方案，附錄 A-3 標為歷史紀錄（PM-305）。
 - **PM-B**：Extension 接收 bridge 指令
 - **PM-B2**：**方案等級判斷雛形** —— 決策 3 使 v2 工具必須擋住票券／日票用戶，`isActiveUserId` 需回傳等級而非布林值（見 A-5）
 - **PM-C**：MCP 第一批（`navigate_to` / `click_element` / `read_page` / `get_live_errors(source='browser')`）✅ 命名已定案
@@ -329,6 +355,7 @@ BugEzy Extension
 | 2026-08-16 | **v0.6** | **新增 §14 The Octa-Memory Matrix（八層記憶矩陣）**：L1~L8、7 個 `memory_*` 工具、自動學習循環、Phase A~D；**依 §5 決策 2 去掉原稿的 `bugezy:` 前綴** |
 | 2026-08-16 | **v0.7** | **決策 4~6 定案**（記憶混合式儲存／L1 兩層式共享／BugEzy 不碰使用者程式碼）；**新增 §14.12 記憶管理**：CRUD 工具 +6（記憶層共 13、全站 43）、多專案 `.bugezy/` 隔離、容量與智慧淘汰、匯出匯入 |
 | 2026-08-16 | **v0.8** | **新增 §15 Zone Grid 空間座標系統**：智慧分區規則、Zone 健康狀態與時間軸、覆蓋層、與圖釘／嚴重度整合、5 個 `zone` 工具（全站 **48 個**）；§9 Phase 3 納入 Zone Grid |
+| 2026-08-16 | **v0.9** | **§3 改為 localhost WebSocket**（與 PM-297~299 的實作一致）：架構圖、安裝方式、延遲 <10ms、不需新權限；附錄 A-3 標為歷史紀錄；修正原稿兩處事實錯誤（WebSocket client 在 `background.ts` 非 `content.ts`；位址是 `127.0.0.1` 非 `localhost`）|
 
 ---
 
@@ -1003,9 +1030,13 @@ get_live_errors(source='browser')  → v2 新增，即時讀瀏覽器 Console／
 
 v2 完成後 MCP 共 **13 + 17 = 30 個工具**。再加上 §14.12 記憶層 13 個與 §15 Zone 5 個，**全部完成後合計 48 個**（`get_live_errors` 不重複計）。
 
-## A-3　`npm install -g bugezy-bridge` **不足以**接通 Native Messaging
+## ~~A-3　`npm install -g bugezy-bridge` **不足以**接通 Native Messaging~~　✅ **已過時**
 
-Chrome Native Messaging 除了裝 CLI，還必須：
+> ✅ **本節為歷史紀錄，問題已不存在。** 本節描述的是**早期的 Native Messaging 方案**，已於 **PM-297 改用 localhost WebSocket** 並實作完成（PM-298~299 通過真實 Chrome 驗收）。**下列所有代價都不再適用**——現在 `npm install -g bugezy-bridge` 就是完整的安裝步驟。見 §3。
+>
+> 內容**保留不刪**：它記錄了「為什麼不選 Native Messaging」的完整理由，日後若有人再提出這個方案，這一節就是答案。
+
+（以下為當時的評估）Chrome Native Messaging 除了裝 CLI，還必須：
 
 1. 產生 **native messaging host manifest**（JSON），內含 host 名稱、執行檔路徑、`"type": "stdio"`；
 2. 在 `allowed_origins` 填入 **擴充功能 ID**——本專案已用 manifest `key` 固定為 `chrome-extension://hfnkjlbbpehkflgfbjenfmnmjkdjadcj/`（PM-187 起）；
@@ -1015,9 +1046,11 @@ Chrome Native Messaging 除了裝 CLI，還必須：
    - **Linux**：`~/.config/google-chrome/NativeMessagingHosts/<host名>.json`
 4. Extension 的 `manifest.json` 要加 **`nativeMessaging` 權限**。
 
-**這會影響上架**：新增 `nativeMessaging` 權限必然觸發 Chrome Web Store 重新審核，且需在 Dashboard 與 `/privacy` 補上該權限說明（見 ARCHITECTURE §4-12、§4-15；v1.1.5 已經因權限問題被退件過一次）。
-
-→ **PM-A 的範圍必須包含「安裝後自動註冊 host manifest」與「解除安裝時清除」**，而不只是發一個 npm 套件。
+> ✅ **這個上架風險已經解除**
+>
+> 當時的顧慮是：新增 `nativeMessaging` 權限**必然觸發 Chrome Web Store 重新審核**，且需在 Dashboard 與 `/privacy` 同步揭露權限說明（見 ARCHITECTURE §4-12、§4-15）——而 v1.1.5 才剛因為宣告了未使用的 `scripting` 權限被退件過。
+>
+> **改用 localhost WebSocket 後，Extension 的權限清單完全沒有變動**，不觸發重新審核，也不需要「安裝後自動註冊 host manifest／解除安裝時清除」那一整套跨 OS 邏輯。
 
 ## A-4　Durable Objects 需要 Workers 付費方案
 
