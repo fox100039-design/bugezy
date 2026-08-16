@@ -1720,12 +1720,40 @@ async function isEcpayActiveUserId(userId: string, env: Env): Promise<boolean> {
     : false;
 }
 
+/** PM-321（決策 3 / §12 A-5）：方案等級。v1 功能看 `active`，v2 功能要看 `tier`。 */
+export type UserTier = 'free' | 'ticket' | 'day_pass' | 'pro' | 'max' | 'agent';
+
+/** PM-321：v2（bridge）功能只開放給這些等級——票券／日票只含 v1。 */
+const V2_ALLOWED_TIERS: readonly UserTier[] = ['pro', 'max', 'agent'];
+export function tierAllowsV2(tier: UserTier): boolean {
+  return V2_ALLOWED_TIERS.includes(tier);
+}
+
 // PM-144：以 user_id 查 users 表判斷是否為有效付費用戶（terminal-logs 付費限定用）。
 // PM-266：ECPay 不通過時再查活動票券（ACTIVE 未到期 → 視同付費）。
+// PM-321：改回傳 { active, tier }——v2 工具需要分辨「票券/日票」與「Pro 訂閱」。
+//
+// 🔴 **回傳型別從 boolean 改成物件，所有呼叫端都必須改用 `.active`。**
+//    物件**恆為 truthy**，漏改的 `if (await isActiveUserId(...))` 會變成「永遠通過」，
+//    等於把付費功能免費開放給所有人，而且完全不會報錯。已逐一改完 4 處呼叫端。
+//
 // ⚠ 這支代表「是否享有付費功能」，**不可**用於 ECPay 開通判斷（見 isEcpayActiveUserId）。
-async function isActiveUserId(userId: string, env: Env): Promise<boolean> {
-  if (await isEcpayActiveUserId(userId, env)) return true;
-  return await hasActiveTicket(userId, env);
+async function isActiveUserId(userId: string, env: Env): Promise<{ active: boolean; tier: UserTier }> {
+  const { data } = await supa(env)
+    .from('users')
+    .select('plan, day_pass_expires_at')
+    .eq('user_id', userId)
+    .maybeSingle();
+  const u = (data ?? {}) as { plan?: string | null; day_pass_expires_at?: string | null };
+
+  // ECPay 側：月費 paid / 取消未到期 cancelled → pro；日票未到期 → day_pass
+  if (u.plan === 'paid' || u.plan === 'cancelled') return { active: true, tier: 'pro' };
+  if (u.plan === 'day_pass' && u.day_pass_expires_at && new Date(u.day_pass_expires_at) > new Date()) {
+    return { active: true, tier: 'day_pass' };
+  }
+  // 活動票券（PM-266）：享有 v1 無限錄製，但**不含 v2**
+  if (await hasActiveTicket(userId, env)) return { active: true, tier: 'ticket' };
+  return { active: false, tier: 'free' };
 }
 
 // ── PM-62：產品首頁（GET /）— 一頁式、深色主題、無 JS、RWD（綠界審核 + 客戶訪問用）──
@@ -6024,7 +6052,7 @@ export default {
       if (request.method === 'POST' && path === '/api/terminal-logs') {
         const userId = await getAuthUserId(request, env);
         if (!userId) return json({ error: '請先登入' }, 401);
-        if (!(await isActiveUserId(userId, env))) {
+        if (!(await isActiveUserId(userId, env)).active) {
           return json({ error: '終端機 CLI 為付費功能，請升級' }, 403);
         }
         const data = (await request.json().catch(() => ({}))) as Record<string, unknown>;
@@ -6038,7 +6066,7 @@ export default {
       if (request.method === 'GET' && path === '/api/terminal-logs') {
         const userId = await getAuthUserId(request, env);
         if (!userId) return json({ error: '請先登入' }, 401);
-        if (!(await isActiveUserId(userId, env))) {
+        if (!(await isActiveUserId(userId, env)).active) {
           return json({ error: '終端機 CLI 為付費功能，請升級' }, 403);
         }
         return jsonNoStore(await readTerminalLogs(env, userId));
@@ -6365,7 +6393,7 @@ async function getReport(reportId: string, request: Request, env: Env): Promise<
       );
     }
     // 已登入但非 owner → 須為有效付費會員
-    if (!(await isActiveUserId(userId, env))) {
+    if (!(await isActiveUserId(userId, env)).active) {
       return jsonNoStore(
         { error: 'upgrade_required', message: '升級會員即可閱讀他人分享的報告' },
         403,
@@ -8403,7 +8431,7 @@ function createMcpServer(env: Env): McpServer {
         return txt('session_token 驗證失敗，請確認 token 正確。');
       }
       // PM-162：終端機 CLI 為付費功能——比照 HTTP 端（PM-144）加付費檢查，MCP 端原本漏了
-      if (!(await isActiveUserId(userId, env))) {
+      if (!(await isActiveUserId(userId, env)).active) {
         return txt('終端機 CLI 為付費功能，請至 bugezy.dev 升級後使用。');
       }
       const data = await readTerminalLogs(env, userId);

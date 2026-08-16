@@ -306,12 +306,23 @@ BugEzy Extension
 ## §9 開發順序
 
 ### Phase 1：bugezy-bridge + 基礎 MCP 工具
+
+> ✅ **Phase 1 核心完工（2026-08-16）：bridge 共 11 支工具**
+>
+> `ping` · `get_page_url` · `navigate_to` · `click_element` · `read_page` · `type_text` · `take_screenshot` · `get_browser_errors` · `analyze_element` · `get_web_vitals` · `get_page_health`
+>
+> 除 `take_screenshot` 受 `activeTab` 權限限制外，其餘 10 支**皆已在真實 Chrome 上通過端到端驗收**。剩餘項目：**PM-D2**（bugezy-watch 即時化）。
+
 - **PM-A**：bugezy-bridge 骨架（localhost MCP ＋ ~~Native Messaging~~ → **改為 localhost WebSocket**）**✅ 已完成（PM-297~299）**
   - 最終未採用 Native Messaging（需 `nativeMessaging` 權限＝重新審核＋各 OS 註冊 host manifest），改用 localhost WebSocket，**不需任何新權限**。§3 已更新為此方案，附錄 A-3 標為歷史紀錄（PM-305）。
-- **PM-B**：Extension 接收 bridge 指令
-- **PM-B2**：**方案等級判斷雛形** —— 決策 3 使 v2 工具必須擋住票券／日票用戶，`isActiveUserId` 需回傳等級而非布林值（見 A-5）
-- **PM-C**：MCP 第一批（`navigate_to` / `click_element` / `read_page` / `get_live_errors(source='browser')`）✅ 命名已定案
-- **PM-D**：MCP 第二批（`analyze_element` / `get_page_health` / `take_screenshot` / `get_web_vitals`）
+- **PM-B**：Extension 接收 bridge 指令 **✅ 已完成（PM-307~314）**
+- **PM-B2**：方案等級判斷雛形（`isActiveUserId` 改回傳 `{ active, tier }`）**✅ 已完成（PM-321）**
+  - bridge 端 9 支 v2 工具已套閘門，**預設關閉**（`ENFORCE_TIER_GATE`）——bridge 目前跑在本機、拿不到真實 tier，接上 Workers 後才啟用。
+- **PM-C**：MCP 第一批（`navigate_to` / `click_element` / `read_page` / `type_text` / `get_browser_errors`）**✅ 已完成（PM-307~314）**
+  - 即時錯誤最終定名 `get_browser_errors`；bridge 端舊的 `get_live_errors` 已於 PM-314 移除（雲端 MCP 的同名工具不受影響）。
+- **PM-D**：MCP 第二批（`analyze_element` / `get_page_health` / `take_screenshot` / `get_web_vitals`）**✅ 已完成（PM-315~318）**
+  - `take_screenshot` 程式碼已完成，但受 `activeTab` 權限限制（見 §13.2）；上架版暫不加 `<all_urls>`，開發版 manifest 可全通（PM-322）。
+- **PM-D2**：bugezy-watch 即時化（`start_terminal_monitor` / `get_terminal_live_errors`，見 §11.2）— **待辦**
 
 ### Phase 2：圖釘系統
 - **PM-E**：圖釘 UI（content script 注入 + 釘選元素 + 描述）
@@ -357,6 +368,7 @@ BugEzy Extension
 | 2026-08-16 | **v0.8** | **新增 §15 Zone Grid 空間座標系統**：智慧分區規則、Zone 健康狀態與時間軸、覆蓋層、與圖釘／嚴重度整合、5 個 `zone` 工具（全站 **48 個**）；§9 Phase 3 納入 Zone Grid |
 | 2026-08-16 | **v0.9** | **§3 改為 localhost WebSocket**（與 PM-297~299 的實作一致）：架構圖、安裝方式、延遲 <10ms、不需新權限；附錄 A-3 標為歷史紀錄；修正原稿兩處事實錯誤（WebSocket client 在 `background.ts` 非 `content.ts`；位址是 `127.0.0.1` 非 `localhost`）|
 | 2026-08-16 | **v1.0** | **§13.2 回填 `take_screenshot` 權限實測結論**（三條路都需 `<all_urls>`）＋ FOX 決策（不急上架、1~3 個月維持 v1.1.5）|
+| 2026-08-16 | **v1.1** | **§9 Phase 1 進度更新**：PM-A~D + B2 標為已完成、PM-D2 待辦；bridge 工具總數 11 |
 
 ---
 

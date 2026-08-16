@@ -494,13 +494,18 @@ BugEzy Extension
 
   <div class="card">
     <div class="card-title">Phase 1：bugezy-bridge + 基礎 MCP 工具</div>
+    <div class="ok-box">
+      <div class="ok-box-title">✅ Phase 1 核心完工（2026-08-16）：bridge 共 <strong>11 支工具</strong></div>
+      <p><code>ping</code> · <code>get_page_url</code> · <code>navigate_to</code> · <code>click_element</code> · <code>read_page</code> · <code>type_text</code> · <code>take_screenshot</code> · <code>get_browser_errors</code> · <code>analyze_element</code> · <code>get_web_vitals</code> · <code>get_page_health</code></p>
+      <p>除 <code>take_screenshot</code> 受 <code>activeTab</code> 權限限制外，其餘 10 支<strong>皆已在真實 Chrome 上通過端到端驗收</strong>。剩餘項目：<strong>PM-D2</strong>（bugezy-watch 即時化）。</p>
+    </div>
     <ul>
       <li><span class="hl">PM-A</span>：bugezy-bridge 骨架（localhost MCP ＋ <s style="color:var(--text-dim)">Native Messaging</s> → <strong>改為 localhost WebSocket</strong>）<span class="hl-green">✅ 已完成（PM-297~299）</span><br><span style="font-size:11px;color:var(--text-dim)">最終未採用 Native Messaging（需 <code>nativeMessaging</code> 權限＝重新審核＋各 OS 註冊 host manifest），改用 localhost WebSocket，<strong>不需任何新權限</strong>。<a href="#s3" style="color:var(--cyan)">§3</a> 已更新為此方案，<a href="#s12" style="color:var(--cyan)">§12 A-3</a> 標為歷史紀錄（PM-305）。</span></li>
-      <li><span class="hl">PM-B</span>：Extension 接收 bridge 指令</li>
-      <li><span class="hl-orange">PM-B2</span>：<span class="hl-orange">方案等級判斷雛形</span>（決策 3 使 v2 工具必須擋住票券／日票用戶，<code>isActiveUserId</code> 需回傳等級而非布林值）</li>
-      <li><span class="hl">PM-C</span>：MCP 第一批（<code>navigate_to</code> / <code>click_element</code> / <code>read_page</code> / <code>get_live_errors(source='browser')</code>）<span class="hl-green">＋ 命名已定案 ✅</span></li>
-      <li><span class="hl">PM-D</span>：MCP 第二批（<code>analyze_element</code> / <code>get_page_health</code> / <code>take_screenshot</code> / <code>get_web_vitals</code>）</li>
-      <li><span class="hl-cyan">PM-D2</span>：<span class="hl-cyan">bugezy-watch 即時化</span>（<code>start_terminal_monitor</code> / <code>get_terminal_live_errors</code>，見 §11.2）</li>
+      <li><span class="hl">PM-B</span>：Extension 接收 bridge 指令 <span class="hl-green">✅ 已完成（PM-307~314）</span></li>
+      <li><span class="hl">PM-B2</span>：方案等級判斷雛形（<code>isActiveUserId</code> 改回傳 <code>{ active, tier }</code>）<span class="hl-green">✅ 已完成（PM-321）</span><br><span style="font-size:11px;color:var(--text-dim)">bridge 端 9 支 v2 工具已套閘門，<strong>預設關閉</strong>（<code>ENFORCE_TIER_GATE</code>）——bridge 目前跑在本機、拿不到真實 tier，接上 Workers 後才啟用。</span></li>
+      <li><span class="hl">PM-C</span>：MCP 第一批（<code>navigate_to</code> / <code>click_element</code> / <code>read_page</code> / <code>type_text</code> / <code>get_browser_errors</code>）<span class="hl-green">✅ 已完成（PM-307~314）</span><br><span style="font-size:11px;color:var(--text-dim)">即時錯誤最終定名 <code>get_browser_errors</code>；bridge 端舊的 <code>get_live_errors</code> 已於 PM-314 移除（雲端 MCP 的同名工具不受影響）。</span></li>
+      <li><span class="hl">PM-D</span>：MCP 第二批（<code>analyze_element</code> / <code>get_page_health</code> / <code>take_screenshot</code> / <code>get_web_vitals</code>）<span class="hl-green">✅ 已完成（PM-315~318）</span><br><span style="font-size:11px;color:var(--text-dim)"><code>take_screenshot</code> 程式碼已完成，但受 <code>activeTab</code> 權限限制（見 <a href="#s13" style="color:var(--cyan)">§13.2</a>）；上架版暫不加 <code>&lt;all_urls&gt;</code>，開發版 manifest 可全通（PM-322）。</span></li>
+      <li><span class="hl-cyan">PM-D2</span>：<span class="hl-cyan">bugezy-watch 即時化</span>（<code>start_terminal_monitor</code> / <code>get_terminal_live_errors</code>，見 §11.2）<span class="hl-orange">— 待辦</span></li>
     </ul>
   </div>
 

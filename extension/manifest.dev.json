@@ -1,0 +1,5 @@
+{
+  "_comment": "PM-322：開發版差異，只在 DEV=true 時合併進 dist/manifest.json。上架版 manifest.json 完全不受影響。",
+  "_why": "take_screenshot 用的 chrome.tabs.captureVisibleTab 需要 <all_urls> 或 activeTab；而 activeTab 只在使用者主動叫用擴充功能後才授予，bridge 的呼叫沒有使用者手勢（PM-312 實測確認）。加 <all_urls> 會觸發 Chrome Web Store 人工審核 2~4 週，故上架版暫不加（FOX 決策 2026-08-16）。",
+  "host_permissions": ["<all_urls>"]
+}

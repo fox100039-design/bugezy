@@ -59,6 +59,52 @@ content.ts（GET_PAGE_INFO / 即時 console 與網路錯誤）→ 目標網頁
 
 **位址一律寫 `127.0.0.1`，不要寫 `localhost`**：`localhost` 在許多系統上會先解析到 IPv6 的 `::1`，而 bridge 綁的是 IPv4 的 `127.0.0.1`——連線直接失敗，且錯誤訊息只說連不上，看不出是位址族群不合。兩端都已寫死（`extension/src/background.ts` 的 `BRIDGE_URL`、`bridge/src/extension-link.ts` 的 `host`）。
 
+#### bridge 的 11 支 MCP 工具（Phase 1 完工，PM-307~324）
+
+| 工具 | 用途 | 端到端 |
+|---|---|---|
+| `ping` | 連線與延遲診斷 | ✅ |
+| `get_page_url` | 當前分頁網址／標題 | ✅ |
+| `navigate_to(url, tab_id?)` | 開背景新分頁或導航既有分頁，等載入完成 | ✅ |
+| `click_element(selector, tab_id?)` | 點擊；disabled／不可見一律**明確報錯不假裝成功** | ✅ |
+| `read_page(tab_id?)` | 文字頁面地圖（省 ~95% token），interactive 元素附**唯一 selector**；含 `ready_state` | ✅ |
+| `type_text(selector, text, tab_id?)` | 輸入文字，**走原生 setter 繞過 React `_valueTracker`** | ✅ |
+| `take_screenshot(tab_id?)` | PNG 截圖（MCP image content）| 🔴 受 `activeTab` 限制 |
+| `get_browser_errors(tab_id?)` | 即時 console／network 錯誤（**僅最近 30 秒**）| ✅ |
+| `analyze_element(selector, tab_id?)` | 屬性／computed styles／box model／a11y | ✅ |
+| `get_web_vitals(tab_id?)` | Core Web Vitals + Google 評級 | ✅ |
+| `get_page_health(tab_id?)` | 0~100 一鍵健檢 | ✅ |
+
+**共通約定**：所有分頁相關工具都吃可選 `tab_id`（省略＝當前分頁，見規格書 §13.3）；指到不存在的分頁**明確報錯，絕不默默退回當前分頁**。
+
+**必守的三條**（都是實測踩出來的）：
+
+1. **`tab.url` / `tab.title` 讀不到** —— 需 `tabs` 權限，只有 `activeTab` 時 Chrome **靜默回空字串**（不報錯）。一律改問 content script（PM-298）。
+2. **`captureVisibleTab` 需 `activeTab` 或 `<all_urls>`，而 `activeTab` 只在使用者手勢後授予** —— bridge 呼叫永遠沒有手勢，且**導航會撤銷 `activeTab`**。三條替代路線（切分頁／`chrome.debugger`／獨立視窗）**都繞不開**，門檻不在「分頁可不可見」而在「有沒有使用者手勢」（PM-312 實測）。
+3. **回傳要帶「解讀脈絡」** —— 錯誤只涵蓋 30 秒、FID 未互動時為 `null` 不是 0、資源大小是低估值、事件監聽器空清單不代表沒有處理器、`ready_state` 非 `complete` 時內容可能不完整。**少了這些，AI 會把正確的回傳讀成錯誤的結論。**
+
+#### 開發版 manifest（PM-322）
+
+`DEV=true node build.mjs` 會把 `extension/manifest.dev.json` 的差異合併進 `dist/manifest.json`（目前只有 `host_permissions: ["<all_urls>"]`，供本機測 `take_screenshot`）。
+
+- **上架版 `manifest.json` 永不被寫回** —— dev 差異只在打包時疊上去
+- `_` 開頭的說明欄位會被剝掉（Chrome 對未知頂層鍵會警告）
+- 陣列用**聯集**合併，不覆蓋（否則日後加 `permissions` 會洗掉上架版原有權限）
+- DEV build 會印「此版本不可上架」警告
+
+#### 方案等級判斷（PM-321）
+
+`isActiveUserId()` 由 `boolean` 改為回傳 **`{ active, tier }`**，`tier ∈ free / ticket / day_pass / pro / max / agent`。
+
+> 🔴 **改這支時務必逐一檢查呼叫端**：物件**恆為 truthy**，漏改的 `if (!(await isActiveUserId(...)))` 會變成永遠不擋人 —— **TypeScript 不報錯、執行不出錯，只是付費功能免費送出去**。
+>
+> 判定順序有意義：先 ECPay（`pro` / `day_pass`）再票券（`ticket`）—— 同時持有票券又付費的人必須算 `pro`，不能被票券降級。
+>
+> `isEcpayActiveUserId` 維持不動（§4-8：ECPay 開通判斷只能用那一支）。
+
+bridge 端 9 支 v2 工具已套閘門，**預設關閉**（需同時設 `ENFORCE_TIER_GATE=true` 與 `BUGEZY_USER_TIER`）。預設關閉是刻意的：bridge 跑在本機拿不到真實 tier，預設開啟只會得到「全放行（等於沒閘門）」或「全擋掉（工具不能用）」。`ping` / `get_page_url` 不設閘門，否則使用者無法排查「為什麼 bridge 不能用」。
+
+
 ### §2a 語音雙引擎架構（PM-85~91）
 
 ```

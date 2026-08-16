@@ -3,7 +3,7 @@
 // 用法：node build.mjs [--watch]
 
 import * as esbuild from 'esbuild';
-import { cpSync, mkdirSync, rmSync } from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -14,9 +14,30 @@ const watch = process.argv.includes('--watch');
 rmSync(outdir, { recursive: true, force: true });
 mkdirSync(outdir, { recursive: true });
 
+// PM-322：DEV=true 時把 manifest.dev.json 的差異合併進去（多一個 <all_urls> host permission）。
+// **上架版 manifest.json 永遠不動** —— dev 差異只在打包時疊上去，不寫回原始檔。
+const isDev = process.env.DEV === 'true';
+
+/** 產出 dist/manifest.json；dev 模式合併 manifest.dev.json 的差異。 */
+function writeManifest() {
+  const base = JSON.parse(readFileSync(resolve(root, 'manifest.json'), 'utf8'));
+  if (!isDev) {
+    writeFileSync(resolve(outdir, 'manifest.json'), JSON.stringify(base, null, 2) + '\n');
+    return;
+  }
+  const dev = JSON.parse(readFileSync(resolve(root, 'manifest.dev.json'), 'utf8'));
+  // `_` 開頭的是給人看的註解欄位，不要進最終 manifest（Chrome 會警告未知的頂層鍵）
+  for (const [k, v] of Object.entries(dev)) {
+    if (k.startsWith('_')) continue;
+    base[k] = Array.isArray(v) && Array.isArray(base[k]) ? [...new Set([...base[k], ...v])] : v;
+  }
+  writeFileSync(resolve(outdir, 'manifest.json'), JSON.stringify(base, null, 2) + '\n');
+  console.log('⚠ DEV manifest：已加入 host_permissions', JSON.stringify(base.host_permissions), '——此版本不可上架');
+}
+
 /** 把靜態檔複製進 dist */
 function copyStatic() {
-  cpSync(resolve(root, 'manifest.json'), resolve(outdir, 'manifest.json'));
+  writeManifest();
   cpSync(resolve(root, 'src/popup.html'), resolve(outdir, 'popup.html'));
   cpSync(resolve(root, 'src/annotate.html'), resolve(outdir, 'annotate.html'));
   cpSync(resolve(root, 'src/edit-report.html'), resolve(outdir, 'edit-report.html'));

@@ -15,6 +15,39 @@ function txt(data: unknown) {
   };
 }
 
+// ── PM-321：方案等級閘門（雛形）────────────────────────────────────────────
+// 決策 3：v2（bridge）功能只給 Pro 訂閱；**票券／日票只含 v1**。
+//
+// ⚠ 目前 bridge 完全跑在本機、沒有連 Cloudflare Workers，拿不到使用者的 tier。
+//   所以閘門邏輯先寫好但**預設關閉**——要開必須同時：
+//     ① 設 `ENFORCE_TIER_GATE=true`  ② 設 `BUGEZY_USER_TIER=<tier>`（暫代真實查詢）
+//   **預設關閉是刻意的**：若預設開啟又查不到 tier，只有兩種結果——
+//   全部放行（等於沒有閘門）或全部擋掉（工具直接不能用）。兩者都比「明確關閉」糟。
+type UserTier = 'free' | 'ticket' | 'day_pass' | 'pro' | 'max' | 'agent';
+const V2_ALLOWED_TIERS: readonly UserTier[] = ['pro', 'max', 'agent'];
+
+/** 回傳 null＝放行；回傳字串＝拒絕原因。 */
+function tierGateReject(): string | null {
+  if (process.env.ENFORCE_TIER_GATE !== 'true') return null; // 預設不啟用
+  const tier = (process.env.BUGEZY_USER_TIER || 'free') as UserTier;
+  if (V2_ALLOWED_TIERS.includes(tier)) return null;
+  return `v2 功能需要 Pro 訂閱（NT$80/月）。目前方案：${tier}${
+    tier === 'ticket' || tier === 'day_pass' ? '——票券／日票僅包含 v1 錄製功能，不含 v2 瀏覽器工具。' : '。'
+  }升級請見 https://bugezy.dev/checkout`;
+}
+
+/**
+ * 包住需要 v2 權限的工具處理函式；閘門關閉時完全不影響行為。
+ * 回傳型別泛型化——`take_screenshot` 回的是 image content，不是純文字。
+ */
+function gated<T extends unknown[], R>(handler: (...args: T) => Promise<R>) {
+  return async (...args: T): Promise<R> => {
+    const reject = tierGateReject();
+    if (reject) return txt({ error: reject, tier_gate: true }) as R;
+    return handler(...args);
+  };
+}
+
 export function createMcpServer(link: ExtensionLink): McpServer {
   const server = new McpServer({ name: 'bugezy-bridge', version: '0.1.0' });
 
@@ -72,7 +105,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
           '省略 → 開新分頁（active:false，不搶焦點）並回傳新的 tab_id；指定 → 在該分頁內導航。分頁若已關閉會回報錯誤，不會改動其他分頁。',
         ),
     },
-    async (args) => {
+    gated(async (args) => {
       const r = await link.send(
         'navigate_to',
         { url: args.url, tab_id: args.tab_id },
@@ -80,7 +113,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
       );
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
       return txt(r.data);
-    },
+    }),
   );
 
   // ── 工具 5：click_element（PM-308）───────────────────────────────────────
@@ -98,11 +131,11 @@ export function createMcpServer(link: ExtensionLink): McpServer {
         .optional()
         .describe('省略 → 使用者當前分頁；指定 → 該分頁（例如 navigate_to 開出來的背景分頁）。分頁已關閉會回報錯誤。'),
     },
-    async (args) => {
+    gated(async (args) => {
       const r = await link.send('click_element', { selector: args.selector, tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, selector: args.selector, extension_connected: link.connected });
       return txt(r.data);
-    },
+    }),
   );
 
   // ── 工具 11：get_page_health（PM-317）────────────────────────────────────
@@ -116,11 +149,11 @@ export function createMcpServer(link: ExtensionLink): McpServer {
         .optional()
         .describe('省略 → 使用者當前分頁；指定 → 該分頁。分頁已關閉會回報錯誤。'),
     },
-    async (args) => {
+    gated(async (args) => {
       const r = await link.send('get_page_health', { tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
       return txt(r.data);
-    },
+    }),
   );
 
   // ── 工具 10：get_web_vitals（PM-316）─────────────────────────────────────
@@ -134,11 +167,11 @@ export function createMcpServer(link: ExtensionLink): McpServer {
         .optional()
         .describe('省略 → 使用者當前分頁；指定 → 該分頁。分頁已關閉會回報錯誤。'),
     },
-    async (args) => {
+    gated(async (args) => {
       const r = await link.send('get_web_vitals', { tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
       return txt(r.data);
-    },
+    }),
   );
 
   // ── 工具 9：analyze_element（PM-315）─────────────────────────────────────
@@ -156,11 +189,11 @@ export function createMcpServer(link: ExtensionLink): McpServer {
         .optional()
         .describe('省略 → 使用者當前分頁；指定 → 該分頁。分頁已關閉會回報錯誤。'),
     },
-    async (args) => {
+    gated(async (args) => {
       const r = await link.send('analyze_element', { selector: args.selector, tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, selector: args.selector, extension_connected: link.connected });
       return txt(r.data);
-    },
+    }),
   );
 
   // ── 工具 10：get_browser_errors（PM-313）─────────────────────────────────
@@ -175,11 +208,11 @@ export function createMcpServer(link: ExtensionLink): McpServer {
         .optional()
         .describe('省略 → 使用者當前分頁；指定 → 該分頁。分頁已關閉會回報錯誤。'),
     },
-    async (args) => {
+    gated(async (args) => {
       const r = await link.send('get_browser_errors', { tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
       return txt(r.data);
-    },
+    }),
   );
 
   // ── 工具 8：take_screenshot（PM-312）─────────────────────────────────────
@@ -193,7 +226,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
         .optional()
         .describe('省略 → 使用者當前分頁；指定 → 該分頁（非 active 時會暫時切換，截完切回）。'),
     },
-    async (args) => {
+    gated(async (args) => {
       const r = await link.send('take_screenshot', { tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
       const d = (r.data ?? {}) as {
@@ -217,7 +250,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
           { type: 'text' as const, text: JSON.stringify(meta, null, 2) },
         ],
       };
-    },
+    }),
   );
 
   // ── 工具 7：type_text（PM-311）───────────────────────────────────────────
@@ -236,7 +269,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
         .optional()
         .describe('省略 → 使用者當前分頁；指定 → 該分頁。分頁已關閉會回報錯誤。'),
     },
-    async (args) => {
+    gated(async (args) => {
       const r = await link.send('type_text', {
         selector: args.selector,
         text: args.text,
@@ -244,7 +277,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
       });
       if (!r.ok) return txt({ error: r.error, selector: args.selector, extension_connected: link.connected });
       return txt(r.data);
-    },
+    }),
   );
 
   // ── 工具 6：read_page（PM-309）───────────────────────────────────────────
@@ -259,11 +292,11 @@ export function createMcpServer(link: ExtensionLink): McpServer {
         .optional()
         .describe('省略 → 使用者當前分頁；指定 → 該分頁（例如 navigate_to 開出來的背景分頁）。分頁已關閉會回報錯誤。'),
     },
-    async (args) => {
+    gated(async (args) => {
       const r = await link.send('read_page', { tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
       return txt(r.data);
-    },
+    }),
   );
 
   return server;

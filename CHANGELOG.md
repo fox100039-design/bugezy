@@ -1,5 +1,36 @@
 # BugEzy Changelog
 
+## 2026-08-16（Phase 1 完工）
+
+**v2 Phase 1 核心完成（PM-305~324）**：`bugezy-bridge` 共 **11 支 MCP 工具**，除 `take_screenshot` 受 Chrome 權限限制外**全部通過真實 Chrome 端到端驗收**。規格書 v0.8 → **v1.1**。server 未 deploy（`isActiveUserId` 改動待下次 deploy）。
+
+- **PM-305** §3 ＋ §12 A-3：Native Messaging → localhost WebSocket，與 PM-297~299 的實作對齊；**修正卡片三處與程式碼不符**（WebSocket client 在 `background.ts` 非 `content.ts`、位址是 `127.0.0.1` 非 `localhost`（後者會先解析到 IPv6 `::1` 而連不上）、延遲來源標錯）。
+- **PM-306** Day 43 收工。
+- **PM-307~309** `navigate_to` / `click_element` / `read_page`（端到端 71/71）。
+  - **`navigate_to`**：`tab.url`/`tab.title` 需 `tabs` 權限、只有 `activeTab` 時 Chrome **靜默回空字串**，改問 content script；bridge 逾時改為**逐指令可設**（原本 10 秒會先於擴充功能的 30 秒載入上限觸發，讓 AI 拿到錯誤的失敗原因）。
+  - **`click_element`**：disabled／不可見／尺寸 0 的元素 `el.click()` **不會拋錯也不會有反應** —— 一律先檢查再點，**不假裝成功**。
+  - **`read_page`**：卡片的「每個元素印 `textContent`」會**逐層重複整頁文字**，50000 額度在前幾個元素就吃光；改為只印直屬文字。interactive 元素另附**經驗證唯一命中**的 selector（`[tag#id.class]` 只是描述，`.btn` 可能命中十個）。
+- **PM-310** 端到端驗收基礎建設；**harness 的 `proc.kill()` 在 Windows 收不掉子程序**，改 `taskkill /T /F` 並加受限的 port 回收（只回收自己洩漏的，不動 Claude Code 的 MCP server）。
+- **PM-311** `type_text`：**只做 `el.value = x` 再 dispatch 事件在 React 上無效** —— React 的 `_valueTracker` 會判定「值沒變」而忽略整個事件，畫面有字但 state 沒動。改走 prototype 原生 setter 繞過 tracker。
+- **PM-312** `take_screenshot`：實測確認 `captureVisibleTab` **需 `activeTab` 或 `<all_urls>`，而 bridge 呼叫永遠沒有使用者手勢**；圖片改走 MCP 原生 image content（塞進 JSON 會灌爆 context）。
+- **PM-313** `get_browser_errors`：沿用 `inject.ts` 既有攔截，**但發現緩存是 30 秒滾動視窗** —— 不揭露的話「空陣列」會被讀成「這頁沒問題」。不回傳 `requestBody`/`responseBody`（可能含 token／個資）。
+- **PM-314** 移除 bridge 舊 `get_live_errors`（驗收 113/113）；`content.ts` 的 `GET_LIVE_ERRORS` **保留不動**（即時監控仍在用）。
+- **PM-315** `analyze_element`：`event_listeners` 改為物件並明講**空清單不代表沒有處理器**（現代網站都用 `addEventListener`，content script 列舉不到）。
+- **PM-316** `get_web_vitals`：**`buffered: true` 是關鍵** —— 少了它，LCP/CLS/FID 在任何「載入完才呼叫」的情境都回 null，而那正是唯一的使用情境。資源大小揭露為**低估值**（跨網域無 `Timing-Allow-Origin` 時 `transferSize` 為 0）。
+- **PM-317** `get_page_health`：一鍵健檢 0~100。**`alt=""` 是合法的裝飾性圖片**（算成問題會在做得越好的網站上誤報越多）；「input 沒 label」有五種合法寫法；**`null` 的指標不列入扣分**（否則每個還沒被互動的頁面都平白失分）。
+- **PM-318** 端到端驗收 171/171。
+- **PM-319** `read_page` 補 `ready_state`（DONE-310 留項）—— 少了它，AI 分不出「這頁真的空」與「還沒載完」。
+- **PM-320** §13.2 回填截圖權限實測結論：三條路線**都繞不開 `<all_urls>`**，門檻不在「分頁可不可見」而在「有沒有使用者手勢」；FOX 決策：不急上架、1~3 個月維持 v1.1.5。
+- **PM-321** 方案等級判斷雛形：`isActiveUserId` 回傳 `{ active, tier }`。**物件恆為 truthy，4 處呼叫端全部改為 `.active`** —— 漏改會讓付費檢查永遠不擋人且完全不報錯。bridge 9 支 v2 工具套閘門，預設關閉。
+- **PM-322** 開發版 manifest（`DEV=true` 合併 `<all_urls>`），**上架版永不被寫回**。
+- **PM-323** 全工具端到端驗收 —— **待擴充功能以開發版重新載入**。
+- **PM-324** 規格書 §9 Phase 1 進度更新（PM-A~D + B2 完成，PM-D2 待辦）。
+
+> **bridge 工具總數 11**：`ping` · `get_page_url` · `navigate_to` · `click_element` · `read_page` · `type_text` · `take_screenshot` · `get_browser_errors` · `analyze_element` · `get_web_vitals` · `get_page_health`
+
+> **待 FOX**：① **以開發版 manifest 重新載入擴充功能**（可一次解掉 `take_screenshot` 與 `ready_state` 共 3 項）② `server` 尚未 deploy（`isActiveUserId` 改動）③ 其餘既有待辦不變（v1.1.5 送審、`DISCORD_WEBHOOK_URL`、`ticket-expiry-notify.sql`、`REPORT_CLEANUP`、`ADMIN_TOKEN`、HSTS、GSC）。
+> **Phase 1 剩餘**：PM-D2（bugezy-watch 即時化）。
+
 ## 2026-08-16
 
 Day 43（PM-302~306）。**純規格書日**——v2/v3 規格書 v0.5 → **v0.9**，`§1~§15` 完整、**48 個 MCP 工具**、**決策 1~6 全定案**。extension／server／bridge 皆未動，未 deploy。
