@@ -232,6 +232,10 @@ if (/port 19850 被占用/.test(stderr)) {
       check('309-2 interactive 元素附 click: selector', /click: "/.test(p1.content || ''), (p1.content || '').slice(0, 300));
       check('309-4 不超過 50000 字元', (p1.content || '').length <= 50_020, String((p1.content || '').length));
       check('309-5 回傳 tab_id + element_count', p1.tab_id === r1.tab_id && typeof p1.element_count === 'number', JSON.stringify({ t: p1.tab_id, c: p1.element_count }));
+      // PM-319（DONE-310 留項）
+      check('319-1 read_page 回傳 ready_state（loading/interactive/complete）',
+        ['loading', 'interactive', 'complete'].includes(p1.ready_state), String(p1.ready_state));
+      check('319   navigate_to 等到載入完成後應為 complete', p1.ready_state === 'complete', String(p1.ready_state));
       // 用 read_page 給的 selector 真的去點一次——驗收條件 2 的真正意思
       // ── PM-311 type_text 端到端 ──
       // bugezy.dev 全站沒有任何 input/textarea，所以借一個有純 HTML 表單的頁面。

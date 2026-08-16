@@ -1047,6 +1047,10 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
       content,
       truncated,
       element_count: document.querySelectorAll('*').length,
+      // PM-319（DONE-310 留項）：頁面還在載入時 content 可能是空的或不完整，
+      //   沒有這個欄位的話，AI 分不出「這頁真的沒東西」還是「還沒 render 完」，
+      //   然後就會對著一個載到一半的頁面下結論。
+      ready_state: document.readyState,
     });
   } else if (msg.type === 'SET_MONITOR_BADGE') {
     // PM-52：轉發給 inject 顯示/隱藏頁面浮動 badge

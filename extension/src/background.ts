@@ -1215,6 +1215,7 @@ async function runBridgeCommand(cmd: BridgeCommandMsg): Promise<unknown> {
         content?: string;
         truncated?: boolean;
         element_count?: number;
+        ready_state?: string;
       }>(tabId, { type: 'BRIDGE_READ_PAGE' });
       return {
         url: res.url ?? '',
@@ -1222,6 +1223,8 @@ async function runBridgeCommand(cmd: BridgeCommandMsg): Promise<unknown> {
         content: res.content ?? '',
         truncated: res.truncated ?? false,
         element_count: res.element_count ?? 0,
+        // PM-319：'loading' / 'interactive' 代表頁面還沒 render 完，content 可能不完整
+        ready_state: res.ready_state ?? 'unknown',
         tab_id: tabId,
       };
     }
