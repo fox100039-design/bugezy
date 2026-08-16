@@ -105,6 +105,24 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     },
   );
 
+  // ── 工具 10：get_web_vitals（PM-316）─────────────────────────────────────
+  server.tool(
+    'get_web_vitals',
+    'Read Core Web Vitals (LCP / FID / CLS) plus FCP, TTFB and a resource breakdown for a tab, each with a Google-standard rating. FID is null until the user has interacted with the page — that is not zero latency. Resource sizes come from transferSize, which is 0 for cached and for cross-origin responses without Timing-Allow-Origin, so the total is a lower bound. 讀取分頁的 Core Web Vitals（LCP／FID／CLS）與 FCP、TTFB 及資源彙總，各自附 Google 標準評級。**使用者尚未互動時 FID 為 null，不是 0**；資源大小取自 transferSize，快取命中與跨網域未送 Timing-Allow-Origin 者皆為 0，**總大小是低估值**。',
+    {
+      tab_id: z
+        .number()
+        .int()
+        .optional()
+        .describe('省略 → 使用者當前分頁；指定 → 該分頁。分頁已關閉會回報錯誤。'),
+    },
+    async (args) => {
+      const r = await link.send('get_web_vitals', { tab_id: args.tab_id });
+      if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
+      return txt(r.data);
+    },
+  );
+
   // ── 工具 9：analyze_element（PM-315）─────────────────────────────────────
   server.tool(
     'analyze_element',

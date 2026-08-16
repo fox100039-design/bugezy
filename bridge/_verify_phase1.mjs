@@ -139,7 +139,7 @@ proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initial
 
 console.log('\n=== ② MCP 工具註冊 ===');
 const tools = (await rpc('tools/list', {})).result.tools;
-check('工具總數 9（analyze_element 新增，舊 get_live_errors 已移除）', tools.length === 9, tools.map((t) => t.name).join(','));
+check('工具總數 10（+get_web_vitals）', tools.length === 10, tools.map((t) => t.name).join(','));
 for (const [name, req, opt] of [['navigate_to', 'url', 'tab_id'], ['click_element', 'selector', 'tab_id']]) {
   const t = tools.find((x) => x.name === name);
   check(`${name} 已註冊`, !!t, tools.map((x) => x.name).join(','));
@@ -152,6 +152,10 @@ const rp = tools.find((t) => t.name === 'read_page');
 check('read_page 已註冊', !!rp, tools.map((x) => x.name).join(','));
 check('  read_page.tab_id 可選 integer', rp?.inputSchema?.properties?.tab_id?.type === 'integer' && !(rp?.inputSchema?.required || []).includes('tab_id'));
 check('  read_page 描述提到敏感欄位遮蔽', /masked/i.test(rp?.description || '') && /遮蔽/.test(rp?.description || ''));
+const wv = tools.find((t) => t.name === 'get_web_vitals');
+check('get_web_vitals 已註冊', !!wv, tools.map((x) => x.name).join(','));
+check('  get_web_vitals.tab_id 可選 integer', wv?.inputSchema?.properties?.tab_id?.type === 'integer' && !(wv?.inputSchema?.required || []).includes('tab_id'));
+check('  描述講明 FID 為 null 不是 0 + 資源大小是低估值', /null until/i.test(wv?.description || '') && /低估值/.test(wv?.description || ''));
 const ae = tools.find((t) => t.name === 'analyze_element');
 check('analyze_element 已註冊', !!ae, tools.map((x) => x.name).join(','));
 check('  analyze_element.selector 必填 + tab_id 可選', (ae?.inputSchema?.required || []).includes('selector') && ae?.inputSchema?.properties?.tab_id?.type === 'integer' && !(ae?.inputSchema?.required || []).includes('tab_id'));
@@ -280,6 +284,27 @@ if (/port 19850 被占用/.test(stderr)) {
       // 驗收 4：受限頁面 —— chrome:// 開不了（navigate_to 會擋），改用「分頁不存在」驗錯誤路徑
       const shotBad = await call('take_screenshot', { tab_id: 99999999 });
       check('312-4 分頁不存在 → error（不 crash）', !!shotBad.error, JSON.stringify(shotBad).slice(0, 200));
+
+      // ── PM-316 get_web_vitals 端到端 ──
+      const wvR = await call('get_web_vitals', { tab_id: r1.tab_id });
+      console.log('    get_web_vitals →', JSON.stringify(wvR).slice(0, 300));
+      if (wvR.error) {
+        check('316-1 回傳 LCP/FCP/TTFB', false, String(wvR.error).slice(0, 200));
+      } else {
+        const v = wvR.vitals || {};
+        check('316-1 LCP/FCP/TTFB 至少這三個有值', !!v.LCP && !!v.FCP && !!v.TTFB, JSON.stringify(v).slice(0, 240));
+        check('316-2 每個指標有 value + rating',
+          [v.LCP, v.FCP, v.TTFB].every((m) => m && typeof m.rating === 'string' && (typeof m.value_ms === 'number' || typeof m.value === 'number')),
+          JSON.stringify({ LCP: v.LCP, FCP: v.FCP, TTFB: v.TTFB }));
+        check('316-3 rating 只會是三種合法值',
+          [v.LCP, v.FCP, v.TTFB, v.CLS].filter(Boolean).every((m) => ['good', 'needs-improvement', 'poor'].includes(m.rating)),
+          JSON.stringify([v.LCP?.rating, v.FCP?.rating, v.TTFB?.rating, v.CLS?.rating]));
+        check('316   FID 未互動時為 null（不是 0）', v.FID === null, JSON.stringify(v.FID));
+        check('316-4 resource_summary 有 total + by_type',
+          typeof wvR.resource_summary?.total_requests === 'number' && !!wvR.resource_summary?.by_type,
+          JSON.stringify(wvR.resource_summary).slice(0, 240));
+        check('316   回傳 tab_id', wvR.tab_id === r1.tab_id, String(wvR.tab_id));
+      }
 
       // ── PM-315 analyze_element 端到端 ──
       // 分析目標同樣從 read_page 的輸出取，不寫死 markup

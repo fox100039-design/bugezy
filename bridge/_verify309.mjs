@@ -21,18 +21,19 @@ const seg = (from, to) => {
 const sensitive = seg('const SENSITIVE_RECT_SELECTORS', '/** PM-186：收集敏感欄位');
 const readPage = seg('const READ_PAGE_MAX_CHARS', '// background → content：控制指令');
 const clickFn = seg('function bridgeClick', '// ── PM-311：type_text');
-const typeFn = seg('const TYPE_TEXT_REJECTED_INPUT_TYPES', '// ── PM-315：analyze_element');
+const typeFn = seg('const TYPE_TEXT_REJECTED_INPUT_TYPES', '// ── PM-316：get_web_vitals');
+const vitalsFn = seg('const VITAL_THRESHOLDS', '// ── PM-315：analyze_element');
 const analyzeFn = seg('const ANALYZE_STYLE_PROPS', '// ── PM-309：read_page');
-const js = ts.transpileModule(sensitive + '\n' + clickFn + '\n' + typeFn + '\n' + analyzeFn + '\n' + readPage, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
+const js = ts.transpileModule(sensitive + '\n' + clickFn + '\n' + typeFn + '\n' + vitalsFn + '\n' + analyzeFn + '\n' + readPage, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { pretendToBeVisual: true });
 const g = dom.window;
 // content script 在頁面裡有這些全域；沙箱裡要手動接進來
 const run = new Function('window', 'document', 'getComputedStyle', 'Node', 'NodeFilter', 'CSS',
-  'HTMLInputElement', 'HTMLTextAreaElement', 'Event', 'InputEvent',
-  js + '\nreturn { extractPageContent, uniqueSelector, ownText, isSensitiveField, bridgeClick, bridgeTypeText, bridgeAnalyzeElement };');
+  'HTMLInputElement', 'HTMLTextAreaElement', 'Event', 'InputEvent', 'performance', 'PerformanceObserver',
+  js + '\nreturn { extractPageContent, uniqueSelector, ownText, isSensitiveField, bridgeClick, bridgeTypeText, bridgeAnalyzeElement, rateVital, summarizeResources };');
 const api = run(g, g.document, g.getComputedStyle.bind(g), g.Node, g.NodeFilter, g.CSS,
-  g.HTMLInputElement, g.HTMLTextAreaElement, g.Event, g.InputEvent);
+  g.HTMLInputElement, g.HTMLTextAreaElement, g.Event, g.InputEvent, g.performance, g.PerformanceObserver);
 
 const setBody = (html) => { g.document.body.innerHTML = html; };
 
@@ -219,6 +220,43 @@ check('4.    並標示 sensitive_field', anPw.sensitive_field === true, JSON.str
 const anMiss = api.bridgeAnalyzeElement('#nope-315');
 check('3. 找不到元素 → error 含 selector', !!anMiss.error && String(anMiss.error).includes('#nope-315'), JSON.stringify(anMiss));
 check('3.    非法選擇器 → error（不 crash）', /合法的 CSS 選擇器/.test(api.bridgeAnalyzeElement('a[[[bad').error || ''));
+
+console.log('\n=== ⑪ PM-316 rateVital：評級必須符合 Google 標準 ===');
+// 逐一驗邊界值（門檻上下各一）——rating 判錯的話，AI 會把「需要改進」當成「良好」
+const RATING_CASES = [
+  ['LCP', 2500, 'good'], ['LCP', 2501, 'needs-improvement'], ['LCP', 4000, 'needs-improvement'], ['LCP', 4001, 'poor'],
+  ['FID', 100, 'good'], ['FID', 101, 'needs-improvement'], ['FID', 300, 'needs-improvement'], ['FID', 301, 'poor'],
+  ['CLS', 0.1, 'good'], ['CLS', 0.11, 'needs-improvement'], ['CLS', 0.25, 'needs-improvement'], ['CLS', 0.26, 'poor'],
+  ['FCP', 1800, 'good'], ['FCP', 1801, 'needs-improvement'], ['FCP', 3000, 'needs-improvement'], ['FCP', 3001, 'poor'],
+  ['TTFB', 800, 'good'], ['TTFB', 801, 'needs-improvement'], ['TTFB', 1800, 'needs-improvement'], ['TTFB', 1801, 'poor'],
+];
+let ratingOk = 0;
+for (const [m, v, want] of RATING_CASES) {
+  const got = api.rateVital(m, v);
+  if (got === want) ratingOk++;
+  else check(`3. ${m}=${v} → ${want}`, false, `得到 ${got}`);
+}
+check(`3. rating 符合 Google 標準（${RATING_CASES.length} 個邊界值全對）`, ratingOk === RATING_CASES.length, `${ratingOk}/${RATING_CASES.length}`);
+
+console.log('\n=== ⑪ PM-316 summarizeResources ===');
+// jsdom 沒有真實資源載入，用假的 performance entry 驗分類與低估揭露
+const fakeEntries = [
+  { name: 'https://x/app.js', initiatorType: 'script', transferSize: 2048 },
+  { name: 'https://x/a.css', initiatorType: 'link', transferSize: 1024 },
+  { name: 'https://x/p.png', initiatorType: 'img', transferSize: 512 },
+  { name: 'https://cdn/f.woff2', initiatorType: 'other', transferSize: 0 }, // 跨網域無 TAO → 0
+  { name: 'https://x/api', initiatorType: 'fetch', transferSize: 256 },
+];
+g.performance.getEntriesByType = (t) => (t === 'resource' ? fakeEntries : []);
+const rs = api.summarizeResources();
+console.log('   ', JSON.stringify(rs));
+check('4. resource_summary 有 total_requests + by_type', rs.total_requests === 5 && !!rs.by_type, JSON.stringify(rs));
+check('4. by_type 分類正確（script/css/image/font/other）',
+  rs.by_type.script.count === 1 && rs.by_type.css.count === 1 && rs.by_type.image.count === 1
+  && rs.by_type.font.count === 1 && rs.by_type.other.count === 1, JSON.stringify(rs.by_type));
+check('4. total_size_kb 合計正確', Math.abs(rs.total_size_kb - (2048 + 1024 + 512 + 256) / 1024) < 0.05, String(rs.total_size_kb));
+check('🔴 transferSize=0 的資源有被計數並揭露「總大小為低估值」',
+  rs.size_unknown_count === 1 && /低估/.test(rs.size_note || ''), JSON.stringify({ n: rs.size_unknown_count, note: rs.size_note }));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -1075,6 +1075,13 @@ async function runBridgeCommand(cmd: BridgeCommandMsg): Promise<unknown> {
       };
     }
 
+    // PM-316
+    case 'get_web_vitals': {
+      const tabId = await resolveTargetTab(cmd.params);
+      const res = await sendToContent<Record<string, unknown>>(tabId, { type: 'BRIDGE_GET_WEB_VITALS' });
+      return { ...res, tab_id: tabId };
+    }
+
     // PM-315
     case 'analyze_element': {
       const selector = cmd.params?.selector;

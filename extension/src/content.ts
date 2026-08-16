@@ -381,6 +381,137 @@ function bridgeTypeText(selector: string, text: string): Record<string, unknown>
   };
 }
 
+// ── PM-316：get_web_vitals ─────────────────────────────────────────────────
+/** Google 官方門檻（good / needs-improvement 的上界）。 */
+const VITAL_THRESHOLDS: Record<string, [number, number]> = {
+  LCP: [2500, 4000],
+  FID: [100, 300],
+  CLS: [0.1, 0.25],
+  FCP: [1800, 3000],
+  TTFB: [800, 1800],
+};
+
+function rateVital(name: string, value: number): 'good' | 'needs-improvement' | 'poor' {
+  const t = VITAL_THRESHOLDS[name];
+  if (!t) return 'good';
+  return value <= t[0] ? 'good' : value <= t[1] ? 'needs-improvement' : 'poor';
+}
+
+interface LayoutShiftEntry extends PerformanceEntry {
+  value: number;
+  hadRecentInput: boolean;
+}
+interface FirstInputEntry extends PerformanceEntry {
+  processingStart: number;
+}
+
+/**
+ * 蒐集 LCP / CLS / FID。
+ *
+ * ⚠ 這三個只能透過 `PerformanceObserver` 拿，而**工具被呼叫時事件早就發生過了**。
+ *   關鍵是 `buffered: true` —— 它會把註冊之前就已產生的 entry 補送過來；
+ *   少了它，這支工具在任何「載入完才呼叫」的情境下都只會回 null（也就是永遠）。
+ */
+function collectObservedVitals(): Promise<{ lcp: number | null; cls: number; fid: number | null }> {
+  return new Promise((resolve) => {
+    let lcp: number | null = null;
+    let cls = 0;
+    let fid: number | null = null;
+    const observers: PerformanceObserver[] = [];
+    const watch = (type: string, cb: (l: PerformanceObserverEntryList) => void) => {
+      try {
+        const o = new PerformanceObserver(cb);
+        o.observe({ type, buffered: true });
+        observers.push(o);
+      } catch {
+        /* 該瀏覽器不支援這個 entry type，略過即可 */
+      }
+    };
+    watch('largest-contentful-paint', (l) => {
+      const es = l.getEntries();
+      const last = es[es.length - 1]; // 專案的 tsconfig lib 沒有 Array.prototype.at
+      if (last) lcp = Math.round(last.startTime);
+    });
+    watch('layout-shift', (l) => {
+      for (const e of l.getEntries() as LayoutShiftEntry[]) if (!e.hadRecentInput) cls += e.value;
+    });
+    watch('first-input', (l) => {
+      const e = l.getEntries()[0] as FirstInputEntry | undefined;
+      if (e) fid = Math.round(e.processingStart - e.startTime);
+    });
+    // buffered entry 在下一個 task 才送達，給它一點時間再收網
+    setTimeout(() => {
+      for (const o of observers) o.disconnect();
+      resolve({ lcp, cls, fid });
+    }, 300);
+  });
+}
+
+function summarizeResources(): Record<string, unknown> {
+  const res = performance.getEntriesByType('resource') as PerformanceResourceTiming[];
+  const buckets: Record<string, { count: number; size_kb: number }> = {
+    script: { count: 0, size_kb: 0 },
+    css: { count: 0, size_kb: 0 },
+    image: { count: 0, size_kb: 0 },
+    font: { count: 0, size_kb: 0 },
+    other: { count: 0, size_kb: 0 },
+  };
+  let totalBytes = 0;
+  let unknownSize = 0;
+  for (const r of res) {
+    const it = r.initiatorType;
+    const key =
+      it === 'script' ? 'script'
+      : it === 'link' || it === 'css' ? 'css'
+      : it === 'img' || it === 'image' ? 'image'
+      : /\.(woff2?|ttf|otf|eot)(\?|$)/i.test(r.name) ? 'font'
+      : 'other';
+    buckets[key].count++;
+    const bytes = r.transferSize || 0;
+    // transferSize 為 0 有兩種可能：快取命中，或**跨網域且對方沒送 Timing-Allow-Origin**。
+    // 後者很常見（CDN、字型、分析腳本），不講明的話總大小會系統性低估。
+    if (bytes === 0) unknownSize++;
+    buckets[key].size_kb += bytes / 1024;
+    totalBytes += bytes;
+  }
+  for (const k of Object.keys(buckets)) buckets[k].size_kb = Math.round(buckets[k].size_kb * 10) / 10;
+  return {
+    total_requests: res.length,
+    total_size_kb: Math.round((totalBytes / 1024) * 10) / 10,
+    by_type: buckets,
+    size_unknown_count: unknownSize,
+    ...(unknownSize
+      ? {
+          size_note: `${unknownSize} 個資源的 transferSize 為 0（快取命中，或跨網域且未送 Timing-Allow-Origin），**總大小為低估值**。`,
+        }
+      : {}),
+  };
+}
+
+async function bridgeGetWebVitals(): Promise<Record<string, unknown>> {
+  const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+  const fcpEntry = performance.getEntriesByType('paint').find((p) => p.name === 'first-contentful-paint');
+  const { lcp, cls, fid } = await collectObservedVitals();
+
+  const vitals: Record<string, unknown> = {};
+  const put = (name: string, value: number | null, key: 'value_ms' | 'value') => {
+    // FID 沒有值代表「使用者還沒互動過」，不是 0 —— 回 null 才不會被讀成「延遲極低」
+    vitals[name] = value === null ? null : { [key]: value, rating: rateVital(name, value) };
+  };
+  put('LCP', lcp, 'value_ms');
+  put('FID', fid, 'value_ms');
+  put('CLS', Math.round(cls * 1000) / 1000, 'value');
+  put('FCP', fcpEntry ? Math.round(fcpEntry.startTime) : null, 'value_ms');
+  put('TTFB', nav ? Math.round(nav.responseStart) : null, 'value_ms');
+  if (nav) {
+    vitals.domContentLoaded_ms = Math.round(nav.domContentLoadedEventEnd);
+    vitals.load_ms = Math.round(nav.loadEventEnd);
+  }
+  if (fid === null) vitals.FID_note = '使用者尚未與頁面互動，FID 無法量測（回 null 而非 0）。';
+
+  return { vitals, resource_summary: summarizeResources() };
+}
+
 // ── PM-315：analyze_element ────────────────────────────────────────────────
 /**
  * 只取 debug 時真的會看的樣式。`getComputedStyle` 完整倒出來有數百個屬性，
@@ -753,6 +884,8 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
     sendResponse(bridgeClick(msg.selector));
   } else if (msg.type === 'BRIDGE_TYPE_TEXT') {
     sendResponse(bridgeTypeText(msg.selector, msg.text));
+  } else if (msg.type === 'BRIDGE_GET_WEB_VITALS') {
+    void bridgeGetWebVitals().then(sendResponse);
   } else if (msg.type === 'BRIDGE_ANALYZE_ELEMENT') {
     sendResponse(bridgeAnalyzeElement(msg.selector));
   } else if (msg.type === 'BRIDGE_GET_BROWSER_ERRORS') {
