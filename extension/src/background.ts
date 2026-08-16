@@ -926,6 +926,40 @@ async function readTabInfo(tabId: number): Promise<{ url: string; title: string 
   return { url: info.url ?? '', title: info.title ?? '' };
 }
 
+/**
+ * PM-308：把指令的 `tab_id` 參數解析成實際的分頁 id。
+ *
+ * 規格書 §13.3：**省略 → 當前分頁（偵察模式）；指定 → 只作用於該分頁（出任務模式）**，
+ * 而且指到不存在的分頁必須**明確報錯，絕不默默退回當前分頁**——
+ * 否則 AI 會在使用者正在用的分頁上，執行原本要在自己分頁跑的操作。
+ */
+async function resolveTargetTab(params: Record<string, unknown> | undefined): Promise<number> {
+  const raw = params?.tab_id;
+  if (raw === undefined || raw === null) {
+    const tab = await activeTab();
+    if (!tab?.id) throw new Error('找不到作用中的分頁');
+    return tab.id;
+  }
+  if (typeof raw !== 'number') throw new Error(`tab_id 必須是數字，收到 ${typeof raw}`);
+  try {
+    await chrome.tabs.get(raw);
+  } catch {
+    throw new Error(`找不到分頁 ${raw}（可能已被關閉）`);
+  }
+  return raw;
+}
+
+/** 送訊息給某分頁的 content script；沒有 content script 時給一句能照著排查的錯誤。 */
+async function sendToContent<T>(tabId: number, msg: unknown): Promise<T> {
+  const res = (await chrome.tabs.sendMessage(tabId, msg).catch(() => null)) as T | null;
+  if (res === null || res === undefined) {
+    throw new Error(
+      `分頁 ${tabId} 沒有 BugEzy content script（可能是 chrome://、Chrome 線上應用程式商店、PDF 檢視器，或該分頁需要重新整理）`,
+    );
+  }
+  return res;
+}
+
 /** 執行一則 bridge 指令，回傳要送回去的 data；失敗請 throw，由呼叫端包成 error。 */
 async function runBridgeCommand(cmd: BridgeCommandMsg): Promise<unknown> {
   switch (cmd.command) {
@@ -1004,6 +1038,29 @@ async function runBridgeCommand(cmd: BridgeCommandMsg): Promise<unknown> {
         };
       }
       return { tab_id: tabId, url: info.url || url, title: info.title };
+    }
+
+    // PM-308
+    case 'click_element': {
+      const selector = cmd.params?.selector;
+      if (typeof selector !== 'string' || !selector.trim()) throw new Error('缺少 selector 參數');
+      const tabId = await resolveTargetTab(cmd.params);
+      const res = await sendToContent<Record<string, unknown>>(tabId, {
+        type: 'BRIDGE_CLICK',
+        selector,
+      });
+      // content script 判定不可點時會回 { error }，照實往上拋（含它給的 tag/text 線索）
+      if (typeof res.error === 'string') {
+        const extra = res.tag ? `（找到的是 <${String(res.tag)}>，文字「${String(res.text ?? '')}」）` : '';
+        throw new Error(`${res.error}${extra}${res.hint ? `\n${String(res.hint)}` : ''}`);
+      }
+      return {
+        clicked: true,
+        selector,
+        element_text: res.text ?? '',
+        element_tag: res.tag ?? '',
+        tab_id: tabId,
+      };
     }
 
     default:

@@ -120,5 +120,27 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     },
   );
 
+  // ── 工具 5：click_element（PM-308）───────────────────────────────────────
+  server.tool(
+    'click_element',
+    'Click an element on the page by CSS selector. Returns the clicked element\'s tag and text so you can confirm you hit the right thing. Reports an error (instead of silently succeeding) when the element is missing, disabled, or invisible. 用 CSS 選擇器點擊頁面元素，回傳被點元素的標籤與文字供確認；元素不存在／disabled／不可見時會明確報錯，不會假裝點成功。',
+    {
+      selector: z
+        .string()
+        .min(1)
+        .describe('CSS 選擇器，例如 `#submit-btn`、`button.primary`、`a[href="/cart"]`。可先用 read_page 確認頁面上有哪些元素。'),
+      tab_id: z
+        .number()
+        .int()
+        .optional()
+        .describe('省略 → 使用者當前分頁；指定 → 該分頁（例如 navigate_to 開出來的背景分頁）。分頁已關閉會回報錯誤。'),
+    },
+    async (args) => {
+      const r = await link.send('click_element', { selector: args.selector, tab_id: args.tab_id });
+      if (!r.ok) return txt({ error: r.error, selector: args.selector, extension_connected: link.connected });
+      return txt(r.data);
+    },
+  );
+
   return server;
 }

@@ -154,6 +154,7 @@ export type ControlMessage =
   // PM-51：🔍 即時監控（AI 透過 MCP 隨時查當前頁面 error）
   | { type: 'GET_LIVE_ERRORS' }
   | { type: 'GET_PAGE_INFO' } // PM-298：bridge 的 get_page_url（content script 讀 location，不需 tabs 權限）
+  | { type: 'BRIDGE_CLICK'; selector: string } // PM-308：bridge 的 click_element
   | { type: 'START_MONITORING' }
   | { type: 'STOP_MONITORING' }
   // PM-52：通知 content/inject 顯示/隱藏頁面浮動監控 badge

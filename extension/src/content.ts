@@ -225,6 +225,57 @@ window.addEventListener('message', async (e: MessageEvent) => {
   }
 });
 
+/**
+ * PM-308：bridge 的 `click_element` 用。
+ *
+ * 幾個「靜默成功」的陷阱——這些情況 `el.click()` **不會拋錯，只是什麼都沒發生**，
+ * 若照實回 `clicked: true`，AI 會以為點成功了，然後對著沒有反應的頁面繼續往下推理：
+ *   · `disabled` 的 button / input
+ *   · `display:none`、`visibility:hidden`、尺寸為 0 的元素
+ *   · 沒有 `click()` 方法的節點（例如純 SVG 以外的非 HTMLElement）
+ * 因此一律先檢查再點，並把不能點的原因講清楚。
+ */
+function bridgeClick(selector: string): Record<string, unknown> {
+  if (typeof selector !== 'string' || !selector.trim()) {
+    return { error: '缺少 selector 參數' };
+  }
+  let el: Element | null;
+  try {
+    el = document.querySelector(selector);
+  } catch {
+    // querySelector 對不合法的選擇器會丟 SyntaxError
+    return { error: `不是合法的 CSS 選擇器：${selector}` };
+  }
+  if (!el) {
+    return {
+      error: `找不到符合「${selector}」的元素`,
+      hint: '該元素可能尚未載入、位於 iframe 內（content script 只跑在最上層框架），或選擇器有誤。可先用 read_page 確認頁面上實際有哪些元素。',
+    };
+  }
+
+  const tag = el.tagName.toLowerCase();
+  // 先把描述資訊取好再點——點擊可能觸發導航，之後頁面就沒了
+  const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 100);
+
+  if ((el as HTMLInputElement).disabled) {
+    return { error: `元素「${selector}」是 disabled 狀態，點了不會有任何反應`, tag, text };
+  }
+  const style = getComputedStyle(el);
+  if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) {
+    return { error: `元素「${selector}」目前不可見（${style.display === 'none' ? 'display:none' : style.visibility === 'hidden' ? 'visibility:hidden' : 'opacity:0'}），點了不會有任何反應`, tag, text };
+  }
+  const rect = el.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0) {
+    return { error: `元素「${selector}」的尺寸為 0（不佔版面），點了不會有任何反應`, tag, text };
+  }
+  if (typeof (el as HTMLElement).click !== 'function') {
+    return { error: `元素「${selector}」（<${tag}>）沒有 click() 方法，無法點擊`, tag, text };
+  }
+
+  (el as HTMLElement).click();
+  return { clicked: true, tag, text };
+}
+
 // background → content：控制指令
 chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse) => {
   if (msg.type === 'START_RECORDING') {
@@ -282,6 +333,8 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
     //   那需要 `tabs` 權限（activeTab 只在使用者主動叫用擴充功能後才生效），
     //   沒有權限時 Chrome 會靜默回空字串。content script 本來就在頁面裡，直接讀最準也不需任何權限。
     sendResponse({ url: location.href, title: document.title });
+  } else if (msg.type === 'BRIDGE_CLICK') {
+    sendResponse(bridgeClick(msg.selector));
   } else if (msg.type === 'SET_MONITOR_BADGE') {
     // PM-52：轉發給 inject 顯示/隱藏頁面浮動 badge
     sendToInject(msg.show ? 'SHOW_MONITOR' : 'HIDE_MONITOR');
