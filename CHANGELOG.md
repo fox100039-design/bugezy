@@ -2,7 +2,7 @@
 
 ## 2026-08-16（Phase 1 完工）
 
-**v2 Phase 1 核心完成（PM-305~324）**：`bugezy-bridge` 共 **11 支 MCP 工具**，除 `take_screenshot` 受 Chrome 權限限制外**全部通過真實 Chrome 端到端驗收**。規格書 v0.8 → **v1.1**。server 未 deploy（`isActiveUserId` 改動待下次 deploy）。
+**v2 Phase 1 核心完成（PM-305~324）**：`bugezy-bridge` 共 **11 支 MCP 工具**，**11 支全部通過真實 Chrome 端到端驗收**（`take_screenshot` 需開發版 manifest 的 `<all_urls>`；上架版仍受 `activeTab` 限制）。規格書 v0.8 → **v1.1**。server 未 deploy（`isActiveUserId` 改動待下次 deploy）。
 
 - **PM-305** §3 ＋ §12 A-3：Native Messaging → localhost WebSocket，與 PM-297~299 的實作對齊；**修正卡片三處與程式碼不符**（WebSocket client 在 `background.ts` 非 `content.ts`、位址是 `127.0.0.1` 非 `localhost`（後者會先解析到 IPv6 `::1` 而連不上）、延遲來源標錯）。
 - **PM-306** Day 43 收工。
@@ -23,12 +23,12 @@
 - **PM-320** §13.2 回填截圖權限實測結論：三條路線**都繞不開 `<all_urls>`**，門檻不在「分頁可不可見」而在「有沒有使用者手勢」；FOX 決策：不急上架、1~3 個月維持 v1.1.5。
 - **PM-321** 方案等級判斷雛形：`isActiveUserId` 回傳 `{ active, tier }`。**物件恆為 truthy，4 處呼叫端全部改為 `.active`** —— 漏改會讓付費檢查永遠不擋人且完全不報錯。bridge 9 支 v2 工具套閘門，預設關閉。
 - **PM-322** 開發版 manifest（`DEV=true` 合併 `<all_urls>`），**上架版永不被寫回**。
-- **PM-323** 全工具端到端驗收 —— **待擴充功能以開發版重新載入**。
+- **PM-323** 全工具端到端驗收：**178 項全數通過、0 failed**（`_verify_phase1.mjs` 106 + `_verify309.mjs` 72）。以開發版 manifest 重新載入後，`take_screenshot` 由 `LIMIT` 轉 `PASS`（1600×765 PNG，解碼後 IHDR 尺寸與回報值一致），`ready_state` 兩項亦轉 PASS。**程式碼從 PM-312 起未改一字，只換 manifest 就從「權限被拒」變正常** —— 反向證實 PM-312／320 的實測結論方向正確。
 - **PM-324** 規格書 §9 Phase 1 進度更新（PM-A~D + B2 完成，PM-D2 待辦）。
 
 > **bridge 工具總數 11**：`ping` · `get_page_url` · `navigate_to` · `click_element` · `read_page` · `type_text` · `take_screenshot` · `get_browser_errors` · `analyze_element` · `get_web_vitals` · `get_page_health`
 
-> **待 FOX**：① **以開發版 manifest 重新載入擴充功能**（可一次解掉 `take_screenshot` 與 `ready_state` 共 3 項）② `server` 尚未 deploy（`isActiveUserId` 改動）③ 其餘既有待辦不變（v1.1.5 送審、`DISCORD_WEBHOOK_URL`、`ticket-expiry-notify.sql`、`REPORT_CLEANUP`、`ADMIN_TOKEN`、HSTS、GSC）。
+> **待 FOX**：① `server` 尚未 deploy（`isActiveUserId` 改動）② 其餘既有待辦不變（v1.1.5 送審、`DISCORD_WEBHOOK_URL`、`ticket-expiry-notify.sql`、`REPORT_CLEANUP`、`ADMIN_TOKEN`、HSTS、GSC）。
 > **Phase 1 剩餘**：PM-D2（bugezy-watch 即時化）。
 
 ## 2026-08-16
