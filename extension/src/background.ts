@@ -960,6 +960,27 @@ async function sendToContent<T>(tabId: number, msg: unknown): Promise<T> {
   return res;
 }
 
+// ── PM-312：take_screenshot ────────────────────────────────────────────────
+/** 切分頁之後給頁面 render 的時間。太短會截到白畫面或舊內容。 */
+const SCREENSHOT_RENDER_WAIT_MS = 400;
+
+/**
+ * 從 PNG 的 IHDR 直接讀寬高。
+ * service worker 裡沒有 `Image`，用 `createImageBitmap` 得多解一次整張圖；
+ * PNG 的前 24 bytes 就有尺寸（8 bytes 簽章 + 4 長度 + 4 'IHDR' + 4 寬 + 4 高），直接讀最省。
+ */
+function pngSize(base64: string): { width: number; height: number } {
+  try {
+    const head = atob(base64.slice(0, 64)); // 24 bytes 只需要前 32 個 base64 字元，多取一些保險
+    const b = (i: number) => head.charCodeAt(i) & 0xff;
+    const be32 = (o: number) => (b(o) << 24) | (b(o + 1) << 16) | (b(o + 2) << 8) | b(o + 3);
+    if (b(0) !== 0x89 || b(1) !== 0x50) return { width: 0, height: 0 }; // 不是 PNG
+    return { width: be32(16) >>> 0, height: be32(20) >>> 0 };
+  } catch {
+    return { width: 0, height: 0 };
+  }
+}
+
 /** 執行一則 bridge 指令，回傳要送回去的 data；失敗請 throw，由呼叫端包成 error。 */
 async function runBridgeCommand(cmd: BridgeCommandMsg): Promise<unknown> {
   switch (cmd.command) {
@@ -1060,6 +1081,54 @@ async function runBridgeCommand(cmd: BridgeCommandMsg): Promise<unknown> {
         element_text: res.text ?? '',
         element_tag: res.tag ?? '',
         tab_id: tabId,
+      };
+    }
+
+    // PM-312：FOX 選方案 B —— 目標分頁不是 active 時暫時切過去截圖，再切回原本那個。
+    case 'take_screenshot': {
+      const tabId = await resolveTargetTab(cmd.params);
+      const tab = await chrome.tabs.get(tabId);
+      const windowId = tab.windowId;
+
+      let switched = false;
+      let previousActiveId: number | undefined;
+      if (!tab.active) {
+        const [prev] = await chrome.tabs.query({ active: true, windowId });
+        previousActiveId = prev?.id;
+        await chrome.tabs.update(tabId, { active: true });
+        switched = true;
+        await new Promise((r) => setTimeout(r, SCREENSHOT_RENDER_WAIT_MS));
+      }
+
+      let dataUrl: string;
+      try {
+        dataUrl = await chrome.tabs.captureVisibleTab(windowId, { format: 'png' });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        throw new Error(
+          `截圖失敗：${msg}\n` +
+            'captureVisibleTab 需要 `activeTab` 權限，而 `activeTab` 只在使用者「主動叫用擴充功能」（點擴充圖示／快捷鍵／右鍵選單）之後才會授予該分頁。' +
+            'bridge 的呼叫沒有使用者手勢，因此可能拿不到權限——請先在目標分頁點一下 BugEzy 圖示再重試。',
+        );
+      } finally {
+        // 不論成功失敗都要切回去，否則使用者的分頁被我們留在別的地方
+        if (switched && previousActiveId !== undefined) {
+          await chrome.tabs.update(previousActiveId, { active: true }).catch(() => undefined);
+        }
+      }
+
+      const base64 = dataUrl.replace(/^data:image\/png;base64,/, '');
+      const { width, height } = pngSize(base64);
+      const info = await readTabInfo(tabId);
+      return {
+        image_base64: base64,
+        format: 'png',
+        width,
+        height,
+        bytes: Math.round((base64.length * 3) / 4),
+        tab_id: tabId,
+        url: info?.url ?? tab.url ?? '',
+        ...(switched ? { warning: '已暫時切換分頁以截圖，截完已切回原本的分頁' } : {}),
       };
     }
 

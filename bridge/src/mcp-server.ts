@@ -142,6 +142,44 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     },
   );
 
+  // ── 工具 8：take_screenshot（PM-312）─────────────────────────────────────
+  server.tool(
+    'take_screenshot',
+    'Capture a PNG screenshot of a tab. Prefer read_page for understanding page structure — it costs ~95% fewer tokens; use screenshots only when you need to see visual layout, styling, or rendering bugs. If the target tab is not the active one it will be focused briefly and then switched back. 截取分頁的 PNG 截圖。**想了解頁面結構請優先用 read_page**（省約 95% token）；只有在需要看視覺排版、樣式或渲染問題時才用截圖。目標分頁若不是當前分頁，會短暫切過去截完再切回。',
+    {
+      tab_id: z
+        .number()
+        .int()
+        .optional()
+        .describe('省略 → 使用者當前分頁；指定 → 該分頁（非 active 時會暫時切換，截完切回）。'),
+    },
+    async (args) => {
+      const r = await link.send('take_screenshot', { tab_id: args.tab_id });
+      if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
+      const d = (r.data ?? {}) as {
+        image_base64?: string;
+        format?: string;
+        width?: number;
+        height?: number;
+        bytes?: number;
+        tab_id?: number;
+        url?: string;
+        warning?: string;
+      };
+      const { image_base64, ...meta } = d;
+      if (!image_base64) return txt({ error: '擴充功能沒有回傳圖片資料', ...meta });
+      // ⚠ 圖片走 MCP 原生的 image content，**不要塞進 JSON 文字裡**——
+      //   一張全螢幕 PNG 的 base64 動輒數十萬字元，當成文字回傳會直接灌爆 AI 的 context，
+      //   而且用戶端也無法把它當圖片顯示。
+      return {
+        content: [
+          { type: 'image' as const, data: image_base64, mimeType: 'image/png' },
+          { type: 'text' as const, text: JSON.stringify(meta, null, 2) },
+        ],
+      };
+    },
+  );
+
   // ── 工具 7：type_text（PM-311）───────────────────────────────────────────
   server.tool(
     'type_text',

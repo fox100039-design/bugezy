@@ -61,6 +61,17 @@ for (const bad of ['chrome://extensions', 'file:///C:/secret.txt', 'javascript:a
 for (const bad of ['not a url', '', undefined]) check(`拒絕 ${JSON.stringify(bad)}（不 crash）`, err(bad) !== null);
 check('錯誤訊息含 protocol 提示', (err('file:///x') || '').includes('http'), err('file:///x'));
 
+console.log('\n=== ① PM-312 pngSize（函式抽自 dist/background.js，用真實 PNG 檔驗證）===');
+const pngSize = grab(bg, 'function pngSize(base64)', 'pngSize');
+globalThis.atob ??= (b64) => Buffer.from(b64, 'base64').toString('binary');
+for (const [f, w, h] of [['icon-16.png', 16, 16], ['icon-48.png', 48, 48], ['icon-128.png', 128, 128]]) {
+  const b64 = readFileSync(`../extension/icons/${f}`).toString('base64');
+  const got = pngSize(b64);
+  check(`${f} → ${w}x${h}`, got.width === w && got.height === h, JSON.stringify(got));
+}
+check('非 PNG 資料 → 回 0x0（不 crash）', JSON.stringify(pngSize(Buffer.from('not a png at all').toString('base64'))) === '{"width":0,"height":0}');
+check('空字串 → 回 0x0（不 crash）', JSON.stringify(pngSize('')) === '{"width":0,"height":0}');
+
 console.log('\n=== ① PM-308 click 前置檢查存在性（原始碼靜態檢查）===');
 const content = readFileSync('../extension/src/content.ts', 'utf8');
 const cb = content.slice(content.indexOf('function bridgeClick'), content.indexOf('// background → content'));
@@ -128,7 +139,7 @@ proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initial
 
 console.log('\n=== ② MCP 工具註冊 ===');
 const tools = (await rpc('tools/list', {})).result.tools;
-check('工具總數 7', tools.length === 7, tools.map((t) => t.name).join(','));
+check('工具總數 8', tools.length === 8, tools.map((t) => t.name).join(','));
 for (const [name, req, opt] of [['navigate_to', 'url', 'tab_id'], ['click_element', 'selector', 'tab_id']]) {
   const t = tools.find((x) => x.name === name);
   check(`${name} 已註冊`, !!t, tools.map((x) => x.name).join(','));
@@ -141,6 +152,10 @@ const rp = tools.find((t) => t.name === 'read_page');
 check('read_page 已註冊', !!rp, tools.map((x) => x.name).join(','));
 check('  read_page.tab_id 可選 integer', rp?.inputSchema?.properties?.tab_id?.type === 'integer' && !(rp?.inputSchema?.required || []).includes('tab_id'));
 check('  read_page 描述提到敏感欄位遮蔽', /masked/i.test(rp?.description || '') && /遮蔽/.test(rp?.description || ''));
+const ss = tools.find((t) => t.name === 'take_screenshot');
+check('take_screenshot 已註冊', !!ss, tools.map((x) => x.name).join(','));
+check('  take_screenshot.tab_id 可選 integer', ss?.inputSchema?.properties?.tab_id?.type === 'integer' && !(ss?.inputSchema?.required || []).includes('tab_id'));
+check('  描述引導優先用 read_page（省 token）', /read_page/.test(ss?.description || '') && /95%/.test(ss?.description || ''));
 const tt = tools.find((t) => t.name === 'type_text');
 check('type_text 已註冊', !!tt, tools.map((x) => x.name).join(','));
 check('  type_text.selector + text 必填', ['selector','text'].every((k) => (tt?.inputSchema?.required || []).includes(k)), JSON.stringify(tt?.inputSchema?.required));
@@ -225,6 +240,31 @@ if (/port 19850 被占用/.test(stderr)) {
         }
       }
       await call('navigate_to', { url: 'https://bugezy.dev/guide', tab_id: r1.tab_id });
+
+      // ── PM-312 take_screenshot 端到端 ──
+      // 圖片走 MCP 原生 image content，所以要看 raw result 而不是 call() 的 JSON。
+      const shotRaw = await rpc('tools/call', { name: 'take_screenshot', arguments: { tab_id: r1.tab_id } });
+      const parts = shotRaw.result?.content || [];
+      const imgPart = parts.find((c) => c.type === 'image');
+      const metaPart = parts.find((c) => c.type === 'text');
+      const meta = metaPart ? JSON.parse(metaPart.text) : {};
+      console.log('    take_screenshot meta →', JSON.stringify(meta).slice(0, 220));
+      if (meta.error) {
+        check('312-1 截取分頁 → 回傳 PNG + 寬高', false, String(meta.error).slice(0, 300));
+      } else {
+        check('312-1 回傳 image content + 寬高', !!imgPart && meta.width > 0 && meta.height > 0, JSON.stringify(meta));
+        // 驗收 2：base64 真的可解碼成有效 PNG（檢查簽章 + IHDR 尺寸與 meta 一致）
+        const buf = Buffer.from(imgPart?.data || '', 'base64');
+        const sigOk = buf.length > 24 && buf[0] === 0x89 && buf.subarray(1, 4).toString() === 'PNG';
+        check('312-2 base64 是有效 PNG（簽章正確且可解碼）', sigOk, `len=${buf.length} head=${buf.subarray(0, 8).toString('hex')}`);
+        check('312-2 解碼後尺寸與回報的一致', sigOk && buf.readUInt32BE(16) === meta.width && buf.readUInt32BE(20) === meta.height,
+          `png=${sigOk ? buf.readUInt32BE(16) + 'x' + buf.readUInt32BE(20) : '?'} meta=${meta.width}x${meta.height}`);
+        check('312   mimeType 為 image/png', imgPart?.mimeType === 'image/png', String(imgPart?.mimeType));
+        check('312-3 非 active 分頁 → 有切換警告（方案 B）', typeof meta.warning === 'string' && /切換分頁/.test(meta.warning), JSON.stringify(meta.warning));
+      }
+      // 驗收 4：受限頁面 —— chrome:// 開不了（navigate_to 會擋），改用「分頁不存在」驗錯誤路徑
+      const shotBad = await call('take_screenshot', { tab_id: 99999999 });
+      check('312-4 分頁不存在 → error（不 crash）', !!shotBad.error, JSON.stringify(shotBad).slice(0, 200));
 
       const roundTripSel = (/click: "([^"]+)"/.exec(p1.content || '') || [])[1];
       if (roundTripSel) {
