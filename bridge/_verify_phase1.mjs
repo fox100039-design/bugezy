@@ -139,7 +139,7 @@ proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initial
 
 console.log('\n=== ② MCP 工具註冊 ===');
 const tools = (await rpc('tools/list', {})).result.tools;
-check('工具總數 9', tools.length === 9, tools.map((t) => t.name).join(','));
+check('工具總數 8（舊 get_live_errors 已移除）', tools.length === 8, tools.map((t) => t.name).join(','));
 for (const [name, req, opt] of [['navigate_to', 'url', 'tab_id'], ['click_element', 'selector', 'tab_id']]) {
   const t = tools.find((x) => x.name === name);
   check(`${name} 已註冊`, !!t, tools.map((x) => x.name).join(','));
@@ -156,7 +156,7 @@ const gbe = tools.find((t) => t.name === 'get_browser_errors');
 check('get_browser_errors 已註冊', !!gbe, tools.map((x) => x.name).join(','));
 check('  get_browser_errors.tab_id 可選 integer', gbe?.inputSchema?.properties?.tab_id?.type === 'integer' && !(gbe?.inputSchema?.required || []).includes('tab_id'));
 check('  描述明講只涵蓋最近 30 秒（避免空陣列被誤讀成沒問題）', /30 seconds/i.test(gbe?.description || '') && /30 秒/.test(gbe?.description || ''));
-check('  舊的 get_live_errors 已標示由 get_browser_errors 取代', /get_browser_errors/.test(tools.find((t) => t.name === 'get_live_errors')?.description || ''));
+check('  舊的 get_live_errors 已從工具清單移除（PM-314）', !tools.some((t) => t.name === 'get_live_errors'), tools.map((t) => t.name).join(','));
 const ss = tools.find((t) => t.name === 'take_screenshot');
 check('take_screenshot 已註冊', !!ss, tools.map((x) => x.name).join(','));
 check('  take_screenshot.tab_id 可選 integer', ss?.inputSchema?.properties?.tab_id?.type === 'integer' && !(ss?.inputSchema?.required || []).includes('tab_id'));
@@ -292,21 +292,32 @@ if (/port 19850 被占用/.test(stderr)) {
       const errs = await call('get_browser_errors', { tab_id: r1.tab_id });
       console.log('    get_browser_errors (404 頁) →', JSON.stringify(errs).slice(0, 400));
       check('313-1 回傳 console + network 兩個陣列', Array.isArray(errs.console_errors) && Array.isArray(errs.network_errors), JSON.stringify(errs).slice(0, 200));
-      if (errs.total_count > 0) {
-        for (const c of errs.console_errors) {
-          check(`313-2 console 每筆含 level/message/source（${String(c.message).slice(0, 24)}…）`,
-            !!c.level && typeof c.message === 'string' && !!c.source, JSON.stringify(c).slice(0, 160));
-          break;
-        }
-        for (const n of errs.network_errors) {
-          check(`313-3 network 每筆含 url/status/method（${n.status}）`,
-            !!n.url && typeof n.status === 'number' && !!n.method, JSON.stringify(n).slice(0, 160));
-          check('313   network 不回傳 requestBody/responseBody（可能含 token／個資）',
-            !('requestBody' in n) && !('responseBody' in n), JSON.stringify(n).slice(0, 160));
-          break;
-        }
+
+      // 欄位結構要用**任何一次真的抓到東西**的結果來驗，不能只押在 404 那一次——
+      // inject 的 buffer 每次換頁會重來，404 頁不一定會產生錯誤，
+      // 押錯地方會讓驗收在「其實有資料」的情況下被跳過（第一次跑就是這樣）。
+      const allConsole = [...(clean.console_errors || []), ...(errs.console_errors || [])];
+      const allNetwork = [...(clean.network_errors || []), ...(errs.network_errors || [])];
+
+      if (allConsole.length) {
+        const c = allConsole[0];
+        check(`313-2 console 每筆含 level/message/source（${String(c.message).slice(0, 28)}…）`,
+          !!c.level && typeof c.message === 'string' && !!c.source, JSON.stringify(c).slice(0, 200));
+        check('313   已濾掉 level:"info"（Web Vitals 之類不算錯誤）',
+          allConsole.every((x) => x.level !== 'info'), JSON.stringify(allConsole.map((x) => x.level)));
       } else {
-        console.log('  NOTE  這次沒抓到錯誤（404 頁可能沒觸發 4xx 資源請求或已超出 30 秒視窗），欄位結構未驗');
+        console.log('  LIMIT 313-2 未驗：這次兩個頁面都沒產生 console 錯誤');
+      }
+
+      if (allNetwork.length) {
+        const n = allNetwork[0];
+        check(`313-3 network 每筆含 url/status/method（${n.status}）`,
+          !!n.url && typeof n.status === 'number' && !!n.method, JSON.stringify(n).slice(0, 200));
+        check('313   🔴 network 不含 requestBody/responseBody（可能有 token／個資）',
+          !('requestBody' in n) && !('responseBody' in n), JSON.stringify(n).slice(0, 200));
+      } else {
+        console.log('  LIMIT 313-3 未驗：需要頁面自己發出 4xx/5xx 的 fetch/XHR 才會有資料');
+        console.log('        （導航到 404 只是文件請求，inject 攔的是 fetch/XHR，不會產生 network_errors）');
       }
       await call('navigate_to', { url: 'https://bugezy.dev/guide', tab_id: r1.tab_id });
 

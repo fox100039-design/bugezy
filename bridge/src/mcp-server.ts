@@ -51,43 +51,6 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     },
   );
 
-  // ── 工具 3：get_live_errors ─────────────────────────────────────────────
-  // PM-296 決策 1：與雲端 MCP 的同名工具維持一致的 `source` 語意。
-  //   本 bridge 只提供 source='browser'（即時）；'cache'（讀 R2 歷史）在雲端 MCP 上。
-  server.tool(
-    'get_live_errors',
-    "[Superseded by get_browser_errors — prefer that one] Read console errors and failed network requests from the user's current tab in real time. Kept for backward compatibility with the cloud MCP's source parameter; get_browser_errors returns the same data with richer fields and tab_id support. 【已由 get_browser_errors 取代，請優先用那一支】即時讀取當前分頁的 Console 錯誤與失敗的網路請求（4xx/5xx）。保留是為了與雲端 MCP 的 source 參數相容；get_browser_errors 提供同樣的資料，欄位更完整且支援 tab_id。",
-    {
-      source: z
-        .enum(['browser', 'cache'])
-        .optional()
-        .describe(
-          "'browser'（預設）= 透過 bridge 即時讀當前分頁；'cache' = 讀雲端 R2 快取，請改用 bugezy.dev/mcp 上的同名工具。",
-        ),
-    },
-    async (args) => {
-      const source = args.source ?? 'browser';
-      if (source === 'cache') {
-        // 明講去哪裡拿，而不是靜默回空陣列讓 AI 以為「沒有錯誤」
-        return txt({
-          error: "本 bridge 只提供 source='browser'（即時）。",
-          hint: "要讀歷史快取請改用雲端 MCP（https://bugezy.dev/mcp）的 get_live_errors。",
-        });
-      }
-      const r = await link.send('get_live_errors');
-      if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
-      const d = (r.data ?? {}) as { consoleLogs?: unknown[]; networkErrors?: unknown[] };
-      const consoleLogs = d.consoleLogs ?? [];
-      const networkErrors = d.networkErrors ?? [];
-      return txt({
-        source: 'browser',
-        console_errors: consoleLogs,
-        network_errors: networkErrors,
-        count: consoleLogs.length + networkErrors.length,
-      });
-    },
-  );
-
   // ── 工具 4：navigate_to（PM-307）─────────────────────────────────────────
   // 規格書 §13.2「出任務模式」：省略 tab_id → 開新分頁且 **active:false 不搶焦點**，
   //   並回傳 tab_id 供後續操作帶入；指定 tab_id → 在該分頁內導航。

@@ -1004,18 +1004,9 @@ async function runBridgeCommand(cmd: BridgeCommandMsg): Promise<unknown> {
       return { url: info.url ?? '', title: info.title ?? '', tab_id: tab.id };
     }
 
-    case 'get_live_errors': {
-      const tab = await activeTab();
-      if (!tab?.id) throw new Error('找不到作用中的分頁');
-      // 沿用 PM-51 既有通道：content script 向 inject 要背景 buffer 的即時 errors
-      const res = (await chrome.tabs.sendMessage(tab.id, { type: 'GET_LIVE_ERRORS' }).catch(() => null)) as
-        | { consoleLogs?: unknown[]; networkErrors?: unknown[] }
-        | null;
-      if (!res) {
-        throw new Error('當前分頁沒有 BugEzy content script（可能是 chrome:// 或商店頁面，或需要重新整理該分頁）');
-      }
-      return { consoleLogs: res.consoleLogs ?? [], networkErrors: res.networkErrors ?? [], url: tab.url ?? '' };
-    }
+    // PM-314：舊的 `get_live_errors` 指令已移除，改由 PM-313 的 `get_browser_errors` 提供
+    //   （同樣讀 inject 的背景緩存，但欄位更完整、支援 tab_id、且會標明 30 秒視窗）。
+    //   content script 的 `GET_LIVE_ERRORS` 訊息**保留不動**——即時監控（PM-51/52）仍在用。
 
     // PM-307：規格書 §13.2「出任務模式」的入口。
     case 'navigate_to': {
