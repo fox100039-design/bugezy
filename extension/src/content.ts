@@ -260,9 +260,11 @@ function bridgeClick(selector: string): Record<string, unknown> {
   if ((el as HTMLInputElement).disabled) {
     return { error: `元素「${selector}」是 disabled 狀態，點了不會有任何反應`, tag, text };
   }
-  const style = getComputedStyle(el);
-  if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) {
-    return { error: `元素「${selector}」目前不可見（${style.display === 'none' ? 'display:none' : style.visibility === 'hidden' ? 'visibility:hidden' : 'opacity:0'}），點了不會有任何反應`, tag, text };
+  // 用與 read_page 相同的 isElementVisible：它優先走 `checkVisibility()`，
+  // 而 **`getComputedStyle` 只看元素自己**——父層 `display:none` 時，子元素的
+  // computed display 仍然是 `block`（Chrome 也一樣），單看自己的樣式抓不到「被祖先隱藏」。
+  if (!isElementVisible(el)) {
+    return { error: `元素「${selector}」目前不可見（display/visibility/opacity 或其祖先被隱藏），點了不會有任何反應`, tag, text };
   }
   const rect = el.getBoundingClientRect();
   if (rect.width === 0 && rect.height === 0) {

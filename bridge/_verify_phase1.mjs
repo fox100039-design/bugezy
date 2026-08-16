@@ -2,8 +2,40 @@
 //   ① 從 **實際打包產物** 抽出純函式測試（不另抄一份，原始碼結構變動時測試會失敗而非靜默通過）
 //   ② 真 MCP JSON-RPC 檢查工具註冊與 schema
 //   ③ 接真 Chrome 跑端到端（需擴充功能已重新載入 + port 19850 未被其他 bridge 占用）
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+
+// ── Windows 上的程序回收 ───────────────────────────────────────────────────
+// `proc.kill()` 只殺得到直接 spawn 的那個 handle；Windows 上常常還隔著一層 wrapper，
+// 結果 bridge 子程序活下來繼續占住 port 19850 —— **下一次驗證就會整段 SKIP，而且
+// 看起來像環境問題**（PM-310 就是這樣卡掉的，連續兩次）。
+// 一律用 taskkill /T（連同整棵 process tree）/F（強制）。
+const isWin = process.platform === 'win32';
+function killTree(pid) {
+  if (!pid) return;
+  try {
+    if (isWin) execFileSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
+    else process.kill(pid, 'SIGKILL');
+  } catch { /* 已經死了就算了 */ }
+}
+
+/** 誰占著這個 port：回傳 { pid, cmd, parent }，沒人占用回 null。 */
+function portHolder(port) {
+  if (!isWin) return null;
+  try {
+    const ps = [
+      `$c = Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1`,
+      'if (-not $c) { return }',
+      '$p = Get-CimInstance Win32_Process -Filter "ProcessId=$($c.OwningProcess)"',
+      '$q = Get-CimInstance Win32_Process -Filter "ProcessId=$($p.ParentProcessId)"',
+      '"$($p.ProcessId)|$($p.CommandLine)|$($q.Name)"',
+    ].join('; ');
+    const out = execFileSync('powershell', ['-NoProfile', '-Command', ps], { encoding: 'utf8' }).trim();
+    if (!out) return null;
+    const [pid, cmd, parent] = out.split('|');
+    return { pid: Number(pid), cmd: (cmd || '').trim(), parent: (parent || '').trim() };
+  } catch { return null; }
+}
 
 let pass = 0, fail = 0;
 const check = (l, ok, extra = '') => { ok ? pass++ : fail++; console.log(ok ? '  PASS ' : '  FAIL ', l, ok ? '' : '→ ' + extra); };
@@ -33,7 +65,10 @@ console.log('\n=== ① PM-308 click 前置檢查存在性（原始碼靜態檢�
 const content = readFileSync('../extension/src/content.ts', 'utf8');
 const cb = content.slice(content.indexOf('function bridgeClick'), content.indexOf('// background → content'));
 check('有 disabled 檢查', /\.disabled/.test(cb));
-check('有 display:none / visibility:hidden 檢查', /display === 'none'/.test(cb) && /visibility === 'hidden'/.test(cb));
+// bridgeClick 改用共用的 isElementVisible（優先 checkVisibility，才抓得到「祖先被隱藏」）
+check('有可見性檢查且共用 isElementVisible', /!isElementVisible\(el\)/.test(cb), cb.slice(0, 200));
+const vis = content.slice(content.indexOf('function isElementVisible'), content.indexOf('/** 只取「直接屬於這個元素」'));
+check('isElementVisible 優先用 checkVisibility，並保留 computedStyle 後備', /checkVisibility/.test(vis) && /display !== 'none'/.test(vis) && /visibility !== 'hidden'/.test(vis), vis.slice(0, 200));
 check('有尺寸為 0 檢查', /getBoundingClientRect/.test(cb));
 check('有非法選擇器 try/catch', /catch\s*\{[\s\S]*?合法的 CSS 選擇器/.test(cb));
 check('textContent 截斷 100', /slice\(0, 100\)/.test(cb));
@@ -41,7 +76,30 @@ check('先取 text 再點擊（點擊可能導航）', cb.indexOf('textContent')
 check('找不到元素的錯誤含 selector', /找不到符合「\$\{selector\}」/.test(cb));
 
 // ═══ ② + ③ 真 MCP ═══
+// 啟動前先看 port 有沒有被占。**只有在確定是本 harness 洩漏的測試程序時才回收**
+// （父程序是 cmd.exe = 從 shell 直接跑的），且需帶 --reclaim 明確授權；
+// 若占用者是 Claude Code 自己 spawn 的 MCP server，一律不動它、只回報。
+const holder = portHolder(19850);
+if (holder) {
+  const leaked = /cmd\.exe/i.test(holder.parent) && /dist[\\/]index\.js/.test(holder.cmd);
+  console.log(`\n  ⚠ port 19850 已被 PID ${holder.pid} 占用（父程序 ${holder.parent}）`);
+  if (leaked && process.argv.includes('--reclaim')) {
+    console.log('    → 判定為本 harness 先前洩漏的測試程序，taskkill /T /F 回收');
+    killTree(holder.pid);
+    await sleep(1200);
+  } else if (leaked) {
+    console.log('    → 看起來是先前洩漏的測試程序；加上 --reclaim 參數即可自動回收');
+  } else {
+    console.log('    → 不是本 harness 的程序（可能是 Claude Code 的 MCP server），不會動它');
+  }
+}
+
 const proc = spawn(process.execPath, ['dist/index.js'], { stdio: ['pipe', 'pipe', 'pipe'] });
+// 不論正常結束、例外、還是 Ctrl-C，都要把 bridge 收乾淨
+const cleanup = () => killTree(proc.pid);
+process.on('exit', cleanup);
+process.on('SIGINT', () => { cleanup(); process.exit(130); });
+process.on('uncaughtException', (e) => { cleanup(); console.error(e); process.exit(1); });
 let stderr = ''; proc.stderr.on('data', (d) => { stderr += d.toString(); });
 let buf = ''; const w = new Map(); let id = 1;
 proc.stdout.on('data', (d) => {
@@ -111,8 +169,15 @@ if (/port 19850 被占用/.test(stderr)) {
       const r3 = await call('navigate_to', { url: 'https://example.com/', tab_id: 99999999 });
       check('307 §13.3 不存在 tab_id → 明確報錯', !!r3.error, JSON.stringify(r3));
 
-      const c1 = await call('click_element', { selector: 'a[href*="faq"]', tab_id: r1.tab_id });
-      console.log('    click_element →', JSON.stringify(c1));
+      // 點擊的目標**從 read_page 的輸出取**，不要寫死 selector：
+      //   寫死的話測的是「我猜這頁有沒有這個元素」，猜錯就變成假的 FAIL（第一次跑就是這樣：
+      //   分頁已經導到 /faq，頁面上自然沒有 a[href*="faq"]，工具其實正確回報了找不到）。
+      //   從 read_page 拿 selector 也正好就是驗收條件 2 要證明的事。
+      const pg = await call('read_page', { tab_id: r1.tab_id });
+      const firstSel = (/click: "([^"]+)"/.exec(pg.content || '') || [])[1];
+      check('308-1 前置：read_page 給得出可用的 selector', !!firstSel, (pg.content || '').slice(0, 200));
+      const c1 = firstSel ? await call('click_element', { selector: firstSel, tab_id: r1.tab_id }) : {};
+      console.log('    click_element(', firstSel, ') →', JSON.stringify(c1));
       check('308-1 點擊成功回 element_text', c1.clicked === true && typeof c1.element_text === 'string', JSON.stringify(c1));
       const c2 = await call('click_element', { selector: '#definitely-not-here-12345', tab_id: r1.tab_id });
       check('308-2 找不到元素 → error 含 selector', !!c2.error && String(c2.error).includes('definitely-not-here-12345'), JSON.stringify(c2));
@@ -121,6 +186,9 @@ if (/port 19850 被占用/.test(stderr)) {
       const c4 = await call('click_element', { selector: 'a[[[bad' , tab_id: r1.tab_id });
       check('308 非法選擇器 → error（不 crash）', !!c4.error, JSON.stringify(c4));
 
+      // 上面的 click 會觸發導航，分頁此刻可能還在載入（實測過一次讀到空的 content）。
+      // 先用 navigate_to 把分頁帶到一個確定的頁面——它本來就會等 load 完成才回傳。
+      await call('navigate_to', { url: 'https://bugezy.dev/guide', tab_id: r1.tab_id });
       const p1 = await call('read_page', { tab_id: r1.tab_id });
       console.log('    read_page →', JSON.stringify(p1).slice(0, 240));
       check('309-1 回傳結構化頁面文字', typeof p1.content === 'string' && p1.content.length > 0, JSON.stringify(p1).slice(0, 200));
@@ -128,15 +196,15 @@ if (/port 19850 被占用/.test(stderr)) {
       check('309-4 不超過 50000 字元', (p1.content || '').length <= 50_020, String((p1.content || '').length));
       check('309-5 回傳 tab_id + element_count', p1.tab_id === r1.tab_id && typeof p1.element_count === 'number', JSON.stringify({ t: p1.tab_id, c: p1.element_count }));
       // 用 read_page 給的 selector 真的去點一次——驗收條件 2 的真正意思
-      const firstSel = (/click: "([^"]+)"/.exec(p1.content || '') || [])[1];
-      if (firstSel) {
-        const c5 = await call('click_element', { selector: firstSel, tab_id: r1.tab_id });
-        check('309-2 read_page 的 selector 可直接餵給 click_element', c5.clicked === true || !!c5.error === false, JSON.stringify(c5));
+      const roundTripSel = (/click: "([^"]+)"/.exec(p1.content || '') || [])[1];
+      if (roundTripSel) {
+        const c5 = await call('click_element', { selector: roundTripSel, tab_id: r1.tab_id });
+        check('309-2 read_page 的 selector 可直接餵給 click_element', c5.clicked === true, JSON.stringify(c5));
       }
     }
   }
 }
 
-proc.kill();
+killTree(proc.pid);
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -20,12 +20,13 @@ const seg = (from, to) => {
 };
 const sensitive = seg('const SENSITIVE_RECT_SELECTORS', '/** PM-186：收集敏感欄位');
 const readPage = seg('const READ_PAGE_MAX_CHARS', '// background → content：控制指令');
-const js = ts.transpileModule(sensitive + '\n' + readPage, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
+const clickFn = seg('function bridgeClick', '// ── PM-309：read_page');
+const js = ts.transpileModule(sensitive + '\n' + clickFn + '\n' + readPage, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { pretendToBeVisual: true });
 const g = dom.window;
 const run = new Function('window', 'document', 'getComputedStyle', 'Node', 'NodeFilter', 'CSS',
-  js + '\nreturn { extractPageContent, uniqueSelector, ownText, isSensitiveField };');
+  js + '\nreturn { extractPageContent, uniqueSelector, ownText, isSensitiveField, bridgeClick };');
 const api = run(g, g.document, g.getComputedStyle.bind(g), g.Node, g.NodeFilter, g.CSS);
 
 const setBody = (html) => { g.document.body.innerHTML = html; };
@@ -86,6 +87,36 @@ console.log('\n=== ⑦ 優先取 <main> ===');
 setBody('<header><p>頁首不該出現</p></header><main><p>主要內容</p></main>');
 out = api.extractPageContent().content;
 check('有 <main> 時只讀 main', out.includes('主要內容') && !out.includes('頁首不該出現'), out);
+
+console.log('\n=== ⑧ PM-308 bridgeClick：不可點的元素要明確回報（不是靜默成功）===');
+// ⚠ jsdom 沒有版面引擎，`getBoundingClientRect()` 對**所有**元素都回 0×0，
+//   會讓「尺寸為 0」那道檢查對每個元素都成立。這裡把它中和掉（一律回非 0），
+//   才能測到後面的分支；「尺寸為 0」這條本身只有真瀏覽器測得準。
+g.Element.prototype.getBoundingClientRect = function () {
+  return { width: 100, height: 20, top: 0, left: 0, right: 100, bottom: 20, x: 0, y: 0, toJSON() {} };
+};
+setBody('<button id="ok">可以點</button>'
+      + '<button id="dis" disabled>不能點</button>'
+      + '<button id="none" style="display:none">自己 display:none</button>'
+      + '<button id="invis" style="visibility:hidden">隱形</button>');
+let clicked = 0;
+g.document.getElementById('ok').addEventListener('click', () => { clicked++; });
+const rOk = api.bridgeClick('#ok');
+check('可點的元素 → clicked:true 且真的觸發了 click', rOk.clicked === true && clicked === 1, JSON.stringify(rOk));
+check('  回傳 tag 與文字', rOk.tag === 'button' && rOk.text === '可以點', JSON.stringify(rOk));
+const rDis = api.bridgeClick('#dis');
+check('🔴 disabled → 回 error 而不是 clicked:true', !rDis.clicked && /disabled/.test(rDis.error || ''), JSON.stringify(rDis));
+const rNone = api.bridgeClick('#none');
+check('🔴 display:none → 回 error', !rNone.clicked && /不可見/.test(rNone.error || ''), JSON.stringify(rNone));
+const rInv = api.bridgeClick('#invis');
+check('🔴 visibility:hidden → 回 error', !rInv.clicked && /不可見/.test(rInv.error || ''), JSON.stringify(rInv));
+const rMiss = api.bridgeClick('#nope-12345');
+check('找不到 → error 含 selector', !rMiss.clicked && String(rMiss.error).includes('#nope-12345'), JSON.stringify(rMiss));
+const rBad = api.bridgeClick('a[[[bad');
+check('非法選擇器 → error（不 crash）', !rBad.clicked && /合法的 CSS 選擇器/.test(rBad.error || ''), JSON.stringify(rBad));
+check('不可點時仍回報找到的 tag/text（讓 AI 知道選對了元素）', rDis.tag === 'button' && rDis.text === '不能點', JSON.stringify(rDis));
+console.log('  NOTE  「祖先 display:none」與「尺寸為 0」兩條在 jsdom 測不準（無版面、無 checkVisibility），');
+console.log('        真瀏覽器走 el.checkVisibility() 與真實 rect —— 以端到端為準。');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
