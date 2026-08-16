@@ -139,7 +139,7 @@ proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initial
 
 console.log('\n=== ② MCP 工具註冊 ===');
 const tools = (await rpc('tools/list', {})).result.tools;
-check('工具總數 11（+get_page_health）', tools.length === 11, tools.map((t) => t.name).join(','));
+check('工具總數 14（11 瀏覽器 + 3 終端機監控）', tools.length === 14, tools.map((t) => t.name).join(','));
 for (const [name, req, opt] of [['navigate_to', 'url', 'tab_id'], ['click_element', 'selector', 'tab_id']]) {
   const t = tools.find((x) => x.name === name);
   check(`${name} 已註冊`, !!t, tools.map((x) => x.name).join(','));
@@ -364,9 +364,10 @@ if (/port 19850 被占用/.test(stderr)) {
       check('313-5 指定 tab_id → 回該分頁 + total_count', clean.tab_id === r1.tab_id && typeof clean.total_count === 'number', JSON.stringify(clean).slice(0, 200));
       check('313   回傳有標明 30 秒視窗（避免空陣列被誤讀成沒問題）', clean.window_seconds === 30 && typeof clean.note === 'string', JSON.stringify(clean).slice(0, 200));
 
-      // 驗收 2/3：製造真實的錯誤再讀。用一個必定 404 的路徑 → 頁面會有 network error，
-      // 而 bugezy.dev 的 404 頁在載入時也會產生資源載入失敗（console）。
-      await call('navigate_to', { url: 'https://bugezy.dev/definitely-not-a-real-page-313', tab_id: r1.tab_id });
+      // 驗收 2/3：PM-328 建了一個**故意出錯的測試頁**（同源的 404 + 500 fetch + console.error + throw），
+      // 因為導航到 404 只是文件請求，inject 攔的是 fetch/XHR，不會產生 network_errors。
+      await call('navigate_to', { url: 'https://bugezy.dev/test-errors', tab_id: r1.tab_id });
+      await sleep(1200); // 給頁面的 fetch 完成的時間
       const errs = await call('get_browser_errors', { tab_id: r1.tab_id });
       console.log('    get_browser_errors (404 頁) →', JSON.stringify(errs).slice(0, 400));
       check('313-1 回傳 console + network 兩個陣列', Array.isArray(errs.console_errors) && Array.isArray(errs.network_errors), JSON.stringify(errs).slice(0, 200));
@@ -394,8 +395,7 @@ if (/port 19850 被占用/.test(stderr)) {
         check('313   🔴 network 不含 requestBody/responseBody（可能有 token／個資）',
           !('requestBody' in n) && !('responseBody' in n), JSON.stringify(n).slice(0, 200));
       } else {
-        console.log('  LIMIT 313-3 未驗：需要頁面自己發出 4xx/5xx 的 fetch/XHR 才會有資料');
-        console.log('        （導航到 404 只是文件請求，inject 攔的是 fetch/XHR，不會產生 network_errors）');
+        check('313-3 network 每筆含 url/status/method', false, 'PM-328 測試頁應產生 network_errors，卻一筆都沒有');
       }
       await call('navigate_to', { url: 'https://bugezy.dev/guide', tab_id: r1.tab_id });
 

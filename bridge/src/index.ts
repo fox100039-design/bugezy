@@ -10,6 +10,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { ExtensionLink, log } from './extension-link.js';
 import { createMcpServer } from './mcp-server.js';
 import { BRIDGE_PORT } from './types.js';
+import { stopAllTerminalMonitors } from './terminal-monitor.js';
 
 async function main(): Promise<void> {
   const port = Number(process.env.BUGEZY_BRIDGE_PORT) || BRIDGE_PORT;
@@ -36,11 +37,15 @@ async function main(): Promise<void> {
 
   const shutdown = () => {
     log('\n👋 BugEzy Bridge 結束');
+    // PM-327：先收掉被監控的子程序，否則 `npm run dev` 之類會變成孤兒繼續占著 port
+    //   （PM-310 已經被自己留下的孤兒 bridge 卡過兩次，這裡不重蹈覆轍）
+    stopAllTerminalMonitors();
     link.close();
     process.exit(0);
   };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
+  process.on('exit', stopAllTerminalMonitors); // 正常結束（stdio 關閉）也要收
 }
 
 main().catch((e) => {

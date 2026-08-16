@@ -1756,6 +1756,63 @@ async function isActiveUserId(userId: string, env: Env): Promise<{ active: boole
   return { active: false, tier: 'free' };
 }
 
+// ── PM-328：測試用故意出錯頁（GET /test-errors）────────────────────────────
+// 目的：`get_browser_errors` 的 network_errors 端到端驗證需要一個「會自己發出失敗請求」的頁面，
+//   而 bugezy.dev 上原本沒有這種頁（PM-314 的 313-3 因此一直是 LIMIT）。
+//
+// 三個刻意的設計：
+//   ① **noindex + nofollow + 不進 sitemap** —— 一個滿是錯誤的頁被 Google 收錄只會誤導人。
+//   ② **請求全部同源** —— CSP 的 `connect-src` 只允許 'self'，打第三方（例如 httpstat.us）
+//      會變成 CSP 違規的 TypeError，而不是我們要測的 4xx/5xx 網路錯誤。
+//   ③ **頁面上明白寫出「這些錯誤是故意的」** —— 免得有人誤以為站壞了來回報。
+function testErrorsPage(): string {
+  return `<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>BugEzy 測試頁（故意出錯）· Intentional Test Errors</title>
+  <style>
+    body { background:#0f0f1a; color:#e0e0e0; font-family:system-ui,-apple-system,"Microsoft JhengHei",sans-serif;
+           line-height:1.7; max-width:760px; margin:0 auto; padding:40px 20px; }
+    h1 { font-size:22px; margin-bottom:8px; }
+    .warn { background:rgba(255,180,0,.12); border:1px solid rgba(255,180,0,.4); border-radius:10px;
+            padding:16px 20px; margin:20px 0; }
+    code { background:rgba(255,255,255,.08); padding:2px 6px; border-radius:4px; font-size:13px; }
+    ul { margin:10px 0 0 20px; } li { margin-bottom:6px; font-size:14px; }
+    .dim { color:rgba(255,255,255,.5); font-size:13px; }
+  </style>
+</head>
+<body>
+  <h1>🧪 BugEzy 測試頁 — 這裡的錯誤都是故意的</h1>
+  <div class="warn">
+    <strong>⚠ 這不是 bug，請不要回報。</strong><br>
+    This page <strong>intentionally</strong> triggers errors so that BugEzy's
+    <code>get_browser_errors</code> tool can be verified end-to-end. Nothing here is broken.
+  </div>
+  <p>本頁載入時會故意觸發以下四種錯誤：</p>
+  <ul>
+    <li><code>fetch('/api/this-does-not-exist')</code> → <strong>404</strong>（network error）</li>
+    <li><code>fetch('/api/test-error-500')</code> → <strong>500</strong>（network error）</li>
+    <li><code>console.error(...)</code> → console error</li>
+    <li><code>throw new Error(...)</code>（未捕獲）→ uncaught error</li>
+  </ul>
+  <p class="dim" style="margin-top:20px">
+    全部為同源請求（CSP <code>connect-src 'self'</code>）。本頁標記 <code>noindex, nofollow</code> 且不列入 sitemap。<br>
+    Added by PM-328.
+  </p>
+  <script>
+    // 故意的失敗請求——catch 掉是為了不讓 unhandledrejection 蓋過真正要測的 network error
+    fetch('/api/this-does-not-exist').catch(function () {});
+    fetch('/api/test-error-500').catch(function () {});
+    console.error('BugEzy test error: this is intentional (PM-328)');
+    setTimeout(function () { throw new Error('BugEzy test: uncaught error (PM-328, intentional)'); }, 100);
+  </script>
+</body>
+</html>`;
+}
+
 // ── PM-62：產品首頁（GET /）— 一頁式、深色主題、無 JS、RWD（綠界審核 + 客戶訪問用）──
 // PM-150：首頁改為函式（依 lang 中英切換）。CSS/script 不變，只切換文字 + <html lang> + meta。
 // PM-222：小白友善重構——漸進式揭露（Hero 講人話 → 三步驟 → 截圖展示 → 賣點 → 語言 → CTA）。
@@ -5876,6 +5933,24 @@ export default {
     if (request.method === 'GET' && path === '/faq') {
       const res = html(faqPage(getLang(request), explicitLang(request))); // PM-66/152
       res.headers.set('Cache-Control', 'no-store');
+      return res;
+    }
+
+    // ── PM-328：故意出錯的測試頁（解掉 313-3 LIMIT）────────────────────────
+    //   用途：讓 bridge 的 get_browser_errors 能在真實頁面上驗到 network_errors。
+    //   ⚠ 一律 noindex：這頁會噴一堆錯誤，被 Google 收錄只會誤導使用者，也不放進 sitemap。
+    if (request.method === 'GET' && path === '/api/test-error-500') {
+      // 同源的 500，供測試頁 fetch。**不放外部服務**——CSP 的 connect-src 只允許 'self'，
+      // 打第三方會變成 CSP 違規（TypeError），而不是我們要測的 5xx 網路錯誤。
+      return new Response(JSON.stringify({ error: 'intentional_test_error', by: 'PM-328' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' },
+      });
+    }
+    if (request.method === 'GET' && path === '/test-errors') {
+      const res = html(testErrorsPage());
+      res.headers.set('Cache-Control', 'no-store');
+      res.headers.set('X-Robots-Tag', 'noindex, nofollow');
       return res;
     }
     // PM-280：/install 已併入 /guide → 301 永久重導（舊連結、書籤、社群貼文、既有外部連結都不會斷，

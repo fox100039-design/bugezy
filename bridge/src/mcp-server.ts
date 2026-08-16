@@ -7,6 +7,13 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ExtensionLink } from './extension-link.js';
 import { NAVIGATE_TIMEOUT_MS } from './types.js';
+import {
+  getTerminalLiveErrors,
+  startTerminalMonitor,
+  stopTerminalMonitor,
+  MAX_MONITORS,
+  TERMINAL_WINDOW_MS,
+} from './terminal-monitor.js';
 
 /** 統一的回傳格式：MCP 只吃 content 陣列，這裡把物件序列化成文字。 */
 function txt(data: unknown) {
@@ -297,6 +304,36 @@ export function createMcpServer(link: ExtensionLink): McpServer {
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
       return txt(r.data);
     }),
+  );
+
+  // ── 工具 12~14：終端機即時監控（PM-327 / PM-D2）──────────────────────────
+  // 走的是 bridge 自己的 child_process，**不經過 Extension**——後端錯誤與瀏覽器無關。
+  server.tool(
+    'start_terminal_monitor',
+    'Run a shell command (e.g. "npm run dev") under BugEzy and watch its output for backend errors in real time. Python tracebacks and Node.js stacks are parsed into type/message/frames, and secrets (DB URIs, API keys, tokens, PII) are masked before anything is stored. Nothing is uploaded — the buffer stays on this machine. 在 BugEzy 底下執行指令（例如 `npm run dev`）並即時監看後端錯誤：Python traceback 與 Node.js stack 會被解析成 type/message/frames，DB 連線字串／金鑰／token／個資在存入前就遮罩。**資料不會上傳，緩存只留在本機。**',
+    {
+      command: z.string().min(1).describe('要執行並監控的指令，例如 `npm run dev`、`python app.py`。會透過 shell 執行。'),
+      cwd: z.string().optional().describe('工作目錄；省略則使用 bridge 的當前目錄。'),
+    },
+    gated(async (args) => txt(startTerminalMonitor(args.command, args.cwd))),
+  );
+
+  server.tool(
+    'get_terminal_live_errors',
+    `Read backend errors captured from a monitored command. Covers the last ${TERMINAL_WINDOW_MS / 1000} seconds. Parsed tracebacks appear in "errors"; stderr that could not be parsed appears in "unparsed_stderr" — an empty "errors" list does NOT mean the process is healthy. 讀取被監控指令的後端錯誤，涵蓋最近 ${TERMINAL_WINDOW_MS / 1000} 秒。解析成功的 traceback 在 errors，解析不出結構的原文在 unparsed_stderr——**errors 為空不代表程式沒問題**。`,
+    {
+      monitor_id: z.string().optional().describe('省略 → 最近啟動的那個 monitor。'),
+    },
+    gated(async (args) => txt(getTerminalLiveErrors(args.monitor_id))),
+  );
+
+  server.tool(
+    'stop_terminal_monitor',
+    `Stop a monitored command and its child processes. Up to ${MAX_MONITORS} commands can be monitored at once. 停止被監控的指令（連同子程序一起收）。同時最多監控 ${MAX_MONITORS} 個。`,
+    {
+      monitor_id: z.string().optional().describe('省略 → 最近啟動的那個 monitor。'),
+    },
+    gated(async (args) => txt(stopTerminalMonitor(args.monitor_id))),
   );
 
   return server;
