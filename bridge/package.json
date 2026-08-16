@@ -3,15 +3,28 @@
   "version": "0.1.0",
   "description": "BugEzy Bridge — 讓任何 MCP 相容的 AI 即時操作瀏覽器（localhost，資料不離開你的電腦）",
   "type": "module",
-  "bin": { "bugezy-bridge": "./dist/index.js" },
-  "files": ["dist", "README.md"],
-  "engines": { "node": ">=18" },
+  "bin": {
+    "bugezy-bridge": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "node dist/index.js"
   },
-  "keywords": ["bugezy", "mcp", "debug", "chrome-extension", "ai"],
+  "keywords": [
+    "bugezy",
+    "mcp",
+    "debug",
+    "chrome-extension",
+    "ai"
+  ],
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1",
@@ -21,6 +34,7 @@
   "devDependencies": {
     "@types/node": "^22",
     "@types/ws": "^8.5.12",
+    "jsdom": "^30.0.1",
     "typescript": "^5.4"
   }
 }

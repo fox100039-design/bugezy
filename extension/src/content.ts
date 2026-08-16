@@ -276,6 +276,185 @@ function bridgeClick(selector: string): Record<string, unknown> {
   return { clicked: true, tag, text };
 }
 
+// ── PM-309：read_page ──────────────────────────────────────────────────────
+const READ_PAGE_MAX_CHARS = 50_000;
+/** 這些標籤連同子樹整個跳過——對「頁面上有什麼可以操作」毫無幫助，卻很佔額度。 */
+const READ_PAGE_SKIP_TAGS = new Set(['script', 'style', 'svg', 'noscript', 'template', 'link', 'meta', 'head']);
+/** AI 後續會用 click_element 操作的元素，要特別標出並附上可直接使用的 selector。 */
+const READ_PAGE_INTERACTIVE = new Set(['a', 'button', 'input', 'select', 'textarea', 'summary', 'label']);
+
+function isElementVisible(el: Element): boolean {
+  const anyEl = el as Element & { checkVisibility?: (o?: unknown) => boolean };
+  if (typeof anyEl.checkVisibility === 'function') {
+    return anyEl.checkVisibility({ checkVisibilityCSS: true, checkOpacity: true });
+  }
+  const s = getComputedStyle(el);
+  return s.display !== 'none' && s.visibility !== 'hidden' && Number(s.opacity) !== 0;
+}
+
+/** 只取「直接屬於這個元素」的文字，**不含子元素**。見 extractPageContent 的說明。 */
+function ownText(el: Element): string {
+  let t = '';
+  for (const n of Array.from(el.childNodes)) {
+    if (n.nodeType === Node.TEXT_NODE) t += n.nodeValue ?? '';
+  }
+  return t.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * 產生**能唯一命中該元素**的 CSS selector，讓 AI 可以直接餵給 click_element。
+ * 只給 `[tag#id.class]` 這種描述是不夠的——`.btn` 可能同時命中十個按鈕，
+ * AI 照著點就會點錯，而且它無從得知自己點錯了。
+ */
+function uniqueSelector(el: Element): string {
+  const one = (s: string): boolean => {
+    try {
+      return document.querySelectorAll(s).length === 1;
+    } catch {
+      return false;
+    }
+  };
+  if (el.id) {
+    const s = `#${CSS.escape(el.id)}`;
+    if (one(s)) return s;
+  }
+  const parts: string[] = [];
+  let cur: Element | null = el;
+  while (cur && cur !== document.documentElement) {
+    const tag = cur.tagName.toLowerCase();
+    if (cur.id) {
+      parts.unshift(`#${CSS.escape(cur.id)}`);
+      break;
+    }
+    const parent: Element | null = cur.parentElement;
+    if (!parent) {
+      parts.unshift(tag);
+      break;
+    }
+    const sameTag = Array.from(parent.children).filter((c) => c.tagName === (cur as Element).tagName);
+    parts.unshift(sameTag.length > 1 ? `${tag}:nth-of-type(${sameTag.indexOf(cur) + 1})` : tag);
+    cur = parent;
+  }
+  return parts.join(' > ');
+}
+
+/** 這個 input 是不是敏感欄位——沿用 PM-186 既有的 SENSITIVE_RECT_SELECTORS，不另立一套定義。 */
+function isSensitiveField(el: Element): boolean {
+  return SENSITIVE_RECT_SELECTORS.some(({ sel }) => {
+    try {
+      return el.matches(sel);
+    } catch {
+      return false;
+    }
+  });
+}
+
+function describeElement(el: Element): string {
+  const tag = el.tagName.toLowerCase();
+  const id = el.id ? `#${el.id}` : '';
+  // class 只取前 3 個：Tailwind 之類的原子式 CSS 一個元素可以掛 20 個 class，全印會吃光額度
+  const cn = typeof el.className === 'string' ? el.className.trim() : '';
+  const cls = cn ? '.' + cn.split(/\s+/).slice(0, 3).join('.') : '';
+  return `${tag}${id}${cls}`;
+}
+
+/** input/select/textarea 的補充資訊：type + placeholder + value。 */
+function describeFormField(el: Element): string {
+  const bits: string[] = [];
+  const input = el as HTMLInputElement;
+  if (el.tagName === 'INPUT' && input.type) bits.push(`type=${input.type}`);
+  if (input.placeholder) bits.push(`placeholder="${input.placeholder.slice(0, 60)}"`);
+  if (input.disabled) bits.push('disabled');
+  if (input.required) bits.push('required');
+  // 🔴 敏感欄位（密碼／token／信用卡…）的值**絕不外送**。
+  //   read_page 的結果會整份進到 AI 的 context，等於送出第三方；
+  //   /privacy 承諾的遮蔽必須在這裡也成立（ARCHITECTURE §4-15：隱私政策要對得上程式碼）。
+  if (input.type === 'password' || isSensitiveField(el)) {
+    if (input.value) bits.push('value=<已遮蔽：敏感欄位>');
+  } else if (input.value) {
+    bits.push(`value="${input.value.slice(0, 60)}"`);
+  }
+  return bits.join(' ');
+}
+
+/**
+ * 把頁面壓成「給 AI 讀的文字地圖」，而不是原始 HTML。
+ *
+ * ⚠ **不能對每個元素都印 `textContent`**：`textContent` 含所有子孫的文字，
+ *   `<body>` 會印出整頁、它底下每一層 `<div>` 再各印一次同樣的內容。
+ *   一個中等頁面就會產生數十倍的重複文字，50000 字元的額度在前幾個元素就被吃光，
+ *   而真正有用的按鈕全部落在截斷線之後。所以這裡只印 **ownText（直屬文字節點）**，
+ *   並且**只有 interactive 元素、或本身帶文字的元素才輸出一行**。
+ */
+function extractPageContent(): { content: string; truncated: boolean } {
+  const root: Element | null = document.querySelector('main') ?? document.body;
+  if (!root) return { content: '', truncated: false };
+
+  const lines: string[] = [];
+  let len = 0;
+  let truncated = false;
+
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, {
+    acceptNode(node): number {
+      const el = node as Element;
+      if (READ_PAGE_SKIP_TAGS.has(el.tagName.toLowerCase())) return NodeFilter.FILTER_REJECT;
+      // 隱藏元素連同**整個子樹**一起跳過（父層看不見，子層也不可能看得見）。
+      // 用 FILTER_REJECT 而不是 FILTER_SKIP，順便省下大量 getComputedStyle 呼叫。
+      if (!isElementVisible(el)) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+
+  const depthOf = (el: Element): number => {
+    let d = 0;
+    let p = el.parentElement;
+    while (p && p !== root && d < 10) {
+      d++;
+      p = p.parentElement;
+    }
+    return d;
+  };
+
+  let node = walker.nextNode();
+  while (node) {
+    const el = node as Element;
+    const tag = el.tagName.toLowerCase();
+    const interactive = READ_PAGE_INTERACTIVE.has(tag);
+    const text = ownText(el);
+
+    let line = '';
+    if (tag === 'iframe') {
+      line = `${'  '.repeat(depthOf(el))}[${describeElement(el)}] （iframe 內容讀不到：content script 只跑在最上層框架）`;
+    } else if (interactive) {
+      const isField = tag === 'input' || tag === 'select' || tag === 'textarea';
+      const extra = isField ? describeFormField(el) : '';
+      // 🔴 表單欄位的 label **絕不可以退回 `.value`**——describeFormField 已經對敏感欄位
+      //   做過遮蔽，這裡若再拿原始 value 當標籤，密碼／token 會從標籤那一欄整個漏出去。
+      //   （這個洞是 PM-309 的 jsdom 測試抓到的，不是想出來的。）
+      const label =
+        text ||
+        el.getAttribute('aria-label') ||
+        (isField ? el.getAttribute('name') || '' : (el as HTMLInputElement).value || '');
+      line = `${'  '.repeat(depthOf(el))}[${describeElement(el)}] ${label}${extra ? ` ${extra}` : ''} → click: "${uniqueSelector(el)}"`;
+    } else if (text) {
+      line = `${'  '.repeat(depthOf(el))}[${describeElement(el)}] ${text}`;
+    }
+
+    if (line) {
+      if (len + line.length + 1 > READ_PAGE_MAX_CHARS) {
+        truncated = true;
+        break;
+      }
+      lines.push(line);
+      len += line.length + 1;
+    }
+    node = walker.nextNode();
+  }
+
+  if (truncated) lines.push('… (truncated)');
+  return { content: lines.join('\n'), truncated };
+}
+
 // background → content：控制指令
 chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse) => {
   if (msg.type === 'START_RECORDING') {
@@ -335,6 +514,15 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
     sendResponse({ url: location.href, title: document.title });
   } else if (msg.type === 'BRIDGE_CLICK') {
     sendResponse(bridgeClick(msg.selector));
+  } else if (msg.type === 'BRIDGE_READ_PAGE') {
+    const { content, truncated } = extractPageContent();
+    sendResponse({
+      url: location.href,
+      title: document.title,
+      content,
+      truncated,
+      element_count: document.querySelectorAll('*').length,
+    });
   } else if (msg.type === 'SET_MONITOR_BADGE') {
     // PM-52：轉發給 inject 顯示/隱藏頁面浮動 badge
     sendToInject(msg.show ? 'SHOW_MONITOR' : 'HIDE_MONITOR');

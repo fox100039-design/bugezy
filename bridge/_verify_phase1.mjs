@@ -70,7 +70,7 @@ proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initial
 
 console.log('\n=== ② MCP 工具註冊 ===');
 const tools = (await rpc('tools/list', {})).result.tools;
-check('工具總數 5', tools.length === 5, tools.map((t) => t.name).join(','));
+check('工具總數 6', tools.length === 6, tools.map((t) => t.name).join(','));
 for (const [name, req, opt] of [['navigate_to', 'url', 'tab_id'], ['click_element', 'selector', 'tab_id']]) {
   const t = tools.find((x) => x.name === name);
   check(`${name} 已註冊`, !!t, tools.map((x) => x.name).join(','));
@@ -79,6 +79,10 @@ for (const [name, req, opt] of [['navigate_to', 'url', 'tab_id'], ['click_elemen
   check(`  ${name}.${req} 必填`, r.includes(req), JSON.stringify(r));
   check(`  ${name}.${opt} 可選 integer`, p[opt]?.type === 'integer' && !r.includes(opt), JSON.stringify(p[opt]));
 }
+const rp = tools.find((t) => t.name === 'read_page');
+check('read_page 已註冊', !!rp, tools.map((x) => x.name).join(','));
+check('  read_page.tab_id 可選 integer', rp?.inputSchema?.properties?.tab_id?.type === 'integer' && !(rp?.inputSchema?.required || []).includes('tab_id'));
+check('  read_page 描述提到敏感欄位遮蔽', /masked/i.test(rp?.description || '') && /遮蔽/.test(rp?.description || ''));
 const cl = tools.find((t) => t.name === 'click_element');
 check('  click_element 描述說明「不會假裝點成功」', /silently succeeding/i.test(cl?.description || '') && /不會假裝點成功/.test(cl?.description || ''));
 // zod 驗證失敗由 MCP SDK 包成 isError 的 tool result（不是 JSON-RPC error），兩種都算擋下
@@ -116,6 +120,19 @@ if (/port 19850 被占用/.test(stderr)) {
       check('308-3/4 分頁不存在 → error', !!c3.error, JSON.stringify(c3));
       const c4 = await call('click_element', { selector: 'a[[[bad' , tab_id: r1.tab_id });
       check('308 非法選擇器 → error（不 crash）', !!c4.error, JSON.stringify(c4));
+
+      const p1 = await call('read_page', { tab_id: r1.tab_id });
+      console.log('    read_page →', JSON.stringify(p1).slice(0, 240));
+      check('309-1 回傳結構化頁面文字', typeof p1.content === 'string' && p1.content.length > 0, JSON.stringify(p1).slice(0, 200));
+      check('309-2 interactive 元素附 click: selector', /click: "/.test(p1.content || ''), (p1.content || '').slice(0, 300));
+      check('309-4 不超過 50000 字元', (p1.content || '').length <= 50_020, String((p1.content || '').length));
+      check('309-5 回傳 tab_id + element_count', p1.tab_id === r1.tab_id && typeof p1.element_count === 'number', JSON.stringify({ t: p1.tab_id, c: p1.element_count }));
+      // 用 read_page 給的 selector 真的去點一次——驗收條件 2 的真正意思
+      const firstSel = (/click: "([^"]+)"/.exec(p1.content || '') || [])[1];
+      if (firstSel) {
+        const c5 = await call('click_element', { selector: firstSel, tab_id: r1.tab_id });
+        check('309-2 read_page 的 selector 可直接餵給 click_element', c5.clicked === true || !!c5.error === false, JSON.stringify(c5));
+      }
     }
   }
 }

@@ -1063,6 +1063,26 @@ async function runBridgeCommand(cmd: BridgeCommandMsg): Promise<unknown> {
       };
     }
 
+    // PM-309
+    case 'read_page': {
+      const tabId = await resolveTargetTab(cmd.params);
+      const res = await sendToContent<{
+        url?: string;
+        title?: string;
+        content?: string;
+        truncated?: boolean;
+        element_count?: number;
+      }>(tabId, { type: 'BRIDGE_READ_PAGE' });
+      return {
+        url: res.url ?? '',
+        title: res.title ?? '',
+        content: res.content ?? '',
+        truncated: res.truncated ?? false,
+        element_count: res.element_count ?? 0,
+        tab_id: tabId,
+      };
+    }
+
     default:
       throw new Error(`未知的指令：${cmd.command}`);
   }

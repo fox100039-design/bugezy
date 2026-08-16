@@ -142,5 +142,24 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     },
   );
 
+  // ── 工具 6：read_page（PM-309）───────────────────────────────────────────
+  // 規格書 §8 的差異化重點：**用文字讀 DOM，而不是截圖**（省 95% token，且 AI 可以直接搜尋元素）。
+  server.tool(
+    'read_page',
+    'Read the page as a compact text map instead of a screenshot (~95% fewer tokens). Every interactive element comes with a ready-to-use CSS selector you can pass straight to click_element. Hidden elements are omitted; sensitive field values (passwords, tokens, card numbers) are masked. 以文字地圖方式讀取頁面（非截圖，省 95% token）；每個可互動元素都附上可直接餵給 click_element 的 selector；隱藏元素不列入，敏感欄位的值一律遮蔽。',
+    {
+      tab_id: z
+        .number()
+        .int()
+        .optional()
+        .describe('省略 → 使用者當前分頁；指定 → 該分頁（例如 navigate_to 開出來的背景分頁）。分頁已關閉會回報錯誤。'),
+    },
+    async (args) => {
+      const r = await link.send('read_page', { tab_id: args.tab_id });
+      if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
+      return txt(r.data);
+    },
+  );
+
   return server;
 }
