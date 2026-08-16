@@ -851,6 +851,81 @@ async function activeTab(): Promise<chrome.tabs.Tab | null> {
   return tab ?? null;
 }
 
+// ── PM-307：navigate_to ────────────────────────────────────────────────────
+/** 頁面載入上限。bridge 端的 NAVIGATE_TIMEOUT_MS 必須比這個**更長**，兩邊要一起改。 */
+const NAVIGATE_TIMEOUT_MS = 30_000;
+
+/**
+ * 只放行 http/https。擋掉 `chrome://`、`file://`、`javascript:`、`data:` 等——
+ * 前兩者 Chrome 本來就會拒絕（但錯誤訊息很難懂），後兩者則是**讓 AI 能在使用者
+ * 瀏覽器裡執行任意腳本或塞入任意內容**，不該由一支「開網頁」的工具提供。
+ */
+function parseNavigableUrl(raw: unknown): string {
+  if (typeof raw !== 'string' || !raw.trim()) throw new Error('缺少 url 參數');
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    throw new Error(`不是合法的網址：${raw}`);
+  }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+    throw new Error(`只接受 http:// 或 https:// 的網址，收到的是 ${u.protocol}//（${raw}）`);
+  }
+  return u.href;
+}
+
+/** 等某個分頁載入完成。逾時、分頁被關閉都會 reject，不會 hang 住。 */
+function waitForTabComplete(tabId: number, timeoutMs: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (err?: Error) => {
+      if (settled) return;
+      settled = true;
+      chrome.tabs.onUpdated.removeListener(onUpdated);
+      chrome.tabs.onRemoved.removeListener(onRemoved);
+      clearTimeout(timer);
+      if (err) reject(err);
+      else resolve();
+    };
+    const onUpdated = (id: number, info: chrome.tabs.TabChangeInfo) => {
+      // 注意：沒有 `tabs` 權限時 changeInfo 不含 url/title，但 **status 仍然有**。
+      if (id === tabId && info.status === 'complete') finish();
+    };
+    const onRemoved = (id: number) => {
+      if (id === tabId) finish(new Error(`分頁 ${tabId} 在載入完成前被關閉`));
+    };
+    const timer = setTimeout(
+      () => finish(new Error(`頁面載入逾時（${Math.round(timeoutMs / 1000)} 秒）`)),
+      timeoutMs,
+    ) as unknown as number;
+
+    chrome.tabs.onUpdated.addListener(onUpdated);
+    chrome.tabs.onRemoved.addListener(onRemoved);
+
+    // 補漏：`tabs.create` 要等它回傳才拿得到 id，這中間若頁面已經載完（快取／極小頁面），
+    //   'complete' 事件就已經過去了，光靠監聽會一路等到逾時。這裡補查一次當下狀態。
+    void chrome.tabs
+      .get(tabId)
+      .then((t) => {
+        if (t.status === 'complete') finish();
+      })
+      .catch(() => finish(new Error(`找不到分頁 ${tabId}（可能已被關閉）`)));
+  });
+}
+
+/**
+ * 讀分頁的 url/title。
+ * PM-298 的教訓：`tab.url` / `tab.title` 需要 `tabs` 權限，只有 `activeTab` 時
+ * Chrome 會**靜默回空字串**而不是報錯，所以一律問 content script。
+ */
+async function readTabInfo(tabId: number): Promise<{ url: string; title: string } | null> {
+  const info = (await chrome.tabs
+    .sendMessage(tabId, { type: 'GET_PAGE_INFO' })
+    .catch(() => null)) as { url?: string; title?: string } | null;
+  if (!info) return null;
+  return { url: info.url ?? '', title: info.title ?? '' };
+}
+
 /** 執行一則 bridge 指令，回傳要送回去的 data；失敗請 throw，由呼叫端包成 error。 */
 async function runBridgeCommand(cmd: BridgeCommandMsg): Promise<unknown> {
   switch (cmd.command) {
@@ -885,6 +960,50 @@ async function runBridgeCommand(cmd: BridgeCommandMsg): Promise<unknown> {
         throw new Error('當前分頁沒有 BugEzy content script（可能是 chrome:// 或商店頁面，或需要重新整理該分頁）');
       }
       return { consoleLogs: res.consoleLogs ?? [], networkErrors: res.networkErrors ?? [], url: tab.url ?? '' };
+    }
+
+    // PM-307：規格書 §13.2「出任務模式」的入口。
+    case 'navigate_to': {
+      const url = parseNavigableUrl(cmd.params?.url);
+      const rawTabId = cmd.params?.tab_id;
+      const hasTabId = rawTabId !== undefined && rawTabId !== null;
+      if (hasTabId && typeof rawTabId !== 'number') {
+        throw new Error(`tab_id 必須是數字，收到 ${typeof rawTabId}`);
+      }
+
+      let tabId: number;
+      if (hasTabId) {
+        // §13.3 邊界：分頁不存在要**明確報錯**，絕不可默默退回當前分頁——
+        //   那會讓 AI 在使用者正在用的分頁上執行原本要在自己分頁跑的操作。
+        tabId = rawTabId as number;
+        try {
+          await chrome.tabs.update(tabId, { url });
+        } catch (e) {
+          throw new Error(
+            `無法在分頁 ${tabId} 導航（該分頁可能已關閉）：${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+      } else {
+        // active:false = 不搶焦點，使用者可以繼續做自己的事（§13.2）
+        const tab = await chrome.tabs.create({ url, active: false });
+        if (typeof tab.id !== 'number') throw new Error('開啟新分頁失敗：Chrome 沒有回傳 tab id');
+        tabId = tab.id;
+      }
+
+      await waitForTabComplete(tabId, NAVIGATE_TIMEOUT_MS);
+
+      const info = await readTabInfo(tabId);
+      if (!info) {
+        // 導航本身成功了，只是讀不到標題（PDF 檢視器、下載頁、被政策擋住注入的頁面…）。
+        // 這種情況回錯誤會誤導 AI 以為沒開成，所以照實回報並附註原因。
+        return {
+          tab_id: tabId,
+          url,
+          title: '',
+          note: '導航已完成，但該分頁沒有 BugEzy content script（可能是 PDF、下載頁或 Chrome 政策不允許注入的頁面），因此無法讀取實際標題。',
+        };
+      }
+      return { tab_id: tabId, url: info.url || url, title: info.title };
     }
 
     default:

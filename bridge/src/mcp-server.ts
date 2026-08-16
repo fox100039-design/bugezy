@@ -6,6 +6,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ExtensionLink } from './extension-link.js';
+import { NAVIGATE_TIMEOUT_MS } from './types.js';
 
 /** 統一的回傳格式：MCP 只吃 content 陣列，這裡把物件序列化成文字。 */
 function txt(data: unknown) {
@@ -84,6 +85,38 @@ export function createMcpServer(link: ExtensionLink): McpServer {
         network_errors: networkErrors,
         count: consoleLogs.length + networkErrors.length,
       });
+    },
+  );
+
+  // ── 工具 4：navigate_to（PM-307）─────────────────────────────────────────
+  // 規格書 §13.2「出任務模式」：省略 tab_id → 開新分頁且 **active:false 不搶焦點**，
+  //   並回傳 tab_id 供後續操作帶入；指定 tab_id → 在該分頁內導航。
+  // 規格書 §13.3 邊界：tab_id 指到不存在的分頁要**明確報錯**，
+  //   絕不可默默退回當前分頁——那會讓 AI 在使用者的分頁上執行破壞性操作。
+  server.tool(
+    'navigate_to',
+    'Open a URL in the browser. Omit tab_id to open a NEW background tab (does not steal focus) and get its tab_id back for subsequent calls; pass tab_id to navigate an existing tab. Waits until the page finishes loading. 開啟網址：省略 tab_id 會開一個背景新分頁（不搶焦點）並回傳其 tab_id；指定 tab_id 則在該分頁內導航。會等頁面載入完成才回傳。',
+    {
+      url: z
+        .string()
+        .url()
+        .describe('要開啟的網址，必須是 http:// 或 https://（chrome://、file:// 等會被拒絕）。'),
+      tab_id: z
+        .number()
+        .int()
+        .optional()
+        .describe(
+          '省略 → 開新分頁（active:false，不搶焦點）並回傳新的 tab_id；指定 → 在該分頁內導航。分頁若已關閉會回報錯誤，不會改動其他分頁。',
+        ),
+    },
+    async (args) => {
+      const r = await link.send(
+        'navigate_to',
+        { url: args.url, tab_id: args.tab_id },
+        NAVIGATE_TIMEOUT_MS,
+      );
+      if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
+      return txt(r.data);
     },
   );
 

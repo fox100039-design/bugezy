@@ -49,6 +49,16 @@ export const BRIDGE_PORT = 19850;
 export const COMMAND_TIMEOUT_MS = 10_000;
 
 /**
+ * PM-307：導航類指令的逾時。**必須比 Extension 端的頁面載入上限更長**
+ * （`background.ts` 的 `NAVIGATE_TIMEOUT_MS` = 30 秒）。
+ *
+ * 否則 bridge 會先在 10 秒逾時、回一句籠統的「指令逾時」，而 Extension 那邊還在載入——
+ * AI 拿到的是錯誤的失敗原因，且分頁其實已經開了。留 5 秒緩衝讓 Extension 自己的
+ * 「頁面載入逾時（30 秒）」訊息先送達。
+ */
+export const NAVIGATE_TIMEOUT_MS = 35_000;
+
+/**
  * 心跳間隔。**必須明顯小於 30 秒**——MV3 的 service worker 閒置 30 秒就會被回收，
  * 而 Chrome 116 起 WebSocket 活動會重置這個閒置計時器，所以固定發心跳等於保活。
  * 這正是選 WebSocket 而非 HTTP 輪詢的關鍵理由（見 README）。

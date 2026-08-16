@@ -117,7 +117,12 @@ export class ExtensionLink {
    * **Extension 沒連線時不會拋錯**，而是回一個帶說明的失敗結果——
    * 讓 MCP 工具可以回「bridge 沒連上」給 AI，而不是讓整個工具呼叫爆掉。
    */
-  send(command: string, params?: Record<string, unknown>): Promise<BridgeResult> {
+  send(
+    command: string,
+    params?: Record<string, unknown>,
+    /** PM-307：導航等慢指令要拉長，見 types.ts 的 NAVIGATE_TIMEOUT_MS。 */
+    timeoutMs: number = COMMAND_TIMEOUT_MS,
+  ): Promise<BridgeResult> {
     if (this.disabledReason) {
       return Promise.resolve({ id: '', ok: false, error: this.disabledReason });
     }
@@ -134,8 +139,8 @@ export class ExtensionLink {
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        resolve({ id, ok: false, error: `指令 ${command} 逾時（${COMMAND_TIMEOUT_MS} ms 未回應）` });
-      }, COMMAND_TIMEOUT_MS);
+        resolve({ id, ok: false, error: `指令 ${command} 逾時（${timeoutMs} ms 未回應）` });
+      }, timeoutMs);
       this.pending.set(id, { resolve, timer });
       this.socket!.send(JSON.stringify(cmd));
     });
