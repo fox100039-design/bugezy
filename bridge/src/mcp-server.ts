@@ -145,7 +145,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
   // ── 工具 8：take_screenshot（PM-312）─────────────────────────────────────
   server.tool(
     'take_screenshot',
-    'Capture a PNG screenshot of a tab. Prefer read_page for understanding page structure — it costs ~95% fewer tokens; use screenshots only when you need to see visual layout, styling, or rendering bugs. If the target tab is not the active one it will be focused briefly and then switched back. 截取分頁的 PNG 截圖。**想了解頁面結構請優先用 read_page**（省約 95% token）；只有在需要看視覺排版、樣式或渲染問題時才用截圖。目標分頁若不是當前分頁，會短暫切過去截完再切回。',
+    'Capture a PNG screenshot of a tab. Prefer read_page for understanding page structure — it costs ~95% fewer tokens and needs no extra permission; use screenshots only for visual layout, styling, or rendering bugs. REQUIRES the user to have clicked the BugEzy toolbar icon on that tab first (Chrome only grants activeTab after a user gesture), and you must NOT navigate in between — navigating revokes it. If the target tab is not active it will be focused briefly and then switched back. 截取分頁的 PNG 截圖。**想了解頁面結構請優先用 read_page**（省約 95% token 且不需額外權限）；只有在需要看視覺排版、樣式或渲染問題時才截圖。**前提：使用者必須先在該分頁點過 BugEzy 圖示**（Chrome 的 activeTab 只在使用者手勢後授予），而且中間不能再導航（導航會撤銷）。目標分頁若不是當前分頁，會短暫切過去截完再切回。',
     {
       tab_id: z
         .number()

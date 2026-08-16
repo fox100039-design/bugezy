@@ -249,7 +249,13 @@ if (/port 19850 被占用/.test(stderr)) {
       const metaPart = parts.find((c) => c.type === 'text');
       const meta = metaPart ? JSON.parse(metaPart.text) : {};
       console.log('    take_screenshot meta →', JSON.stringify(meta).slice(0, 220));
-      if (meta.error) {
+      if (meta.error && /activeTab|all_urls/i.test(String(meta.error))) {
+        // 已知的 Chrome 權限限制（PM-312 實測確認），**不是程式缺陷**，待 FOX 決策。
+        // 標成 LIMIT 而不是 PASS——絕不假裝通過；也不標 FAIL，免得真正的迴歸被這條噪音蓋掉。
+        // 若哪天權限情況改變（加了 <all_urls>，或使用者先點過圖示），這裡會自動改走下面的正常驗證。
+        console.log('  LIMIT 312-1~3 未驗：captureVisibleTab 需 activeTab／<all_urls>，bridge 呼叫無使用者手勢');
+        console.log('        → 這是 Chrome 權限模型的限制，非實作問題；處置方式待決策');
+      } else if (meta.error) {
         check('312-1 截取分頁 → 回傳 PNG + 寬高', false, String(meta.error).slice(0, 300));
       } else {
         check('312-1 回傳 image content + 寬高', !!imgPart && meta.width > 0 && meta.height > 0, JSON.stringify(meta));

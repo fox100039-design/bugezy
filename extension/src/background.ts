@@ -1107,8 +1107,11 @@ async function runBridgeCommand(cmd: BridgeCommandMsg): Promise<unknown> {
         const msg = e instanceof Error ? e.message : String(e);
         throw new Error(
           `截圖失敗：${msg}\n` +
-            'captureVisibleTab 需要 `activeTab` 權限，而 `activeTab` 只在使用者「主動叫用擴充功能」（點擴充圖示／快捷鍵／右鍵選單）之後才會授予該分頁。' +
-            'bridge 的呼叫沒有使用者手勢，因此可能拿不到權限——請先在目標分頁點一下 BugEzy 圖示再重試。',
+            'captureVisibleTab 需要 `activeTab` 或 `<all_urls>` 權限。BugEzy 只有 `activeTab`，' +
+            '而它**只在使用者主動叫用擴充功能之後**才會授予該分頁（點擴充圖示／快捷鍵／右鍵選單），bridge 的呼叫沒有使用者手勢。\n' +
+            '可用的作法：請使用者在**要截圖的那個分頁**點一下 BugEzy 圖示，然後**直接呼叫 take_screenshot，中間不要再 navigate_to** ' +
+            '——導航會讓 `activeTab` 失效，又得重點一次。\n' +
+            '若只是要了解頁面內容，改用 read_page 不需要任何額外權限，而且省約 95% token。',
         );
       } finally {
         // 不論成功失敗都要切回去，否則使用者的分頁被我們留在別的地方
