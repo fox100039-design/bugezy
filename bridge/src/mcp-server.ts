@@ -105,6 +105,24 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     },
   );
 
+  // ── 工具 11：get_page_health（PM-317）────────────────────────────────────
+  server.tool(
+    'get_page_health',
+    'One-shot health check for a tab: a 0-100 score, a one-line summary, and a breakdown of errors, Core Web Vitals, accessibility and DOM stats. Use this first to decide whether a page needs deeper investigation — it replaces calling get_browser_errors + get_web_vitals separately. Note: the error portion only covers the last ~30 seconds, so a high score can mean "nothing broke recently" rather than "nothing is broken". 一鍵健檢：0~100 分數、一句話摘要，以及錯誤／Core Web Vitals／可及性／DOM 統計的細項。**建議先用這支決定要不要深入**，它可取代分別呼叫 get_browser_errors 與 get_web_vitals。注意：錯誤部分只涵蓋最近約 30 秒，高分可能只代表「最近沒出事」而非「沒有問題」。',
+    {
+      tab_id: z
+        .number()
+        .int()
+        .optional()
+        .describe('省略 → 使用者當前分頁；指定 → 該分頁。分頁已關閉會回報錯誤。'),
+    },
+    async (args) => {
+      const r = await link.send('get_page_health', { tab_id: args.tab_id });
+      if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
+      return txt(r.data);
+    },
+  );
+
   // ── 工具 10：get_web_vitals（PM-316）─────────────────────────────────────
   server.tool(
     'get_web_vitals',

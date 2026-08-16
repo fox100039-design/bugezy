@@ -381,6 +381,129 @@ function bridgeTypeText(selector: string, text: string): Record<string, unknown>
   };
 }
 
+// ── PM-317：get_page_health ────────────────────────────────────────────────
+/** 這些 input type 沒有標籤是正常的，不該算成可及性問題。 */
+const HEALTH_UNLABELLED_OK_TYPES = new Set(['hidden', 'submit', 'button', 'reset', 'image']);
+
+function countInputsWithoutLabel(): number {
+  const fields = Array.from(document.querySelectorAll('input, select, textarea'));
+  return fields.filter((f) => {
+    const t = (f as HTMLInputElement).type;
+    if (f.tagName === 'INPUT' && HEALTH_UNLABELLED_OK_TYPES.has(t)) return false;
+    // 有這幾種任何一種就算有標籤——只查 <label for> 會產生大量誤報
+    if (f.getAttribute('aria-label') || f.getAttribute('aria-labelledby') || f.getAttribute('title')) return false;
+    if (f.id) {
+      try {
+        if (document.querySelector(`label[for="${CSS.escape(f.id)}"]`)) return false;
+      } catch {
+        /* id 內容導致 selector 不合法，當作沒找到 */
+      }
+    }
+    if (f.closest('label')) return false; // 被 <label> 包起來也算
+    return true;
+  }).length;
+}
+
+/** 最大巢狀深度。用顯式堆疊而非遞迴，避免病態深度的頁面爆掉 call stack。 */
+function domMaxDepth(): number {
+  let max = 0;
+  const stack: Array<[Element, number]> = [[document.documentElement, 1]];
+  while (stack.length) {
+    const [el, d] = stack.pop() as [Element, number];
+    if (d > max) max = d;
+    for (const c of Array.from(el.children)) stack.push([c, d + 1]);
+  }
+  return max;
+}
+
+async function bridgeGetPageHealth(): Promise<Record<string, unknown>> {
+  // 直接呼叫同一組函式，**不繞回 bridge**（卡片要求，也少一次往返）
+  const [{ consoleLogs, networkErrors }, wv] = await Promise.all([
+    queryInjectLiveErrors(),
+    bridgeGetWebVitals(),
+  ]);
+
+  const consoleErrors = consoleLogs.filter((c) => c.level !== 'info');
+  const criticalCount = consoleErrors.filter((c) => c.level === 'error').length;
+
+  // 🔴 `alt=""` 是**合法的**（表示裝飾性圖片，螢幕閱讀器應略過）。
+  //    只計「沒有 alt 屬性」的，把 alt="" 也算成問題會在做得好的網站上狂噴誤報。
+  const imagesWithoutAlt = document.querySelectorAll('img:not([alt])').length;
+  const inputsWithoutLabel = countInputsWithoutLabel();
+  const missingLang = !document.documentElement.getAttribute('lang');
+  const missingTitle = !document.title.trim();
+
+  const elementCount = document.querySelectorAll('*').length;
+
+  const vitals = (wv.vitals ?? {}) as Record<string, { rating?: string } | null>;
+  const ratingOf = (k: string): string | null => vitals[k]?.rating ?? null;
+  // 只看真的有量到的指標——null（例如使用者還沒互動的 FID）不能算成失分，
+  // 否則每個「還沒被點過」的頁面都會被扣分。
+  const rated = ['LCP', 'FID', 'CLS', 'FCP', 'TTFB'].map(ratingOf).filter((r): r is string => r !== null);
+  const poorCount = rated.filter((r) => r === 'poor').length;
+  const niCount = rated.filter((r) => r === 'needs-improvement').length;
+
+  const deductions = {
+    console: Math.min(consoleErrors.length * 5, 30),
+    network: Math.min(networkErrors.length * 5, 20),
+    poor_vitals: poorCount * 10,
+    needs_improvement_vitals: niCount * 5,
+    images_without_alt: Math.min(imagesWithoutAlt * 2, 10),
+    inputs_without_label: Math.min(inputsWithoutLabel * 3, 10),
+    missing_lang: missingLang ? 5 : 0,
+    large_dom: elementCount > 3000 ? 5 : 0,
+  };
+  const total = Object.values(deductions).reduce((a, b) => a + b, 0);
+  const score = Math.max(0, Math.min(100, 100 - total));
+
+  const a11yIssues = imagesWithoutAlt + inputsWithoutLabel + (missingLang ? 1 : 0) + (missingTitle ? 1 : 0);
+  const bits: string[] = [];
+  if (consoleErrors.length || networkErrors.length) {
+    bits.push(`${consoleErrors.length + networkErrors.length} 個錯誤`);
+  }
+  if (poorCount) bits.push(`${poorCount} 項效能不合格`);
+  else if (niCount) bits.push(`${niCount} 項效能待改進`);
+  if (a11yIssues) bits.push(`${a11yIssues} 個可及性問題`);
+  const summary = bits.length
+    ? `${score} 分：${bits.join('、')}。`
+    : `${score} 分：最近 30 秒內沒有錯誤，效能與可及性檢查皆通過。`;
+
+  return {
+    score,
+    summary,
+    details: {
+      errors: {
+        console_count: consoleErrors.length,
+        network_count: networkErrors.length,
+        critical_count: criticalCount,
+      },
+      performance: {
+        lcp_rating: ratingOf('LCP'),
+        fcp_rating: ratingOf('FCP'),
+        cls_rating: ratingOf('CLS'),
+        ttfb_rating: ratingOf('TTFB'),
+      },
+      accessibility: {
+        images_without_alt: imagesWithoutAlt,
+        inputs_without_label: inputsWithoutLabel,
+        missing_lang: missingLang,
+        missing_title: missingTitle,
+      },
+      dom: {
+        element_count: elementCount,
+        max_depth: domMaxDepth(),
+        inline_styles_count: document.querySelectorAll('[style]').length,
+        iframes_count: document.querySelectorAll('iframe').length,
+      },
+    },
+    deductions,
+    // 分數的錯誤部分沿用 inject 的 30 秒滾動緩存（同 get_browser_errors），
+    // 不講明的話「100 分」會被讀成「這頁沒問題」，但可能只是錯誤已被裁掉。
+    errors_window_seconds: 30,
+    note: '錯誤統計只涵蓋最近 30 秒（頁面內滾動緩存）。要納入「載入當下」的錯誤，請先重新整理該分頁再呼叫。可及性檢查不含連結有效性（需實際發出請求，本工具不做）。',
+  };
+}
+
 // ── PM-316：get_web_vitals ─────────────────────────────────────────────────
 /** Google 官方門檻（good / needs-improvement 的上界）。 */
 const VITAL_THRESHOLDS: Record<string, [number, number]> = {
@@ -884,6 +1007,8 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
     sendResponse(bridgeClick(msg.selector));
   } else if (msg.type === 'BRIDGE_TYPE_TEXT') {
     sendResponse(bridgeTypeText(msg.selector, msg.text));
+  } else if (msg.type === 'BRIDGE_GET_PAGE_HEALTH') {
+    void bridgeGetPageHealth().then(sendResponse);
   } else if (msg.type === 'BRIDGE_GET_WEB_VITALS') {
     void bridgeGetWebVitals().then(sendResponse);
   } else if (msg.type === 'BRIDGE_ANALYZE_ELEMENT') {

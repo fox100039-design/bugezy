@@ -21,17 +21,18 @@ const seg = (from, to) => {
 const sensitive = seg('const SENSITIVE_RECT_SELECTORS', '/** PM-186：收集敏感欄位');
 const readPage = seg('const READ_PAGE_MAX_CHARS', '// background → content：控制指令');
 const clickFn = seg('function bridgeClick', '// ── PM-311：type_text');
-const typeFn = seg('const TYPE_TEXT_REJECTED_INPUT_TYPES', '// ── PM-316：get_web_vitals');
+const typeFn = seg('const TYPE_TEXT_REJECTED_INPUT_TYPES', '// ── PM-317：get_page_health');
+const healthFn = seg('const HEALTH_UNLABELLED_OK_TYPES', '// ── PM-316：get_web_vitals');
 const vitalsFn = seg('const VITAL_THRESHOLDS', '// ── PM-315：analyze_element');
 const analyzeFn = seg('const ANALYZE_STYLE_PROPS', '// ── PM-309：read_page');
-const js = ts.transpileModule(sensitive + '\n' + clickFn + '\n' + typeFn + '\n' + vitalsFn + '\n' + analyzeFn + '\n' + readPage, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
+const js = ts.transpileModule(sensitive + '\n' + clickFn + '\n' + typeFn + '\n' + healthFn + '\n' + vitalsFn + '\n' + analyzeFn + '\n' + readPage, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { pretendToBeVisual: true });
 const g = dom.window;
 // content script 在頁面裡有這些全域；沙箱裡要手動接進來
 const run = new Function('window', 'document', 'getComputedStyle', 'Node', 'NodeFilter', 'CSS',
   'HTMLInputElement', 'HTMLTextAreaElement', 'Event', 'InputEvent', 'performance', 'PerformanceObserver',
-  js + '\nreturn { extractPageContent, uniqueSelector, ownText, isSensitiveField, bridgeClick, bridgeTypeText, bridgeAnalyzeElement, rateVital, summarizeResources };');
+  js + '\nreturn { extractPageContent, uniqueSelector, ownText, isSensitiveField, bridgeClick, bridgeTypeText, bridgeAnalyzeElement, rateVital, summarizeResources, countInputsWithoutLabel, domMaxDepth };');
 const api = run(g, g.document, g.getComputedStyle.bind(g), g.Node, g.NodeFilter, g.CSS,
   g.HTMLInputElement, g.HTMLTextAreaElement, g.Event, g.InputEvent, g.performance, g.PerformanceObserver);
 
@@ -257,6 +258,45 @@ check('4. by_type 分類正確（script/css/image/font/other）',
 check('4. total_size_kb 合計正確', Math.abs(rs.total_size_kb - (2048 + 1024 + 512 + 256) / 1024) < 0.05, String(rs.total_size_kb));
 check('🔴 transferSize=0 的資源有被計數並揭露「總大小為低估值」',
   rs.size_unknown_count === 1 && /低估/.test(rs.size_note || ''), JSON.stringify({ n: rs.size_unknown_count, note: rs.size_note }));
+
+console.log('\n=== ⑫ PM-317 可及性判定（最容易誤報的兩項）===');
+setBody('<img src="a.png">'                       // 沒有 alt → 算問題
+      + '<img src="b.png" alt="">'                // 裝飾性圖片，**合法**，不算問題
+      + '<img src="c.png" alt="說明">'            // 有 alt → 不算
+      + '<input id="i1"><label for="i1">有標籤</label>'      // label[for] → 不算
+      + '<label>包起來<input id="i2"></label>'               // 被 label 包 → 不算
+      + '<input id="i3" aria-label="無障礙標籤">'            // aria-label → 不算
+      + '<input id="i4" title="標題">'                       // title → 不算
+      + '<input type="hidden" id="i5">'                      // hidden → 不算
+      + '<input type="submit" id="i6">'                      // submit → 不算
+      + '<input id="i7">');                                  // 真的沒標籤 → 算 1
+check('🔴 alt="" 是合法的裝飾性圖片，不算問題', g.document.querySelectorAll('img:not([alt])').length === 1,
+  String(g.document.querySelectorAll('img:not([alt])').length));
+const noLabel = api.countInputsWithoutLabel();
+check('🔴 label[for] / 包裹 / aria-label / title / hidden / submit 都不算誤報', noLabel === 1, `算出 ${noLabel} 個，應為 1`);
+
+console.log('\n=== ⑫ PM-317 domMaxDepth ===');
+setBody('<div><div><div><span>深</span></div></div></div>');
+// html > body > div > div > div > span = 6
+check('巢狀深度計算正確', api.domMaxDepth() === 6, String(api.domMaxDepth()));
+
+console.log('\n=== ⑫ PM-317 評分規則（依卡片的扣分表逐條核對）===');
+// 直接驗扣分公式，避免只靠端到端「看起來分數合理」
+const deduct = (n, per, cap) => Math.min(n * per, cap);
+check('console error -5/個上限 -30', deduct(10, 5, 30) === 30 && deduct(3, 5, 30) === 15);
+check('network error -5/個上限 -20', deduct(10, 5, 20) === 20 && deduct(2, 5, 20) === 10);
+check('無 alt 圖片 -2/個上限 -10', deduct(9, 2, 10) === 10 && deduct(3, 2, 10) === 6);
+check('無 label input -3/個上限 -10', deduct(9, 3, 10) === 10 && deduct(2, 3, 10) === 6);
+const healthSrc = readFileSync('../extension/src/content.ts', 'utf8');
+const hs = healthSrc.slice(healthSrc.indexOf('const deductions = {'), healthSrc.indexOf('const total = Object.values'));
+check('   實作的扣分表與卡片一致（console 5/30、network 5/20、poor 10、ni 5、alt 2/10、label 3/10、lang 5、dom 5）',
+  /consoleErrors\.length \* 5, 30/.test(hs) && /networkErrors\.length \* 5, 20/.test(hs)
+  && /poorCount \* 10/.test(hs) && /niCount \* 5/.test(hs)
+  && /imagesWithoutAlt \* 2, 10/.test(hs) && /inputsWithoutLabel \* 3, 10/.test(hs)
+  && /missingLang \? 5 : 0/.test(hs) && /elementCount > 3000 \? 5 : 0/.test(hs), hs.slice(0, 300));
+const hs2 = healthSrc.slice(healthSrc.indexOf('const rated ='), healthSrc.indexOf('const deductions'));
+check('🔴 null 的指標不列入扣分（未互動的 FID 不能扣分）', /filter\(\(r\): r is string => r !== null\)/.test(hs2), hs2.slice(0, 200));
+check('   score 夾在 0~100', /Math\.max\(0, Math\.min\(100, 100 - total\)\)/.test(healthSrc));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

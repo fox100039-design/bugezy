@@ -139,7 +139,7 @@ proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initial
 
 console.log('\n=== ② MCP 工具註冊 ===');
 const tools = (await rpc('tools/list', {})).result.tools;
-check('工具總數 10（+get_web_vitals）', tools.length === 10, tools.map((t) => t.name).join(','));
+check('工具總數 11（+get_page_health）', tools.length === 11, tools.map((t) => t.name).join(','));
 for (const [name, req, opt] of [['navigate_to', 'url', 'tab_id'], ['click_element', 'selector', 'tab_id']]) {
   const t = tools.find((x) => x.name === name);
   check(`${name} 已註冊`, !!t, tools.map((x) => x.name).join(','));
@@ -152,6 +152,10 @@ const rp = tools.find((t) => t.name === 'read_page');
 check('read_page 已註冊', !!rp, tools.map((x) => x.name).join(','));
 check('  read_page.tab_id 可選 integer', rp?.inputSchema?.properties?.tab_id?.type === 'integer' && !(rp?.inputSchema?.required || []).includes('tab_id'));
 check('  read_page 描述提到敏感欄位遮蔽', /masked/i.test(rp?.description || '') && /遮蔽/.test(rp?.description || ''));
+const ph = tools.find((t) => t.name === 'get_page_health');
+check('get_page_health 已註冊', !!ph, tools.map((x) => x.name).join(','));
+check('  get_page_health.tab_id 可選 integer', ph?.inputSchema?.properties?.tab_id?.type === 'integer' && !(ph?.inputSchema?.required || []).includes('tab_id'));
+check('  描述提醒高分可能只是「最近沒出事」', /nothing broke recently/i.test(ph?.description || '') && /最近沒出事/.test(ph?.description || ''));
 const wv = tools.find((t) => t.name === 'get_web_vitals');
 check('get_web_vitals 已註冊', !!wv, tools.map((x) => x.name).join(','));
 check('  get_web_vitals.tab_id 可選 integer', wv?.inputSchema?.properties?.tab_id?.type === 'integer' && !(wv?.inputSchema?.required || []).includes('tab_id'));
@@ -284,6 +288,24 @@ if (/port 19850 被占用/.test(stderr)) {
       // 驗收 4：受限頁面 —— chrome:// 開不了（navigate_to 會擋），改用「分頁不存在」驗錯誤路徑
       const shotBad = await call('take_screenshot', { tab_id: 99999999 });
       check('312-4 分頁不存在 → error（不 crash）', !!shotBad.error, JSON.stringify(shotBad).slice(0, 200));
+
+      // ── PM-317 get_page_health 端到端 ──
+      const gh = await call('get_page_health', { tab_id: r1.tab_id });
+      console.log('    get_page_health →', JSON.stringify(gh).slice(0, 320));
+      if (gh.error) {
+        check('317-1 回傳 score + summary + details', false, String(gh.error).slice(0, 200));
+      } else {
+        check('317-1 score 為 0~100 的數字 + 有 summary/details',
+          typeof gh.score === 'number' && gh.score >= 0 && gh.score <= 100 && typeof gh.summary === 'string' && !!gh.details,
+          JSON.stringify({ s: gh.score, sum: gh.summary }));
+        check('317-3 details 含 errors/performance/accessibility/dom 四區塊',
+          ['errors', 'performance', 'accessibility', 'dom'].every((k) => k in gh.details), Object.keys(gh.details).join(','));
+        check('317-4 summary 是人類可讀的一句話（含分數且非空）',
+          gh.summary.length > 5 && gh.summary.includes(String(gh.score)), gh.summary);
+        check('317-2 乾淨頁面分數偏高（bugezy.dev/guide 應 ≥ 70）', gh.score >= 70, `score=${gh.score} deductions=${JSON.stringify(gh.deductions)}`);
+        check('317   dom 統計為合理數值', gh.details.dom.element_count > 0 && gh.details.dom.max_depth > 0, JSON.stringify(gh.details.dom));
+        check('317   有揭露錯誤只涵蓋 30 秒', gh.errors_window_seconds === 30 && typeof gh.note === 'string', JSON.stringify(gh.errors_window_seconds));
+      }
 
       // ── PM-316 get_web_vitals 端到端 ──
       const wvR = await call('get_web_vitals', { tab_id: r1.tab_id });
