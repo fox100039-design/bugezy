@@ -381,6 +381,198 @@ function bridgeTypeText(selector: string, text: string): Record<string, unknown>
   };
 }
 
+// ── PM-330／331：圖釘系統（依 PM-329 設計）──────────────────────────────────
+//
+// 圖釘存在 **content script 的模組變數**裡：content script 本來就每個分頁一份，
+// 分頁隔離天然成立，不需要另存 tab_id。分頁關閉／重整 → 圖釘消失是**正確語意**
+// （圖釘綁的是「這一頁的這個元素」，頁面沒了就沒有指涉對象）。
+//
+// ⚠ 不放 background 的 Map：MV3 service worker 閒置 30 秒被回收，Map 會一起消失（PM-298 的坑）。
+// ⚠ 不放 chrome.storage.session：頁面重整後 selector 可能指向不同元素，
+//   復原一個指向錯元素的圖釘，比讓它消失更糟。
+
+interface Pin {
+  id: string;
+  selector: string;
+  description: string;
+  status: 'active' | 'warning' | 'error' | 'stale';
+  created_at: number;
+  last_check: { at: number; summary: string } | null;
+}
+
+const pins = new Map<string, Pin>();
+let pinSeq = 0;
+let pinLayer: HTMLElement | null = null;
+let pinRepositionQueued = false;
+
+const PIN_STATUS_COLOR: Record<Pin['status'], string> = {
+  active: '#22c55e',
+  warning: '#eab308',
+  error: '#ef4444',
+  stale: '#6b7280',
+};
+
+/** 建立（或取得）覆蓋層容器。**一律用 DOM API，不用 innerHTML** —— Trusted Types 網站會擋掉字串賦值（PM-69）。 */
+function ensurePinLayer(): HTMLElement {
+  if (pinLayer && pinLayer.isConnected) return pinLayer;
+  const el = document.createElement('div');
+  el.setAttribute('data-bugezy-pins', '1');
+  Object.assign(el.style, {
+    position: 'fixed',
+    inset: '0',
+    zIndex: '2147483646',
+    pointerEvents: 'none', // 讓點擊穿透到頁面
+  } as CSSStyleDeclaration);
+  document.documentElement.appendChild(el);
+  pinLayer = el;
+  return el;
+}
+
+/** 重畫所有圖釘的位置。滾動／resize 時用 rAF 節流。 */
+function repositionPins(): void {
+  if (!pins.size) return;
+  const layer = ensurePinLayer();
+  while (layer.firstChild) layer.removeChild(layer.firstChild);
+  for (const pin of pins.values()) {
+    let el: Element | null = null;
+    try {
+      el = document.querySelector(pin.selector);
+    } catch {
+      el = null;
+    }
+    if (!el) {
+      pin.status = 'stale'; // 元素不見了 → 失去目標，但不刪除（AI 需要知道）
+      continue;
+    }
+    const r = el.getBoundingClientRect();
+    const dot = document.createElement('div');
+    Object.assign(dot.style, {
+      position: 'absolute',
+      left: `${Math.max(0, r.left - 6)}px`,
+      top: `${Math.max(0, r.top - 6)}px`,
+      width: '14px',
+      height: '14px',
+      borderRadius: '50%',
+      background: PIN_STATUS_COLOR[pin.status],
+      border: '2px solid #fff',
+      boxShadow: '0 1px 4px rgba(0,0,0,.4)',
+      pointerEvents: 'auto', // 只有圓點可點（PM-304 的結論：整層 none 就收不到點擊）
+      cursor: 'help',
+    } as CSSStyleDeclaration);
+    dot.title = `📌 ${pin.description || '(無描述)'}
+${pin.selector}
+狀態：${pin.status}`;
+    layer.appendChild(dot);
+  }
+}
+
+function queueReposition(): void {
+  if (pinRepositionQueued) return;
+  pinRepositionQueued = true;
+  requestAnimationFrame(() => {
+    pinRepositionQueued = false;
+    repositionPins();
+  });
+}
+window.addEventListener('scroll', queueReposition, { passive: true });
+window.addEventListener('resize', queueReposition, { passive: true });
+
+function findPinBySelector(selector: string): Pin | undefined {
+  for (const p of pins.values()) if (p.selector === selector) return p;
+  return undefined;
+}
+
+function bridgePinElement(selector: string, description: string): Record<string, unknown> {
+  if (typeof selector !== 'string' || !selector.trim()) return { error: '缺少 selector 參數' };
+  let el: Element | null;
+  try {
+    el = document.querySelector(selector);
+  } catch {
+    return { error: `不是合法的 CSS 選擇器：${selector}` };
+  }
+  if (!el) {
+    return {
+      error: `找不到符合「${selector}」的元素`,
+      hint: '該元素可能尚未載入、位於 iframe 內（content script 只跑在最上層框架），或選擇器有誤。可先用 read_page 確認頁面上實際有哪些元素。',
+    };
+  }
+
+  // 同一 selector 重複釘 → **更新描述，回原本的 pin_id**（不建立第二個）
+  const existing = findPinBySelector(selector);
+  const pin: Pin = existing ?? {
+    id: `pin${++pinSeq}-${Date.now().toString(36)}`,
+    selector,
+    description: '',
+    status: 'active',
+    created_at: Date.now(),
+    last_check: null,
+  };
+  if (typeof description === 'string' && description) pin.description = description;
+  pins.set(pin.id, pin);
+  queueReposition();
+
+  return {
+    pin_id: pin.id,
+    selector,
+    description: pin.description,
+    element_found: true,
+    tag: el.tagName.toLowerCase(),
+    text: (el.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 100),
+    updated_existing: !!existing,
+  };
+}
+
+function bridgePinAnalyze(selector: string): Record<string, unknown> {
+  // 先確保有圖釘（沒有就自動建立）
+  const pinned = bridgePinElement(selector, '');
+  if (typeof pinned.error === 'string') return pinned;
+  const pin = pins.get(String(pinned.pin_id));
+  if (!pin) return { error: '建立圖釘失敗' };
+  if (!pin.description) pin.description = 'pin_analyze 自動建立';
+
+  // **直接複用 analyze_element 的分析，不另寫一套**
+  const analysis = bridgeAnalyzeElement(selector);
+  if (typeof analysis.error === 'string') {
+    pin.status = 'stale';
+    pin.last_check = { at: Date.now(), summary: String(analysis.error) };
+    queueReposition();
+    return { pin_id: pin.id, selector, status: pin.status, error: analysis.error };
+  }
+
+  // status 只用 analyze_element 已算出的資訊推導，**不引入新的錯誤來源**
+  const vis = analysis.visibility as { visible?: boolean; has_size?: boolean } | undefined;
+  const attrs = (analysis.attributes ?? {}) as Record<string, string>;
+  const problems: string[] = [];
+  if (!vis?.visible) problems.push('元素不可見');
+  if (!vis?.has_size) problems.push('尺寸為 0');
+  if ('disabled' in attrs) problems.push('disabled');
+  pin.status = problems.length ? 'warning' : 'active';
+  pin.last_check = {
+    at: Date.now(),
+    summary: problems.length ? `⚠ ${problems.join('、')}` : '✅ 可見且可互動',
+  };
+  queueReposition();
+
+  return { pin_id: pin.id, selector, status: pin.status, summary: pin.last_check.summary, analysis };
+}
+
+function bridgeGetPinResults(): Record<string, unknown> {
+  repositionPins(); // 順便重算，讓 stale 狀態即時更新
+  return {
+    pins: [...pins.values()].map((p) => ({
+      pin_id: p.id,
+      selector: p.selector,
+      description: p.description,
+      status: p.status,
+      created_at: p.created_at,
+      last_check: p.last_check,
+    })),
+    total_count: pins.size,
+    // 無圖釘時回**空陣列**而不是 error（驗收條件 3）
+    ...(pins.size === 0 ? { note: '這個分頁目前沒有任何圖釘。用 pin_element 或 pin_analyze 建立。' } : {}),
+  };
+}
+
 // ── PM-317：get_page_health ────────────────────────────────────────────────
 /** 這些 input type 沒有標籤是正常的，不該算成可及性問題。 */
 const HEALTH_UNLABELLED_OK_TYPES = new Set(['hidden', 'submit', 'button', 'reset', 'image']);
@@ -1007,6 +1199,12 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
     sendResponse(bridgeClick(msg.selector));
   } else if (msg.type === 'BRIDGE_TYPE_TEXT') {
     sendResponse(bridgeTypeText(msg.selector, msg.text));
+  } else if (msg.type === 'BRIDGE_PIN_ELEMENT') {
+    sendResponse(bridgePinElement(msg.selector, msg.description));
+  } else if (msg.type === 'BRIDGE_PIN_ANALYZE') {
+    sendResponse(bridgePinAnalyze(msg.selector));
+  } else if (msg.type === 'BRIDGE_GET_PIN_RESULTS') {
+    sendResponse(bridgeGetPinResults());
   } else if (msg.type === 'BRIDGE_GET_PAGE_HEALTH') {
     void bridgeGetPageHealth().then(sendResponse);
   } else if (msg.type === 'BRIDGE_GET_WEB_VITALS') {

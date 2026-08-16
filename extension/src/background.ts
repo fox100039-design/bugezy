@@ -1075,6 +1075,45 @@ async function runBridgeCommand(cmd: BridgeCommandMsg): Promise<unknown> {
       };
     }
 
+    // PM-330／331：圖釘系統
+    case 'pin_element': {
+      const selector = cmd.params?.selector;
+      const description = cmd.params?.description;
+      if (typeof selector !== 'string' || !selector.trim()) throw new Error('缺少 selector 參數');
+      const tabId = await resolveTargetTab(cmd.params);
+      const res = await sendToContent<Record<string, unknown>>(tabId, {
+        type: 'BRIDGE_PIN_ELEMENT',
+        selector,
+        description: typeof description === 'string' ? description : '',
+      });
+      if (typeof res.error === 'string') {
+        throw new Error(`${res.error}${res.hint ? `
+${String(res.hint)}` : ''}`);
+      }
+      return { ...res, tab_id: tabId };
+    }
+
+    case 'pin_analyze': {
+      const selector = cmd.params?.selector;
+      if (typeof selector !== 'string' || !selector.trim()) throw new Error('缺少 selector 參數');
+      const tabId = await resolveTargetTab(cmd.params);
+      const res = await sendToContent<Record<string, unknown>>(tabId, {
+        type: 'BRIDGE_PIN_ANALYZE',
+        selector,
+      });
+      if (typeof res.error === 'string' && !res.pin_id) {
+        throw new Error(`${res.error}${res.hint ? `
+${String(res.hint)}` : ''}`);
+      }
+      return { ...res, tab_id: tabId };
+    }
+
+    case 'get_pin_results': {
+      const tabId = await resolveTargetTab(cmd.params);
+      const res = await sendToContent<Record<string, unknown>>(tabId, { type: 'BRIDGE_GET_PIN_RESULTS' });
+      return { ...res, tab_id: tabId };
+    }
+
     // PM-317
     case 'get_page_health': {
       const tabId = await resolveTargetTab(cmd.params);

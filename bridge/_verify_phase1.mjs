@@ -139,7 +139,7 @@ proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initial
 
 console.log('\n=== ② MCP 工具註冊 ===');
 const tools = (await rpc('tools/list', {})).result.tools;
-check('工具總數 14（11 瀏覽器 + 3 終端機監控）', tools.length === 14, tools.map((t) => t.name).join(','));
+check('工具總數 17（11 瀏覽器 + 3 終端機 + 3 圖釘）', tools.length === 17, tools.map((t) => t.name).join(','));
 for (const [name, req, opt] of [['navigate_to', 'url', 'tab_id'], ['click_element', 'selector', 'tab_id']]) {
   const t = tools.find((x) => x.name === name);
   check(`${name} 已註冊`, !!t, tools.map((x) => x.name).join(','));
@@ -310,6 +310,33 @@ if (/port 19850 被占用/.test(stderr)) {
         check('317   dom 統計為合理數值', gh.details.dom.element_count > 0 && gh.details.dom.max_depth > 0, JSON.stringify(gh.details.dom));
         check('317   有揭露錯誤只涵蓋 30 秒', gh.errors_window_seconds === 30 && typeof gh.note === 'string', JSON.stringify(gh.errors_window_seconds));
       }
+
+      // ── PM-330／331 圖釘系統端到端 ──
+      const pinSel = (/click: "([^"]+)"/.exec(p1.content || '') || [])[1];
+      const empty = await call('get_pin_results', { tab_id: r1.tab_id });
+      check('331-3 無圖釘時回空陣列（不是 error）',
+        !empty.error && Array.isArray(empty.pins) && empty.pins.length === 0, JSON.stringify(empty).slice(0, 200));
+      if (pinSel) {
+        const p1r = await call('pin_element', { selector: pinSel, description: '測試圖釘', tab_id: r1.tab_id });
+        console.log('    pin_element →', JSON.stringify(p1r).slice(0, 200));
+        check('330-1 回傳 pin_id + element_found', !!p1r.pin_id && p1r.element_found === true, JSON.stringify(p1r).slice(0, 200));
+        const dup = await call('pin_element', { selector: pinSel, description: '改過的描述', tab_id: r1.tab_id });
+        check('330-3 重複釘同一元素 → 更新描述、pin_id 不變',
+          dup.pin_id === p1r.pin_id && dup.description === '改過的描述' && dup.updated_existing === true, JSON.stringify(dup).slice(0, 200));
+        const listed = await call('get_pin_results', { tab_id: r1.tab_id });
+        check('330-2 圖釘出現在清單且只有一個（沒有重複建立）',
+          listed.total_count === 1 && listed.pins?.[0]?.pin_id === p1r.pin_id, JSON.stringify(listed).slice(0, 240));
+
+        const an = await call('pin_analyze', { selector: pinSel, tab_id: r1.tab_id });
+        console.log('    pin_analyze →', JSON.stringify(an).slice(0, 220));
+        check('331-1 pin_analyze 回傳含完整 analysis', !!an.analysis?.computed_styles && !!an.analysis?.box_model, JSON.stringify(an).slice(0, 200));
+        check('331-4 pin_analyze 後狀態有更新', ['active', 'warning', 'error', 'stale'].includes(an.status) && !!an.summary, JSON.stringify({ s: an.status, m: an.summary }));
+        const after = await call('get_pin_results', { tab_id: r1.tab_id });
+        check('331-2 清單含狀態與 last_check',
+          after.pins?.[0]?.status === an.status && !!after.pins?.[0]?.last_check, JSON.stringify(after).slice(0, 240));
+      }
+      const badPin = await call('pin_element', { selector: '#nope-pin-330', description: 'x', tab_id: r1.tab_id });
+      check('330-4 元素不存在 → error 含 selector', !!badPin.error && String(badPin.error).includes('#nope-pin-330'), JSON.stringify(badPin).slice(0, 200));
 
       // ── PM-316 get_web_vitals 端到端 ──
       const wvR = await call('get_web_vitals', { tab_id: r1.tab_id });

@@ -161,6 +161,9 @@ export type ControlMessage =
   | { type: 'BRIDGE_ANALYZE_ELEMENT'; selector: string } // PM-315：bridge 的 analyze_element
   | { type: 'BRIDGE_GET_WEB_VITALS' } // PM-316：bridge 的 get_web_vitals
   | { type: 'BRIDGE_GET_PAGE_HEALTH' } // PM-317：bridge 的 get_page_health
+  | { type: 'BRIDGE_PIN_ELEMENT'; selector: string; description: string } // PM-330
+  | { type: 'BRIDGE_PIN_ANALYZE'; selector: string } // PM-331
+  | { type: 'BRIDGE_GET_PIN_RESULTS' } // PM-331
   | { type: 'START_MONITORING' }
   | { type: 'STOP_MONITORING' }
   // PM-52：通知 content/inject 顯示/隱藏頁面浮動監控 badge

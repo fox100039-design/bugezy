@@ -21,20 +21,23 @@ const seg = (from, to) => {
 const sensitive = seg('const SENSITIVE_RECT_SELECTORS', '/** PM-186：收集敏感欄位');
 const readPage = seg('const READ_PAGE_MAX_CHARS', '// background → content：控制指令');
 const clickFn = seg('function bridgeClick', '// ── PM-311：type_text');
-const typeFn = seg('const TYPE_TEXT_REJECTED_INPUT_TYPES', '// ── PM-317：get_page_health');
+const typeFn = seg('const TYPE_TEXT_REJECTED_INPUT_TYPES', '// ── PM-330／331：圖釘系統');
+const pinsFn = seg('interface Pin {', '// ── PM-317：get_page_health');
 const healthFn = seg('const HEALTH_UNLABELLED_OK_TYPES', '// ── PM-316：get_web_vitals');
 const vitalsFn = seg('const VITAL_THRESHOLDS', '// ── PM-315：analyze_element');
 const analyzeFn = seg('const ANALYZE_STYLE_PROPS', '// ── PM-309：read_page');
-const js = ts.transpileModule(sensitive + '\n' + clickFn + '\n' + typeFn + '\n' + healthFn + '\n' + vitalsFn + '\n' + analyzeFn + '\n' + readPage, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
+const js = ts.transpileModule(sensitive + '\n' + clickFn + '\n' + typeFn + '\n' + pinsFn + '\n' + healthFn + '\n' + vitalsFn + '\n' + analyzeFn + '\n' + readPage, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { pretendToBeVisual: true });
 const g = dom.window;
 // content script 在頁面裡有這些全域；沙箱裡要手動接進來
 const run = new Function('window', 'document', 'getComputedStyle', 'Node', 'NodeFilter', 'CSS',
   'HTMLInputElement', 'HTMLTextAreaElement', 'Event', 'InputEvent', 'performance', 'PerformanceObserver',
-  js + '\nreturn { extractPageContent, uniqueSelector, ownText, isSensitiveField, bridgeClick, bridgeTypeText, bridgeAnalyzeElement, rateVital, summarizeResources, countInputsWithoutLabel, domMaxDepth };');
+  'requestAnimationFrame',
+  js + '\nreturn { extractPageContent, uniqueSelector, ownText, isSensitiveField, bridgeClick, bridgeTypeText, bridgeAnalyzeElement, rateVital, summarizeResources, countInputsWithoutLabel, domMaxDepth, bridgePinElement, bridgePinAnalyze, bridgeGetPinResults };');
 const api = run(g, g.document, g.getComputedStyle.bind(g), g.Node, g.NodeFilter, g.CSS,
-  g.HTMLInputElement, g.HTMLTextAreaElement, g.Event, g.InputEvent, g.performance, g.PerformanceObserver);
+  g.HTMLInputElement, g.HTMLTextAreaElement, g.Event, g.InputEvent, g.performance, g.PerformanceObserver,
+  (cb) => g.setTimeout(cb, 0));
 
 const setBody = (html) => { g.document.body.innerHTML = html; };
 
@@ -297,6 +300,33 @@ check('   實作的扣分表與卡片一致（console 5/30、network 5/20、poor
 const hs2 = healthSrc.slice(healthSrc.indexOf('const rated ='), healthSrc.indexOf('const deductions'));
 check('🔴 null 的指標不列入扣分（未互動的 FID 不能扣分）', /filter\(\(r\): r is string => r !== null\)/.test(hs2), hs2.slice(0, 200));
 check('   score 夾在 0~100', /Math\.max\(0, Math\.min\(100, 100 - total\)\)/.test(healthSrc));
+
+console.log('\n=== ⑬ PM-330／331 圖釘系統 ===');
+setBody('<button id="b1">按鈕一</button><button id="b2" style="display:none">看不見</button>');
+const emptyPins = api.bridgeGetPinResults();
+check('331-3 無圖釘 → 空陣列（不是 error）', !emptyPins.error && Array.isArray(emptyPins.pins) && emptyPins.pins.length === 0, JSON.stringify(emptyPins));
+const pa = api.bridgePinElement('#b1', '第一個圖釘');
+check('330-1 回傳 pin_id + element_found', !!pa.pin_id && pa.element_found === true, JSON.stringify(pa));
+const pb = api.bridgePinElement('#b1', '改過的描述');
+check('330-3 重複釘 → pin_id 不變且描述更新', pb.pin_id === pa.pin_id && pb.description === '改過的描述' && pb.updated_existing === true, JSON.stringify(pb));
+const lst = api.bridgeGetPinResults();
+check('330-2 清單只有一個圖釘（沒有重複建立）', lst.total_count === 1, JSON.stringify(lst).slice(0, 200));
+check('330-2 頁面上有視覺標記層', !!g.document.querySelector('[data-bugezy-pins]'), 'layer 不存在');
+check('330-2 標記數量與圖釘數一致', g.document.querySelector('[data-bugezy-pins]')?.children.length === 1, String(g.document.querySelector('[data-bugezy-pins]')?.children.length));
+const badPin = api.bridgePinElement('#nope-330', 'x');
+check('330-4 元素不存在 → error 含 selector', !!badPin.error && String(badPin.error).includes('#nope-330'), JSON.stringify(badPin));
+
+const an1 = api.bridgePinAnalyze('#b1');
+check('331-1 pin_analyze 回傳完整 analysis', !!an1.analysis?.computed_styles && !!an1.analysis?.box_model, JSON.stringify(an1).slice(0, 200));
+check('331-4 可見元素 → status active', an1.status === 'active', JSON.stringify({ s: an1.status, m: an1.summary }));
+const an2 = api.bridgePinAnalyze('#b2');
+check('331-4 隱藏元素 → status warning 且說明原因', an2.status === 'warning' && /不可見|尺寸/.test(an2.summary || ''), JSON.stringify({ s: an2.status, m: an2.summary }));
+const lst2 = api.bridgeGetPinResults();
+check('331-2 清單含 status 與 last_check', lst2.pins.every((p) => !!p.status && !!p.last_check), JSON.stringify(lst2).slice(0, 240));
+g.document.getElementById('b1').remove();
+const lst3 = api.bridgeGetPinResults();
+check('🔴 元素消失 → 標為 stale 而非刪除或報錯',
+  lst3.pins.find((p) => p.selector === '#b1')?.status === 'stale', JSON.stringify(lst3).slice(0, 240));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

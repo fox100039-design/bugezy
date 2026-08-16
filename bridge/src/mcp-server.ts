@@ -306,6 +306,54 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     }),
   );
 
+  // ── 工具 15~17：圖釘系統（PM-330／331，Phase 2）──────────────────────────
+  // 圖釘存在 content script 裡，依分頁天然隔離；分頁關閉／重整即消失（見 PM-329 設計）。
+  server.tool(
+    'pin_element',
+    'Pin an element on the page with a note, showing a coloured marker next to it. Pinning the same selector again UPDATES the existing pin instead of creating a duplicate. Pins live in the tab and disappear when it is closed or reloaded. 在頁面元素上釘一個帶註記的標記。**重複釘同一個 selector 會更新原有圖釘，不會建立第二個**；圖釘存在該分頁，關閉或重整即消失。',
+    {
+      selector: z.string().min(1).describe('CSS 選擇器。可先用 read_page 取得可用的 selector。'),
+      description: z.string().describe('這個圖釘的用途／要觀察什麼。'),
+      tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。'),
+    },
+    gated(async (args) => {
+      const r = await link.send('pin_element', {
+        selector: args.selector,
+        description: args.description,
+        tab_id: args.tab_id,
+      });
+      if (!r.ok) return txt({ error: r.error, selector: args.selector, extension_connected: link.connected });
+      return txt(r.data);
+    }),
+  );
+
+  server.tool(
+    'pin_analyze',
+    'Pin an element (creating the pin if needed) and immediately run the full analyze_element inspection on it, storing the result as that pin latest check and updating its marker colour (green ok / yellow problem / grey element gone). 釘選元素（尚未釘則自動建立）並立刻對它執行完整的 analyze_element 分析，結果存為該圖釘的最近一次檢查並更新標記顏色（綠＝正常／黃＝有問題／灰＝元素已消失）。',
+    {
+      selector: z.string().min(1).describe('CSS 選擇器。'),
+      tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。'),
+    },
+    gated(async (args) => {
+      const r = await link.send('pin_analyze', { selector: args.selector, tab_id: args.tab_id });
+      if (!r.ok) return txt({ error: r.error, selector: args.selector, extension_connected: link.connected });
+      return txt(r.data);
+    }),
+  );
+
+  server.tool(
+    'get_pin_results',
+    'List all pins in a tab with their status and latest check. Returns an empty array (not an error) when there are no pins. Status "stale" means the pinned element no longer exists on the page — that is different from the element being broken. 列出分頁內所有圖釘及其狀態與最近一次檢查。**沒有圖釘時回空陣列，不是錯誤**。狀態 `stale` 代表被釘的元素已從頁面消失——這與「元素有問題」是兩回事。',
+    {
+      tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。'),
+    },
+    gated(async (args) => {
+      const r = await link.send('get_pin_results', { tab_id: args.tab_id });
+      if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
+      return txt(r.data);
+    }),
+  );
+
   // ── 工具 12~14：終端機即時監控（PM-327 / PM-D2）──────────────────────────
   // 走的是 bridge 自己的 child_process，**不經過 Extension**——後端錯誤與瀏覽器無關。
   server.tool(
