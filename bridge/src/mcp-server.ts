@@ -142,6 +142,33 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     },
   );
 
+  // ── 工具 7：type_text（PM-311）───────────────────────────────────────────
+  server.tool(
+    'type_text',
+    'Type text into an input, textarea, or contenteditable element. Replaces the existing value and fires input/change events the way a real user would, so React/Vue state actually updates. Returns previous_value so you can tell whether you overwrote something. 在 input / textarea / contenteditable 輸入文字：會取代原有內容，並以框架收得到的方式觸發 input/change 事件（React/Vue 的狀態會真的更新）；回傳 previous_value 讓你知道是否覆蓋掉了原本的值。',
+    {
+      selector: z
+        .string()
+        .min(1)
+        .describe('CSS 選擇器，指向 input / textarea / contenteditable 元素。可先用 read_page 取得可用的 selector。'),
+      text: z.string().describe('要輸入的文字。**會取代欄位原有的全部內容**，不是附加。'),
+      tab_id: z
+        .number()
+        .int()
+        .optional()
+        .describe('省略 → 使用者當前分頁；指定 → 該分頁。分頁已關閉會回報錯誤。'),
+    },
+    async (args) => {
+      const r = await link.send('type_text', {
+        selector: args.selector,
+        text: args.text,
+        tab_id: args.tab_id,
+      });
+      if (!r.ok) return txt({ error: r.error, selector: args.selector, extension_connected: link.connected });
+      return txt(r.data);
+    },
+  );
+
   // ── 工具 6：read_page（PM-309）───────────────────────────────────────────
   // 規格書 §8 的差異化重點：**用文字讀 DOM，而不是截圖**（省 95% token，且 AI 可以直接搜尋元素）。
   server.tool(

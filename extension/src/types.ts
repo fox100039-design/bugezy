@@ -156,6 +156,7 @@ export type ControlMessage =
   | { type: 'GET_PAGE_INFO' } // PM-298：bridge 的 get_page_url（content script 讀 location，不需 tabs 權限）
   | { type: 'BRIDGE_CLICK'; selector: string } // PM-308：bridge 的 click_element
   | { type: 'BRIDGE_READ_PAGE' } // PM-309：bridge 的 read_page
+  | { type: 'BRIDGE_TYPE_TEXT'; selector: string; text: string } // PM-311：bridge 的 type_text
   | { type: 'START_MONITORING' }
   | { type: 'STOP_MONITORING' }
   // PM-52：通知 content/inject 顯示/隱藏頁面浮動監控 badge

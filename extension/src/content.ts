@@ -278,6 +278,109 @@ function bridgeClick(selector: string): Record<string, unknown> {
   return { clicked: true, tag, text };
 }
 
+// ── PM-311：type_text ──────────────────────────────────────────────────────
+/** 這些 input type 不吃文字，硬寫 value 只會靜默無效（file 甚至會被瀏覽器擋下）。 */
+const TYPE_TEXT_REJECTED_INPUT_TYPES = new Set([
+  'checkbox', 'radio', 'file', 'button', 'submit', 'reset', 'image', 'range', 'color',
+]);
+
+/** 敏感欄位的值不回傳原文，避免密碼／token 進到 AI 的 context（同 PM-309）。 */
+function maskFieldValue(el: Element, value: string): string {
+  if (!value) return '';
+  const t = (el as HTMLInputElement).type;
+  return t === 'password' || isSensitiveField(el) ? '<已遮蔽：敏感欄位>' : value;
+}
+
+/**
+ * PM-311：bridge 的 `type_text`。
+ *
+ * 🔴 **不能只做 `el.value = text` 再 dispatch 事件**——React 會在 input 上掛一個
+ *   內部的 `_valueTracker`，直接指定 `.value` 不會更新它，於是 React 收到 input 事件時
+ *   比對「值沒變」就**整個忽略**：畫面上文字出現了，但 React state 完全沒動，
+ *   接著送出表單會送出空值。**這是典型的假成功**，而且從回傳值上看不出來。
+ *   正解是透過原型上的 **原生 value setter** 寫入，繞過 tracker，再 dispatch 事件。
+ */
+function bridgeTypeText(selector: string, text: string): Record<string, unknown> {
+  if (typeof selector !== 'string' || !selector.trim()) return { error: '缺少 selector 參數' };
+  if (typeof text !== 'string') return { error: 'text 必須是字串' };
+
+  let el: Element | null;
+  try {
+    el = document.querySelector(selector);
+  } catch {
+    return { error: `不是合法的 CSS 選擇器：${selector}` };
+  }
+  if (!el) {
+    return {
+      error: `找不到符合「${selector}」的元素`,
+      hint: '該元素可能尚未載入、位於 iframe 內（content script 只跑在最上層框架），或選擇器有誤。可先用 read_page 確認頁面上實際有哪些元素。',
+    };
+  }
+
+  const tag = el.tagName.toLowerCase();
+  const editable = el.getAttribute('contenteditable');
+  const isCE = editable !== null && editable !== 'false';
+  const isInput = tag === 'input';
+  const isTextarea = tag === 'textarea';
+  if (!isInput && !isTextarea && !isCE) {
+    return { error: `元素「${selector}」是 <${tag}>，不是可輸入的欄位（需要 input / textarea / contenteditable）`, tag };
+  }
+
+  const input = el as HTMLInputElement | HTMLTextAreaElement;
+  if (isInput) {
+    const t = (input as HTMLInputElement).type;
+    if (TYPE_TEXT_REJECTED_INPUT_TYPES.has(t)) {
+      return {
+        error: `元素「${selector}」是 <input type="${t}">，不接受文字輸入${t === 'file' ? '（瀏覽器基於安全性禁止用程式設定檔案欄位）' : t === 'checkbox' || t === 'radio' ? '（要改變勾選狀態請用 click_element）' : ''}`,
+        tag,
+      };
+    }
+  }
+
+  // disabled 與 readonly 分開報——AI 需要知道是「不能用」還是「只能看」，兩者的下一步不同
+  if (!isCE && input.disabled) {
+    return { error: `元素「${selector}」是 disabled 狀態，無法輸入`, tag };
+  }
+  if (!isCE && input.readOnly) {
+    return { error: `元素「${selector}」是 readonly 狀態，無法輸入（欄位存在但不允許修改）`, tag };
+  }
+  if (!isElementVisible(el)) {
+    return { error: `元素「${selector}」目前不可見（display/visibility/opacity 或其祖先被隱藏），輸入不會有任何效果`, tag };
+  }
+
+  const previous = isCE ? (el.textContent ?? '') : input.value;
+
+  try {
+    (el as HTMLElement).focus?.();
+  } catch {
+    /* focus 失敗不影響輸入 */
+  }
+
+  if (isCE) {
+    el.textContent = text;
+    el.dispatchEvent(new InputEvent('input', { bubbles: true, data: text, inputType: 'insertText' }));
+  } else {
+    // 繞過 React 的 _valueTracker：用原型上的原生 setter 寫入（見上方說明）
+    const proto = isTextarea ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+    if (setter) setter.call(input, text);
+    else input.value = text; // 理論上不會走到，但不要因此整個失敗
+    // bubbles 必須為 true：React 用的是掛在 root 的委派監聽，不冒泡就收不到
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  const now = isCE ? (el.textContent ?? '') : input.value;
+  return {
+    typed: true,
+    tag,
+    previous_value: maskFieldValue(el, previous),
+    new_value: maskFieldValue(el, now),
+    // 寫進去之後再讀一次確認——有些欄位有 maxlength 或輸入遮罩，會把值改掉
+    value_matches: now === text,
+  };
+}
+
 // ── PM-309：read_page ──────────────────────────────────────────────────────
 const READ_PAGE_MAX_CHARS = 50_000;
 /** 這些標籤連同子樹整個跳過——對「頁面上有什麼可以操作」毫無幫助，卻很佔額度。 */
@@ -516,6 +619,8 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
     sendResponse({ url: location.href, title: document.title });
   } else if (msg.type === 'BRIDGE_CLICK') {
     sendResponse(bridgeClick(msg.selector));
+  } else if (msg.type === 'BRIDGE_TYPE_TEXT') {
+    sendResponse(bridgeTypeText(msg.selector, msg.text));
   } else if (msg.type === 'BRIDGE_READ_PAGE') {
     const { content, truncated } = extractPageContent();
     sendResponse({

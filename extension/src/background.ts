@@ -1063,6 +1063,35 @@ async function runBridgeCommand(cmd: BridgeCommandMsg): Promise<unknown> {
       };
     }
 
+    // PM-311
+    case 'type_text': {
+      const selector = cmd.params?.selector;
+      const text = cmd.params?.text;
+      if (typeof selector !== 'string' || !selector.trim()) throw new Error('缺少 selector 參數');
+      if (typeof text !== 'string') throw new Error('缺少 text 參數（必須是字串）');
+      const tabId = await resolveTargetTab(cmd.params);
+      const res = await sendToContent<Record<string, unknown>>(tabId, {
+        type: 'BRIDGE_TYPE_TEXT',
+        selector,
+        text,
+      });
+      if (typeof res.error === 'string') {
+        const extra = res.tag ? `（找到的是 <${String(res.tag)}>）` : '';
+        throw new Error(`${res.error}${extra}${res.hint ? `\n${String(res.hint)}` : ''}`);
+      }
+      return {
+        typed: true,
+        selector,
+        tab_id: tabId,
+        previous_value: res.previous_value ?? '',
+        new_value: res.new_value ?? '',
+        // 寫入後實際值與要求不符時明講（maxlength、輸入遮罩等會改動內容）
+        ...(res.value_matches === false
+          ? { warning: '欄位實際存下的值與要求的不同（可能有 maxlength 或輸入格式限制），請以 new_value 為準' }
+          : {}),
+      };
+    }
+
     // PM-309
     case 'read_page': {
       const tabId = await resolveTargetTab(cmd.params);

@@ -20,14 +20,18 @@ const seg = (from, to) => {
 };
 const sensitive = seg('const SENSITIVE_RECT_SELECTORS', '/** PM-186：收集敏感欄位');
 const readPage = seg('const READ_PAGE_MAX_CHARS', '// background → content：控制指令');
-const clickFn = seg('function bridgeClick', '// ── PM-309：read_page');
-const js = ts.transpileModule(sensitive + '\n' + clickFn + '\n' + readPage, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
+const clickFn = seg('function bridgeClick', '// ── PM-311：type_text');
+const typeFn = seg('const TYPE_TEXT_REJECTED_INPUT_TYPES', '// ── PM-309：read_page');
+const js = ts.transpileModule(sensitive + '\n' + clickFn + '\n' + typeFn + '\n' + readPage, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { pretendToBeVisual: true });
 const g = dom.window;
+// content script 在頁面裡有這些全域；沙箱裡要手動接進來
 const run = new Function('window', 'document', 'getComputedStyle', 'Node', 'NodeFilter', 'CSS',
-  js + '\nreturn { extractPageContent, uniqueSelector, ownText, isSensitiveField, bridgeClick };');
-const api = run(g, g.document, g.getComputedStyle.bind(g), g.Node, g.NodeFilter, g.CSS);
+  'HTMLInputElement', 'HTMLTextAreaElement', 'Event', 'InputEvent',
+  js + '\nreturn { extractPageContent, uniqueSelector, ownText, isSensitiveField, bridgeClick, bridgeTypeText };');
+const api = run(g, g.document, g.getComputedStyle.bind(g), g.Node, g.NodeFilter, g.CSS,
+  g.HTMLInputElement, g.HTMLTextAreaElement, g.Event, g.InputEvent);
 
 const setBody = (html) => { g.document.body.innerHTML = html; };
 
@@ -117,6 +121,67 @@ check('非法選擇器 → error（不 crash）', !rBad.clicked && /合法的 CS
 check('不可點時仍回報找到的 tag/text（讓 AI 知道選對了元素）', rDis.tag === 'button' && rDis.text === '不能點', JSON.stringify(rDis));
 console.log('  NOTE  「祖先 display:none」與「尺寸為 0」兩條在 jsdom 測不準（無版面、無 checkVisibility），');
 console.log('        真瀏覽器走 el.checkVisibility() 與真實 rect —— 以端到端為準。');
+
+console.log('\n=== ⑨ PM-311 bridgeTypeText ===');
+setBody('<input id="t" type="text" value="舊的">'
+      + '<textarea id="ta">原文</textarea>'
+      + '<input id="dis" disabled><input id="ro" readonly>'
+      + '<input id="pw" type="password" value="old-secret">'
+      + '<input id="chk" type="checkbox"><input id="file" type="file">'
+      + '<div id="ce" contenteditable="true">可編輯</div>'
+      + '<p id="plain">不是欄位</p>');
+const ev = { input: 0, change: 0 };
+g.document.getElementById('t').addEventListener('input', (e) => { if (e.bubbles) ev.input++; });
+g.document.getElementById('t').addEventListener('change', (e) => { if (e.bubbles) ev.change++; });
+
+const t1 = api.bridgeTypeText('#t', '新的文字');
+check('1. input 輸入成功 + value 更新', t1.typed === true && g.document.getElementById('t').value === '新的文字', JSON.stringify(t1));
+check('1. input/change 事件皆觸發且 bubbles', ev.input === 1 && ev.change === 1, JSON.stringify(ev));
+check('   回傳 previous_value（讓 AI 知道覆蓋了什麼）', t1.previous_value === '舊的' && t1.new_value === '新的文字', JSON.stringify(t1));
+
+const t2 = api.bridgeTypeText('#ta', '新內容');
+check('2. textarea 輸入成功', t2.typed === true && g.document.getElementById('ta').value === '新內容', JSON.stringify(t2));
+
+check('3. disabled → error 且點名 disabled', !api.bridgeTypeText('#dis', 'x').typed && /disabled/.test(api.bridgeTypeText('#dis', 'x').error || ''));
+const ro = api.bridgeTypeText('#ro', 'x');
+check('3. readonly → error 且與 disabled 分開描述', !ro.typed && /readonly/.test(ro.error || '') && !/disabled/.test(ro.error || ''), JSON.stringify(ro));
+
+const plain = api.bridgeTypeText('#plain', 'x');
+check('4. 非表單元素 → error', !plain.typed && /不是可輸入的欄位/.test(plain.error || ''), JSON.stringify(plain));
+const chk = api.bridgeTypeText('#chk', 'x');
+check('4. checkbox → error 並指引改用 click_element', !chk.typed && /click_element/.test(chk.error || ''), JSON.stringify(chk));
+const file = api.bridgeTypeText('#file', 'x');
+check('4. file → error（瀏覽器禁止程式設定）', !file.typed && /安全性/.test(file.error || ''), JSON.stringify(file));
+
+const pw = api.bridgeTypeText('#pw', 'new-secret');
+check('5. 🔴 password 的 previous/new 值都被遮蔽', pw.typed === true && !JSON.stringify(pw).includes('old-secret') && !JSON.stringify(pw).includes('new-secret'), JSON.stringify(pw));
+check('5.    但實際有寫進去', g.document.getElementById('pw').value === 'new-secret');
+
+const ce = api.bridgeTypeText('#ce', '改過了');
+check('   contenteditable 可輸入', ce.typed === true && g.document.getElementById('ce').textContent === '改過了', JSON.stringify(ce));
+const miss = api.bridgeTypeText('#nope-9', 'x');
+check('   找不到 → error 含 selector', /#nope-9/.test(miss.error || ''), JSON.stringify(miss));
+
+// 🔴 React 相容性：模擬 React 的 _valueTracker。
+//   React 在節點上裝一個 **own property** 的 get/set，set 時把值存進自己的快取。
+//   · 用 `el.value = x`（會打到 own setter）→ 快取同步更新 → React 比對「快取 == 現值」
+//     判定沒變化，**整個 input 事件被忽略**：畫面有字但 state 沒動。
+//   · 用 **prototype 上的原生 setter** → 繞過 own setter → 快取維持舊值 → React 比對
+//     發現不一致 → 正常處理事件。
+//   所以正確的期望是：**真實值已更新，而 tracker 快取仍是舊的**。
+const rt = g.document.getElementById('t');
+const protoDesc = Object.getOwnPropertyDescriptor(g.HTMLInputElement.prototype, 'value');
+let trackerCache = protoDesc.get.call(rt);
+Object.defineProperty(rt, 'value', {
+  configurable: true,
+  get() { return protoDesc.get.call(this); },
+  set(v) { trackerCache = v; protoDesc.set.call(this, v); }, // React 的 own setter
+});
+const cacheBefore = trackerCache;
+api.bridgeTypeText('#t', 'React 也收得到');
+const realNow = protoDesc.get.call(rt);
+check('🔴 走原生 setter：真實值已更新', realNow === 'React 也收得到', `real=${realNow}`);
+check('🔴 且繞過 tracker（快取仍是舊值 → React 才會認得這次變更）', trackerCache === cacheBefore, `cache=${trackerCache} before=${cacheBefore}`);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

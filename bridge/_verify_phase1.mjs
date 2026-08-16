@@ -128,7 +128,7 @@ proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initial
 
 console.log('\n=== ② MCP 工具註冊 ===');
 const tools = (await rpc('tools/list', {})).result.tools;
-check('工具總數 6', tools.length === 6, tools.map((t) => t.name).join(','));
+check('工具總數 7', tools.length === 7, tools.map((t) => t.name).join(','));
 for (const [name, req, opt] of [['navigate_to', 'url', 'tab_id'], ['click_element', 'selector', 'tab_id']]) {
   const t = tools.find((x) => x.name === name);
   check(`${name} 已註冊`, !!t, tools.map((x) => x.name).join(','));
@@ -141,6 +141,11 @@ const rp = tools.find((t) => t.name === 'read_page');
 check('read_page 已註冊', !!rp, tools.map((x) => x.name).join(','));
 check('  read_page.tab_id 可選 integer', rp?.inputSchema?.properties?.tab_id?.type === 'integer' && !(rp?.inputSchema?.required || []).includes('tab_id'));
 check('  read_page 描述提到敏感欄位遮蔽', /masked/i.test(rp?.description || '') && /遮蔽/.test(rp?.description || ''));
+const tt = tools.find((t) => t.name === 'type_text');
+check('type_text 已註冊', !!tt, tools.map((x) => x.name).join(','));
+check('  type_text.selector + text 必填', ['selector','text'].every((k) => (tt?.inputSchema?.required || []).includes(k)), JSON.stringify(tt?.inputSchema?.required));
+check('  type_text.tab_id 可選 integer', tt?.inputSchema?.properties?.tab_id?.type === 'integer' && !(tt?.inputSchema?.required || []).includes('tab_id'));
+check('  type_text 描述講明會「取代」原有內容', /取代/.test(tt?.description || '') && /Replaces/i.test(tt?.description || ''));
 const cl = tools.find((t) => t.name === 'click_element');
 check('  click_element 描述說明「不會假裝點成功」', /silently succeeding/i.test(cl?.description || '') && /不會假裝點成功/.test(cl?.description || ''));
 // zod 驗證失敗由 MCP SDK 包成 isError 的 tool result（不是 JSON-RPC error），兩種都算擋下
@@ -196,6 +201,31 @@ if (/port 19850 被占用/.test(stderr)) {
       check('309-4 不超過 50000 字元', (p1.content || '').length <= 50_020, String((p1.content || '').length));
       check('309-5 回傳 tab_id + element_count', p1.tab_id === r1.tab_id && typeof p1.element_count === 'number', JSON.stringify({ t: p1.tab_id, c: p1.element_count }));
       // 用 read_page 給的 selector 真的去點一次——驗收條件 2 的真正意思
+      // ── PM-311 type_text 端到端 ──
+      // bugezy.dev 全站沒有任何 input/textarea，所以借一個有純 HTML 表單的頁面。
+      // 用 html.duckduckgo.com（**沒有 JS 自動完成**，打字不會送出任何請求），
+      // 而且欄位是從 read_page 的輸出找出來的，不寫死 markup。
+      const fp = await call('navigate_to', { url: 'https://html.duckduckgo.com/html/', tab_id: r1.tab_id });
+      if (fp.error) {
+        console.log('  SKIP  311 端到端：表單頁開不起來 →', fp.error);
+      } else {
+        const fpg = await call('read_page', { tab_id: r1.tab_id });
+        const inputLine = (fpg.content || '').split('\n').find((l) => /^\s*\[input/.test(l) && /click: "/.test(l));
+        const inputSel = inputLine ? (/click: "([^"]+)"/.exec(inputLine) || [])[1] : null;
+        check('311 前置：read_page 在真實頁面找得到 input 及其 selector', !!inputSel, (fpg.content || '').slice(0, 300));
+        if (inputSel) {
+          const ty = await call('type_text', { selector: inputSel, text: 'bugezy phase1 check', tab_id: r1.tab_id });
+          console.log('    type_text(', inputSel, ') →', JSON.stringify(ty));
+          check('311-1 輸入成功並回傳 previous/new value', ty.typed === true && ty.new_value === 'bugezy phase1 check', JSON.stringify(ty));
+          // 再讀一次頁面，確認值真的寫進 DOM（不是只回報成功）
+          const after = await call('read_page', { tab_id: r1.tab_id });
+          check('311-1 read_page 讀回同一個值（確認真的寫進 DOM）', (after.content || '').includes('bugezy phase1 check'), (after.content || '').slice(0, 300));
+          const bad = await call('type_text', { selector: 'body', text: 'x', tab_id: r1.tab_id });
+          check('311-4 非表單元素 → error', !!bad.error && /不是可輸入的欄位/.test(String(bad.error)), JSON.stringify(bad));
+        }
+      }
+      await call('navigate_to', { url: 'https://bugezy.dev/guide', tab_id: r1.tab_id });
+
       const roundTripSel = (/click: "([^"]+)"/.exec(p1.content || '') || [])[1];
       if (roundTripSel) {
         const c5 = await call('click_element', { selector: roundTripSel, tab_id: r1.tab_id });
