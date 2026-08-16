@@ -59,7 +59,7 @@ content.ts（GET_PAGE_INFO / 即時 console 與網路錯誤）→ 目標網頁
 
 **位址一律寫 `127.0.0.1`，不要寫 `localhost`**：`localhost` 在許多系統上會先解析到 IPv6 的 `::1`，而 bridge 綁的是 IPv4 的 `127.0.0.1`——連線直接失敗，且錯誤訊息只說連不上，看不出是位址族群不合。兩端都已寫死（`extension/src/background.ts` 的 `BRIDGE_URL`、`bridge/src/extension-link.ts` 的 `host`）。
 
-#### bridge 的 11 支 MCP 工具（Phase 1 完工，PM-307~324）
+#### bridge 的 17 支 MCP 工具（Phase 1 + Phase 2，PM-307~332）
 
 | 工具 | 用途 | 端到端 |
 |---|---|---|
@@ -75,6 +75,22 @@ content.ts（GET_PAGE_INFO / 即時 console 與網路錯誤）→ 目標網頁
 | `get_web_vitals(tab_id?)` | Core Web Vitals + Google 評級 | ✅ |
 | `get_page_health(tab_id?)` | 0~100 一鍵健檢 | ✅ |
 
+**終端機監控（PM-327 / PM-D2）** —— 走 bridge 自己的 `child_process`，**完全不經過 Extension**：
+
+| 工具 | 用途 |
+|---|---|
+| `start_terminal_monitor(command, cwd?)` | spawn 指令並攔 stderr/stdout，解析成 traceback |
+| `get_terminal_live_errors(monitor_id?)` | 讀最近 **120 秒**的後端錯誤 |
+| `stop_terminal_monitor(monitor_id?)` | 停止並連同子程序收乾淨 |
+
+**圖釘系統（PM-330/331，Phase 2）** —— 圖釘存在 content script，依分頁天然隔離：
+
+| 工具 | 用途 |
+|---|---|
+| `pin_element(selector, description, tab_id?)` | 釘選 + 視覺標記；**重複釘同一 selector 會更新而非新增** |
+| `pin_analyze(selector, tab_id?)` | 釘選 + 執行 `analyze_element`，更新狀態與顏色 |
+| `get_pin_results(tab_id?)` | 列出圖釘與最近檢查；無圖釘回**空陣列**不是 error |
+
 **共通約定**：所有分頁相關工具都吃可選 `tab_id`（省略＝當前分頁，見規格書 §13.3）；指到不存在的分頁**明確報錯，絕不默默退回當前分頁**。
 
 **必守的三條**（都是實測踩出來的）：
@@ -82,6 +98,23 @@ content.ts（GET_PAGE_INFO / 即時 console 與網路錯誤）→ 目標網頁
 1. **`tab.url` / `tab.title` 讀不到** —— 需 `tabs` 權限，只有 `activeTab` 時 Chrome **靜默回空字串**（不報錯）。一律改問 content script（PM-298）。
 2. **`captureVisibleTab` 需 `activeTab` 或 `<all_urls>`，而 `activeTab` 只在使用者手勢後授予** —— bridge 呼叫永遠沒有手勢，且**導航會撤銷 `activeTab`**。三條替代路線（切分頁／`chrome.debugger`／獨立視窗）**都繞不開**，門檻不在「分頁可不可見」而在「有沒有使用者手勢」（PM-312 實測）。
 3. **回傳要帶「解讀脈絡」** —— 錯誤只涵蓋 30 秒、FID 未互動時為 `null` 不是 0、資源大小是低估值、事件監聽器空清單不代表沒有處理器、`ready_state` 非 `complete` 時內容可能不完整。**少了這些，AI 會把正確的回傳讀成錯誤的結論。**
+
+#### 終端機監控的三個約定（PM-327）
+
+- **`cli/src` 的 `parse-traceback.ts` 與 `pii-mask.ts` 是「複製」到 `bridge/src/vendor/`，不是 import。** 因為 `bugezy-bridge` 要單獨 `npm publish`，`../../cli/src/...` 在發布出去的套件裡不存在。**改動請改 `cli/src` 再同步**，`_verify327.mjs` 會逐字比對，漂移即 FAIL。
+- **視窗 120 秒**（瀏覽器端是 30 秒）：後端編譯／重啟一輪就可能超過半分鐘。
+- 🔴 **回傳的 `command` 也要遮罩**：`DATABASE_URL=... npm run dev` 這種寫法極常見，而該欄位每次查詢都會回傳給 AI ——不遮等於把憑證反覆送進 context。
+- **`unparsed_stderr` 必須保留**：解析器只支援 Python／Node，Go／Rust／Java 會解析不出來；只回 `errors` 會讓那些語言的使用者拿到空陣列並以為沒事。
+- **Windows 用 `taskkill /T`**：`shell:true` 多一層 `cmd.exe`，只 kill child 會留孫程序。
+
+#### 圖釘系統的儲存決策（PM-329/330）
+
+圖釘存在 **content script 的模組變數**，不是 background 的 Map、也不是 `chrome.storage.session`：
+
+- background 是 **MV3 service worker，閒置 30 秒被回收**，Map 一起消失（PM-298 的坑）
+- `chrome.storage.session` 會在頁面重整後復原圖釘，但 **selector 可能已指向不同元素** —— 復原一個指向錯元素的圖釘比讓它消失更糟
+
+**分頁關閉／重整 → 圖釘消失，是正確語意**（圖釘綁的是「這一頁的這個元素」）。狀態多一個 **`stale`**：元素從 DOM 消失時轉灰且**不刪除** —— 那既不是正常也不是「元素有問題」，回成 error 會讓 AI 去查一個不存在的東西。
 
 #### 開發版 manifest（PM-322）
 
@@ -91,6 +124,7 @@ content.ts（GET_PAGE_INFO / 即時 console 與網路錯誤）→ 目標網頁
 - `_` 開頭的說明欄位會被剝掉（Chrome 對未知頂層鍵會警告）
 - 陣列用**聯集**合併，不覆蓋（否則日後加 `permissions` 會洗掉上架版原有權限）
 - DEV build 會印「此版本不可上架」警告
+- 🔴 **一般 `npm run build` 會把 dist 的 dev manifest 蓋掉**。開發中頻繁 rebuild 很容易在沒注意時弄丟 `<all_urls>`，下次重新載入就發現 `take_screenshot` 又不能用，而且**看起來像功能壞掉、不像 build 參數問題**（PM-332 實際發生過）。因此：開發請用 **`npm run build:dev`**，而一般 build 偵測到「先前是 dev manifest」時會明確警告。
 
 #### 方案等級判斷（PM-321）
 

@@ -1,5 +1,26 @@
 # BugEzy Changelog
 
+## 2026-08-16（Phase 2 圖釘 + PM-D2 終端機）
+
+**PM-326~332**：bridge 工具總數 **11 → 17**（11 瀏覽器 + 3 終端機 + 3 圖釘）。全套回歸 **216 項 0 failed**（`_verify_phase1` 111 + `_verify309` 84 + `_verify327` 21）。server 已 deploy（Version `b5529590`）。
+
+- **PM-326** bugezy-watch CLI 盤點（未改碼）。關鍵發現：**CLI 全檔只有一個 POST，沒有任何讀取通道** —— 沿用它就得做「CLI 推 Workers → bridge 拉 Workers」，多一次往返且**資料會離開本機**。而 bridge 自己就是 Node process，直接 spawn 攔 stderr 即可。這一點決定了 PM-327 的路徑。
+- **PM-327** `start_terminal_monitor` / `get_terminal_live_errors` / `stop_terminal_monitor`（**21/21**，真的 spawn 子程序）。
+  🔴 **測試抓到真外洩**：錯誤內容有遮罩，但**回聲的 `command` 欄位是原封不動回傳的** —— `DATABASE_URL=postgres://u:pw@h/db npm run dev` 這種寫法極常見，而該欄位每次查詢都會回傳給 AI，等於**把憑證反覆送進 context**。四處回傳全部補遮罩。
+  另：**`parse-traceback.ts` / `pii-mask.ts` 是複製而非 import**（bridge 要 `npm publish`，相對路徑在發布包裡不存在），並用逐字比對測試防漂移；窗口 120 秒；保留 `unparsed_stderr`（解析器只支援 Python／Node，只回 `errors` 會讓 Go／Rust 使用者以為沒事）；Windows 用 `taskkill /T` 收孫程序。
+- **PM-328** `bugezy.dev/test-errors` 測試頁部署，**313-3 LIMIT → PASS**（抓到真實 404）。
+  🔴 **卡片的 `fetch('https://httpstat.us/500')` 會被 CSP 擋掉**（`connect-src 'self'`），得到的是 CSP 違規的 TypeError 而非要測的 5xx —— 改為全同源並新增 `/api/test-error-500`。另加 `noindex, nofollow`（HTTP 標頭 + meta 兩層）、不進 sitemap、中英雙語「這不是 bug」警告。
+- **PM-329** Phase 2 圖釘系統設計（未改碼）。
+- **PM-330** `pin_element`：覆蓋層外層 `pointer-events:none`／圓點 `auto`（PM-304 的結論）、**一律 DOM API 不用 `innerHTML`**（Trusted Types 網站會擋，PM-69 的坑）、重複釘同一 selector 更新而非新增。
+- **PM-331** `pin_analyze` + `get_pin_results`（複用 `analyze_element`，不另寫分析）。
+  🔴 **新增 `stale` 狀態**：SPA 換頁後被釘的元素會從 DOM 消失 —— 那既不是正常也不是「元素有問題」，回成 error 會讓 AI 去查一個不存在的東西。改為轉灰標 `stale` 且**不刪除**（AI 需要知道釘的東西不見了）。
+- **PM-332** 全套回歸 216/216。
+  🔴 **發現一個自己造成的回歸**：PM-330 的一般 `node build.mjs` **靜默把 dist 的 dev manifest 蓋掉**，FOX 重載後 `take_screenshot` 又變回權限受限 —— 而且看起來像功能壞掉、不像 build 參數問題。已加 `npm run build:dev`，且一般 build 偵測到「先前是 dev manifest」會明確警告。
+
+> **bridge 17 支工具**：`ping` · `get_page_url` · `navigate_to` · `click_element` · `read_page` · `type_text` · `take_screenshot` · `get_browser_errors` · `analyze_element` · `get_web_vitals` · `get_page_health` · `start_terminal_monitor` · `get_terminal_live_errors` · `stop_terminal_monitor` · `pin_element` · `pin_analyze` · `get_pin_results`
+> ⚠ **PM-321 的 `isActiveUserId({ active, tier })` 已隨 PM-328 一併 deploy 上線**（向下相容，4 處呼叫端皆已改用 `.active`）。
+> **待 FOX**：以 `npm run build:dev` 產物重新載入擴充功能 → `take_screenshot` 的 LIMIT 即可轉 PASS。其餘既有待辦不變。
+
 ## 2026-08-16（Phase 1 完工）
 
 **v2 Phase 1 核心完成（PM-305~324）**：`bugezy-bridge` 共 **11 支 MCP 工具**，**11 支全部通過真實 Chrome 端到端驗收**（`take_screenshot` 需開發版 manifest 的 `<all_urls>`；上架版仍受 `activeTab` 限制）。規格書 v0.8 → **v1.1**。server 未 deploy（`isActiveUserId` 改動待下次 deploy）。

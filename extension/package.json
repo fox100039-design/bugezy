@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
+    "build:dev": "node build.mjs --dev",
     "dev": "node build.mjs --watch",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
   },

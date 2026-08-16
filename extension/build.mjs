@@ -11,17 +11,36 @@ const root = dirname(fileURLToPath(import.meta.url));
 const outdir = resolve(root, 'dist');
 const watch = process.argv.includes('--watch');
 
-rmSync(outdir, { recursive: true, force: true });
-mkdirSync(outdir, { recursive: true });
-
 // PM-322：DEV=true 時把 manifest.dev.json 的差異合併進去（多一個 <all_urls> host permission）。
 // **上架版 manifest.json 永遠不動** —— dev 差異只在打包時疊上去，不寫回原始檔。
-const isDev = process.env.DEV === 'true';
+// 兩種寫法都支援：`node build.mjs --dev`（跨平台，npm script 用這個）或 `DEV=true node build.mjs`
+const isDev = process.env.DEV === 'true' || process.argv.includes('--dev');
+
+// ⚠ 這段必須在 rmSync 之前——dist 一刪就讀不到先前的 manifest 了。
+let prevHadAllUrls = false;
+try {
+  prevHadAllUrls = JSON.stringify(
+    JSON.parse(readFileSync(resolve(outdir, 'manifest.json'), 'utf8')).host_permissions ?? [],
+  ).includes('<all_urls>');
+} catch {
+  /* dist 還不存在 */
+}
+
+rmSync(outdir, { recursive: true, force: true });
+mkdirSync(outdir, { recursive: true });
 
 /** 產出 dist/manifest.json；dev 模式合併 manifest.dev.json 的差異。 */
 function writeManifest() {
   const base = JSON.parse(readFileSync(resolve(root, 'manifest.json'), 'utf8'));
   if (!isDev) {
+    // PM-332：**一般 build 會把 dist 的 dev manifest 蓋掉**。開發中頻繁 rebuild 時，
+    //   很容易在沒注意的情況下把 <all_urls> 弄丟，然後下次重新載入擴充功能就發現
+    //   take_screenshot 又不能用了——而且看起來像功能壞掉，不像是 build 參數的問題。
+    //   （這正是 PM-332 實際發生的事。）所以這裡明講一聲。
+    if (prevHadAllUrls) {
+      console.log('⚠ 注意：dist 先前是 DEV manifest（含 <all_urls>），這次一般 build 已將它移除。');
+      console.log('   開發用請改跑：npm run build:dev（或 DEV=true node build.mjs），並重新載入擴充功能。');
+    }
     writeFileSync(resolve(outdir, 'manifest.json'), JSON.stringify(base, null, 2) + '\n');
     return;
   }
