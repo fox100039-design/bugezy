@@ -61,6 +61,7 @@ code{background:rgba(255,255,255,0.07);padding:2px 6px;border-radius:4px;font-si
 .toc-title{font-size:13px;font-weight:700;color:var(--cyan);margin-bottom:10px}
 .toc a{display:block;color:var(--text-dim);text-decoration:none;font-size:12px;padding:3px 0;transition:color .2s}
 .toc a:hover{color:var(--cyan)}
+.toc a.sub{padding-left:14px;font-size:11px;color:rgba(255,255,255,0.35)}
 .wire{background:#050810;border:1px dashed rgba(255,255,255,0.15);border-radius:10px;padding:16px;margin:12px 0;font-size:11px;color:var(--text-dim);white-space:pre;overflow-x:auto;line-height:1.5}
 .tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;margin:1px}
 .tag-in{background:rgba(50,180,120,0.15);color:var(--success)}
@@ -101,7 +102,7 @@ details .details-body{padding:4px 18px 18px}
   <div>
     <div class="header-title">BugEzy v2/v3 產品規格書</div>
     <div class="header-sub">From Bug Reporter to AI Debug Partner · FOX + Claude 共同規劃</div>
-    <div class="header-date">📌 v0.6 · 2026-08-16 · +§14 八層記憶矩陣（Octa-Memory Matrix） · 程式 &gt; ARCHITECTURE.md &gt; 本文</div>
+    <div class="header-date">📌 v0.7 · 2026-08-16 · +§14 八層記憶矩陣 · 決策 4~6 已定案 · 程式 &gt; ARCHITECTURE.md &gt; 本文</div>
   </div>
 </div>
 
@@ -123,6 +124,7 @@ details .details-body{padding:4px 18px 18px}
   <a href="#s12">§12 附錄 — 實作查證與待決策 ★新增</a>
   <a href="#s13">§13 雙模式操作 — 偵察模式 + 出任務模式 ★新增</a>
   <a href="#s14">§14 The Octa-Memory Matrix — 八層記憶矩陣 ★新增</a>
+  <a href="#s14-12" class="sub">　└ §14.12 記憶管理（存儲／共享／權限已定案）★新增</a>
 </div>
 
 <!-- ══════════ §1 ══════════ -->
@@ -946,7 +948,7 @@ L8 🟣 團隊協作庫     ─┴─ 知道「改完之後要負什麼責任」
     <tr><td><code>memory_perf_check(metrics)</code></td><td><strong>L7</strong> 效能比對</td></tr>
     <tr><td><code>memory_biz_validate(output)</code></td><td><strong>L4</strong> 商業邏輯驗證</td></tr>
   </table>
-  <p style="font-size:11px;color:var(--text-dim)">📌 工具總數連動：既有 13 ＋ v2 新增 17 ＋ 記憶 7 ＝ <strong>37 個</strong>（<code>get_live_errors</code> 不重複計）。</p>
+  <p style="font-size:11px;color:var(--text-dim)">📌 <a href="#s14-12" style="color:var(--cyan)">§14.12.1</a> 再加 6 個管理工具（update／delete／list／clear／export／import）→ 記憶層共 <strong>13 個</strong>，全站合計 <span class="hl">43 個</span>。</p>
 
   <div class="sub-title">§14.10　自動學習循環</div>
   <div class="wire">        debug 成功
@@ -987,21 +989,170 @@ L8 🟣 團隊協作庫     ─┴─ 知道「改完之後要負什麼責任」
     <tr><td class="hl">Phase D</td><td><span class="hl-orange">L7</span> 效能帳本庫 ＋ <span style="color:var(--primary);font-weight:700">L8</span> 團隊協作庫</td><td>進階</td></tr>
   </table>
 
-  <div class="rule-box">
-    <div class="rule-box-title">🔴 Phase A 動工前必須先回答的三個問題（本節未定義）</div>
+  <div class="decision settled">
+    <div class="decision-title">✅ Phase A 的三個前提已定案（2026-08-16）· 決策 4~6</div>
+
+    <p style="font-size:12px;color:var(--text)"><strong>決策 4：記憶存哪裡？→ 混合式</strong></p>
+    <table>
+      <tr><th>位置</th><th>層</th><th>理由</th></tr>
+      <tr><td class="hl-blue">雲端（Supabase）</td><td><strong>L1 匿名模式</strong> ＋ <strong>L3 客服手冊</strong></td><td>L1 匿名經驗要跨專案／跨使用者累積才有威力；L3 是全平台共用的產品手冊</td></tr>
+      <tr><td class="hl-green">本機（<code>.bugezy/</code>）</td><td><strong>L2 L4 L5 L6 L7 L8</strong>（含敏感專案資訊）＋ <strong>L1 原始細節</strong></td><td>業務規則、資安鐵律、架構細節都是使用者的機密資產，不上雲</td></tr>
+    </table>
+
+    <p style="font-size:12px;color:var(--text);margin-top:10px"><strong>決策 5：L1 跨用戶共享？→ 兩層式</strong></p>
     <ul>
-      <li><strong>記憶存在哪裡？</strong>L1／L2／L4 記的都是<strong>使用者原始碼的內容</strong>（業務規則、架構細節、修法片段）。存雲端 Supabase → <code>/privacy</code> 得同步改（見 <code>ARCHITECTURE.md §4-15</code>：隱私政策要對得上程式碼）；存本機（bridge 旁）→ 換機、多人協作、L8 團隊共享全部要重新設計。<strong>這個選擇會決定 Phase A 的整個資料層，不能邊做邊決定。</strong></li>
-      <li><strong>L1 跨不跨使用者共享？</strong>「越用越聰明」若指全平台共享，威力最大——但一則經驗裡含著 A 公司的檔名、函式名與修法，被 B 公司的 AI 取用就是<strong>原始碼細節外洩</strong>。若不共享，新用戶的 L1 是空的，第一個月毫無感覺。<strong>兩條路的產品體驗差很多。</strong></li>
-      <li><strong>L6／L7 的「主動撤回修改」由誰執行？</strong>§14.6 寫「立刻自己改掉」、§14.7 寫「主動撤回修改」——這都是<strong>寫入使用者程式碼</strong>的動作。目前 v1／v2 的工具全是唯讀或操作瀏覽器，<strong>沒有任何一支會改檔案</strong>。要不要跨過這條線、以及要不要有人工確認關卡，屬產品層決策。</li>
+      <li><span class="hl-blue">匿名化模式共享</span>：去掉檔名／變數名，<strong>只留 bug 模式</strong></li>
+      <li><span class="hl-green">原始細節私有</span>：存在本機 <code>.bugezy/</code>，<strong>不上傳</strong></li>
     </ul>
-    <p style="margin-top:6px">這三題都不影響本節「寫下規格」，但<strong>會直接決定 Phase A 第一張卡怎麼開</strong>，故先標記。</p>
+    <div class="rule-box" style="margin-top:8px">
+      <div class="rule-box-title">⚠ 匿名化不能只清欄位，要連 symptom 字串一起清</div>
+      <p>L1 的「症狀」欄位本身就常內嵌識別資訊——<code>Cannot read 'map' of undefined at CheckoutPage.tsx:42</code>、堆疊追蹤裡的內部網域、錯誤訊息帶出的客戶 ID。<strong>只把「檔名／變數名」當成獨立欄位清掉，敏感內容仍會從錯誤訊息整段漏出去。</strong>上傳前必須對全文做遮蔽（CLI 上傳前遮蔽機密字串的既有做法可沿用）。</p>
+      <p>另外：把匿名 L1 存上雲端<strong>是一項新的資料蒐集行為</strong>，依 <code>ARCHITECTURE.md §4-15</code>，<code>/privacy</code> 必須在功能上線<strong>之前</strong>同步更新（PM-291 被 Chrome Web Store 退件就是這一條）。</p>
+    </div>
+
+    <p style="font-size:12px;color:var(--text);margin-top:10px"><strong>決策 6：L6／L7 能改檔案嗎？→ 只建議，絕不動手</strong></p>
+    <div class="wire">BugEzy  = 偵測 + 分析 + 建議   （眼睛和大腦）
+AI 工具 = 決定是否動手修改     （手）
+
+BugEzy 永遠不碰用戶程式碼</div>
+    <p style="font-size:12px;color:var(--text-dim)">這條同時解掉一個連帶問題：<strong>§14.6「立刻自己改掉」與 §14.7「主動撤回修改」的措辭要照此理解</strong>——BugEzy 提出的是<strong>建議</strong>，實際落筆的是 AI 工具。這也讓 v2 維持「沒有任何一支工具會寫使用者的檔案」的界線不被打破。</p>
+  </div>
+
+  <div class="sub-title" id="s14-12">§14.12　記憶管理</div>
+
+  <div class="sub-title" style="font-size:13px">§14.12.1　AI 與用戶的 CRUD 權限</div>
+  <p style="font-size:12px;color:var(--text-dim)">在 <a href="#s14" style="color:var(--cyan)">§14.9</a> 的 7 個工具之上<strong>再加 6 個</strong>，讓記憶可以被更新、刪除、盤點與搬移——記憶若只能寫不能改，三個月後就會塞滿過時的解法。</p>
+
+  <div class="mem-lbl">MCP 工具擴充</div>
+  <table>
+    <tr><th>工具</th><th>說明</th><th></th></tr>
+    <tr><td><code>memory_save(layer, entry)</code></td><td>寫入</td><td class="hl-green">§14.9 已有</td></tr>
+    <tr><td><code>memory_update(layer, id, entry)</code></td><td><strong>更新</strong>（修法進化時覆蓋舊經驗）</td><td class="hl">新增</td></tr>
+    <tr><td><code>memory_delete(layer, id)</code></td><td>刪除</td><td class="hl">新增</td></tr>
+    <tr><td><code>memory_search(query, layers?)</code></td><td>搜尋</td><td class="hl-green">§14.9 已有</td></tr>
+    <tr><td><code>memory_list(layer)</code></td><td>列出某層所有記憶</td><td class="hl">新增</td></tr>
+    <tr><td><code>memory_clear(layer)</code></td><td>清空某層</td><td class="hl">新增</td></tr>
+    <tr><td><code>memory_export()</code></td><td>匯出整個 <code>.bugezy/</code></td><td class="hl">新增</td></tr>
+    <tr><td><code>memory_import(path)</code></td><td>匯入</td><td class="hl">新增</td></tr>
+  </table>
+  <p style="font-size:11px;color:var(--text-dim)">📌 <strong>工具總數連動</strong>：既有 13 ＋ v2 新增 17 ＋ 記憶 <strong>7 ＋ 6 ＝ 13</strong> ＝ <span class="hl">43 個</span>（<code>get_live_errors</code> 不重複計）。§14.9 的另外 5 個（<code>memory_learn</code> / <code>memory_get</code> / <code>memory_audit</code> / <code>memory_perf_check</code> / <code>memory_biz_validate</code>）不變。</p>
+
+  <div class="ok-box">
+    <div class="ok-box-title">✅ <code>memory_import</code> 會寫檔，但不牴觸決策 6</div>
+    <p>決策 6 的界線是<strong>「不碰使用者的程式碼」</strong>，不是「完全不寫檔」。<code>memory_import</code> 只寫進 <code>.bugezy/</code>——那是 BugEzy 自己的目錄，且是使用者主動下指令要求的。<strong>專案原始碼一個位元組都不會動。</strong></p>
+  </div>
+
+  <div class="mem-lbl">用戶 CLI 管理</div>
+  <div class="wire">bugezy memory init               → 在當前專案建立 .bugezy/
+bugezy memory list L1            → 列出 Debug 經驗
+bugezy memory delete L1 --id=5   → 刪除某條
+bugezy memory export             → 匯出備份
+bugezy memory import backup.json → 匯入
+bugezy memory clear L1           → 清空某層
+bugezy memory stats              → 各層容量統計</div>
+  <p style="font-size:11px;color:var(--text-dim)">📌 <code>memory init</code> 是 §14.12.3 步驟 3 提示使用者執行的指令，一併列進來。<strong>記憶是使用者的資產，任何一層都必須能被使用者自己看見、修改、刪除、帶走</strong>——這也是 <code>/privacy</code>「使用者權利」章節能對得上的前提。</p>
+
+  <div class="mem-lbl">AI 自動更新場景</div>
+  <div class="wire">第一次修 bug        → memory_save(L1, { symptom, fix: '加 ?? []' })
+三個月後更好的修法  → memory_update(L1, id, { fix: '改用 Zod schema' })
+
+= 記憶會進化，不會停在最初級的解法</div>
+
+  <div class="sub-title" style="font-size:13px">§14.12.2　多專案隔離</div>
+  <p style="font-size:12px;color:var(--text-dim)"><code>.bugezy/</code> 跟著<strong>專案根目錄</strong>走（跟 <code>.git/</code> 同層）：</p>
+  <div class="wire">C:\projects\
+  ├── client-A-ecommerce\
+  │   └── .bugezy\         ← A 的記憶
+  ├── client-B-hospital\
+  │   └── .bugezy\         ← B 的記憶
+  └── my-side-project\
+      └── .bugezy\         ← 自己的記憶</div>
+
+  <div class="mem-lbl">結構</div>
+  <div class="wire">.bugezy/
+  config.json              ← 容量上限、淘汰規則
+  memory/
+    L1-debug.json
+    L2-project.json
+    L4-business.json
+    L5-dependencies.json
+    L6-security.json
+    L7-performance.json
+    L8-team.json
+  .gitignore               ← 預設不進 git（含敏感資訊）</div>
+  <div class="ok-box">
+    <div class="ok-box-title">兩個容易做錯的細節</div>
+    <p><strong>① 沒有 <code>L3-support.json</code> 不是漏寫。</strong>L3 客服知識庫依<strong>決策 4</strong> 放雲端——它是 BugEzy 自己的產品手冊，每個使用者拿到的內容都一樣，沒有存在專案目錄裡的理由。本機是 <strong>L1（原始細節）＋ L2、L4、L5、L6、L7、L8 共 7 個檔</strong>。</p>
+    <p><strong>② <code>.bugezy/.gitignore</code> 的內容必須是自我忽略樣式</strong>，否則「預設不進 git」不會成立：</p>
+    <div class="wire">*
+!.gitignore</div>
+    <p>放一個空的或只寫 <code>.bugezy/</code> 的 <code>.gitignore</code> 都<strong>沒有效果</strong>——目錄內的 <code>.gitignore</code> 只能忽略同目錄與子目錄的內容，且必須自己排除自己才不會連規則檔一起被忽略掉。</p>
+  </div>
+  <p style="font-size:11px;color:var(--text-dim)">📌 <strong>團隊要共享時走匯出／匯入，不要改成進 git。</strong>L2／L4／L8 確實是團隊會想共用的內容，但 L6（資安鐵律，可能含內部政策）與 L1（含真實檔名與修法）同在一個目錄下，整包進 git 等於把敏感層一併推上遠端。§14.12.5 的匯出檔才是核准的交接路徑。</p>
+
+  <div class="sub-title" style="font-size:13px">§14.12.3　自動切換</div>
+  <div class="mem-lbl">bridge 啟動時</div>
+  <div class="wire">1. 從 CWD 往上找 .bugezy/（跟 git 找 .git/ 一樣）
+2. 找到   → 載入該專案記憶
+3. 找不到 → 空白記憶 + 提示 bugezy memory init
+4. cd 換專案 → 重啟 bridge → 自動切換</div>
+  <p style="font-size:11px;color:var(--text-dim)">📌 步驟 4 在實務上是<strong>自動發生</strong>的：bridge 由 AI 工具以 stdio 啟動，CWD 就是 AI 工具當下的專案目錄。換專案＝開新的 AI session＝新的 bridge process，不需要使用者手動重啟。</p>
+
+  <div class="mem-lbl">L1 跨專案共享的部分</div>
+  <div class="wire">A 專案修過 Stripe webhook bug → 匿名化存雲端
+B 專案也接 Stripe             → 搜尋時從雲端撈到
+
+= 做過的專案越多，新專案上手越快</div>
+
+  <div class="sub-title" style="font-size:13px">§14.12.4　容量限制與智慧淘汰</div>
+  <div class="mem-lbl">本機容量（極寬裕）</div>
+  <table>
+    <tr><th>項目</th><th>估算</th></tr>
+    <tr><td>L1 單條</td><td>≈ <strong>500 bytes</strong></td></tr>
+    <tr><td>L1 1000 條</td><td>≈ <strong>500 KB</strong></td></tr>
+    <tr><td>整個 <code>.bugezy/</code></td><td>通常 <span class="hl-green">&lt; 10 MB</span></td></tr>
+  </table>
+
+  <div class="mem-lbl">自動淘汰規則</div>
+  <table>
+    <tr><th>層</th><th>觸發條件</th><th>動作</th></tr>
+    <tr><td class="hl-red">L1</td><td>超過 <code>max_entries</code>（預設 <strong>2000</strong>）</td><td>淘汰<strong>最久沒匹配</strong>的</td></tr>
+    <tr><td class="hl-orange">L7</td><td>超過 <code>retention_days</code>（預設 <strong>90 天</strong>）</td><td>只保留近期基準</td></tr>
+  </table>
+  <p style="font-size:11px;color:var(--text-dim)">📌 L1 淘汰看的是<strong>「最久沒被匹配」而非「最久以前寫的」</strong>——一條三年前寫、但每個月都命中的經驗，價值遠高於上週寫完再也沒用過的那條。實作時要記 <code>last_hit_at</code>，不能只靠 <code>created_at</code>。</p>
+
+  <div class="mem-lbl">合併機制</div>
+  <div class="wire">同一個 bug 修過 5 次 → 自動合併成一條最佳實踐
+
+「最初 ?? → 後來 Zod → 最終 middleware 統一處理」
+
+= 記憶濃縮，不只堆積</div>
+
+  <div class="mem-lbl">用戶可設上限</div>
+  <div class="wire">// .bugezy/config.json
+{
+  "L1_max_entries": 2000,
+  "L7_retention_days": 90,
+  "auto_merge": true,
+  "auto_evict": true
+}</div>
+
+  <div class="sub-title" style="font-size:13px">§14.12.5　匯出 / 匯入 / 備份</div>
+  <div class="wire">匯出：bugezy memory export                       → .bugezy-backup-20260816.json
+匯入：bugezy memory import .bugezy-backup-20260816.json
+
+用途：換電腦、新同事加入、專案交接</div>
+  <div class="rule-box">
+    <div class="rule-box-title">⚠ 匯出檔含敏感內容，交接時要當作機密處理</div>
+    <p><strong>匯出不含雲端 L1 匿名經驗</strong>（那些本來就在雲端，換電腦後自動撈得到）。但匯出檔<strong>會包含 L1 的原始細節</strong>（真實檔名、函式名、修法）<strong>以及 L6 的資安鐵律</strong>——正是決策 4／5 特意留在本機、不上雲的那些。</p>
+    <p>因此 <code>.bugezy-backup-*.json</code> 應比照憑證檔對待：<strong>不要寄到公開頻道、不要 commit 進 git</strong>。CLI 匯出時應直接印出這行警告。</p>
   </div>
 </div>
 
 </div>
 
 <div class="footer">
-  BugEzy v2/v3 產品規格書 · v0.6 · 2026-08-16 · FOX + Claude<br>
+  BugEzy v2/v3 產品規格書 · v0.7 · 2026-08-16 · FOX + Claude<br>
   程式 &gt; ARCHITECTURE.md &gt; 本文
 </div>
 
