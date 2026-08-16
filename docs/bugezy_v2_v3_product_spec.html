@@ -77,6 +77,22 @@ details[open] summary::before{content:'▼ '}
 details summary:hover{background:rgba(255,255,255,0.03)}
 details .details-body{padding:4px 18px 18px}
 .footer{text-align:center;padding:32px 20px 48px;font-size:11px;color:var(--text-dim);border-top:1px solid rgba(255,255,255,0.08);margin-top:32px}
+/* §14 八層記憶矩陣 */
+.mem{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-left:4px solid var(--mc);border-radius:0 12px 12px 0;padding:18px 22px;margin-bottom:14px}
+.mem-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.mem-id{font-family:'Outfit',sans-serif;font-size:18px;font-weight:900;color:var(--mc)}
+.mem-name{font-size:14px;font-weight:700;color:var(--text)}
+.mem-kind{font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:color-mix(in srgb,var(--mc) 18%,transparent);color:var(--mc)}
+.mem-why{font-size:12px;color:var(--text);margin-bottom:8px}
+.mem-lbl{font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;margin:10px 0 4px}
+.mem ul{margin:4px 0 4px 18px}
+.mem li,.mem p{font-size:12px;color:var(--text-dim);margin-bottom:4px}
+.mem-demo{background:rgba(0,0,0,0.28);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:12px 14px;margin-top:6px}
+.mem-demo p{font-size:11.5px;margin-bottom:5px}
+.mem-quote{color:var(--mc);font-style:italic}
+.mem-bad{color:var(--red)}.mem-good{color:var(--success)}
+.m1{--mc:var(--red)}.m2{--mc:var(--yellow)}.m3{--mc:var(--blue)}.m4{--mc:var(--success)}
+.m5{--mc:var(--blue)}.m6{--mc:var(--red)}.m7{--mc:var(--orange)}.m8{--mc:var(--primary)}
 </style>
 </head>
 <body>
@@ -85,7 +101,7 @@ details .details-body{padding:4px 18px 18px}
   <div>
     <div class="header-title">BugEzy v2/v3 產品規格書</div>
     <div class="header-sub">From Bug Reporter to AI Debug Partner · FOX + Claude 共同規劃</div>
-    <div class="header-date">📌 v0.5 · 2026-08-15 · 三項決策已定案 + §13 雙模式操作 + 全類別 tab_id · 程式 &gt; ARCHITECTURE.md &gt; 本文</div>
+    <div class="header-date">📌 v0.6 · 2026-08-16 · +§14 八層記憶矩陣（Octa-Memory Matrix） · 程式 &gt; ARCHITECTURE.md &gt; 本文</div>
   </div>
 </div>
 
@@ -106,6 +122,7 @@ details .details-body{padding:4px 18px 18px}
   <a href="#s11">§11 全棧 Debug — bugezy-watch 整合 ★新增</a>
   <a href="#s12">§12 附錄 — 實作查證與待決策 ★新增</a>
   <a href="#s13">§13 雙模式操作 — 偵察模式 + 出任務模式 ★新增</a>
+  <a href="#s14">§14 The Octa-Memory Matrix — 八層記憶矩陣 ★新增</a>
 </div>
 
 <!-- ══════════ §1 ══════════ -->
@@ -785,10 +802,206 @@ Claude 開瀏覽器測  ──►  Extension 掛著（攔截 console/network）<
   <p style="font-size:11px;color:var(--text-dim);margin-top:12px">📌 查證日期 <strong>2026-08-15</strong>，依據 Anthropic 官方產品頁／支援文件／Claude Code 文件與 GitHub issue。<strong>對手能力變動快，引用前請重新查證。</strong>另註：Anthropic 於 2026-08-12 起讓 Chrome 側邊欄以 Cowork session 形式運作，此表描述的是該變更後的狀態。</p>
 </div>
 
+<!-- ══════════ §14 ══════════ -->
+<div class="section" id="s14">
+  <div class="section-title"><span class="num">§14</span>The Octa-Memory Matrix — 八層記憶矩陣 <span style="font-size:12px;color:var(--cyan)">★新增</span></div>
+
+  <div class="card">
+    <p style="font-size:13px;color:var(--text)">當這八層全部組建完成，BugEzy 的大腦結構會呈現<strong>完美的立體防線</strong>。AI 不再是每次從零開始的臨時工，而是一個<span class="hl">有記憶、會成長、懂業務、知分寸</span>的 AI 開發夥伴。</p>
+  </div>
+
+  <div class="wire">L1 🔴 Debug 經驗庫   ─┐
+L2 🟡 專案知識庫     ─┼─ 知道「這個專案是怎麼回事」
+L3 🔵 客服知識庫     ─┘
+L4 🟢 商業邏輯庫     ─┐
+L5 🔵 外部依賴庫     ─┼─ 知道「什麼叫做對、什麼不是我的錯」
+L6 🔴 資安合規庫     ─┘
+L7 🟠 效能帳本庫     ─┐
+L8 🟣 團隊協作庫     ─┴─ 知道「改完之後要負什麼責任」</div>
+  <p style="font-size:11px;color:var(--text-dim)">🔴 與 🔵 各出現兩次是<strong>刻意的分組</strong>：紅＝會擋下錯誤修改的關鍵防線（L1 經驗、L6 資安），藍＝描述外部環境的知識（L3 使用環境、L5 依賴環境）。</p>
+
+  <div class="sub-title">§14.1　L1 Debug 經驗庫</div>
+  <div class="mem m1">
+    <div class="mem-head"><span class="mem-id">L1</span><span class="mem-name">🔴 Debug 經驗庫</span><span class="mem-kind">動態</span></div>
+    <p class="mem-why"><strong>為什麼需要</strong>：10 秒秒殺重複 Bug，<span class="hl-green">省 95% 推理 Token</span>。同一個 bug 不該讓 AI 從零推理第二次。</p>
+    <div class="mem-lbl">記憶內容</div>
+    <ul><li>每次 debug 成功後<strong>自動記錄</strong>：症狀 → 根因 → 修法 → 關鍵檔案</li></ul>
+    <div class="mem-lbl">實戰威力</div>
+    <div class="mem-demo">
+      <p class="mem-quote">「TypeError: Cannot read 'map' of undefined → API 回傳 null 沒有預設值 → 加 <code>?? []</code> 防護」</p>
+      <p>下次遇到類似 error → 自動比對歷史 → <span class="mem-good">直接給修法</span>。<strong>越用越聰明。</strong></p>
+    </div>
+  </div>
+
+  <div class="sub-title">§14.2　L2 專案知識庫</div>
+  <div class="mem m2">
+    <div class="mem-head"><span class="mem-id">L2</span><span class="mem-name">🟡 專案知識庫</span><span class="mem-kind">靜態</span></div>
+    <p class="mem-why"><strong>為什麼需要</strong>：讓 AI 擁有<strong>整幅地圖</strong>，不用每次重複讀取大文件。</p>
+    <div class="mem-lbl">記憶內容</div>
+    <ul><li>架構文件、引擎清單、API 路由表、<strong>已知的坑</strong></li></ul>
+    <div class="mem-lbl">實戰威力</div>
+    <div class="mem-demo">
+      <p class="mem-quote">「這個欄位用 <code>timestamptz</code> 不是 <code>timestamp</code>」</p>
+      <p>→ <span class="mem-good">AI 不會再犯</span>。</p>
+    </div>
+  </div>
+
+  <div class="sub-title">§14.3　L3 客服知識庫</div>
+  <div class="mem m3">
+    <div class="mem-head"><span class="mem-id">L3</span><span class="mem-name">🔵 客服知識庫</span><span class="mem-kind">支援</span></div>
+    <p class="mem-why"><strong>為什麼需要</strong>：<strong>產品內建客服</strong>，自動排查環境與安裝問題。</p>
+    <div class="mem-lbl">記憶內容</div>
+    <ul><li>安裝教學（Extension / MCP / Bridge）、FAQ、操作指南、錯誤排解</li></ul>
+    <div class="mem-lbl">實戰威力</div>
+    <div class="mem-demo">
+      <p>用戶問「MCP 連不上」→ AI 查 L3 → <span class="mem-quote">「最常見原因是 token 過期，請到設定頁重新複製」</span></p>
+      <p><strong>整合 <code>SKILL.md</code></strong>：靜態手冊 ＋ 動態經驗 ＝ 完整客服。</p>
+    </div>
+  </div>
+
+  <div class="sub-title">§14.4　L4 商業邏輯庫</div>
+  <div class="mem m4">
+    <div class="mem-head"><span class="mem-id">L4</span><span class="mem-name">🟢 商業邏輯庫</span><span class="mem-kind">業務</span></div>
+    <p class="mem-why"><strong>為什麼需要</strong>：確保 AI 修 Code 時，<strong>數據與業務規則完全正確</strong>。<span class="hl-orange">這是 AI 最常犯的錯——程式碼寫對了，但商業邏輯改錯了。</span></p>
+    <div class="mem-lbl">記憶內容</div>
+    <ul><li>核心業務規則</li></ul>
+    <div class="mem-lbl">實戰威力（LottoShare）</div>
+    <div class="mem-demo">
+      <p class="mem-quote">「冷熱門號碼的權重計算，任何時候分母都不能為 0，且勝率加總必須剛好等於 1（100%）」</p>
+      <p>ENG-27 回傳的 JSON <strong>格式正確（不噴錯）</strong>，但數據總和 ＝ 1.2（120%）</p>
+      <p><span class="mem-bad">✗ 沒有 L4</span> → AI 說「沒有 bug」</p>
+      <p><span class="mem-good">✓ 有 L4</span> → AI 說「違反商業規則，權重分配錯誤」→ <strong>主動修正</strong></p>
+    </div>
+  </div>
+
+  <div class="sub-title">§14.5　L5 外部依賴庫</div>
+  <div class="mem m5">
+    <div class="mem-head"><span class="mem-id">L5</span><span class="mem-name">🔵 外部依賴庫</span><span class="mem-kind">環境</span></div>
+    <p class="mem-why"><strong>為什麼需要</strong>：分辨是<strong>自己的 Bug</strong> 還是<strong>第三方 API 掛掉</strong>。</p>
+    <div class="mem-lbl">記憶內容</div>
+    <ul><li>外部依賴的<strong>脾氣與坑</strong></li></ul>
+    <div class="mem-lbl">實戰威力</div>
+    <div class="mem-demo">
+      <p class="mem-quote">「第三方開獎數據 API 每天晚上 8:30~8:35 例行維護，回傳 503 屬正常」</p>
+      <p>ENG-12 在 8:32 噴網路錯誤</p>
+      <p><span class="mem-bad">✗ 沒有 L5</span> → AI：「你的程式壞了！」</p>
+      <p><span class="mem-good">✓ 有 L5</span> → AI：「這是 API 維護，不是你的問題。已幫你加上 Retry Circuit Breaker，5 分鐘後自動重試」</p>
+    </div>
+  </div>
+
+  <div class="sub-title">§14.6　L6 資安合規庫</div>
+  <div class="mem m6">
+    <div class="mem-head"><span class="mem-id">L6</span><span class="mem-name">🔴 資安合規庫</span><span class="mem-kind">防禦</span></div>
+    <p class="mem-why"><strong>為什麼需要</strong>：防止 AI 寫出<strong>有安全性漏洞或密碼外洩</strong>的程式碼。</p>
+    <div class="mem-lbl">記憶內容</div>
+    <ul><li>專案的<strong>資安鐵律</strong></li></ul>
+    <div class="mem-lbl">實戰威力</div>
+    <div class="mem-demo">
+      <p class="mem-quote">「嚴禁將 <code>API_KEY</code>、<code>JWT_SECRET</code>、DB 密碼寫死在代碼中，必須用 <code>process.env</code>」</p>
+      <p class="mem-quote">「使用者的密碼、身分證字號在日誌中必須完全遮蔽」</p>
+      <p>AI 修完 bug 自動<strong>「自我審查（Audit）」</strong> → 發現自己不小心寫死了一個變數 → <span class="mem-good">立刻自己改掉</span> → 確保產出的 PR 100% 符合資安規範</p>
+    </div>
+  </div>
+
+  <div class="sub-title">§14.7　L7 效能帳本庫</div>
+  <div class="mem m7">
+    <div class="mem-head"><span class="mem-id">L7</span><span class="mem-name">🟠 效能帳本庫</span><span class="mem-kind">監控</span></div>
+    <p class="mem-why"><strong>為什麼需要</strong>：確保修好 Bug 的同時，<strong>網站速度不會變慢</strong>。</p>
+    <div class="mem-lbl">記憶內容</div>
+    <ul><li>各引擎正常運作時的<strong>效能基準（Baseline）</strong></li></ul>
+    <div class="mem-lbl">實戰威力</div>
+    <div class="mem-demo">
+      <p class="mem-quote">「正常情況下 ENG-15 大數據機率回歸引擎，單次運算 &lt; 200ms，記憶體 &lt; 128MB」</p>
+      <p>AI 修完 bug → 重啟引擎 → 自動測試比對帳本 → 發現修完後運算卡了 <span class="mem-bad">2000ms（效能衰退 10 倍）</span></p>
+      <p>→ <span class="mem-good">主動撤回修改</span> → 嘗試更省記憶體的寫法</p>
+    </div>
+  </div>
+
+  <div class="sub-title">§14.8　L8 團隊協作庫</div>
+  <div class="mem m8">
+    <div class="mem-head"><span class="mem-id">L8</span><span class="mem-name">🟣 團隊協作庫</span><span class="mem-kind">流程</span></div>
+    <p class="mem-why"><strong>為什麼需要</strong>：自動對接 Git 與團隊分工，<strong>PR 寫得比人類更優雅</strong>。</p>
+    <div class="mem-lbl">記憶內容</div>
+    <ul><li>模組負責人（Owner）＋ Git 修改歷史</li></ul>
+    <div class="mem-lbl">實戰威力</div>
+    <div class="mem-demo">
+      <p class="mem-quote">「Core-Algorithm 模組負責人是 Max，任何修改必須 @Max Review」</p>
+      <p>AI 修好 code → 自動發 PR → 完美的 commit message → 自動標記 @Max → 附上說明：</p>
+      <p class="mem-quote">「本次修改影響 ENG-12，已根據 Max 上週五在 Slack 提到的架構進行優化」</p>
+    </div>
+  </div>
+
+  <div class="sub-title">§14.9　MCP 工具設計</div>
+  <div class="ok-box">
+    <div class="ok-box-title">✅ 已依 §5 命名慣例調整：<strong>去掉 <code>bugezy:</code> 前綴</strong></div>
+    <p>原稿寫的是 <code>bugezy:memory_save(...)</code>，但 <a href="#s5" style="color:var(--cyan)">§5 決策 2（2026-08-15 定案）</a>已明訂<strong>工具名一律 snake_case、不加 <code>bugezy:</code> 前綴</strong>——MCP 用戶端本來就以 server 名稱做命名空間，再加前綴會出現 <code>bugezy - bugezy:memory_save</code>。故本節 7 個工具<strong>全部去掉前綴</strong>，與既有 13 個及 v2 新增的 17 個一致。</p>
+  </div>
+  <table>
+    <tr><th>類別</th><th>工具</th><th>說明</th></tr>
+    <tr><td rowspan="2" class="hl-green">記憶寫入</td><td><code>memory_save(layer, entry)</code></td><td>存入指定層</td></tr>
+    <tr><td><code>memory_learn(debug_session)</code></td><td>debug 完成後<strong>自動萃取經驗</strong>存入 L1</td></tr>
+    <tr><td rowspan="2" class="hl-blue">記憶讀取</td><td><code>memory_search(query, layers?)</code></td><td><strong>跨層</strong>搜尋相關記憶</td></tr>
+    <tr><td><code>memory_get(layer, topic)</code></td><td>精準提取指定層的特定主題</td></tr>
+    <tr><td rowspan="3" class="hl-red">自動守衛</td><td><code>memory_audit(code_diff)</code></td><td><strong>L6</strong> 資安審查</td></tr>
+    <tr><td><code>memory_perf_check(metrics)</code></td><td><strong>L7</strong> 效能比對</td></tr>
+    <tr><td><code>memory_biz_validate(output)</code></td><td><strong>L4</strong> 商業邏輯驗證</td></tr>
+  </table>
+  <p style="font-size:11px;color:var(--text-dim)">📌 工具總數連動：既有 13 ＋ v2 新增 17 ＋ 記憶 7 ＝ <strong>37 個</strong>（<code>get_live_errors</code> 不重複計）。</p>
+
+  <div class="sub-title">§14.10　自動學習循環</div>
+  <div class="wire">        debug 成功
+            │
+            ▼
+  ┌──────────────────────┐
+  │ L1  自動存入經驗      │
+  └──────────┬───────────┘
+             ▼
+  ┌──────────────────────┐
+  │ L7  記錄修前修後效能   │
+  └──────────┬───────────┘
+             ▼
+  ┌──────────────────────┐
+  │ L6  審查修改是否合規   │
+  └──────────┬───────────┘
+             ▼
+  ┌──────────────────────┐
+  │ L4  驗證商業邏輯正確   │
+  └──────────┬───────────┘
+             ▼
+        全部通過？
+             │
+             ▼
+       ✅ 經驗確認 ───────┐
+                          │
+    下次遇到同類 bug ◄─────┘
+             │
+             ▼
+       直接提取 → 越來越快</div>
+
+  <div class="sub-title">§14.11　開發順序</div>
+  <table>
+    <tr><th>階段</th><th>層</th><th>理由</th></tr>
+    <tr><td class="hl">Phase A</td><td><span class="hl-red">L1</span> Debug 經驗庫 ＋ <span class="hl-blue">L3</span> 客服知識庫</td><td><strong>先做，最有即戰力</strong></td></tr>
+    <tr><td class="hl">Phase B</td><td><span class="hl">L2</span> 專案知識庫 ＋ <span class="hl-green">L4</span> 商業邏輯庫</td><td>專案深度整合</td></tr>
+    <tr><td class="hl">Phase C</td><td><span class="hl-blue">L5</span> 外部依賴庫 ＋ <span class="hl-red">L6</span> 資安合規庫</td><td>防禦層</td></tr>
+    <tr><td class="hl">Phase D</td><td><span class="hl-orange">L7</span> 效能帳本庫 ＋ <span style="color:var(--primary);font-weight:700">L8</span> 團隊協作庫</td><td>進階</td></tr>
+  </table>
+
+  <div class="rule-box">
+    <div class="rule-box-title">🔴 Phase A 動工前必須先回答的三個問題（本節未定義）</div>
+    <ul>
+      <li><strong>記憶存在哪裡？</strong>L1／L2／L4 記的都是<strong>使用者原始碼的內容</strong>（業務規則、架構細節、修法片段）。存雲端 Supabase → <code>/privacy</code> 得同步改（見 <code>ARCHITECTURE.md §4-15</code>：隱私政策要對得上程式碼）；存本機（bridge 旁）→ 換機、多人協作、L8 團隊共享全部要重新設計。<strong>這個選擇會決定 Phase A 的整個資料層，不能邊做邊決定。</strong></li>
+      <li><strong>L1 跨不跨使用者共享？</strong>「越用越聰明」若指全平台共享，威力最大——但一則經驗裡含著 A 公司的檔名、函式名與修法，被 B 公司的 AI 取用就是<strong>原始碼細節外洩</strong>。若不共享，新用戶的 L1 是空的，第一個月毫無感覺。<strong>兩條路的產品體驗差很多。</strong></li>
+      <li><strong>L6／L7 的「主動撤回修改」由誰執行？</strong>§14.6 寫「立刻自己改掉」、§14.7 寫「主動撤回修改」——這都是<strong>寫入使用者程式碼</strong>的動作。目前 v1／v2 的工具全是唯讀或操作瀏覽器，<strong>沒有任何一支會改檔案</strong>。要不要跨過這條線、以及要不要有人工確認關卡，屬產品層決策。</li>
+    </ul>
+    <p style="margin-top:6px">這三題都不影響本節「寫下規格」，但<strong>會直接決定 Phase A 第一張卡怎麼開</strong>，故先標記。</p>
+  </div>
+</div>
+
 </div>
 
 <div class="footer">
-  BugEzy v2/v3 產品規格書 · v0.5 · 2026-08-15 · FOX + Claude<br>
+  BugEzy v2/v3 產品規格書 · v0.6 · 2026-08-16 · FOX + Claude<br>
   程式 &gt; ARCHITECTURE.md &gt; 本文
 </div>
 
