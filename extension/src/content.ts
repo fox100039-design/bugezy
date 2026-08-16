@@ -381,6 +381,138 @@ function bridgeTypeText(selector: string, text: string): Record<string, unknown>
   };
 }
 
+// ── PM-315：analyze_element ────────────────────────────────────────────────
+/**
+ * 只取 debug 時真的會看的樣式。`getComputedStyle` 完整倒出來有數百個屬性，
+ * 一次呼叫就能吃掉數千 token，而其中絕大多數（`-webkit-*` 之類）對找 bug 毫無幫助。
+ */
+const ANALYZE_STYLE_PROPS = [
+  'display', 'position', 'visibility', 'opacity', 'overflow', 'zIndex',
+  'width', 'height', 'margin', 'padding', 'border', 'boxSizing',
+  'color', 'backgroundColor', 'fontSize', 'fontFamily', 'fontWeight',
+  'flexDirection', 'justifyContent', 'alignItems',
+] as const; // 20 個，未超過驗收上限 25
+
+/** 值得回報的屬性；其餘（class/style 等已另外處理的）不重複倒出來。 */
+const ANALYZE_ATTR_WHITELIST = new Set([
+  'href', 'src', 'alt', 'title', 'type', 'name', 'placeholder', 'value',
+  'role', 'target', 'rel', 'for', 'disabled', 'readonly', 'required',
+  'checked', 'selected', 'hidden', 'tabindex', 'contenteditable',
+]);
+
+/** 常見標籤的隱含 ARIA role（沒寫 role 屬性時，瀏覽器實際採用的角色）。 */
+function implicitRole(el: Element): string {
+  const tag = el.tagName.toLowerCase();
+  if (tag === 'a') return el.hasAttribute('href') ? 'link' : 'generic';
+  if (tag === 'input') {
+    const t = (el as HTMLInputElement).type;
+    if (t === 'checkbox') return 'checkbox';
+    if (t === 'radio') return 'radio';
+    if (t === 'button' || t === 'submit' || t === 'reset') return 'button';
+    if (t === 'search') return 'searchbox';
+    return 'textbox';
+  }
+  const map: Record<string, string> = {
+    button: 'button', select: 'combobox', textarea: 'textbox', img: 'img',
+    nav: 'navigation', main: 'main', header: 'banner', footer: 'contentinfo',
+    aside: 'complementary', form: 'form', table: 'table', ul: 'list', ol: 'list',
+    li: 'listitem', h1: 'heading', h2: 'heading', h3: 'heading',
+    h4: 'heading', h5: 'heading', h6: 'heading',
+  };
+  return map[tag] ?? 'generic';
+}
+
+const NATURALLY_FOCUSABLE = new Set(['a', 'button', 'input', 'select', 'textarea', 'summary']);
+
+function bridgeAnalyzeElement(selector: string): Record<string, unknown> {
+  if (typeof selector !== 'string' || !selector.trim()) return { error: '缺少 selector 參數' };
+  let el: Element | null;
+  try {
+    el = document.querySelector(selector);
+  } catch {
+    return { error: `不是合法的 CSS 選擇器：${selector}` };
+  }
+  if (!el) {
+    return {
+      error: `找不到符合「${selector}」的元素`,
+      hint: '該元素可能尚未載入、位於 iframe 內（content script 只跑在最上層框架），或選擇器有誤。可先用 read_page 確認頁面上實際有哪些元素。',
+    };
+  }
+
+  const tag = el.tagName.toLowerCase();
+  const sensitive = isSensitiveField(el);
+
+  // 屬性：白名單 + aria-* / data-*，並對敏感欄位的值遮蔽
+  const attributes: Record<string, string> = {};
+  let attrTruncated = false;
+  for (const a of Array.from(el.attributes)) {
+    const n = a.name.toLowerCase();
+    if (n === 'class' || n === 'id' || n === 'style') continue; // 這三個另有欄位／太長
+    if (!ANALYZE_ATTR_WHITELIST.has(n) && !n.startsWith('aria-') && !n.startsWith('data-')) continue;
+    if (Object.keys(attributes).length >= 30) {
+      attrTruncated = true;
+      break;
+    }
+    // 🔴 敏感欄位的 value 不外送（同 PM-309/311）——結果會整份進 AI 的 context
+    attributes[n] =
+      n === 'value' && (sensitive || (el as HTMLInputElement).type === 'password')
+        ? '<已遮蔽：敏感欄位>'
+        : a.value.slice(0, 200);
+  }
+
+  const cs = getComputedStyle(el);
+  const computed_styles: Record<string, string> = {};
+  for (const p of ANALYZE_STYLE_PROPS) computed_styles[p] = cs[p as keyof CSSStyleDeclaration] as string;
+
+  const r = el.getBoundingClientRect();
+  const tabindexAttr = el.getAttribute('tabindex');
+
+  // ⚠ 只列得出**行內 on* 屬性**。現代網站幾乎都用 addEventListener 綁定，
+  //   那些在 content script 裡是**看不到的**（`getEventListeners` 只存在於 DevTools console）。
+  //   所以空陣列**不代表沒有事件處理器**——必須講清楚，否則 AI 會據此誤判「這顆按鈕沒接事件」。
+  const inline_attributes = Array.from(el.attributes)
+    .filter((a) => a.name.toLowerCase().startsWith('on'))
+    .map((a) => a.name.toLowerCase());
+
+  return {
+    tag,
+    id: el.id || null,
+    classes: Array.from(el.classList).slice(0, 50),
+    attributes,
+    ...(attrTruncated ? { attributes_truncated: true } : {}),
+    computed_styles,
+    box_model: {
+      x: Math.round(r.x), y: Math.round(r.y),
+      width: Math.round(r.width), height: Math.round(r.height),
+      top: Math.round(r.top), left: Math.round(r.left),
+    },
+    event_listeners: {
+      inline_attributes,
+      note: 'ㄧ律只列得出行內 on* 屬性。用 addEventListener 綁的監聽器在 content script 無法列舉（getEventListeners 僅存在於 DevTools），**空陣列不代表沒有事件處理器**。完整列舉需要 chrome.debugger 權限，Phase 1 不支援。',
+    },
+    accessibility: {
+      role: el.getAttribute('role') || implicitRole(el),
+      role_is_implicit: !el.hasAttribute('role'),
+      aria_label: el.getAttribute('aria-label'),
+      aria_hidden: el.getAttribute('aria-hidden'),
+      tabindex: tabindexAttr === null ? null : Number(tabindexAttr),
+      focusable:
+        !(el as HTMLInputElement).disabled &&
+        (tabindexAttr !== null ? Number(tabindexAttr) >= 0 : NATURALLY_FOCUSABLE.has(tag)),
+    },
+    visibility: {
+      visible: isElementVisible(el),
+      display: cs.display,
+      visibility: cs.visibility,
+      opacity: cs.opacity,
+      has_size: r.width > 0 || r.height > 0,
+      in_viewport:
+        r.top < window.innerHeight && r.bottom > 0 && r.left < window.innerWidth && r.right > 0,
+    },
+    ...(sensitive ? { sensitive_field: true } : {}),
+  };
+}
+
 // ── PM-309：read_page ──────────────────────────────────────────────────────
 const READ_PAGE_MAX_CHARS = 50_000;
 /** 這些標籤連同子樹整個跳過——對「頁面上有什麼可以操作」毫無幫助，卻很佔額度。 */
@@ -621,6 +753,8 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
     sendResponse(bridgeClick(msg.selector));
   } else if (msg.type === 'BRIDGE_TYPE_TEXT') {
     sendResponse(bridgeTypeText(msg.selector, msg.text));
+  } else if (msg.type === 'BRIDGE_ANALYZE_ELEMENT') {
+    sendResponse(bridgeAnalyzeElement(msg.selector));
   } else if (msg.type === 'BRIDGE_GET_BROWSER_ERRORS') {
     // PM-313：**沿用 inject.ts 既有的攔截機制**（PM-51 的通道），不另外掛一套。
     //   inject 在 document_start 就開始收，不需要先按錄製。

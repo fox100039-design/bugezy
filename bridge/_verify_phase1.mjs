@@ -139,7 +139,7 @@ proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initial
 
 console.log('\n=== ② MCP 工具註冊 ===');
 const tools = (await rpc('tools/list', {})).result.tools;
-check('工具總數 8（舊 get_live_errors 已移除）', tools.length === 8, tools.map((t) => t.name).join(','));
+check('工具總數 9（analyze_element 新增，舊 get_live_errors 已移除）', tools.length === 9, tools.map((t) => t.name).join(','));
 for (const [name, req, opt] of [['navigate_to', 'url', 'tab_id'], ['click_element', 'selector', 'tab_id']]) {
   const t = tools.find((x) => x.name === name);
   check(`${name} 已註冊`, !!t, tools.map((x) => x.name).join(','));
@@ -152,6 +152,10 @@ const rp = tools.find((t) => t.name === 'read_page');
 check('read_page 已註冊', !!rp, tools.map((x) => x.name).join(','));
 check('  read_page.tab_id 可選 integer', rp?.inputSchema?.properties?.tab_id?.type === 'integer' && !(rp?.inputSchema?.required || []).includes('tab_id'));
 check('  read_page 描述提到敏感欄位遮蔽', /masked/i.test(rp?.description || '') && /遮蔽/.test(rp?.description || ''));
+const ae = tools.find((t) => t.name === 'analyze_element');
+check('analyze_element 已註冊', !!ae, tools.map((x) => x.name).join(','));
+check('  analyze_element.selector 必填 + tab_id 可選', (ae?.inputSchema?.required || []).includes('selector') && ae?.inputSchema?.properties?.tab_id?.type === 'integer' && !(ae?.inputSchema?.required || []).includes('tab_id'));
+check('  描述警告「空清單不代表沒有事件處理器」', /does NOT mean/i.test(ae?.description || '') && /不代表沒有事件處理器/.test(ae?.description || ''));
 const gbe = tools.find((t) => t.name === 'get_browser_errors');
 check('get_browser_errors 已註冊', !!gbe, tools.map((x) => x.name).join(','));
 check('  get_browser_errors.tab_id 可選 integer', gbe?.inputSchema?.properties?.tab_id?.type === 'integer' && !(gbe?.inputSchema?.required || []).includes('tab_id'));
@@ -276,6 +280,29 @@ if (/port 19850 被占用/.test(stderr)) {
       // 驗收 4：受限頁面 —— chrome:// 開不了（navigate_to 會擋），改用「分頁不存在」驗錯誤路徑
       const shotBad = await call('take_screenshot', { tab_id: 99999999 });
       check('312-4 分頁不存在 → error（不 crash）', !!shotBad.error, JSON.stringify(shotBad).slice(0, 200));
+
+      // ── PM-315 analyze_element 端到端 ──
+      // 分析目標同樣從 read_page 的輸出取，不寫死 markup
+      const anSel = (/click: "([^"]+)"/.exec(p1.content || '') || [])[1];
+      const an = anSel ? await call('analyze_element', { selector: anSel, tab_id: r1.tab_id }) : { error: '沒有可用的 selector' };
+      if (anSel && !an.error) {
+        console.log('    analyze_element(', anSel, ') →', JSON.stringify(an).slice(0, 260));
+        check('315-1 回傳 tag/attributes/computed_styles/box_model',
+          !!an.tag && !!an.attributes && !!an.computed_styles && !!an.box_model, JSON.stringify(an).slice(0, 200));
+        // 注意：這條若寫成 `Object.keys(an.computed_styles || {}).length <= 25`，
+        // 在工具回 error（沒有 computed_styles）時會變成 0 <= 25 而**假通過**。
+        // 所以整段放在 !an.error 之內，並額外要求欄位確實存在且非空。
+        check('315-2 computed_styles 只有精選屬性且 1~25 個',
+          Object.keys(an.computed_styles || {}).length > 0 && Object.keys(an.computed_styles || {}).length <= 25,
+          String(Object.keys(an.computed_styles || {}).length));
+        check('315   box_model 在真實版面上有非零尺寸', an.box_model?.width > 0 || an.box_model?.height > 0, JSON.stringify(an.box_model));
+        check('315   visibility/accessibility 皆有回傳', !!an.visibility && !!an.accessibility, JSON.stringify(an).slice(0, 200));
+        check('315   回傳 selector + tab_id', an.selector === anSel && an.tab_id === r1.tab_id, JSON.stringify({ s: an.selector, t: an.tab_id }));
+      } else {
+        check('315-1~2 analyze_element 可用', false, JSON.stringify(an).slice(0, 200));
+      }
+      const anBad = await call('analyze_element', { selector: '#nope-315-e2e', tab_id: r1.tab_id });
+      check('315-3 找不到元素 → error 含 selector', !!anBad.error && String(anBad.error).includes('#nope-315-e2e'), JSON.stringify(anBad).slice(0, 200));
 
       // ── PM-313 get_browser_errors 端到端 ──
       // 驗收 4：乾淨的頁面要回**空陣列**而不是 error

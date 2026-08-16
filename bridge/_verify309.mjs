@@ -21,15 +21,16 @@ const seg = (from, to) => {
 const sensitive = seg('const SENSITIVE_RECT_SELECTORS', '/** PM-186：收集敏感欄位');
 const readPage = seg('const READ_PAGE_MAX_CHARS', '// background → content：控制指令');
 const clickFn = seg('function bridgeClick', '// ── PM-311：type_text');
-const typeFn = seg('const TYPE_TEXT_REJECTED_INPUT_TYPES', '// ── PM-309：read_page');
-const js = ts.transpileModule(sensitive + '\n' + clickFn + '\n' + typeFn + '\n' + readPage, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
+const typeFn = seg('const TYPE_TEXT_REJECTED_INPUT_TYPES', '// ── PM-315：analyze_element');
+const analyzeFn = seg('const ANALYZE_STYLE_PROPS', '// ── PM-309：read_page');
+const js = ts.transpileModule(sensitive + '\n' + clickFn + '\n' + typeFn + '\n' + analyzeFn + '\n' + readPage, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { pretendToBeVisual: true });
 const g = dom.window;
 // content script 在頁面裡有這些全域；沙箱裡要手動接進來
 const run = new Function('window', 'document', 'getComputedStyle', 'Node', 'NodeFilter', 'CSS',
   'HTMLInputElement', 'HTMLTextAreaElement', 'Event', 'InputEvent',
-  js + '\nreturn { extractPageContent, uniqueSelector, ownText, isSensitiveField, bridgeClick, bridgeTypeText };');
+  js + '\nreturn { extractPageContent, uniqueSelector, ownText, isSensitiveField, bridgeClick, bridgeTypeText, bridgeAnalyzeElement };');
 const api = run(g, g.document, g.getComputedStyle.bind(g), g.Node, g.NodeFilter, g.CSS,
   g.HTMLInputElement, g.HTMLTextAreaElement, g.Event, g.InputEvent);
 
@@ -182,6 +183,42 @@ api.bridgeTypeText('#t', 'React 也收得到');
 const realNow = protoDesc.get.call(rt);
 check('🔴 走原生 setter：真實值已更新', realNow === 'React 也收得到', `real=${realNow}`);
 check('🔴 且繞過 tracker（快取仍是舊值 → React 才會認得這次變更）', trackerCache === cacheBefore, `cache=${trackerCache} before=${cacheBefore}`);
+
+console.log('\n=== ⑩ PM-315 bridgeAnalyzeElement ===');
+setBody('<a id="a1" class="btn primary lg" href="/x" role="menuitem" aria-label="去 X" data-track="hero" onclick="void 0">前往</a>'
+      + '<input id="pw" type="password" value="secret-should-not-leak" name="password">'
+      + '<button id="plain">一般按鈕</button>');
+const an = api.bridgeAnalyzeElement('#a1');
+console.log('   ', JSON.stringify(an).slice(0, 320));
+check('1. 含 tag / attributes / computed_styles / box_model',
+  an.tag === 'a' && !!an.attributes && !!an.computed_styles && !!an.box_model, JSON.stringify(an).slice(0, 200));
+check('1. classes 正確展開', JSON.stringify(an.classes) === '["btn","primary","lg"]', JSON.stringify(an.classes));
+check('1. 白名單屬性有取到（href/role/aria-label/data-*）',
+  an.attributes.href === '/x' && an.attributes.role === 'menuitem' && an.attributes['aria-label'] === '去 X' && an.attributes['data-track'] === 'hero',
+  JSON.stringify(an.attributes));
+check('1. class/id/style 不重複倒進 attributes', !('class' in an.attributes) && !('id' in an.attributes) && !('style' in an.attributes), JSON.stringify(an.attributes));
+check('2. computed_styles 不超過 25 個', Object.keys(an.computed_styles).length <= 25, String(Object.keys(an.computed_styles).length));
+check('2. computed_styles 含 debug 常用屬性', ['display','position','zIndex','color','fontSize'].every((k) => k in an.computed_styles), Object.keys(an.computed_styles).join(','));
+
+check('   accessibility：明寫的 role 優先且標示非隱含', an.accessibility.role === 'menuitem' && an.accessibility.role_is_implicit === false, JSON.stringify(an.accessibility));
+const anB = api.bridgeAnalyzeElement('#plain');
+check('   accessibility：沒寫 role 時回隱含角色並標示', anB.accessibility.role === 'button' && anB.accessibility.role_is_implicit === true, JSON.stringify(anB.accessibility));
+check('   accessibility：button 天生 focusable', anB.accessibility.focusable === true, JSON.stringify(anB.accessibility));
+
+check('   event_listeners 列出行內 on* 屬性', JSON.stringify(an.event_listeners.inline_attributes) === '["onclick"]', JSON.stringify(an.event_listeners));
+check('🔴 event_listeners 明講「空陣列不代表沒有處理器」',
+  /不代表沒有事件處理器/.test(an.event_listeners.note || ''), an.event_listeners.note);
+check('   沒有行內 on* 時仍附帶同一句說明',
+  Array.isArray(anB.event_listeners.inline_attributes) && anB.event_listeners.inline_attributes.length === 0 && /不代表沒有/.test(anB.event_listeners.note || ''),
+  JSON.stringify(anB.event_listeners));
+
+const anPw = api.bridgeAnalyzeElement('#pw');
+check('4. 🔴 敏感欄位的 value 被遮蔽', !JSON.stringify(anPw).includes('secret-should-not-leak'), JSON.stringify(anPw.attributes));
+check('4.    並標示 sensitive_field', anPw.sensitive_field === true, JSON.stringify(anPw).slice(0, 200));
+
+const anMiss = api.bridgeAnalyzeElement('#nope-315');
+check('3. 找不到元素 → error 含 selector', !!anMiss.error && String(anMiss.error).includes('#nope-315'), JSON.stringify(anMiss));
+check('3.    非法選擇器 → error（不 crash）', /合法的 CSS 選擇器/.test(api.bridgeAnalyzeElement('a[[[bad').error || ''));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

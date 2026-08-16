@@ -105,7 +105,29 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     },
   );
 
-  // ── 工具 9：get_browser_errors（PM-313）──────────────────────────────────
+  // ── 工具 9：analyze_element（PM-315）─────────────────────────────────────
+  server.tool(
+    'analyze_element',
+    'Deep-dive a single element: attributes, a curated set of computed styles, box model, accessibility info, and visibility breakdown. Use this after read_page when you need to know WHY an element looks or behaves wrong. Note: event listeners bound via addEventListener cannot be enumerated from a content script — an empty list does NOT mean there are no handlers. 深度分析單一元素：屬性、精選的計算樣式、box model、可及性資訊、可見性細節。適合在 read_page 之後用來查「這個元素為什麼長得不對／行為不對」。注意：用 addEventListener 綁的監聽器無法列舉，**空清單不代表沒有事件處理器**。',
+    {
+      selector: z
+        .string()
+        .min(1)
+        .describe('CSS 選擇器。可先用 read_page 取得頁面上可用的 selector。'),
+      tab_id: z
+        .number()
+        .int()
+        .optional()
+        .describe('省略 → 使用者當前分頁；指定 → 該分頁。分頁已關閉會回報錯誤。'),
+    },
+    async (args) => {
+      const r = await link.send('analyze_element', { selector: args.selector, tab_id: args.tab_id });
+      if (!r.ok) return txt({ error: r.error, selector: args.selector, extension_connected: link.connected });
+      return txt(r.data);
+    },
+  );
+
+  // ── 工具 10：get_browser_errors（PM-313）─────────────────────────────────
   // 讀的是 inject.ts 既有的背景緩存（PM-50/51），不另外掛一套攔截器。
   server.tool(
     'get_browser_errors',

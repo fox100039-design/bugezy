@@ -1075,6 +1075,21 @@ async function runBridgeCommand(cmd: BridgeCommandMsg): Promise<unknown> {
       };
     }
 
+    // PM-315
+    case 'analyze_element': {
+      const selector = cmd.params?.selector;
+      if (typeof selector !== 'string' || !selector.trim()) throw new Error('缺少 selector 參數');
+      const tabId = await resolveTargetTab(cmd.params);
+      const res = await sendToContent<Record<string, unknown>>(tabId, {
+        type: 'BRIDGE_ANALYZE_ELEMENT',
+        selector,
+      });
+      if (typeof res.error === 'string') {
+        throw new Error(`${res.error}${res.hint ? `\n${String(res.hint)}` : ''}`);
+      }
+      return { selector, ...res, tab_id: tabId };
+    }
+
     // PM-313
     case 'get_browser_errors': {
       const tabId = await resolveTargetTab(cmd.params);
