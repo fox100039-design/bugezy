@@ -24,6 +24,34 @@ interface Pending {
   timer: NodeJS.Timeout;
 }
 
+/**
+ * PM-372：允許連線的擴充功能 origin。
+ *
+ * 預設是 BugEzy 的正式版 ID；`manifest.json` 有固定的 `key`，所以**開發版未封裝載入時
+ * 的 ID 與正式版相同**，一般情況不需要另外設定。真的需要（例如改過 key）再用
+ * `BUGEZY_EXTENSION_IDS` 逗號分隔加入。
+ */
+const PROD_EXTENSION_ID = 'hfnkjlbbpehkflgfbjenfmnmjkdjadcj';
+
+function buildAllowedOrigins(): Set<string> {
+  const ids = [PROD_EXTENSION_ID, ...(process.env.BUGEZY_EXTENSION_IDS || '').split(',')]
+    .map((x) => x.trim())
+    .filter(Boolean);
+  const out = new Set<string>();
+  for (const id of ids) {
+    // 已經是完整 origin 就直接收；只給 id 就補上三種瀏覽器的 scheme
+    if (id.includes('://')) out.add(id.replace(/\/$/, ''));
+    else {
+      out.add(`chrome-extension://${id}`);
+      out.add(`moz-extension://${id}`);
+      out.add(`safari-web-extension://${id}`);
+    }
+  }
+  return out;
+}
+
+const ALLOWED_ORIGINS = buildAllowedOrigins();
+
 export class ExtensionLink {
   private wss: WebSocketServer | null = null;
   private socket: WebSocket | null = null;
@@ -63,8 +91,11 @@ export class ExtensionLink {
         verifyClient: (info, done) => {
           const origin = info.origin || info.req.headers.origin || '';
           if (!origin) return done(true);
-          if (/^(chrome-extension|moz-extension|safari-web-extension):\/\//.test(origin)) return done(true);
-          log(`⛔ 拒絕來自 ${origin} 的連線（只接受擴充功能）`);
+          if (ALLOWED_ORIGINS.has(origin)) return done(true);
+          // PM-372：只放行 **BugEzy 自己的** 擴充功能。原本放行任何 `chrome-extension://`，
+          //   等於使用者裝的任何一個擴充功能都能連上 bridge、冒充 BugEzy 餵資料給 AI。
+          log(`⛔ 拒絕來自 ${origin} 的連線（只接受 BugEzy 擴充功能）`);
+          log(`   若這是你的開發版擴充，請設 BUGEZY_EXTENSION_IDS=<你的 extension id>（逗號分隔可多個）`);
           done(false, 403, 'Forbidden origin');
         },
       });

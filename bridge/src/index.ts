@@ -12,6 +12,7 @@ import { createMcpServer } from './mcp-server.js';
 import { BRIDGE_PORT } from './types.js';
 import { stopAllTerminalMonitors } from './terminal-monitor.js';
 import { initMemoryStore } from './memory-store.js';
+import { resolveTier, isGateEnabled, tierResolutionNote, TIER_LABEL } from './tier-gate.js';
 
 async function main(): Promise<void> {
   const port = Number(process.env.BUGEZY_BRIDGE_PORT) || BRIDGE_PORT;
@@ -24,6 +25,16 @@ async function main(): Promise<void> {
   // bridge 由 AI 工具以 stdio 啟動，CWD 就是當下的專案目錄 → 換專案自動切換記憶（§14.12.3）。
   const mem = initMemoryStore(process.cwd());
   log(mem.found ? `   記憶矩陣: ${mem.root}` : '   記憶矩陣: 尚未建立（第一次 memory_save 會自動建立 .bugezy/）');
+
+  // PM-374：**閘門預設開啟**，方案改由 BUGEZY_SESSION_TOKEN 向 Workers 查（不再讀自由字串環境變數）。
+  //   啟動時先查一次並印出結果 —— 被擋的時候使用者要能一眼看出是「沒設 token」還是「真的沒訂閱」。
+  if (isGateEnabled()) {
+    const tier = await resolveTier();
+    log(`   方案閘門: 開啟；目前判定為 ${TIER_LABEL[tier]}`);
+    log(`   ${tierResolutionNote()}`);
+  } else {
+    log('   方案閘門: 已由 ENFORCE_TIER_GATE=false 明確關閉');
+  }
 
   const link = new ExtensionLink();
   try {

@@ -4,6 +4,8 @@
 // 瀏覽器錯誤、終端機錯誤、zone 錯誤三條路徑都要用同一套判定，
 // 而終端機錯誤根本不經過瀏覽器 —— 規則只能放在三者的交會點，也就是 bridge。
 
+import { safeCompile, MAX_PATTERN_LEN } from './regex-guard.js';
+
 export type Severity = 'critical' | 'minor' | 'info' | 'ignore';
 
 /** 分類器吃的最小形狀；三條來源各自映射到這個介面。 */
@@ -34,20 +36,39 @@ export interface SeverityRule {
 const rules = new Map<string, SeverityRule>();
 let ruleSeq = 0;
 
-export function addSeverityRule(r: Omit<SeverityRule, 'rule_id'>): SeverityRule {
+/** PM-375：regex 規則在**新增時就編譯一次**，之後重複使用同一個物件。 */
+const compiled = new Map<string, RegExp>();
+
+export function addSeverityRule(
+  r: Omit<SeverityRule, 'rule_id'>,
+): SeverityRule | { error: string } {
+  // PM-375：只有 regex 需要守衛；contains／starts_with 是字串比對，沒有回溯問題。
+  //   但長度上限對三者都套用 —— 一條 5000 字的 pattern 不管哪種比對都不合理。
+  if (r.pattern.length > MAX_PATTERN_LEN) {
+    return { error: `pattern 長度 ${r.pattern.length} 超過上限 ${MAX_PATTERN_LEN} 字元。` };
+  }
+  let re: RegExp | null = null;
+  if (r.match_type === 'regex') {
+    const c = safeCompile(r.pattern);
+    if (!c.ok) return { error: c.error! };
+    re = c.re;
+  }
   const rule: SeverityRule = { ...r, rule_id: `rule${++ruleSeq}-${Date.now().toString(36)}` };
   rules.set(rule.rule_id, rule);
+  if (re) compiled.set(rule.rule_id, re);
   return rule;
 }
 export function listSeverityRules(): SeverityRule[] {
   return [...rules.values()];
 }
 export function removeSeverityRule(ruleId: string): boolean {
+  compiled.delete(ruleId);
   return rules.delete(ruleId);
 }
 /** 測試用：清空自訂規則。 */
 export function _clearSeverityRules(): void {
   rules.clear();
+  compiled.clear();
   ruleSeq = 0;
 }
 
@@ -62,12 +83,14 @@ function ruleMatches(rule: SeverityRule, e: ClassifiableError): boolean {
   if (!v) return false;
   if (rule.match_type === 'contains') return v.includes(rule.pattern);
   if (rule.match_type === 'starts_with') return v.startsWith(rule.pattern);
-  try {
-    return new RegExp(rule.pattern).test(v);
-  } catch {
-    return false; // 使用者給了不合法的 regex → 當作沒命中，而不是讓整個分類炸掉
-  }
+  // PM-375：用新增時就編好的 RegExp，不再每筆錯誤重新編譯一次。
+  //   編不出來的 pattern 在 addSeverityRule 就被擋掉了，所以這裡拿不到才是異常 → 當作沒命中。
+  const re = compiled.get(rule.rule_id);
+  return re ? re.test(v.slice(0, MAX_MATCH_INPUT)) : false;
 }
+
+/** PM-375／373：比對輸入也限長 —— 守衛只擋得住「明顯的」壞 pattern，輸入限長才是兜底。 */
+const MAX_MATCH_INPUT = 32 * 1024;
 
 /** §6 的內建規則。 */
 function builtinSeverity(e: ClassifiableError): Severity {

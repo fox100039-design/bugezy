@@ -465,13 +465,15 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     'add_severity_rule',
     'Add a custom severity rule that overrides the built-in §6 classification — e.g. treat 404s under /api/ as critical, or downgrade "deprecated" warnings to info. Use severity "ignore" to drop matching errors entirely. Rules live in memory and are lost when the bridge restarts. 新增自訂嚴重度規則，優先於內建的 §6 判定 —— 例如把 /api/ 的 404 升為 critical、把含 deprecated 的警告降為 info。severity 設 ignore 可讓命中的錯誤完全不出現。**規則存在記憶體，bridge 重啟即消失。**',
     {
-      pattern: z.string().min(1).describe('要比對的字串或正規表示式。'),
+      pattern: z.string().min(1).max(200).describe('要比對的字串或正規表示式（上限 200 字元；regex 不得含巢狀量詞如 (a+)+）。'),
       match_type: z.enum(['contains', 'starts_with', 'regex']).describe('比對方式。'),
       target_field: z.enum(['message', 'url', 'source']).describe('比對哪個欄位。'),
       severity: z.enum(['critical', 'minor', 'info', 'ignore']).describe('命中後要指定的嚴重度；ignore = 完全濾掉。'),
       description: z.string().optional().describe('這條規則的用途，方便日後回顧。'),
     },
     gated('add_severity_rule', async (args) =>
+      // PM-375：pattern 過長或含巢狀量詞會被擋下並回可讀原因，而不是收下一條
+      // 之後每次分類都拖垮查詢的規則。
       txt(
         addSeverityRule({
           pattern: args.pattern,

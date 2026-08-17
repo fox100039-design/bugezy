@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { readFileSync } from 'node:fs';
+import { startMockWorkers } from './_mock-workers.mjs';
 
 // ── Windows 上的程序回收 ───────────────────────────────────────────────────
 // `proc.kill()` 只殺得到直接 spawn 的那個 handle；Windows 上常常還隔著一層 wrapper，
@@ -114,9 +115,17 @@ if (holder) {
 // PM-361：bridge 的 CWD 決定記憶矩陣落在哪裡（§14.12.3 從 CWD 往上找 .bugezy/）。
 // 這裡指到暫存專案，**絕不能讓端到端在 repo 裡真的長出一個 .bugezy/**——那會被 commit 進去。
 const MEM_PROJ = fs.mkdtempSync(path.join(os.tmpdir(), 'bugezy-e2e-mem-'));
+// PM-374：閘門預設開啟且方案來自 token → 端到端必須提供一個會回 agent 的 Workers。
+const mock = await startMockWorkers('agent');
 const proc = spawn(process.execPath, [path.resolve('dist/index.js')], {
   cwd: MEM_PROJ,
   stdio: ['pipe', 'pipe', 'pipe'],
+  env: {
+    ...process.env,
+    BUGEZY_WORKERS_URL: mock.url,
+    BUGEZY_SESSION_TOKEN: 'e2e-test-token-0123456789',
+    BUGEZY_USER_EMAIL: 'e2e@example.com',
+  },
 });
 // 不論正常結束、例外、還是 Ctrl-C，都要把 bridge 收乾淨
 const cleanup = () => killTree(proc.pid);
@@ -750,5 +759,6 @@ if (/port 19850 被占用/.test(stderr)) {
 }
 
 killTree(proc.pid);
+mock.srv.close();
 console.log(`\n${pass} passed, ${fail} failed${limit ? `, ${limit} LIMIT（環境限制，非產品缺陷）` : ''}`);
 process.exit(fail ? 1 : 0);

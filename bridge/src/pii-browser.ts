@@ -56,9 +56,24 @@ function labelForValue(value: string, paramName: string): string {
  * 順序與 `maskStderr` 一致（DB URI → env 賦值 → token → 一般 PII），
  * 因為前面的規則會吃掉後面規則本來會誤判的片段。
  */
+/**
+ * PM-373：進遮罩前先限長。
+ *
+ * 共用的 regex（`[\w.-]+@[\w.-]+\.\w{2,}` 這類）在**特製的超長輸入**下會產生大量回溯，
+ * 一則 100 KB 的假 email 字串就能讓 bridge 卡住。**刻意不動共用 regex**（那份與 CLI
+ * 逐字一致、有防漂移測試），改在呼叫端截斷 —— 效果一樣，風險小得多。
+ */
+export const MAX_MESSAGE_LEN = 32 * 1024;
+export const MAX_URL_LEN = 8 * 1024;
+export const TRUNCATED_SUFFIX = ' ...<truncated>';
+
+function clamp(text: string, max: number): string {
+  return text.length <= max ? text : text.slice(0, max) + TRUNCATED_SUFFIX;
+}
+
 export function maskBrowserError(message: string): string {
   if (!message) return message;
-  let m = message;
+  let m = clamp(message, MAX_MESSAGE_LEN);
 
   // 1. DB 連線字串 → 保留 scheme + host，只遮帳密（AI 還看得出連的是哪台）
   m = m.replace(DB_URI, (match) => {
@@ -98,8 +113,9 @@ export function maskBrowserError(message: string): string {
  * 改了 path 等於把那支工具弄壞。zone 歸類與去重也依賴網址的穩定性。
  * 參數名也保留：AI 需要知道「是 api_key 錯了還是 signature 錯了」。
  */
-export function maskUrl(url: string): string {
-  if (!url) return url;
+export function maskUrl(rawUrl: string): string {
+  if (!rawUrl) return rawUrl;
+  const url = clamp(rawUrl, MAX_URL_LEN); // PM-373
   const q = url.indexOf('?');
   if (q < 0) return url; // 沒有 query → 完全不動
   const head = url.slice(0, q);
@@ -118,7 +134,16 @@ export function maskUrl(url: string): string {
       const value = pair.slice(eq + 1);
       if (!value) return pair;
       if (SENSITIVE_PARAMS.has(name.toLowerCase())) {
-        return `${name}=<masked:${labelForValue(decodeURIComponent(value), name)}>`;
+        // PM-376：`decodeURIComponent` 對壞編碼（例如 `%ZZ`）會拋 URIError。
+        //   遮罩流程不該因為一個編壞的參數就整支炸掉 —— 解不開就當作不透明值，
+        //   直接拿原始字串去判型別（判不出來就退回 TOKEN）。
+        let decoded = value;
+        try {
+          decoded = decodeURIComponent(value);
+        } catch {
+          /* 壞編碼 → 用原始值判型別；無論如何這個參數的值都會被遮掉 */
+        }
+        return `${name}=<masked:${labelForValue(decoded, name)}>`;
       }
       // 參數名不敏感，但值本身長得像 token／email 也要遮
       const byPattern = maskBrowserError(value);

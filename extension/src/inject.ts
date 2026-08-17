@@ -81,7 +81,8 @@ if (window.__bugezyInjected) {
 }
 
 function post(msg: InjectMessage) {
-  window.postMessage(msg, '*');
+  // PM-369：targetOrigin 由 '*' 收緊為 '/'（僅同源）——同頁通訊不需要對任何 origin 開放。
+  window.postMessage(msg, '/');
 }
 
 function main() {
@@ -442,9 +443,9 @@ function main() {
     panel.appendChild(content);
     document.body.appendChild(panel);
 
-    // PM-36：建完面板後請 content 從 background buffer 取回歷史語音，填回面板
-    // （跳頁恢復時面板才不會是空的）
-    post({ source: BUGEZY_SOURCE, dir: 'to-content', kind: 'REQUEST_VOICE_HISTORY' });
+    // PM-369（資安）：**不再向 content 索取歷史語音。**
+    // 那條路徑會把跨頁累積的逐字稿送進 MAIN world，而 MAIN world 與頁面共用 JS 環境，
+    // 任何網站監聽 `message` 就能全部收走。面板改為只顯示當前頁的即時逐字稿。
   }
   function hideCaptionBar() {
     captionBar?.remove();
@@ -1481,24 +1482,6 @@ function main() {
       showMonitorBadge(); // PM-52：開即時監控 → 顯示頁面浮動 badge
     } else if (data.cmd === 'HIDE_MONITOR') {
       hideMonitorBadge();
-    } else if (data.kind === 'VOICE_HISTORY') {
-      // PM-36：收到歷史語音 → 填入右上面板（跳頁恢復時不再是空的）
-      const voiceContent = document.getElementById('bugezy-voice-content');
-      if (voiceContent && data.segments && data.segments.length > 0) {
-        // PM-239：改「覆寫」為「合併」。REQUEST_VOICE_HISTORY 走 inject→content→background 四層
-        //   非同步 message passing，若第一段 final（onresult 用 += 追加面板）先於本回應到達，
-        //   原本 `textContent =` 會把第一段蓋掉。改成：面板為空才直接填；已有文字則歷史放前面保留既有。
-        const historyText = data.segments.map((s) => s.text).join('\n');
-        const currentText = voiceContent.textContent || '';
-        if (!currentText) {
-          voiceContent.textContent = historyText; // 面板還空 → 正常跳頁恢復
-        } else {
-          voiceContent.textContent = `${historyText}\n${currentText}`; // 第一段 final 先到 → 歷史放前面保留既有
-        }
-        const panel = document.getElementById('bugezy-voice-panel');
-        if (panel) panel.scrollTop = panel.scrollHeight;
-        blog('載入歷史語音', data.segments.length, '段', currentText ? '（已合併既有）' : '');
-      }
     } else if (data.kind === 'READY_ACK') {
       readyAcked = true; // PM-37：content 已收到 READY，可停止重複發送
       blog('收到 READY_ACK');

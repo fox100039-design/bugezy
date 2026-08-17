@@ -39,13 +39,18 @@ for (const origin of ['https://evil.example.com', 'http://localhost:3000', 'http
   const r = await tryConnect(origin);
   check(`    🔴 網頁 Origin ${origin} → 被拒`, r === 'rejected', r);
 }
-check('    擴充功能 Origin → 放行',
-  (await tryConnect('chrome-extension://abcdefghijklmnopabcdefghijklmnop')) === 'open');
+// PM-372：只放行 BugEzy 自己的 extension ID
+const BUGEZY_ID = 'hfnkjlbbpehkflgfbjenfmnmjkdjadcj';
+check('    BugEzy 擴充功能 Origin → 放行',
+  (await tryConnect(`chrome-extension://${BUGEZY_ID}`)) === 'open');
+check('372-1 🔴 別的擴充功能（合法 chrome-extension://）→ 被拒',
+  (await tryConnect('chrome-extension://abcdefghijklmnopabcdefghijklmnop')) === 'rejected');
 check('    沒有 Origin 的本機工具 → 放行（本機程式本來就能偽造 header，擋它沒有意義）',
   (await tryConnect(null)) === 'open');
 // 惡意頁面連不上，就無法把真正的 Extension 踢掉
 check('    🔴 被拒的連線無法取代既有的 Extension 連線', await (async () => {
-  const ext = new WebSocket(`ws://127.0.0.1:${PORT}`, { headers: { Origin: 'chrome-extension://realextensionidxxxxxxxxxxxxxxxx' } });
+  const ext = new WebSocket(`ws://127.0.0.1:${PORT}`, { headers: { Origin: `chrome-extension://${BUGEZY_ID}` } });
+  ext.on('error', () => {}); // 不讓意外的連線錯誤變成未處理例外
   await new Promise((r) => ext.on('open', r));
   await tryConnect('https://evil.example.com');
   await new Promise((r) => setTimeout(r, 400));

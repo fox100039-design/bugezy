@@ -11,9 +11,12 @@ const OPENAI = 'sk-abcdefghijklmnopqrstuvwxyz012345';
 const AWS = 'AKIAIOSFODNN7EXAMPLE';
 
 console.log('\n=== ⓪ 需求 7：與 maskStderr 用同一組 regex pattern ===');
-const shared = readFileSync('src/pii-browser.ts', 'utf8');
+const sharedRaw = readFileSync('src/pii-browser.ts', 'utf8');
+// 檢查「有沒有偷偷重寫共用樣式」時要**先去掉註解** —— 說明文字裡引用 pattern 是正常的，
+// 真正要防的是可執行的重複宣告。
+const shared = sharedRaw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*/g, '');
 check('7 pii-browser 從 vendor/pii-mask import 共用 pattern（不是另抄一份）',
-  /from '\.\/vendor\/pii-mask\.js'/.test(shared)
+  /from '\.\/vendor\/pii-mask\.js'/.test(sharedRaw)
   && /TOKEN_PATTERNS/.test(shared) && /GENERAL_PII/.test(shared)
   && /DB_URI/.test(shared) && /ENV_SENSITIVE_KEYS/.test(shared));
 check('7 pii-browser 沒有自己重寫 JWT／email 這類共用樣式',

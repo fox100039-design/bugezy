@@ -10,6 +10,11 @@
 
 import { spawn, type ChildProcess } from 'node:child_process';
 import { maskStderr } from './vendor/pii-mask.js';
+import { checkCommand } from './command-guard.js';
+
+/** PM-373：進 maskStderr 前先限長（理由同 pii-browser：不動共用 regex，改在呼叫端截斷）。 */
+const MAX_STDERR_CHUNK = 32 * 1024;
+const clampStderr = (t: string) => (t.length <= MAX_STDERR_CHUNK ? t : t.slice(0, MAX_STDERR_CHUNK) + ' ...<truncated>');
 import { parseNodeError, parsePythonTraceback, type ParsedError } from './vendor/parse-traceback.js';
 import { log } from './extension-link.js';
 
@@ -50,6 +55,13 @@ function prune(m: Monitor): void {
 export function startTerminalMonitor(command: string, cwd?: string): Record<string, unknown> {
   if (!command.trim()) return { error: '缺少 command 參數' };
 
+  // PM-368：白名單 + shell 元字元兩道檢查，**都過才 spawn**。
+  //   呼叫這支的是 AI，而 AI 讀得到攻擊者可控的頁面內容 —— 提示注入不需要任何漏洞
+  //   就能變成 RCE。錯誤訊息回原文（未遮罩）是刻意的：使用者要看得出自己哪裡寫錯，
+  //   而被拒絕的指令從來沒有執行過，也不會被存進緩存。
+  const guard = checkCommand(command);
+  if (!guard.ok) return { error: guard.error, command_rejected: true };
+
   const running = [...monitors.values()].filter((m) => m.status === 'running');
   if (running.length >= MAX_MONITORS) {
     return {
@@ -83,7 +95,7 @@ export function startTerminalMonitor(command: string, cwd?: string): Record<stri
   let pending = '';
   const onStderr = (chunk: Buffer) => {
     // 🔴 先遮罩再解析——與 CLI 同順序。反過來的話，traceback 的 raw 欄位會存到未遮罩的原文。
-    const masked = maskStderr(pending + chunk.toString());
+    const masked = maskStderr(clampStderr(pending + chunk.toString()));
     pending = '';
     const parsed: ParsedError | null = parsePythonTraceback(masked) ?? parseNodeError(masked);
     const at = Date.now();
@@ -100,7 +112,7 @@ export function startTerminalMonitor(command: string, cwd?: string): Record<stri
   child.stderr?.on('data', onStderr);
   // stdout 也看：很多工具（Vite / Next）把錯誤印在 stdout
   child.stdout?.on('data', (c: Buffer) => {
-    const masked = maskStderr(c.toString());
+    const masked = maskStderr(clampStderr(c.toString()));
     const parsed = parsePythonTraceback(masked) ?? parseNodeError(masked);
     if (parsed) {
       m.errors.push({ at: Date.now(), data: { ...parsed, severity: 'error' } });

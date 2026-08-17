@@ -79,7 +79,9 @@ function sendToInject(
   blog(
     `→ 轉送 ${cmd} 給 inject（keyboardMode=${keyboardMode === true}, micEnabled=${micEnabled === true}, whisperMode=${whisperMode === true}）`,
   );
-  window.postMessage(msg, '*');
+  // PM-369：targetOrigin 由 '*' 收緊為 '/'（僅同源）。這是 content↔inject 的同頁通訊，
+  // 用 '*' 等於允許任何 origin 接收；'/' 表示「只送給與本文件同源者」。
+  window.postMessage(msg, '/');
 }
 
 /** PM-87/91：算出本次錄製的語音旗標。mic OFF → 都不錄；免費版→即時字幕(useOldVoice)；
@@ -150,25 +152,22 @@ window.addEventListener('message', async (e: MessageEvent) => {
     return;
   }
 
-  // PM-36：inject 要歷史語音 → 跟 background 拿 buffer → 回填給 inject（to-inject）
-  if (data.kind === 'REQUEST_VOICE_HISTORY') {
-    chrome.runtime.sendMessage({ type: 'GET_VOICE_BUFFER' }, (response) => {
-      const segments = (response as { segments?: unknown[] } | undefined)?.segments;
-      if (segments && segments.length > 0) {
-        window.postMessage(
-          { source: BUGEZY_SOURCE, dir: 'to-inject', kind: 'VOICE_HISTORY', segments },
-          '*',
-        );
-      }
-    });
-    return;
-  }
+  // PM-369（資安）：**已移除 REQUEST_VOICE_HISTORY / VOICE_HISTORY 這條路徑。**
+  //
+  // 原本的行為是：inject（MAIN world）建好語音面板後跟 content 要歷史逐字稿，
+  // content 從 background 撈出**跨頁累積的整份語音緩存**再 postMessage 回 MAIN world。
+  // MAIN world 與頁面共用同一個 JS 環境，頁面只要監聽 `message` 就能收到
+  // ——等於使用者在**別的分頁／別的網站**講過的話，全部送到當前這個網站手上。
+  //
+  // 代價：跳頁之後頁面上的語音面板只顯示當前頁的逐字稿，不再回填先前頁面的。
+  // **錄製本身完全不受影響** —— 逐字稿走 FLUSH_VOICE（inject → content → background）
+  // 單向往外推，報告內容一段都不會少。
 
   if (data.kind === 'READY') {
     injectReady = true;
     blog('✓ inject 已報到（READY）');
     // PM-37：回 ACK 讓 inject 停止重複發 READY（解載入順序競爭）
-    window.postMessage({ source: BUGEZY_SOURCE, dir: 'to-inject', kind: 'READY_ACK' }, '*');
+    window.postMessage({ source: BUGEZY_SOURCE, dir: 'to-inject', kind: 'READY_ACK' }, '/');
     return;
   }
 
@@ -205,7 +204,7 @@ window.addEventListener('message', async (e: MessageEvent) => {
             reportUrl: resp?.shareUrl,
             error: resp?.ok ? undefined : (resp?.error ?? '上傳失敗'),
           } satisfies InjectMessage,
-          '*',
+          '/',
         );
       },
     );

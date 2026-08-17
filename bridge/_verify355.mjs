@@ -254,7 +254,8 @@ check('360-4 格式錯誤（缺 layers）→ error', !!memoryImport(badFile, 'me
 fs.writeFileSync(badFile, 'not json at all');
 check('360-4 不是 JSON → error 而不是拋例外', !!memoryImport(badFile, 'merge').error);
 
-const l3File = path.join(tmp, 'with-l3.json');
+// PM-371：匯入路徑必須在專案內，測試檔改放 proj
+const l3File = path.join(proj, 'with-l3.json');
 fs.writeFileSync(l3File, JSON.stringify({ version: '1.0', layers: { L3: [{ id: 'x', content: { topic: 't', content: 'c' } }], L2: [] } }));
 const l3imp = memoryImport(l3File, 'merge');
 check('    🔴 匯入檔含 L3 → 列為 ignored 而非寫入本機', l3imp.ignored_layers?.includes('L3') && !fs.existsSync(path.join(projRoot, 'memory', 'L3-support.json')), JSON.stringify(l3imp));
@@ -267,8 +268,10 @@ const rt2 = readLayer('L2').find((x) => x.id === e2.id);
 check('360-5 匯出後匯入 → 資料一致',
   rt1?.content.content === 'AAA' && rt2?.content.content === 'BBB' && roundtrip.imported >= 2,
   JSON.stringify({ rt1: rt1?.content.content, rt2: rt2?.content.content }));
+// `with-l3.json` 是這個測試自己放進 proj 的（PM-371 後匯入檔必須在專案內），不算 memoryImport 產生的
 check('    匯入只寫 .bugezy/，沒有在專案裡多生檔案',
-  fs.readdirSync(proj).sort().join(',') === ['.bugezy', `.bugezy-backup-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.json`, 'src'].sort().join(','),
+  fs.readdirSync(proj).filter((f) => f !== 'with-l3.json').sort().join(',')
+    === ['.bugezy', `.bugezy-backup-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.json`, 'src'].sort().join(','),
   fs.readdirSync(proj).join(','));
 
 console.log('\n=== ⑦ 完整流程 save → search → update → export → clear → import ===');

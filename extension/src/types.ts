@@ -245,9 +245,9 @@ export type InjectMessage =
   | { source: typeof BUGEZY_SOURCE; dir: 'to-content'; kind: 'FLUSH_CONSOLE'; log: ConsoleLog }
   | { source: typeof BUGEZY_SOURCE; dir: 'to-content'; kind: 'FLUSH_NETWORK'; error: NetworkError }
   | { source: typeof BUGEZY_SOURCE; dir: 'to-content'; kind: 'FLUSH_RRWEB'; events: unknown[] }
-  // PM-36：inject 建面板後請求歷史語音（to-content）；content 讀 buffer 後回填（to-inject）
-  | { source: typeof BUGEZY_SOURCE; dir: 'to-content'; kind: 'REQUEST_VOICE_HISTORY' }
-  | { source: typeof BUGEZY_SOURCE; dir: 'to-inject'; kind: 'VOICE_HISTORY'; segments: VoiceSegment[] }
+  // PM-36 的 REQUEST_VOICE_HISTORY / VOICE_HISTORY 已於 **PM-369（資安）移除**：
+  //   那條路徑把跨頁累積的語音逐字稿送進 MAIN world，任何網站監聽 message 就能收走。
+  //   型別一併刪除，避免日後有人「看到型別還在」就把功能加回去。
   // PM-37：content 收到 READY 後回 ACK，讓 inject 停止重複發 READY（解 READY 競爭條件）
   | { source: typeof BUGEZY_SOURCE; dir: 'to-inject'; kind: 'READY_ACK' }
   // PM-50：inject 打包背景緩存（最近 30 秒）回傳給 content

@@ -5,6 +5,7 @@
 // （MV3 擴充頁 CSP 會擋掉綠界表單內嵌的 inline <script>，故不能靠它自動送出，改由本 bundle 手動 submit。）
 
 import { API_BASE } from './types';
+import { parseEcpayForm, submitEcpayForm } from './ecpay-form';
 import { getAuthHeaders } from './auth';
 
 const statusEl = document.getElementById('status');
@@ -34,11 +35,11 @@ void (async () => {
       setStatus(msg);
       return;
     }
-    // 回應是綠界 auto-submit 表單 HTML；innerHTML 不會執行內嵌 script（也被 CSP 擋），
-    // 故解析出 form 後由本頁手動 submit（跨站 POST 到綠界，允許）。
-    document.body.innerHTML = text;
-    const form = document.getElementById('ecpay') as HTMLFormElement | null;
-    if (form) form.submit();
+    // PM-378：回應是綠界 auto-submit 表單 HTML。**不再用 innerHTML** ——
+    //   innerHTML 雖然不執行 <script>，但 `<img onerror>` 這類事件處理器不受 CSP script-src 限制，
+    //   回應一旦被竄改就會執行。改為解析出 action／hidden 欄位後，用 createElement 重建表單。
+    const ecpay = parseEcpayForm(text);
+    if (ecpay) submitEcpayForm(ecpay);
     else setStatus('付款頁載入異常，請稍後再試。');
   } catch {
     setStatus('網路錯誤，請稍後再試。');
