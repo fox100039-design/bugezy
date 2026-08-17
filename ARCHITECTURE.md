@@ -109,6 +109,31 @@ content.ts（GET_PAGE_INFO / 即時 console 與網路錯誤）→ 目標網頁
 2. **`captureVisibleTab` 需 `activeTab` 或 `<all_urls>`，而 `activeTab` 只在使用者手勢後授予** —— bridge 呼叫永遠沒有手勢，且**導航會撤銷 `activeTab`**。三條替代路線（切分頁／`chrome.debugger`／獨立視窗）**都繞不開**，門檻不在「分頁可不可見」而在「有沒有使用者手勢」（PM-312 實測）。
 3. **回傳要帶「解讀脈絡」** —— 錯誤只涵蓋 30 秒、FID 未互動時為 `null` 不是 0、資源大小是低估值、事件監聽器空清單不代表沒有處理器、`ready_state` 非 `complete` 時內容可能不完整。**少了這些，AI 會把正確的回傳讀成錯誤的結論。**
 
+#### 方案分層閘門（PM-362，規格書 §2／Phase 6 PM-P）
+
+對照表在 `bridge/src/tier-gate.ts`，**涵蓋全部 51 支工具**——驗收會拿註冊清單與對照表**雙向比對**，新增工具卻忘了分層會直接測試失敗，而不是默默套用預設值。
+
+```
+free   ping · get_page_url                        ← 永遠不擋
+ticket / day_pass                                 ← 只含 v1 錄製，v2 一律擋
+pro    其餘 49 支（v2 全功能 + 記憶矩陣）
+max    start_auto_detect(depth: 'full')           ← 「AI 自動化 debug」
+agent  目前沒有 agent-only 工具
+```
+
+- **預設關閉**（沿用 PM-321 的理由）：bridge 跑在本機拿不到真實 tier，預設開啟只會得到「全放行（等於沒閘門）」或「全擋掉（工具不能用）」。要開必須同時設 `ENFORCE_TIER_GATE=true` 與 `BUGEZY_USER_TIER=<tier>`。
+- **`ping` / `get_page_url` 永遠不擋**：擋掉的話，使用者連「為什麼 bridge 不能用」都查不出來。
+- **`start_auto_detect` 依參數分層**：同一支工具，`quick` 是 Pro、`full` 是 Max。所以不能只靠 `TOOL_TIER_MAP`，要在處理函式裡用 `autoDetectTier(depth)` 再擋一次；錯誤訊息也點名是「full 模式」而不是整支工具不能用。
+- **兩處 fail closed**：沒列在表裡的工具當 Pro；`BUGEZY_USER_TIER` 給了不認得的值當 free。反過來寫（未知＝放行、未知＝最高權限）都會讓閘門形同虛設。
+
+#### 免費版用量（PM-363／PM-63／PM-170）
+
+10 次錄製 / 5 次回溯 / 20 次 MCP 讀取，逾額回 403 `limit_reached`。**付費、cancelled 未到期、day_pass 未到期、活動票券生效**四種情況一律無限。
+
+- **無限判定必須與 `bumpUsage` 完全一致**——PM-267 踩過：popup 顯示「✨ 無限次」但第 11 次錄製被後端擋掉，前後端說法不一。`readUsageQuota` 因此重用同一組判定（含 `hasActiveTicket`）。
+- **重置是「距上次重置滿 30 天」的滾動制，不是曆月 1 號**，且**只在 `bumpUsage`（真的用掉一次）時觸發**。`get_usage_quota` 是唯讀的：查詢額度不該改變額度，否則「看一下還剩幾次」就會把重置日往後推。
+- `get_usage_quota` 的「email 不存在」與「token 不符」**回同一句話**——分開講等於幫人確認某個 email 有沒有註冊。
+
 #### 八層記憶矩陣（PM-355~361，規格書 §14）
 
 `.bugezy/` 跟著專案根目錄走，bridge 啟動時**從 CWD 往上找**（跟 git 找 `.git/` 一樣）。bridge 由 AI 工具以 stdio 啟動、CWD 就是當下的專案目錄，所以**換專案＝自動換記憶**，不需要任何手動切換。

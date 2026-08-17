@@ -1,5 +1,20 @@
 # BugEzy Changelog
 
+## 2026-08-17（Phase 6 方案分層 + 免費版用量）
+
+**PM-362~364**：bridge 新增 `tier-gate.ts`（工具數不變，仍 51）；Workers 端雲端 MCP **13 → 14**（新增 `get_usage_quota`），已 deploy `07ff249b`。全套 **0 failed**：`_verify_phase1` 190、`_verify309` 151、`_verify327` 21、`_verify350` 27、`_verify355` 81、**`_verify362` 26**（真的 spawn 六個不同方案的 bridge）。規格書 §9 Phase 6 的 PM-P／PM-Q 標 ✅。
+
+- **PM-362** 方案分層：`TOOL_TIER_MAP` **涵蓋全部 51 支**，驗收拿註冊清單與對照表**雙向比對** —— 新增工具忘了分層會直接測試失敗，而不是默默套用預設值。**預設仍關閉**（理由同 PM-321：本機拿不到真實 tier）。
+  - `ping` / `get_page_url` 永遠不擋：擋掉的話使用者連「為什麼 bridge 不能用」都查不出來。
+  - 🔴 **`start_auto_detect` 依參數分層**：`quick` = Pro、`full` = Max。只靠對照表會變成「整支工具都要 Max」，把 Pro 用戶的 quick 模式一起擋掉。已分別測 pro+quick 放行、pro+full 擋下、省略 depth 視同 quick。
+  - **兩處 fail closed**：沒列在表裡的工具當 Pro、`BUGEZY_USER_TIER` 給不認得的值當 free。反過來寫都會讓閘門形同虛設。
+- **PM-363** 免費版用量：**10 次/月的限制 PM-63／PM-170 就已上線**（`bumpUsage`，含票券/日票/付費無限與自動重置），本次補的是查詢介面 **`get_usage_quota`**。
+  - **唯讀**：查詢不消耗額度、**也不觸發重置** —— 否則「看一下還剩幾次」就會把重置日往後推。
+  - 無限判定重用 `bumpUsage` 的同一組邏輯（含 `hasActiveTicket`）：PM-267 踩過「popup 說無限、後端第 11 次擋掉」的前後端不一致。
+  - 「email 不存在」與「token 不符」**回同一句話**，不幫人確認某個 email 有沒有註冊。
+  - ⚠ **兩處卡片與實際不符，未改並已回報**：① 重置是**30 天滾動制**不是曆月 1 號（改了會位移每個現有免費用戶的重置日）② **MCP 讀取有計入用量**（卡片寫不計），與 `/pricing`、`/faq`、`/privacy` 三個公開頁面的公告衝突。
+- **PM-364** 收工。
+
 ## 2026-08-17（§14 八層記憶矩陣 完工）
 
 **PM-355~361**：bridge 工具總數 **37 → 51**（+13 記憶工具 +1 `memory_stats`）。全套 **0 failed**：端到端 `_verify_phase1` **190**、jsdom `_verify309` **151**、終端機 `_verify327` **21**、嚴重度 `_verify350` **27**、記憶矩陣 `_verify355` **81**。規格書 §9 加 **§14 ✅**，並新增 **§14.13 實作註記**列出十處落差。

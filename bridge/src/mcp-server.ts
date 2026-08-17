@@ -30,6 +30,7 @@ import {
   memoryUpdate, memoryDelete, memoryList, memoryClear,
   memoryExport, memoryImport, memoryStats,
 } from './memory-ops.js';
+import { tierGateReject, autoDetectTier, TOOL_TIER_MAP } from './tier-gate.js';
 
 // ── PM-355~360：§14 記憶矩陣 ────────────────────────────────────────────────
 // `L3` **刻意收進 enum 裡**，不是漏掉：若把它排除在 enum 外，AI 傳 L3 只會拿到
@@ -54,35 +55,22 @@ function txt(data: unknown) {
   };
 }
 
-// ── PM-321：方案等級閘門（雛形）────────────────────────────────────────────
-// 決策 3：v2（bridge）功能只給 Pro 訂閱；**票券／日票只含 v1**。
+// ── PM-362：方案分層閘門（PM-321 雛形的完整版，對照表在 tier-gate.ts）──────
 //
-// ⚠ 目前 bridge 完全跑在本機、沒有連 Cloudflare Workers，拿不到使用者的 tier。
-//   所以閘門邏輯先寫好但**預設關閉**——要開必須同時：
-//     ① 設 `ENFORCE_TIER_GATE=true`  ② 設 `BUGEZY_USER_TIER=<tier>`（暫代真實查詢）
-//   **預設關閉是刻意的**：若預設開啟又查不到 tier，只有兩種結果——
-//   全部放行（等於沒有閘門）或全部擋掉（工具直接不能用）。兩者都比「明確關閉」糟。
-type UserTier = 'free' | 'ticket' | 'day_pass' | 'pro' | 'max' | 'agent';
-const V2_ALLOWED_TIERS: readonly UserTier[] = ['pro', 'max', 'agent'];
-
-/** 回傳 null＝放行；回傳字串＝拒絕原因。 */
-function tierGateReject(): string | null {
-  if (process.env.ENFORCE_TIER_GATE !== 'true') return null; // 預設不啟用
-  const tier = (process.env.BUGEZY_USER_TIER || 'free') as UserTier;
-  if (V2_ALLOWED_TIERS.includes(tier)) return null;
-  return `v2 功能需要 Pro 訂閱（NT$80/月）。目前方案：${tier}${
-    tier === 'ticket' || tier === 'day_pass' ? '——票券／日票僅包含 v1 錄製功能，不含 v2 瀏覽器工具。' : '。'
-  }升級請見 https://bugezy.dev/checkout`;
-}
+// **預設仍然關閉**：bridge 跑在本機拿不到真實 tier，預設開啟只會得到「全放行（等於
+// 沒閘門）」或「全擋掉（工具不能用）」。要開必須同時設 `ENFORCE_TIER_GATE=true`
+// 與 `BUGEZY_USER_TIER=<tier>`。`ping` / `get_page_url` 永遠不擋，否則使用者無法
+// 排查「為什麼 bridge 不能用」。
 
 /**
- * 包住需要 v2 權限的工具處理函式；閘門關閉時完全不影響行為。
- * 回傳型別泛型化——`take_screenshot` 回的是 image content，不是純文字。
+ * 包住需要方案權限的工具處理函式；閘門關閉時完全不影響行為。
+ * @param name 工具名，用來查 TOOL_TIER_MAP —— **不是裝飾用的**，查錯表就等於沒有分層。
+ * @param requiredOverride 同一支工具因參數而屬於不同方案時使用（見 start_auto_detect）。
  */
-function gated<T extends unknown[], R>(handler: (...args: T) => Promise<R>) {
+function gated<T extends unknown[], R>(name: string, handler: (...args: T) => Promise<R>) {
   return async (...args: T): Promise<R> => {
-    const reject = tierGateReject();
-    if (reject) return txt({ error: reject, tier_gate: true }) as R;
+    const reject = tierGateReject(name);
+    if (reject) return txt({ error: reject, tier_gate: true, tool: name }) as R;
     return handler(...args);
   };
 }
@@ -144,7 +132,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
           '省略 → 開新分頁（active:false，不搶焦點）並回傳新的 tab_id；指定 → 在該分頁內導航。分頁若已關閉會回報錯誤，不會改動其他分頁。',
         ),
     },
-    gated(async (args) => {
+    gated('navigate_to', async (args) => {
       const r = await link.send(
         'navigate_to',
         { url: args.url, tab_id: args.tab_id },
@@ -170,7 +158,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
         .optional()
         .describe('省略 → 使用者當前分頁；指定 → 該分頁（例如 navigate_to 開出來的背景分頁）。分頁已關閉會回報錯誤。'),
     },
-    gated(async (args) => {
+    gated('click_element', async (args) => {
       const r = await link.send('click_element', { selector: args.selector, tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, selector: args.selector, extension_connected: link.connected });
       return txt(r.data);
@@ -188,7 +176,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
         .optional()
         .describe('省略 → 使用者當前分頁；指定 → 該分頁。分頁已關閉會回報錯誤。'),
     },
-    gated(async (args) => {
+    gated('get_page_health', async (args) => {
       const r = await link.send('get_page_health', { tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
       const d = (r.data ?? {}) as Record<string, unknown>;
@@ -241,7 +229,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
         .optional()
         .describe('省略 → 使用者當前分頁；指定 → 該分頁。分頁已關閉會回報錯誤。'),
     },
-    gated(async (args) => {
+    gated('get_web_vitals', async (args) => {
       const r = await link.send('get_web_vitals', { tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
       return txt(r.data);
@@ -263,7 +251,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
         .optional()
         .describe('省略 → 使用者當前分頁；指定 → 該分頁。分頁已關閉會回報錯誤。'),
     },
-    gated(async (args) => {
+    gated('analyze_element', async (args) => {
       const r = await link.send('analyze_element', { selector: args.selector, tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, selector: args.selector, extension_connected: link.connected });
       return txt(r.data);
@@ -282,7 +270,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
         .optional()
         .describe('省略 → 使用者當前分頁；指定 → 該分頁。分頁已關閉會回報錯誤。'),
     },
-    gated(async (args) => {
+    gated('get_browser_errors', async (args) => {
       const r = await link.send('get_browser_errors', { tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
       // PM-350：在 bridge 這一層統一標 severity（三條錯誤來源共用同一套規則）
@@ -310,7 +298,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
         .optional()
         .describe('省略 → 使用者當前分頁；指定 → 該分頁（非 active 時會暫時切換，截完切回）。'),
     },
-    gated(async (args) => {
+    gated('take_screenshot', async (args) => {
       const r = await link.send('take_screenshot', { tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
       const d = (r.data ?? {}) as {
@@ -353,7 +341,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
         .optional()
         .describe('省略 → 使用者當前分頁；指定 → 該分頁。分頁已關閉會回報錯誤。'),
     },
-    gated(async (args) => {
+    gated('type_text', async (args) => {
       const r = await link.send('type_text', {
         selector: args.selector,
         text: args.text,
@@ -376,7 +364,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
         .optional()
         .describe('省略 → 使用者當前分頁；指定 → 該分頁（例如 navigate_to 開出來的背景分頁）。分頁已關閉會回報錯誤。'),
     },
-    gated(async (args) => {
+    gated('read_page', async (args) => {
       const r = await link.send('read_page', { tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
       return txt(r.data);
@@ -393,7 +381,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
       description: z.string().describe('這個圖釘的用途／要觀察什麼。'),
       tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。'),
     },
-    gated(async (args) => {
+    gated('pin_element', async (args) => {
       const r = await link.send('pin_element', {
         selector: args.selector,
         description: args.description,
@@ -411,7 +399,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
       selector: z.string().min(1).describe('CSS 選擇器。'),
       tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。'),
     },
-    gated(async (args) => {
+    gated('pin_analyze', async (args) => {
       const r = await link.send('pin_analyze', { selector: args.selector, tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, selector: args.selector, extension_connected: link.connected });
       return txt(r.data);
@@ -424,7 +412,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     {
       tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。'),
     },
-    gated(async (args) => {
+    gated('get_pin_results', async (args) => {
       const r = await link.send('get_pin_results', { tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
       return txt(r.data);
@@ -436,7 +424,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     'get_error_summary',
     'Group the current page errors by severity (§6 rules, plus any custom rules you added). Use this to decide what to fix first instead of reading every error. Errors matched by an "ignore" rule are excluded entirely. 依嚴重度分組當前分頁的錯誤（§6 規則 + 你自訂的規則），用來決定「先修哪一個」而不必逐條讀。被 ignore 規則命中的錯誤完全不會出現。',
     { tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。') },
-    gated(async (args) => {
+    gated('get_error_summary', async (args) => {
       const r = await link.send('get_browser_errors', { tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
       const d = (r.data ?? {}) as Record<string, unknown>;
@@ -473,7 +461,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
       severity: z.enum(['critical', 'minor', 'info', 'ignore']).describe('命中後要指定的嚴重度；ignore = 完全濾掉。'),
       description: z.string().optional().describe('這條規則的用途，方便日後回顧。'),
     },
-    gated(async (args) =>
+    gated('add_severity_rule', async (args) =>
       txt(
         addSeverityRule({
           pattern: args.pattern,
@@ -490,7 +478,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     'list_severity_rules',
     'List all custom severity rules currently in effect. 列出目前生效的所有自訂嚴重度規則。',
     {},
-    gated(async () => {
+    gated('list_severity_rules', async () => {
       const rules = listSeverityRules();
       return txt({
         rules,
@@ -504,7 +492,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     'remove_severity_rule',
     'Remove a custom severity rule; matching errors go back to the built-in §6 classification. 移除自訂嚴重度規則，命中的錯誤會回到 §6 的內建判定。',
     { rule_id: z.string().min(1).describe('要移除的規則 id（來自 add_severity_rule 或 list_severity_rules）。') },
-    gated(async (args) => {
+    gated('remove_severity_rule', async (args) => {
       const ok = removeSeverityRule(args.rule_id);
       if (!ok) return txt({ error: `找不到規則 ${args.rule_id}`, available: listSeverityRules().map((r) => r.rule_id) });
       return txt({ removed: true, rule_id: args.rule_id, remaining: listSeverityRules().length });
@@ -518,14 +506,21 @@ export function createMcpServer(link: ExtensionLink): McpServer {
       depth: z.enum(['quick', 'full']).optional().describe("'quick'（預設）跳過逐區深入分析；'full' 會對每個非健康區域再跑 analyze_element。"),
       tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。'),
     },
-    gated(async (args) => txt(await startAutoDetect(link, args.tab_id, args.depth ?? 'quick'))),
+    gated('start_auto_detect', async (args) => {
+      // full 模式屬於 §2 的「AI 自動化 debug」= Max；quick 模式 Pro 就能用。
+      // 同一支工具因參數落在不同方案，所以要在這裡再擋一次，不能只靠 TOOL_TIER_MAP。
+      const depth = args.depth ?? 'quick';
+      const reject = tierGateReject('start_auto_detect（full 模式）', autoDetectTier(depth));
+      if (reject) return txt({ error: reject, tier_gate: true, tool: 'start_auto_detect', depth });
+      return txt(await startAutoDetect(link, args.tab_id, depth));
+    }),
   );
 
   server.tool(
     'get_detect_report',
     'Read the result of a previous start_auto_detect: severity summary, per-zone status, critical errors, vitals, a score, and which elements are worth pinning. 讀取先前 start_auto_detect 的結果：嚴重度摘要、各區狀態、critical 錯誤、效能指標、分數，以及值得釘選深入看的元素。',
     { detect_id: z.string().optional().describe('省略 → 最近一次偵測。') },
-    gated(async (args) => txt(getDetectReport(args.detect_id))),
+    gated('get_detect_report', async (args) => txt(getDetectReport(args.detect_id))),
   );
 
   server.tool(
@@ -535,7 +530,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
       time_window_seconds: z.number().optional().describe('配對時間窗口，預設 2 秒（超出窗口但在 3 倍內者標為 low confidence）。'),
       tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。'),
     },
-    gated(async (args) => txt(await correlateErrors(link, args.tab_id, args.time_window_seconds ?? 2))),
+    gated('correlate_errors', async (args) => txt(await correlateErrors(link, args.tab_id, args.time_window_seconds ?? 2))),
   );
 
   // ── 工具 23~30：Zone Grid（PM-341~346，規格書 §15）────────────────────────
@@ -543,7 +538,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     'map_page_zones',
     'Split the page into semantic zones (header / nav / main / aside / footer / section / role / class-name heuristics) so errors can be given an ADDRESS instead of just "somewhere on the page". Elements that fall into no zone are counted in unassigned_count — that number is never hidden. Call this first; the other zone tools build on it. 依語意結構把頁面切成區域，讓錯誤有「地址」而不只是「頁面某處」。沒落進任何區域的頂層元素計入 unassigned_count（**永不隱藏**）。其他 zone 工具都建立在這支之上，請先呼叫它。',
     { tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。') },
-    gated(async (args) => {
+    gated('map_page_zones', async (args) => {
       const r = await link.send('map_page_zones', { tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
       return txt(r.data);
@@ -554,7 +549,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     'get_zone_health',
     'Health status per zone (healthy / warning / error / unknown) with error counts, plus a separate "unassigned" bucket for errors that could not be located. IMPORTANT: a page where every zone is healthy can still be broken — always read unassigned. Each unhealthy zone carries a suggested_action you can act on directly. 各區域的健康狀態與錯誤數，另有獨立的 unassigned 統計（**無法定位的錯誤都在那裡，全綠不代表沒問題**）。有問題的區域會附上可直接執行的 suggested_action。',
     { tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。') },
-    gated(async (args) => {
+    gated('get_zone_health', async (args) => {
       const r = await link.send('get_zone_health', { tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
       return txt(r.data);
@@ -568,7 +563,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
       zone_id: z.string().min(1).describe('zone_id 或 zone 名稱；也可傳 Unassigned。'),
       tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。'),
     },
-    gated(async (args) => {
+    gated('get_zone_errors', async (args) => {
       const r = await link.send('get_zone_errors', { zone_id: args.zone_id, tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
       const d = (r.data ?? {}) as Record<string, unknown>;
@@ -589,7 +584,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     'show_zone_overlay',
     'Show the zone grid overlay on the page: a translucent border per zone with its name and an error badge (red zones blink). 顯示頁面上的區域覆蓋層：每區一個半透明邊框，附名稱標籤與錯誤 badge（紅色區域會閃爍）。',
     { tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。') },
-    gated(async (args) => {
+    gated('show_zone_overlay', async (args) => {
       const r = await link.send('show_zone_overlay', { tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
       return txt(r.data);
@@ -600,7 +595,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     'hide_zone_overlay',
     'Hide the zone grid overlay. 隱藏區域覆蓋層。',
     { tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。') },
-    gated(async (args) => {
+    gated('hide_zone_overlay', async (args) => {
       const r = await link.send('hide_zone_overlay', { tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
       return txt(r.data);
@@ -614,7 +609,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
       interval_seconds: z.number().int().optional().describe('掃描間隔秒數，預設 10（最低 2）。'),
       tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。'),
     },
-    gated(async (args) => {
+    gated('watch_zones', async (args) => {
       const r = await link.send('watch_zones', {
         interval_seconds: args.interval_seconds,
         tab_id: args.tab_id,
@@ -628,7 +623,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     'get_zone_changes',
     'Collect zone status changes since your last call (the list is cleared once read). Empty changes means nothing changed — not that monitoring failed. Each change carries a suggested_action: deeper analysis when a zone degrades, cleanup when it recovers. 取走自上次查詢後的區域狀態變化（**讀取即清空**）。changes 為空代表沒有變化，不是監控失敗。每筆變化都附 suggested_action：惡化時建議深入分析、好轉時建議清理圖釘。',
     { tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。') },
-    gated(async (args) => {
+    gated('get_zone_changes', async (args) => {
       const r = await link.send('get_zone_changes', { tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
       return txt(r.data);
@@ -639,7 +634,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     'stop_watching_zones',
     'Stop zone monitoring and report how long it ran and how many changes were seen. 停止區域監控，並回報監控時長與偵測到的變化總數。',
     { tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。') },
-    gated(async (args) => {
+    gated('stop_watching_zones', async (args) => {
       const r = await link.send('stop_watching_zones', { tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
       return txt(r.data);
@@ -656,7 +651,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
       name,
       `${zh === '顯示' ? 'Show' : 'Hide'} the floating BugEzy debug panel in the bottom-right corner of the page (pins / errors / performance, isolated in a shadow DOM so it cannot clash with the site styles). ${zh}頁面右下角的 BugEzy 即時面板（圖釘／錯誤／效能；以 shadow DOM 隔離，不會與網站樣式互相干擾）。`,
       { tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。') },
-      gated(async (args) => {
+      gated(name, async (args) => {
         const r = await link.send(cmd, { tab_id: args.tab_id });
         if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
         return txt(r.data);
@@ -669,7 +664,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     'patrol_pins',
     'Re-check every pin in one call: each is re-analysed, its status updated, and any CHANGE since the last check is flagged. Use alert_count to decide whether anything needs attention — it counts pins whose state changed, not pins that are merely unhealthy. Returns patrolled: 0 (not an error) when there are no pins. 一次巡檢所有圖釘：逐一重新分析、更新狀態，並標出**與上次相比的變化**。`alert_count` 數的是「狀態有變」的圖釘（不是「有問題」的圖釘），適合用來判斷需不需要深入看。沒有圖釘時回 `patrolled: 0`，不是錯誤。',
     { tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。') },
-    gated(async (args) => {
+    gated('patrol_pins', async (args) => {
       const r = await link.send('patrol_pins', { tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
       return txt(r.data);
@@ -684,7 +679,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
       selector: z.string().optional().describe('也可改用 selector 指定；pin_id 存在時以 pin_id 為準。'),
       tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。'),
     },
-    gated(async (args) => {
+    gated('remove_pin', async (args) => {
       const r = await link.send('remove_pin', {
         pin_id: args.pin_id,
         selector: args.selector,
@@ -705,7 +700,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
         .describe("預設 'all'。注意沒有 'resolved' 這個狀態。"),
       tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。'),
     },
-    gated(async (args) => {
+    gated('clear_pins', async (args) => {
       const r = await link.send('clear_pins', { status: args.status, tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
       return txt(r.data);
@@ -721,7 +716,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
       command: z.string().min(1).describe('要執行並監控的指令，例如 `npm run dev`、`python app.py`。會透過 shell 執行。'),
       cwd: z.string().optional().describe('工作目錄；省略則使用 bridge 的當前目錄。'),
     },
-    gated(async (args) => txt(startTerminalMonitor(args.command, args.cwd))),
+    gated('start_terminal_monitor', async (args) => txt(startTerminalMonitor(args.command, args.cwd))),
   );
 
   server.tool(
@@ -730,7 +725,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     {
       monitor_id: z.string().optional().describe('省略 → 最近啟動的那個 monitor。'),
     },
-    gated(async (args) => {
+    gated('get_terminal_live_errors', async (args) => {
       const d = getTerminalLiveErrors(args.monitor_id) as Record<string, unknown>;
       if (!Array.isArray(d.errors)) return txt(d);
       return txt({
@@ -748,7 +743,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     {
       monitor_id: z.string().optional().describe('省略 → 最近啟動的那個 monitor。'),
     },
-    gated(async (args) => txt(stopTerminalMonitor(args.monitor_id))),
+    gated('stop_terminal_monitor', async (args) => txt(stopTerminalMonitor(args.monitor_id))),
   );
 
 
@@ -765,7 +760,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
         tags: z.array(z.string()).optional().describe('標籤，搜尋時權重 ×2。L6／L4 的規則可加 "regex:<樣式>" 讓 memory_audit／memory_biz_validate 能機器逐條檢查。'),
       }),
     },
-    gated(async (args) => {
+    gated('memory_save', async (args) => {
       const layer = layerOrReject(args.layer);
       if (isReject(layer)) return txt(layer);
       return txt(memorySave(layer, args.entry));
@@ -783,7 +778,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
         related_files: z.array(z.string()).optional().describe('關鍵檔案，會一併存成 tags。'),
       }),
     },
-    gated(async (args) => txt(memoryLearn(args.debug_session))),
+    gated('memory_learn', async (args) => txt(memoryLearn(args.debug_session))),
   );
 
   server.tool(
@@ -794,7 +789,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
       layers: z.array(LAYER_ENUM).optional().describe('省略 → 搜尋全部七層。'),
       limit: z.number().int().positive().max(100).optional().describe('預設 10。'),
     },
-    gated(async (args) => {
+    gated('memory_search', async (args) => {
       const bad = (args.layers ?? []).find((l) => l === 'L3');
       if (bad) return txt({ error: L3_MESSAGE });
       return txt(memorySearch(args.query, args.layers as Layer[] | undefined, args.limit ?? 10));
@@ -808,7 +803,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
       layer: LAYER_ENUM.describe(LAYER_DESC),
       topic: z.string().min(1).describe('必須與存入時的 topic 完全相同（忽略大小寫與前後空白）。'),
     },
-    gated(async (args) => {
+    gated('memory_get', async (args) => {
       const layer = layerOrReject(args.layer);
       if (isReject(layer)) return txt(layer);
       return txt(memoryGet(layer, args.topic));
@@ -819,7 +814,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     'memory_audit',
     'Security self-review against L6: scan the ADDED lines of a git diff for hardcoded secrets (built-in patterns) plus any L6 rule that declares a "regex:" tag. IMPORTANT: passed:true only means the machine-checkable rules passed — natural-language rules are returned in rules_needing_ai_review for you to judge yourself. Writes nothing. 依 L6 資安鐵律自我審查：掃 git diff 的**新增行**，比對內建機密樣式與 L6 中宣告 `regex:` 的規則。⚠ **passed:true 只代表「可機檢的部分」通過**，自然語言的鐵律會放在 rules_needing_ai_review 交還給你自己判讀。**不寫任何檔案。**',
     { code_diff: z.string().min(1).describe('git diff 格式的文字。只會檢查 + 開頭的新增行。') },
-    gated(async (args) => txt(memoryAudit(args.code_diff))),
+    gated('memory_audit', async (args) => txt(memoryAudit(args.code_diff))),
   );
 
   server.tool(
@@ -832,7 +827,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
         unit: z.string().min(1).describe("單位，例如 'ms' / 'MB' / 'ops/s'。必須與基準一致才會比較。"),
       }),
     },
-    gated(async (args) => txt(memoryPerfCheck(args.metrics))),
+    gated('memory_perf_check', async (args) => txt(memoryPerfCheck(args.metrics))),
   );
 
   server.tool(
@@ -845,7 +840,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
         related_rules: z.array(z.string()).optional().describe('只比對 topic 含這些字的規則；省略 → 比對 L4 全部。'),
       }),
     },
-    gated(async (args) => txt(memoryBizValidate(args.output as { context: string; result: unknown; related_rules?: string[] }))),
+    gated('memory_biz_validate', async (args) => txt(memoryBizValidate(args.output as { context: string; result: unknown; related_rules?: string[] }))),
   );
 
   server.tool(
@@ -860,7 +855,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
         tags: z.array(z.string()).optional(),
       }).describe('只帶要改的欄位；沒帶的保持原樣。'),
     },
-    gated(async (args) => {
+    gated('memory_update', async (args) => {
       const layer = layerOrReject(args.layer);
       if (isReject(layer)) return txt(layer);
       return txt(memoryUpdate(layer, args.id, args.entry));
@@ -874,7 +869,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
       layer: LAYER_ENUM.describe(LAYER_DESC),
       id: z.string().min(1),
     },
-    gated(async (args) => {
+    gated('memory_delete', async (args) => {
       const layer = layerOrReject(args.layer);
       if (isReject(layer)) return txt(layer);
       return txt(memoryDelete(layer, args.id));
@@ -889,7 +884,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
       limit: z.number().int().positive().max(500).optional().describe('預設 50。'),
       sort_by: z.enum(['created_at', 'updated_at', 'last_hit_at', 'hit_count']).optional().describe("預設 'updated_at'，皆為由新到舊／由多到少。"),
     },
-    gated(async (args) => {
+    gated('memory_list', async (args) => {
       const layer = layerOrReject(args.layer);
       if (isReject(layer)) return txt(layer);
       return txt(memoryList(layer, args.limit ?? 50, args.sort_by ?? 'updated_at'));
@@ -903,7 +898,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
       layer: LAYER_ENUM.describe(LAYER_DESC),
       confirm: z.boolean().describe('必須明確傳 true 才會執行。這是防呆，不要自動帶。'),
     },
-    gated(async (args) => {
+    gated('memory_clear', async (args) => {
       const layer = layerOrReject(args.layer);
       if (isReject(layer)) return txt(layer);
       return txt(memoryClear(layer, args.confirm));
@@ -917,7 +912,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
       layers: z.array(LAYER_ENUM).optional().describe('省略 → 匯出全部七層。'),
       path: z.string().optional().describe('省略 → 專案根目錄的 .bugezy-backup-YYYYMMDD.json。'),
     },
-    gated(async (args) => {
+    gated('memory_export', async (args) => {
       const bad = (args.layers ?? []).find((l) => l === 'L3');
       if (bad) return txt({ error: L3_MESSAGE });
       return txt(memoryExport(args.layers as Layer[] | undefined, args.path));
@@ -931,15 +926,18 @@ export function createMcpServer(link: ExtensionLink): McpServer {
       path: z.string().min(1).describe('備份檔路徑。'),
       strategy: z.enum(['merge', 'overwrite']).optional().describe("預設 'merge'（同 id 跳過，只加新的）。"),
     },
-    gated(async (args) => txt(memoryImport(args.path, args.strategy ?? 'merge'))),
+    gated('memory_import', async (args) => txt(memoryImport(args.path, args.strategy ?? 'merge'))),
   );
 
   server.tool(
     'memory_stats',
     'Show where the .bugezy/ store lives, how many entries each layer holds, and the active config. Use this first if memory tools behave unexpectedly — a missing store is the usual cause. 顯示 .bugezy/ 的位置、各層筆數與生效中的設定。記憶工具行為不如預期時先看這個——最常見的原因是還沒建立 .bugezy/。',
     {},
-    gated(async () => txt(memoryStats())),
+    gated('memory_stats', async () => txt(memoryStats())),
   );
 
   return server;
 }
+
+export { TOOL_TIER_MAP };
+

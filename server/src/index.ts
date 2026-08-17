@@ -2379,6 +2379,7 @@ BugEzy 是一個 Chrome 擴充工具 + MCP server，讓開發者用語音 + 一�
 | \`get_live_errors\` | 即時監控錯誤（需 session_token） |
 | \`get_terminal_logs\` | Terminal CLI 錯誤（需 session_token，付費功能） |
 | \`get_usage_stats\` | Token 用量統計（需登入） |
+| \`get_usage_quota\` | 方案與本月剩餘用量（需登入；查詢不消耗額度） |
 
 ### 建議的讀取順序
 1. 先呼叫 \`get_timeline\` — 一次拿到 AI 導航摘要 + 完整時間軸（最省 Token）
@@ -7375,6 +7376,71 @@ async function getTicketWallet(request: Request, env: Env): Promise<Response> {
   }
 }
 
+// PM-363：唯讀的額度查詢。**刻意不遞增、也不觸發重置** —— 查詢額度不該改變額度，
+// 否則「看一下還剩幾次」就會把 usage_reset_at 往後推、或被誤計成一次使用。
+// 重置仍然只在 bumpUsage（真的用掉一次時）發生，這裡只回報「下次重置時間」。
+async function readUsageQuota(
+  userId: string,
+  env: Env,
+): Promise<Record<string, unknown> | null> {
+  const { data, error } = await supa(env)
+    .from('users')
+    .select('plan, recording_count, rewind_count, mcp_count, day_pass_expires_at, usage_reset_at')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error || !data) return null;
+
+  const u = data as {
+    plan: string | null;
+    recording_count: number;
+    rewind_count: number;
+    mcp_count: number;
+    day_pass_expires_at: string | null;
+    usage_reset_at: string | null;
+  };
+
+  // 與 bumpUsage 完全相同的無限判定（含活動票券）——兩邊說法不一致的話，
+  // 使用者會看到「無限次」卻在第 11 次被擋（PM-267 就踩過這個坑）。
+  const ticket = await hasActiveTicket(userId, env);
+  const unlimited = isActiveUser(u) || ticket;
+  const tier = unlimited
+    ? u.plan === 'day_pass'
+      ? 'day_pass'
+      : ticket && u.plan !== 'paid' && u.plan !== 'cancelled'
+        ? 'ticket'
+        : 'pro'
+    : 'free';
+
+  // PM-170 的重置是**距上次重置滿 30 天**的滾動制，不是曆月 1 號。
+  // 這裡照實回報，不要編一個「下個月 1 號」的日期讓使用者對不上。
+  const resetBase = u.usage_reset_at ? new Date(u.usage_reset_at) : null;
+  const resetsAt = resetBase ? new Date(resetBase.getTime() + 30 * 86_400_000).toISOString() : null;
+
+  if (unlimited) {
+    return {
+      tier,
+      unlimited: true,
+      limits: null,
+      note: '目前方案沒有用量限制。',
+    };
+  }
+  const mk = (used: number, max: number) => ({
+    used,
+    limit: max,
+    remaining: Math.max(0, max - used),
+  });
+  return {
+    tier,
+    unlimited: false,
+    recording: mk(u.recording_count || 0, FREE_LIMITS.recording),
+    rewind: mk(u.rewind_count || 0, FREE_LIMITS.rewind),
+    mcp: mk(u.mcp_count || 0, FREE_LIMITS.mcp),
+    resets_at: resetsAt,
+    reset_rule: '免費版用量在距上次重置滿 30 天後歸零（滾動制，不是每月 1 號）。',
+    upgrade_url: 'https://bugezy.dev/checkout',
+  };
+}
+
 // POST /api/user/usage — 遞增用量；免費版超限回 403 limit_reached（PM-63）
 async function bumpUsage(request: Request, env: Env): Promise<Response> {
   const userId = await getAuthUserId(request, env);
@@ -8545,6 +8611,43 @@ function createMcpServer(env: Env): McpServer {
       const est = estimateTokens(text, 'get_usage_stats');
       await logMcpUsage(env, 'get_usage_stats', est); // PM-56b：await，否則 Workers 提前終止寫不進
       return { content: [{ type: 'text' as const, text: text + formatTokenFooter(est) }] };
+    },
+  );
+
+  // Tool（PM-363）: get_usage_quota — 免費版還剩幾次
+  server.tool(
+    'get_usage_quota',
+    '查詢目前方案與本月剩餘用量（錄製 / 回溯 / MCP 讀取）。需 user_email + session_token 驗證身分。查詢不會消耗額度。Check your plan and remaining monthly quota — requires user_email and session_token. Checking does not consume quota.',
+    {
+      user_email: z.string().optional().describe('使用者 email。未提供則無法查詢（安全預設）。'),
+      session_token: z.string().optional().describe('BugEzy session token（MCP URL 已帶 ?token= 則不需提供）。'),
+    },
+    async (args) => {
+      if (!args.user_email) {
+        return txt('請提供 user_email 參數以查詢用量。例如：get_usage_quota(user_email: "you@example.com")');
+      }
+      const token = env.__mcp_session_token || args.session_token || '';
+      if (!token) {
+        return txt('請在 MCP URL 加上 ?token=xxx，或提供 session_token 參數。可從 BugEzy 擴充進階設定複製。');
+      }
+      const { data: user, error: uErr } = await supabase()
+        .from('users')
+        .select('user_id')
+        .eq('email', args.user_email)
+        .maybeSingle();
+      if (uErr) {
+        console.error('MCP get_usage_quota user lookup failed:', uErr.message);
+        return txt('查詢失敗，請稍後再試。');
+      }
+      // 查無此 email 與 token 不符一律回同一句 —— 分開講等於幫人確認「這個 email 有註冊」
+      const tokenUserId = await verifySessionByToken(token, env);
+      if (!user || !tokenUserId || tokenUserId !== (user as { user_id: string }).user_id) {
+        return txt('session_token 驗證失敗，請確認 email 與 token 正確。');
+      }
+
+      const quota = await readUsageQuota((user as { user_id: string }).user_id, env);
+      if (!quota) return txt('查詢失敗，請稍後再試。');
+      return txtWithTokens(quota, 'get_usage_quota');
     },
   );
 
