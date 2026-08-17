@@ -426,6 +426,8 @@ let zoneSeq = 0;
 /** zone_id 依「名稱」保持穩定 —— 否則 §15.4 的時間軸每次重建就會斷掉。 */
 const zoneIdByName = new Map<string, string>();
 let zonesStale = false;
+/** map_page_zones 是否呼叫過。**與「有幾個 zone」是兩回事** —— 見 bridgeGetZoneHealth 的說明。 */
+let zonesMapped = false;
 
 function titleCase(s: string): string {
   return s
@@ -527,6 +529,7 @@ function bridgeMapPageZones(): Record<string, unknown> {
 
   zoneList = zones;
   zonesStale = false;
+  zonesMapped = true;
   return {
     zones,
     unassigned_count: unassigned,
@@ -596,10 +599,15 @@ async function collectZoneBuckets(): Promise<{
 }
 
 async function bridgeGetZoneHealth(): Promise<Record<string, unknown>> {
-  if (zoneList.length === 0) {
+  // 🔴 判斷依據是「有沒有分過區」，**不是「有沒有 zone」**。
+  //    很多頁面（例如純內容頁）根本沒有語意標籤 → zones 為 0，但它照樣會有錯誤。
+  //    若因為 zones 為 0 就整支拒絕回應，那些錯誤會**完全無法透過 zone 工具看到** ——
+  //    這正是 §15.3 要防的「錯誤被吞掉」，只是換成在工具層發生。
+  //    （這個洞是 PM-348 在真實的 /test-errors 頁上抓到的。）
+  if (!zonesMapped) {
     return {
       error: '尚未分區。請先呼叫 map_page_zones()。',
-      hint: 'Zone Grid 的健康狀態建立在分區結果上，沒有 zones 就沒有可回報的對象。',
+      hint: 'Zone Grid 的健康狀態建立在分區結果上，請先呼叫 map_page_zones()。',
     };
   }
   const { buckets } = await collectZoneBuckets();
@@ -634,12 +642,15 @@ async function bridgeGetZoneHealth(): Promise<Record<string, unknown>> {
     },
     summary,
     zones_stale: zonesStale,
+    ...(zoneList.length === 0
+      ? { note: '這一頁沒有可辨識的語意區域，因此所有錯誤都在 unassigned 裡——請務必讀它。' }
+      : {}),
     ...(zonesStale ? { note: 'DOM 已大幅變動（可能是 SPA 換頁），建議重新呼叫 map_page_zones()。' } : {}),
   };
 }
 
 async function bridgeGetZoneErrors(zoneId: string): Promise<Record<string, unknown>> {
-  if (zoneList.length === 0) return { error: '尚未分區。請先呼叫 map_page_zones()。' };
+  if (!zonesMapped) return { error: '尚未分區。請先呼叫 map_page_zones()。' };
   const z = zoneList.find((x) => x.zone_id === zoneId || x.name === zoneId);
   if (!z && zoneId !== 'Unassigned') {
     return {

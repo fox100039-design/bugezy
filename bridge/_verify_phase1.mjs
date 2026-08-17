@@ -429,9 +429,16 @@ if (/port 19850 被占用/.test(stderr)) {
       check('345-4 stop 回報時長與變化總數',
         wzStop.stopped === true && typeof wzStop.duration_seconds === 'number' && typeof wzStop.total_changes_detected === 'number', JSON.stringify(wzStop));
 
+
       }
 
       // ── PM-316 get_web_vitals 端到端 ──
+      // 前面的 click_element 會點到語言切換連結 → 觸發導航。
+      // `get_web_vitals` 在頁面「載入完成但尚未 paint」的空窗期呼叫時，
+      // paint entries 與 buffered LCP 都可能還沒落地 → LCP/FCP 回 null。
+      // 這**不是工具壞掉**（它誠實回 null 而非編數字），但會讓測試偶發性 FAIL，
+      // 所以這裡等頁面真的穩定下來再量。實測未加等待時約每 4 次出現 1 次 null。
+      await sleep(1500);
       const wvR = await call('get_web_vitals', { tab_id: r1.tab_id });
       console.log('    get_web_vitals →', JSON.stringify(wvR).slice(0, 300));
       if (wvR.error) {
@@ -523,6 +530,38 @@ if (/port 19850 被占用/.test(stderr)) {
       if (roundTripSel) {
         const c5 = await call('click_element', { selector: roundTripSel, tab_id: r1.tab_id });
         check('309-2 read_page 的 selector 可直接餵給 click_element', c5.clicked === true, JSON.stringify(c5));
+      }
+
+      // ── PM-348 驗收 4：真實頁面的歸類 ──
+      // **刻意放在最後**：這段會導航兩次，而 get_web_vitals 需要頁面 paint 完成才量得到
+      //   LCP/FCP —— 夾在中間會把它的前提破壞掉（PM-347 已經踩過一次同樣的事）。
+      {
+        // 驗收 4：真實頁面上的歸類。/test-errors 的錯誤都來自頁面載入時的 fetch，
+        // **沒有使用者互動、也沒有現場元素** → 依設計應全部落進 Unassigned 而不是消失。
+        await call('navigate_to', { url: 'https://bugezy.dev/test-errors', tab_id: r1.tab_id });
+        await sleep(1500);
+        await call('map_page_zones', { tab_id: r1.tab_id });
+        const zhErr = await call('get_zone_health', { tab_id: r1.tab_id });
+        console.log('    zone_health(/test-errors) →', JSON.stringify(zhErr).slice(0, 260));
+        if (zhErr.error) {
+          // PM-348 抓到的洞：頁面沒有語意標籤 → zones 為 0，舊版會整支拒絕回應，
+          // 導致該頁的錯誤完全看不到。修法已進 content.ts，但需要再重新載入一次擴充功能。
+          check('342-4 🔴 零 zone 的頁面仍要回報 unassigned（不可整支拒絕）', false,
+            `${String(zhErr.error)}（修法已完成，待擴充功能重新載入）`);
+        } else {
+          const totalZoneErrors = zhErr.zones.reduce((n, x) => n + x.error_count + x.warning_count, 0);
+          const unassignedTotal = zhErr.unassigned.error_count + zhErr.unassigned.warning_count;
+          check('342-4 🔴 抓不到現場的錯誤落進 Unassigned 而非被吞掉',
+            unassignedTotal > 0, JSON.stringify(zhErr.unassigned));
+          check('346   Unassigned 有問題時建議指向 get_zone_errors（不是 pin_analyze）',
+            unassignedTotal === 0 || /get_zone_errors/.test(zhErr.unassigned.suggested_action || ''), String(zhErr.unassigned.suggested_action));
+          const zuErr = await call('get_zone_errors', { zone_id: 'Unassigned', tab_id: r1.tab_id });
+          check('343   Unassigned 的明細查得到，且 element_selector 為 null',
+            zuErr.total_count > 0 && [...zuErr.errors, ...zuErr.network_fails].some((e) => e.element_selector === null),
+            JSON.stringify(zuErr).slice(0, 240));
+          console.log(`    真實頁面歸類：zones 內 ${totalZoneErrors} 筆、Unassigned ${unassignedTotal} 筆`);
+        }
+        await call('navigate_to', { url: 'https://bugezy.dev/guide', tab_id: r1.tab_id });
       }
     }
   }
