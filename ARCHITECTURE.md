@@ -59,7 +59,14 @@ content.ts（GET_PAGE_INFO / 即時 console 與網路錯誤）→ 目標網頁
 
 **位址一律寫 `127.0.0.1`，不要寫 `localhost`**：`localhost` 在許多系統上會先解析到 IPv6 的 `::1`，而 bridge 綁的是 IPv4 的 `127.0.0.1`——連線直接失敗，且錯誤訊息只說連不上，看不出是位址族群不合。兩端都已寫死（`extension/src/background.ts` 的 `BRIDGE_URL`、`bridge/src/extension-link.ts` 的 `host`）。
 
-#### bridge 的 51 支 MCP 工具（Phase 1~3 + Phase 5 + §14 記憶矩陣，PM-307~361）
+#### MCP 工具總覽：全站 **65 支**（bridge 51 + 雲端 14）
+
+| 位置 | 數量 | 內容 |
+|---|---|---|
+| **bridge**（本機，`ws://127.0.0.1:19850`） | **51** | 瀏覽器操控 11 ＋ 圖釘 6 ＋ Zone Grid 8 ＋ 即時面板 2 ＋ 終端機監控 3 ＋ 嚴重度與自動化 7 ＋ 記憶矩陣 14 |
+| **雲端**（Cloudflare Workers，`/mcp`） | **14** | 報告查詢 12 ＋ `get_usage_stats` ＋ `get_usage_quota` |
+
+#### bridge 的 51 支 MCP 工具（Phase 1~3 + Phase 5 + Phase 6 + §14 記憶矩陣，PM-307~381）
 
 | 工具 | 用途 | 端到端 |
 |---|---|---|
