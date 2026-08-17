@@ -32,6 +32,7 @@ import {
   MAX_TOPIC_LEN, MAX_CONTENT_LEN, MAX_TAGS,
 } from './memory-ops.js';
 import { tierGateReject, autoDetectTier, TOOL_TIER_MAP } from './tier-gate.js';
+import { maskBrowserError, maskUrl, maskErrorPayload, maskConsoleEntry, maskNetworkEntry } from './pii-browser.js';
 
 // ── PM-355~360：§14 記憶矩陣 ────────────────────────────────────────────────
 // `L3` **刻意收進 enum 裡**，不是漏掉：若把它排除在 enum 外，AI 傳 L3 只會拿到
@@ -206,8 +207,11 @@ export function createMcpServer(link: ExtensionLink): McpServer {
       // summary 是 content script 依「舊的分數」組出來的句子；這裡既然改了分數，
       // 就必須把句首的數字一起換掉 —— 否則回傳會自相矛盾（summary 說 90 分、score 卻是別的值），
       // 而 AI 通常只讀 summary，會拿到錯的數字。
+      // PM-367：summary 由 content script 組出，可能夾帶錯誤原文 → 一併遮罩
       const newSummary =
-        typeof d.summary === 'string' ? d.summary.replace(/^\d+ 分/, `${newScore} 分`) : d.summary;
+        typeof d.summary === 'string'
+          ? maskBrowserError(d.summary.replace(/^\d+ 分/, `${newScore} 分`))
+          : d.summary;
       return txt({
         ...d,
         score: newScore,
@@ -276,15 +280,19 @@ export function createMcpServer(link: ExtensionLink): McpServer {
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
       // PM-350：在 bridge 這一層統一標 severity（三條錯誤來源共用同一套規則）
       const d = (r.data ?? {}) as Record<string, unknown>;
-      return txt({
-        ...d,
-        console_errors: decorate((d.console_errors ?? []) as Array<Record<string, unknown>>, (e) => ({
-          level: e.level as string, message: e.message as string, source: e.source as string,
-        })),
-        network_errors: decorate((d.network_errors ?? []) as Array<Record<string, unknown>>, (e) => ({
-          status: e.status as number, url: e.url as string, message: `${String(e.method)} ${String(e.url)} → ${String(e.status)}`,
-        })),
-      });
+      // PM-367：**先分級再遮罩**。順序反過來的話，使用者自訂的嚴重度規則
+      //   （例如 pattern 比對某個 email 或 token）會比對到已經被遮掉的字串而失效。
+      return txt(
+        maskErrorPayload({
+          ...d,
+          console_errors: decorate((d.console_errors ?? []) as Array<Record<string, unknown>>, (e) => ({
+            level: e.level as string, message: e.message as string, source: e.source as string,
+          })),
+          network_errors: decorate((d.network_errors ?? []) as Array<Record<string, unknown>>, (e) => ({
+            status: e.status as number, url: e.url as string, message: `${String(e.method)} ${String(e.url)} → ${String(e.status)}`,
+          })),
+        }),
+      );
     }),
   );
 
@@ -435,9 +443,10 @@ export function createMcpServer(link: ExtensionLink): McpServer {
       const nets = decorate((d.network_errors ?? []) as Array<Record<string, unknown>>, (e) => ({
         status: e.status as number, url: e.url as string,
       }));
+      // PM-367：分級完成後才遮罩訊息；網址走 maskUrl（只遮 query 的敏感值、保留 path）
       const all = [
-        ...cons.map((e) => ({ type: 'console', message: e.message, source: e.source, severity: e.severity })),
-        ...nets.map((e) => ({ type: 'network', message: `${String(e.method)} ${String(e.url)} → ${String(e.status)}`, source: 'network', severity: e.severity })),
+        ...cons.map((e) => ({ type: 'console', message: maskBrowserError(String(e.message ?? '')), source: e.source, severity: e.severity })),
+        ...nets.map((e) => ({ type: 'network', message: `${String(e.method)} ${maskUrl(String(e.url ?? ''))} → ${String(e.status)}`, source: 'network', severity: e.severity })),
       ];
       const counts = { critical: 0, minor: 0, info: 0 };
       for (const e of all) counts[e.severity as 'critical' | 'minor' | 'info']++;
@@ -569,7 +578,8 @@ export function createMcpServer(link: ExtensionLink): McpServer {
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
       const d = (r.data ?? {}) as Record<string, unknown>;
       if (!Array.isArray(d.errors)) return txt(d);
-      return txt({
+      // PM-367：同樣先分級再遮罩；`element_selector` / `zone_id` 不動（那些是 BugEzy 產生的）
+      return txt(maskErrorPayload({
         ...d,
         errors: decorate(d.errors as Array<Record<string, unknown>>, (e) => ({
           level: e.level as string, message: e.message as string, source: e.source as string,
@@ -577,7 +587,7 @@ export function createMcpServer(link: ExtensionLink): McpServer {
         network_fails: decorate((d.network_fails ?? []) as Array<Record<string, unknown>>, (e) => ({
           status: e.status as number, url: e.url as string, message: `${String(e.method)} ${String(e.url)} → ${String(e.status)}`,
         })),
-      });
+      }));
     }),
   );
 

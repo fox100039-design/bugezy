@@ -6,6 +6,7 @@
 import type { ExtensionLink } from './extension-link.js';
 import { classifySeverity, decorate, severitySummary, type Severity } from './severity.js';
 import { getTerminalLiveErrors } from './terminal-monitor.js';
+import { maskConsoleEntry, maskNetworkEntry, maskUrl } from './pii-browser.js';
 
 interface DetectReport {
   detect_id: string;
@@ -120,7 +121,10 @@ export async function startAutoDetect(
     duration_ms: Date.now() - startedAt,
     summary: `${severitySummary(counts)}；${zoneRows.length} 個區域（${zoneErrTotal} 筆已定位錯誤）`,
     zones: zoneRows,
-    critical_errors: all.filter((e) => e.severity === 'critical'),
+    // PM-367：這裡放的就是 get_browser_errors 的同一批資料，不遮的話 PII 只是換一支工具流出去
+    critical_errors: all
+      .filter((e) => e.severity === 'critical')
+      .map((e) => maskNetworkEntry(maskConsoleEntry(e as Record<string, unknown>))),
     vitals: vitals?.vitals ?? null,
     pin_suggestions: pinSuggestions,
     score,
@@ -196,7 +200,8 @@ export async function correlateErrors(
       const frame = (b.frames as Array<Record<string, unknown>> | undefined)?.[0];
       correlations.push({
         frontend: {
-          url: f.url, status: f.status, method: f.method, timestamp: f.timestamp,
+          // PM-367：只遮 query 的敏感值，**path 保持原樣** —— 上面的配對就是靠 path 做的
+          url: maskUrl(String(f.url ?? '')), status: f.status, method: f.method, timestamp: f.timestamp,
           severity: classifySeverity({ status: Number(f.status), url: String(f.url ?? '') }) as Severity,
         },
         backend: {

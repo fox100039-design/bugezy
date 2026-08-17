@@ -1,5 +1,17 @@
 # BugEzy Changelog
 
+## 2026-08-17（瀏覽器錯誤 PII 遮罩）
+
+**PM-367**：把 PM-366 列為「待 FOX 決策」的那一項做掉。全套 **567 / 0**（新增 `_verify367` 47 項）。
+
+- **共用同一組 regex**（驗收條件 7）：把 `cli/src/pii-mask.ts` 的四組 pattern 改為 export，bridge vendor 逐字同步（防漂移測試仍過），`pii-browser.ts` 直接 import。**`maskStderr` 自己的輸出一個字都沒變**，終端機仍是 `***MASKED***`。
+- **保留型別標籤是關鍵，不是裝飾**：`<masked:JWT>` 讓 AI 知道「這裡本來是 JWT，可能過期或格式錯」；一坨 `***` 只剩「有東西被遮掉了」。**遮罩不該讓工具失去用處**——這正是 PM-366 當時先不動手的原因。
+- 🔴 **網址只遮 query 的敏感參數值，`path` 一個字元都不能改** —— `correlate_errors` 靠 path 配對前後端錯誤，動了 path 等於把那支工具弄壞。參數名保留（AI 要知道是 `api_key` 還是 `signature` 出問題）。
+- 🔴 **先分級再遮罩** —— 順序反過來，PM-351 的自訂嚴重度規則會比對到已被遮掉的字串而失效。
+- **多做兩個套用點**：卡片列了四個，另外補上 `start_auto_detect` 的 `critical_errors` 與 `correlate_errors` 的 `frontend.url` —— 那兩支回的是**同一批資料**，不遮的話 PII 只是換一支工具流出去。
+- **Stripe key／Bearer／Basic 等瀏覽器情境的額外樣式放在 `pii-browser.ts`，不塞進共用檔** —— 共用檔同時被已發布的 CLI 使用，往裡面加樣式等於改變既有使用者的上傳行為。
+- 🔴 **追出困擾多輪的 `get_web_vitals` 端到端不穩定的真正原因**：**背景／被遮住的視窗不會 paint**。Chrome 在視窗未取得焦點時節流算繪，`first-contentful-paint` entry 從頭到尾不會產生，LCP/FCP 就永遠是 null——**等多久都沒用**（PM-366 的有界輪詢因此只治好一半）。試過「先重新導航再量」反而更糟（多一次載入 → 出現載入逾時與 ready_state 不穩），已撤回。**這是環境條件、不是產品缺陷**，工具回 null 而非編數字是正確行為。改為標示 **LIMIT**（既不計 pass 也不計 fail，但一定印出來），並在受限時仍嚴格驗證其餘指標（TTFB／CLS／載入時間／FID 誠實說明）確實正常。`get_page_health` 的分數同理（`poor_vitals` 扣分源自量不到的指標）。
+
 ## 2026-08-17（安全盤點 + 修復）
 
 **PM-365~366**：攻擊面盤點 5 大類 15 項，修掉 1 個 P0、1 個 P1、2 個 P2；3 項接受風險並記錄理由。全套 **514 / 0**（新增 `_verify366` 18 項）。

@@ -3,30 +3,41 @@
 // 上傳前一律在「使用者本機」遮罩，server 永遠只收到遮罩後的結果（同 PM-157 前端遮罩精神）。
 // server 端另有一份相同規則做雙重防護（防舊版 CLI 未更新）。
 
+// PM-367：以下四組 pattern 改為 export，讓 bridge 的瀏覽器錯誤遮罩能沿用**同一組規則**
+// （規格要求「與 terminal 的 maskStderr 用同一組 regex pattern」）。
+// TOKEN／PII 兩組加上 `label`，供需要標示型別的呼叫端使用（例如 `<masked:JWT>`）；
+// **`maskStderr` 自己的輸出完全不變**，仍是 ***MASKED*** / ***。
+
 // 資料庫連線字串（含密碼）：mysql/postgres/mongodb/redis/amqp/mssql://...
-const DB_URI = /\b(mysql|postgres|postgresql|mongodb|redis|amqp|mssql):\/\/[^\s"']+/gi;
+export const DB_URI = /\b(mysql|postgres|postgresql|mongodb|redis|amqp|mssql):\/\/[^\s"']+/gi;
 
 // 環境變數賦值（KEY=VALUE 或 KEY: "VALUE"）——保留 KEY 名稱、遮罩值
-const ENV_SENSITIVE_KEYS =
+export const ENV_SENSITIVE_KEYS =
   /\b(DATABASE_URL|DB_URL|DB_PASSWORD|DB_PASS|REDIS_URL|MONGO_URI|SQLALCHEMY_DATABASE_URI|SECRET_KEY|JWT_SECRET|API_KEY|API_SECRET|AWS_SECRET_ACCESS_KEY|AWS_ACCESS_KEY_ID|STRIPE_SECRET|OPENAI_API_KEY|GROQ_API_KEY|SUPABASE_SERVICE_ROLE_KEY|PRIVATE_KEY|CLIENT_SECRET)\s*[=:]\s*["']?[^\s"']+["']?/gi;
 
+/** 帶型別標籤的 pattern。`label` 只給需要標示型別的呼叫端用，`maskStderr` 不使用它。 */
+export interface LabeledPattern {
+  re: RegExp;
+  label: string;
+}
+
 // 常見 token / key 格式 → 整個遮罩
-const TOKEN_PATTERNS: RegExp[] = [
-  /\bsk-[A-Za-z0-9]{20,}\b/g, // OpenAI
-  /\bAIza[A-Za-z0-9_-]{30,}\b/g, // Google
-  /\bghp_[A-Za-z0-9]{36,}\b/g, // GitHub PAT
-  /\bgho_[A-Za-z0-9]{36,}\b/g, // GitHub OAuth
-  /\bAKIA[A-Z0-9]{16}\b/g, // AWS Access Key ID
-  /\bxox[baprs]-[A-Za-z0-9-]+/g, // Slack token
-  /eyJ[\w-]+\.eyJ[\w-]+\.[\w-]+/g, // JWT
+export const TOKEN_PATTERNS: LabeledPattern[] = [
+  { re: /\bsk-[A-Za-z0-9]{20,}\b/g, label: 'API_KEY' }, // OpenAI
+  { re: /\bAIza[A-Za-z0-9_-]{30,}\b/g, label: 'API_KEY' }, // Google
+  { re: /\bghp_[A-Za-z0-9]{36,}\b/g, label: 'TOKEN' }, // GitHub PAT
+  { re: /\bgho_[A-Za-z0-9]{36,}\b/g, label: 'TOKEN' }, // GitHub OAuth
+  { re: /\bAKIA[A-Z0-9]{16}\b/g, label: 'API_KEY' }, // AWS Access Key ID
+  { re: /\bxox[baprs]-[A-Za-z0-9-]+/g, label: 'TOKEN' }, // Slack token
+  { re: /eyJ[\w-]+\.eyJ[\w-]+\.[\w-]+/g, label: 'JWT' }, // JWT
 ];
 
 // 一般 PII（複用 PM-157 規則）：email / 信用卡 / 台灣手機 / 台灣身分證
-const GENERAL_PII: RegExp[] = [
-  /\b[\w.-]+@[\w.-]+\.\w{2,}\b/g,
-  /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g,
-  /\b09\d{2}[\s-]?\d{3}[\s-]?\d{3}\b/g,
-  /\b[A-Z][12]\d{8}\b/g,
+export const GENERAL_PII: LabeledPattern[] = [
+  { re: /\b[\w.-]+@[\w.-]+\.\w{2,}\b/g, label: 'EMAIL' },
+  { re: /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g, label: 'CARD' },
+  { re: /\b09\d{2}[\s-]?\d{3}[\s-]?\d{3}\b/g, label: 'PHONE' },
+  { re: /\b[A-Z][12]\d{8}\b/g, label: 'ID' },
 ];
 
 /** 遮罩 stderr/crash log 中的敏感資料。DB URI 保 scheme+host、env 保 KEY 名、token/PII 整遮。 */
@@ -54,10 +65,10 @@ export function maskStderr(text: string): string {
   });
 
   // 3. token / key 格式 → 整個遮罩
-  for (const pattern of TOKEN_PATTERNS) masked = masked.replace(pattern, '***MASKED***');
+  for (const p of TOKEN_PATTERNS) masked = masked.replace(p.re, '***MASKED***');
 
   // 4. 一般 PII → 局部遮罩
-  for (const pattern of GENERAL_PII) masked = masked.replace(pattern, '***');
+  for (const p of GENERAL_PII) masked = masked.replace(p.re, '***');
 
   return masked;
 }
