@@ -1,5 +1,19 @@
 # BugEzy Changelog
 
+## 2026-08-17（Phase 3 Zone Grid 完工）
+
+**PM-341~347**：bridge 工具總數 **22 → 30**（+8 Zone Grid）。jsdom 驗證 **151 項 0 failed**；端到端 127/1（唯一 FAIL 待擴充功能重新載入）。規格書 → **v1.3**，§9 的 Phase 1/2/3 全數標 ✅。
+
+- **PM-341** `map_page_zones`：依 §15.2 四層規則分區。**巢狀的內層 zone 會被去掉**（否則同一錯誤同時屬於兩區、歸類沒有唯一解）；**`zone_id` 依名稱保持穩定**（否則 §15.4 時間軸每次換頁就斷）；規則 3 只看 body 直接子層（全頁掃描會把頁面切得太碎）。`unassigned_count` **一律回傳，不做「0 就省略」**。
+- **PM-342** error 歸類 —— 🔴 **§15.3 原本的「stack trace 反推 DOM」做不出來**（stack 只有檔名:行:列，瀏覽器沒有 frame→節點的 API）。改為**在錯誤發生當下抓現場**：資源錯誤用 `event.target`（最準）／事件用 capture 記下的最後互動元素／fetch 用 `activeElement`／抓不到 → Unassigned。**記 selector 字串而非元素本身** —— 這筆資料要經 postMessage 跨 world，DOM 節點不可序列化。新增的是**可選欄位**，既有錯誤收集完全不變。
+- **PM-343** `get_zone_health` / `get_zone_errors`：`unassigned` 是**獨立欄位、永遠回傳**，且工具描述寫死一句「全綠不代表沒問題，一定要讀 unassigned」—— §15.8 的規則是「✅ 就跳過」，而抓不到現場的往往正是 `setTimeout`／Promise 深處這類最難查的錯誤。
+- **PM-344** Zone 覆蓋層：§15.5 兩處矛盾照正解實作（`pointer-events` 分兩層、樣式不注入 `<style>` 字串）。四層覆蓋層 z-index 分層：Zone < 高亮 < 圖釘 < 面板。
+- **PM-345** `watch_zones` / `get_zone_changes` / `stop_watching_zones`：**Pull 模式是唯一可行解**（MCP 沒有 server→模型的推播通道），描述用大寫 PULL-based 講明，避免 AI 啟動後傻等通知。讀取即清空；**未啟動監控時回明確說明而非空陣列**（空陣列在此有歧義）。
+- **PM-346** `suggested_action`：healthy 回 `null` 省 token；**Unassigned 的建議指向 `get_zone_errors` 而非 `pin_analyze`**（它沒有 selector，硬給一個會讓 AI 拿著不存在的 selector 去釘 —— 看似有幫助卻把 AI 導進死路的建議，比沒有建議更糟）。
+- **PM-347** 收工。🔴 **順手抓到一個自己造成的回歸**：新加的端到端在 zone 區段開頭多做了一次 `navigate_to`，但分頁本來就在該頁 —— 這次多餘的重載把 `performance` 的 paint entries 清掉，導致 `get_web_vitals` 的 LCP/FCP 變成 `null`。移除後即恢復。**工具本身的行為是誠實的**（拿不到就回 null 而非編一個數字），否則這個回歸完全看不出來。
+
+> **待 FOX**：**重新載入擴充功能**（`npm run build:dev` 產物已備妥）→ Zone Grid 的端到端即可補完。這次不需要重連 MCP。
+
 ## 2026-08-17（Phase 2 完工 + Phase 3 視覺化）
 
 **PM-334~339**：bridge 工具總數 **17 → 22**（11 瀏覽器 + 3 終端機 + **6 圖釘** + **2 面板**）。jsdom 真實 DOM 驗證 **115 項 0 failed**。

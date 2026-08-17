@@ -1108,6 +1108,47 @@ ${String(res.hint)}` : ''}`);
       return { ...res, tab_id: tabId };
     }
 
+    // PM-341~345：Zone Grid
+    case 'map_page_zones':
+    case 'get_zone_health':
+    case 'show_zone_overlay':
+    case 'hide_zone_overlay':
+    case 'get_zone_changes':
+    case 'stop_watching_zones': {
+      const MAP: Record<string, string> = {
+        map_page_zones: 'BRIDGE_MAP_ZONES',
+        get_zone_health: 'BRIDGE_ZONE_HEALTH',
+        show_zone_overlay: 'BRIDGE_SHOW_ZONE_OVERLAY',
+        hide_zone_overlay: 'BRIDGE_HIDE_ZONE_OVERLAY',
+        get_zone_changes: 'BRIDGE_ZONE_CHANGES',
+        stop_watching_zones: 'BRIDGE_STOP_WATCH_ZONES',
+      };
+      const tabId = await resolveTargetTab(cmd.params);
+      const res = await sendToContent<Record<string, unknown>>(tabId, { type: MAP[cmd.command] });
+      return { ...res, tab_id: tabId };
+    }
+
+    case 'get_zone_errors': {
+      const zoneId = cmd.params?.zone_id;
+      if (typeof zoneId !== 'string' || !zoneId.trim()) throw new Error('缺少 zone_id 參數');
+      const tabId = await resolveTargetTab(cmd.params);
+      const res = await sendToContent<Record<string, unknown>>(tabId, {
+        type: 'BRIDGE_ZONE_ERRORS',
+        zone_id: zoneId,
+      });
+      return { ...res, tab_id: tabId };
+    }
+
+    case 'watch_zones': {
+      const iv = cmd.params?.interval_seconds;
+      const tabId = await resolveTargetTab(cmd.params);
+      const res = await sendToContent<Record<string, unknown>>(tabId, {
+        type: 'BRIDGE_WATCH_ZONES',
+        interval_seconds: typeof iv === 'number' ? iv : undefined,
+      });
+      return { ...res, tab_id: tabId };
+    }
+
     // PM-339：面板顯示／隱藏（AI 可控制）
     case 'show_debug_panel':
     case 'hide_debug_panel': {

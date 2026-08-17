@@ -383,6 +383,564 @@ function bridgeTypeText(selector: string, text: string): Record<string, unknown>
   };
 }
 
+// ── PM-341~346：Zone Grid（規格書 §15）─────────────────────────────────────
+//
+// 依 §15.2 的四層規則自動分區；error 歸類走 PM-342 的「現場元素」而非 stack trace
+// （§15.3 已查證 stack trace 反推 DOM 是做不出來的）。
+
+interface Zone {
+  zone_id: string;
+  name: string;
+  selector: string;
+  tag: string;
+  element_count: number;
+  rect: { x: number; y: number; width: number; height: number };
+}
+
+interface ZoneHealth {
+  status: 'healthy' | 'warning' | 'error' | 'unknown';
+  error_count: number;
+  warning_count: number;
+}
+
+/** §15.2 規則 1：HTML5 語意標籤 */
+const ZONE_SEMANTIC_TAGS = ['header', 'nav', 'main', 'aside', 'footer', 'section', 'article'];
+/** §15.2 規則 2：role 屬性 */
+const ZONE_ROLES: Record<string, string> = {
+  banner: 'Header',
+  navigation: 'Navigation',
+  main: 'Main',
+  complementary: 'Sidebar',
+  contentinfo: 'Footer',
+  search: 'Search',
+  form: 'Form',
+};
+/** §15.2 規則 3：常見 class/id 命名 */
+const ZONE_NAME_HINTS = [
+  'header', 'nav', 'navbar', 'sidebar', 'aside', 'footer', 'cart', 'checkout',
+  'product', 'search', 'menu', 'content', 'main', 'hero', 'banner', 'toolbar',
+];
+
+let zoneList: Zone[] = [];
+let zoneSeq = 0;
+/** zone_id 依「名稱」保持穩定 —— 否則 §15.4 的時間軸每次重建就會斷掉。 */
+const zoneIdByName = new Map<string, string>();
+let zonesStale = false;
+
+function titleCase(s: string): string {
+  return s
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
+/** 依 §15.2 的命名邏輯替 zone 取名。 */
+function nameZone(el: Element, tag: string, index: number): string {
+  const role = el.getAttribute('role');
+  if (role && ZONE_ROLES[role]) return ZONE_ROLES[role];
+
+  const aria = el.getAttribute('aria-label');
+  if (aria) return titleCase(aria.slice(0, 30));
+
+  // class/id 裡的描述性字眼
+  const cn = typeof el.className === 'string' ? el.className : '';
+  for (const hint of ZONE_NAME_HINTS) {
+    if (new RegExp(`(^|[-_\\s])${hint}([-_\\s]|$)`, 'i').test(cn) || new RegExp(hint, 'i').test(el.id)) {
+      return titleCase(hint);
+    }
+  }
+  if (el.id) return titleCase(el.id.slice(0, 30));
+  if (cn.trim()) return titleCase(cn.trim().split(/\s+/)[0].slice(0, 30));
+
+  // section/article → 用子標題
+  if (tag === 'section' || tag === 'article') {
+    const h = el.querySelector('h1,h2,h3,h4,h5,h6');
+    const t = h?.textContent?.trim();
+    if (t) return titleCase(t.slice(0, 30));
+  }
+  if (ZONE_SEMANTIC_TAGS.includes(tag)) return titleCase(tag);
+  return `Section-${index + 1}`;
+}
+
+/** 給 zone 一個穩定的 id（同名沿用），避免時間軸斷裂。 */
+function zoneIdFor(name: string): string {
+  const existing = zoneIdByName.get(name);
+  if (existing) return existing;
+  const id = `zone${++zoneSeq}-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+  zoneIdByName.set(name, id);
+  return id;
+}
+
+function bridgeMapPageZones(): Record<string, unknown> {
+  const root = document.body;
+  if (!root) return { zones: [], unassigned_count: 0, note: '頁面尚無 body' };
+
+  const found: Element[] = [];
+  // 規則 1+2：語意標籤與 role（一次撈完，之後用 contains 去掉巢狀的內層）
+  for (const tag of ZONE_SEMANTIC_TAGS) {
+    for (const el of Array.from(root.querySelectorAll(tag))) found.push(el);
+  }
+  for (const role of Object.keys(ZONE_ROLES)) {
+    for (const el of Array.from(root.querySelectorAll(`[role="${role}"]`))) {
+      if (!found.includes(el)) found.push(el);
+    }
+  }
+  // 規則 3：class/id 命名推測（只看 body 的直接子層，避免把整頁都切碎）
+  for (const el of Array.from(root.children)) {
+    if (found.includes(el)) continue;
+    const cn = typeof el.className === 'string' ? el.className : '';
+    if (ZONE_NAME_HINTS.some((h) => new RegExp(h, 'i').test(cn) || new RegExp(h, 'i').test(el.id))) {
+      found.push(el);
+    }
+  }
+
+  // 去掉被其他 zone 包住的內層（避免 header 內的 nav 又切一塊，造成歸類歧義）
+  const outermost = found.filter((el) => !found.some((o) => o !== el && o.contains(el)));
+
+  const zones: Zone[] = outermost
+    .filter((el) => isElementVisible(el))
+    .map((el, i) => {
+      const tag = el.tagName.toLowerCase();
+      const name = nameZone(el, tag, i);
+      const r = el.getBoundingClientRect();
+      return {
+        zone_id: zoneIdFor(name),
+        name,
+        selector: uniqueSelector(el),
+        tag,
+        element_count: el.querySelectorAll('*').length,
+        rect: {
+          x: Math.round(r.x),
+          y: Math.round(r.y),
+          width: Math.round(r.width),
+          height: Math.round(r.height),
+        },
+      };
+    });
+
+  // 🔴 §15.3：沒落進任何 zone 的頂層元素必須計數。
+  //    不揭露的話，AI 看到「全部 zone 都健康」就會結案，而問題正藏在沒被歸類的那些裡。
+  const unassigned = Array.from(root.children).filter(
+    (el) => !zones.some((z) => el.matches(z.selector) || el.contains(document.querySelector(z.selector) as Node)),
+  ).length;
+
+  zoneList = zones;
+  zonesStale = false;
+  return {
+    zones,
+    unassigned_count: unassigned,
+    ...(zones.length === 0
+      ? { note: '這一頁沒有可辨識的語意區域（header/nav/main/aside/footer/section/article/role）。所有錯誤都會歸入 Unassigned。' }
+      : {}),
+  };
+}
+
+/**
+ * PM-342：把一筆錯誤歸到某個 zone。
+ * 走的是「錯誤發生當下記下的現場元素 selector」（inject.ts 的 elementSelector），
+ * 從該元素往上找第一個屬於某 zone 的祖先。抓不到 → 'Unassigned'（**絕不靜默丟掉**）。
+ */
+function classifyToZone(elementSelector: string | undefined): string {
+  if (!elementSelector) return 'Unassigned';
+  let el: Element | null;
+  try {
+    el = document.querySelector(elementSelector);
+  } catch {
+    return 'Unassigned';
+  }
+  while (el) {
+    for (const z of zoneList) {
+      try {
+        if (el.matches(z.selector)) return z.zone_id;
+      } catch {
+        /* selector 不合法就跳過這個 zone */
+      }
+    }
+    el = el.parentElement;
+  }
+  return 'Unassigned';
+}
+
+/** 依 §15.3 判定 zone 狀態；§15.8：嚴重度繼承最高等級。 */
+function zoneStatusOf(errorCount: number, warningCount: number): ZoneHealth['status'] {
+  if (errorCount > 0) return 'error';
+  if (warningCount > 0) return 'warning';
+  return 'healthy';
+}
+
+/** PM-346：依狀態給出「下一步該做什麼」，healthy 回 null（省 token）。 */
+function suggestedActionFor(z: { name: string; selector?: string }, status: string): string | null {
+  if (status === 'healthy' || status === 'unknown') return null;
+  if (!z.selector) return `這些錯誤沒有可定位的現場元素（Unassigned），建議用 get_zone_errors('Unassigned') 看完整清單。`;
+  return `呼叫 pin_analyze("${z.selector}") 深度分析「${z.name}」這一區`;
+}
+
+async function collectZoneBuckets(): Promise<{
+  buckets: Map<string, { errors: ConsoleLog[]; net: NetworkError[] }>;
+}> {
+  const { consoleLogs, networkErrors } = await queryInjectLiveErrors();
+  const buckets = new Map<string, { errors: ConsoleLog[]; net: NetworkError[] }>();
+  const put = (id: string) => {
+    if (!buckets.has(id)) buckets.set(id, { errors: [], net: [] });
+    return buckets.get(id)!;
+  };
+  for (const z of zoneList) put(z.zone_id);
+  put('Unassigned');
+  for (const c of consoleLogs) {
+    if (c.level === 'info') continue; // Web Vitals 之類不算錯誤（同 PM-313）
+    put(classifyToZone(c.elementSelector)).errors.push(c);
+  }
+  for (const n of networkErrors) put(classifyToZone(n.elementSelector)).net.push(n);
+  return { buckets };
+}
+
+async function bridgeGetZoneHealth(): Promise<Record<string, unknown>> {
+  if (zoneList.length === 0) {
+    return {
+      error: '尚未分區。請先呼叫 map_page_zones()。',
+      hint: 'Zone Grid 的健康狀態建立在分區結果上，沒有 zones 就沒有可回報的對象。',
+    };
+  }
+  const { buckets } = await collectZoneBuckets();
+  const zones = zoneList.map((z) => {
+    const b = buckets.get(z.zone_id) ?? { errors: [], net: [] };
+    const errCount = b.errors.filter((e) => e.level === 'error').length + b.net.length;
+    const warnCount = b.errors.filter((e) => e.level === 'warn').length;
+    const status = zoneStatusOf(errCount, warnCount);
+    return {
+      zone_id: z.zone_id,
+      name: z.name,
+      selector: z.selector,
+      status,
+      error_count: errCount,
+      warning_count: warnCount,
+      suggested_action: suggestedActionFor(z, status), // PM-346
+    };
+  });
+  const u = buckets.get('Unassigned') ?? { errors: [], net: [] };
+  const uErr = u.errors.filter((e) => e.level === 'error').length + u.net.length;
+  const uWarn = u.errors.filter((e) => e.level === 'warn').length;
+  const summary = { healthy: 0, warning: 0, error: 0, unknown: 0 } as Record<string, number>;
+  for (const z of zones) summary[z.status]++;
+  return {
+    zones,
+    // 🔴 §15.3：Unassigned 一定要單獨回報。歸不了類的錯誤若被吞掉，
+    //    畫面會是一片令人安心的綠，而 §15.8 的規則正是「✅ 就跳過，省 token」。
+    unassigned: {
+      error_count: uErr,
+      warning_count: uWarn,
+      suggested_action: suggestedActionFor({ name: 'Unassigned' }, zoneStatusOf(uErr, uWarn)),
+    },
+    summary,
+    zones_stale: zonesStale,
+    ...(zonesStale ? { note: 'DOM 已大幅變動（可能是 SPA 換頁），建議重新呼叫 map_page_zones()。' } : {}),
+  };
+}
+
+async function bridgeGetZoneErrors(zoneId: string): Promise<Record<string, unknown>> {
+  if (zoneList.length === 0) return { error: '尚未分區。請先呼叫 map_page_zones()。' };
+  const z = zoneList.find((x) => x.zone_id === zoneId || x.name === zoneId);
+  if (!z && zoneId !== 'Unassigned') {
+    return {
+      error: `找不到 zone「${zoneId}」`,
+      available: [...zoneList.map((x) => ({ zone_id: x.zone_id, name: x.name })), { zone_id: 'Unassigned', name: 'Unassigned' }],
+    };
+  }
+  const key = z ? z.zone_id : 'Unassigned';
+  const { buckets } = await collectZoneBuckets();
+  const b = buckets.get(key) ?? { errors: [], net: [] };
+  const errCount = b.errors.filter((e) => e.level === 'error').length + b.net.length;
+  const warnCount = b.errors.filter((e) => e.level === 'warn').length;
+  return {
+    zone: {
+      zone_id: key,
+      name: z ? z.name : 'Unassigned',
+      status: zoneStatusOf(errCount, warnCount),
+      ...(z ? { selector: z.selector } : {}),
+    },
+    errors: b.errors.map((e) => ({
+      level: e.level,
+      message: e.message,
+      source: e.source ?? 'console',
+      element_selector: e.elementSelector ?? null,
+      timestamp: e.timestamp,
+    })),
+    network_fails: b.net.map((n) => ({
+      url: n.url,
+      status: n.status,
+      method: n.method,
+      element_selector: n.elementSelector ?? null,
+      timestamp: n.timestamp,
+    })),
+    total_count: b.errors.length + b.net.length,
+    window_seconds: 30,
+    note: '錯誤來自 inject 的 30 秒滾動緩存（同 get_browser_errors）；element_selector 為 null 代表當下抓不到現場元素，該筆歸入 Unassigned。',
+  };
+}
+
+// ── PM-344：Zone Grid 視覺化覆蓋層 ─────────────────────────────────────────
+const ZONE_BORDER: Record<string, string> = {
+  healthy: 'rgba(0,200,83,0.15)',
+  warning: 'rgba(255,214,0,0.15)',
+  error: 'rgba(255,23,68,0.25)',
+  unknown: 'rgba(158,158,158,0.1)',
+};
+const ZONE_LINE: Record<string, string> = {
+  healthy: '#00c853',
+  warning: '#ffd600',
+  error: '#ff1744',
+  unknown: '#9e9e9e',
+};
+let zoneLayer: HTMLElement | null = null;
+let zoneOverlayOn = false;
+let zoneHealthCache: Array<{ zone_id: string; status: string; error_count: number; warning_count: number }> = [];
+
+function ensureZoneLayer(): HTMLElement {
+  if (zoneLayer && zoneLayer.isConnected) return zoneLayer;
+  const el = document.createElement('div');
+  el.setAttribute('data-bugezy-zones', '1');
+  Object.assign(el.style, {
+    position: 'fixed',
+    inset: '0',
+    zIndex: '2147483644', // 最底層：高亮 645、圖釘 646、面板 647
+    pointerEvents: 'none', // §15.5 正解：外層穿透
+  } as CSSStyleDeclaration);
+  document.documentElement.appendChild(el);
+  try {
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync('@keyframes bugezy-zone-blink{0%,100%{opacity:1}50%{opacity:.45}}');
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+  } catch {
+    /* 不支援就沒有閃爍，框仍在 */
+  }
+  zoneLayer = el;
+  return el;
+}
+
+function renderZoneOverlay(): void {
+  if (!zoneOverlayOn) return;
+  const layer = ensureZoneLayer();
+  while (layer.firstChild) layer.removeChild(layer.firstChild);
+  for (const z of zoneList) {
+    let el: Element | null;
+    try {
+      el = document.querySelector(z.selector);
+    } catch {
+      continue;
+    }
+    if (!el) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) continue;
+    const h = zoneHealthCache.find((x) => x.zone_id === z.zone_id);
+    const status = h?.status ?? 'unknown';
+
+    const box = document.createElement('div');
+    Object.assign(box.style, {
+      position: 'absolute',
+      left: `${r.left}px`,
+      top: `${r.top}px`,
+      width: `${r.width}px`,
+      height: `${r.height}px`,
+      border: `2px solid ${ZONE_LINE[status]}`,
+      background: ZONE_BORDER[status],
+      boxSizing: 'border-box',
+      pointerEvents: 'none',
+      ...(status === 'error' ? { animation: 'bugezy-zone-blink 1.2s ease-in-out infinite' } : {}),
+    } as CSSStyleDeclaration);
+
+    // 左上角名稱標籤 —— pointer-events: auto（§15.5 正解：只有小元件可點）
+    const label = document.createElement('div');
+    label.textContent = z.name;
+    Object.assign(label.style, {
+      position: 'absolute',
+      left: '0',
+      top: '0',
+      padding: '1px 6px',
+      background: ZONE_LINE[status],
+      color: '#fff',
+      fontSize: '11px',
+      fontFamily: 'system-ui,sans-serif',
+      pointerEvents: 'auto',
+      cursor: 'pointer',
+      whiteSpace: 'nowrap',
+    } as CSSStyleDeclaration);
+    label.title = `${z.name}\n${z.selector}\n${z.element_count} 個元素`;
+
+    // 右上角錯誤 badge
+    const badge = document.createElement('div');
+    const ec = h?.error_count ?? 0;
+    const wc = h?.warning_count ?? 0;
+    badge.textContent = ec ? `🔴 ×${ec}` : wc ? `🟡 ×${wc}` : status === 'unknown' ? '⚫' : '✅';
+    Object.assign(badge.style, {
+      position: 'absolute',
+      right: '0',
+      top: '0',
+      padding: '1px 6px',
+      background: 'rgba(0,0,0,.65)',
+      color: '#fff',
+      fontSize: '11px',
+      fontFamily: 'system-ui,sans-serif',
+      pointerEvents: 'auto',
+      cursor: 'pointer',
+      whiteSpace: 'nowrap',
+    } as CSSStyleDeclaration);
+    badge.title = `${z.name}：${ec} 個錯誤、${wc} 個警告`;
+
+    box.append(label, badge);
+    layer.appendChild(box);
+  }
+}
+
+let zoneRepositionQueued = false;
+function queueZoneReposition(): void {
+  if (!zoneOverlayOn || zoneRepositionQueued) return;
+  zoneRepositionQueued = true;
+  requestAnimationFrame(() => {
+    zoneRepositionQueued = false;
+    renderZoneOverlay();
+  });
+}
+window.addEventListener('scroll', queueZoneReposition, { passive: true });
+window.addEventListener('resize', queueZoneReposition, { passive: true });
+
+async function bridgeShowZoneOverlay(): Promise<Record<string, unknown>> {
+  if (zoneList.length === 0) return { error: '尚未分區。請先呼叫 map_page_zones()。' };
+  // 順手更新健康狀態，否則覆蓋層會全部是灰色的 unknown
+  const health = await bridgeGetZoneHealth();
+  const zs = (health.zones ?? []) as typeof zoneHealthCache;
+  zoneHealthCache = zs;
+  zoneOverlayOn = true;
+  renderZoneOverlay();
+  return { overlay: 'shown', zone_count: zoneList.length };
+}
+
+function bridgeHideZoneOverlay(): Record<string, unknown> {
+  zoneOverlayOn = false;
+  zoneLayer?.remove();
+  zoneLayer = null;
+  return { overlay: 'hidden' };
+}
+
+// ── PM-345：watch_zones 持續監控（Pull 模式，§15.7 綠框②）──────────────────
+//
+// MCP 沒有 server 主動推播給模型的通道，所以這裡只做「本地定期掃描 + 累積變化」，
+// AI 主動呼叫 get_zone_changes 時才取走。
+interface ZoneChange {
+  zone_id: string;
+  name: string;
+  previous_status: string;
+  current_status: string;
+  timestamp: number;
+  new_errors: number;
+  suggested_action: string | null;
+}
+let zoneWatchTimer: number | undefined;
+let zoneWatchStartedAt = 0;
+let zoneWatchInterval = 10;
+let zoneChanges: ZoneChange[] = [];
+let zoneTotalChanges = 0;
+let lastZoneStatus = new Map<string, { status: string; errors: number }>();
+
+async function scanZones(): Promise<void> {
+  if (zoneList.length === 0) return;
+  const health = await bridgeGetZoneHealth();
+  const zs = (health.zones ?? []) as Array<{
+    zone_id: string; name: string; selector: string; status: string; error_count: number; warning_count: number;
+  }>;
+  zoneHealthCache = zs;
+  for (const z of zs) {
+    const prev = lastZoneStatus.get(z.zone_id);
+    if (prev && prev.status !== z.status) {
+      const change: ZoneChange = {
+        zone_id: z.zone_id,
+        name: z.name,
+        previous_status: prev.status,
+        current_status: z.status,
+        timestamp: Date.now(),
+        new_errors: Math.max(0, z.error_count - prev.errors),
+        // PM-346：惡化 → 建議深入；好轉 → 建議清理
+        suggested_action:
+          z.status === 'healthy'
+            ? `「${z.name}」已恢復正常，可用 remove_pin("${z.selector}") 清掉先前的圖釘`
+            : `呼叫 pin_analyze("${z.selector}") 深度分析「${z.name}」這一區`,
+      };
+      zoneChanges.push(change);
+      zoneTotalChanges++;
+    }
+    lastZoneStatus.set(z.zone_id, { status: z.status, errors: z.error_count });
+  }
+  if (zoneOverlayOn) renderZoneOverlay();
+}
+
+function bridgeWatchZones(intervalSeconds?: number): Record<string, unknown> {
+  if (zoneList.length === 0) return { error: '尚未分區。請先呼叫 map_page_zones()。' };
+  zoneWatchInterval = Math.max(2, intervalSeconds ?? 10);
+  // 重複呼叫 → **更新間隔而不是再開一個 watcher**（驗收條件 6）
+  const restarting = zoneWatchTimer !== undefined;
+  if (zoneWatchTimer !== undefined) clearInterval(zoneWatchTimer);
+  if (!restarting) {
+    zoneWatchStartedAt = Date.now();
+    zoneChanges = [];
+    zoneTotalChanges = 0;
+    lastZoneStatus = new Map();
+  }
+  void scanZones();
+  zoneWatchTimer = setInterval(() => void scanZones(), zoneWatchInterval * 1000) as unknown as number;
+  return {
+    watching: true,
+    zone_count: zoneList.length,
+    interval_seconds: zoneWatchInterval,
+    ...(restarting ? { note: '已在監控中 → 更新掃描間隔（沒有建立第二個 watcher）' } : {}),
+  };
+}
+
+function bridgeGetZoneChanges(): Record<string, unknown> {
+  const since = zoneWatchStartedAt;
+  const out = zoneChanges;
+  zoneChanges = []; // 取走即清空 —— 「自上次查詢後的變化」
+  return {
+    changes: out,
+    since_last_check: since,
+    watching: zoneWatchTimer !== undefined,
+    ...(zoneWatchTimer === undefined
+      ? { note: '目前沒有在監控。先呼叫 watch_zones() 才會累積變化。' }
+      : out.length === 0
+        ? { note: '自上次查詢以來沒有 zone 狀態變化。' }
+        : {}),
+  };
+}
+
+function bridgeStopWatchingZones(): Record<string, unknown> {
+  if (zoneWatchTimer === undefined) return { stopped: false, error: '目前沒有在監控 zones。' };
+  clearInterval(zoneWatchTimer);
+  zoneWatchTimer = undefined;
+  return {
+    stopped: true,
+    duration_seconds: Math.round((Date.now() - zoneWatchStartedAt) / 1000),
+    total_changes_detected: zoneTotalChanges,
+  };
+}
+
+// 分頁關閉／換頁時自動收斂（§15.7 橘框）——不收的話 setInterval 會跟著殘留
+window.addEventListener('pagehide', () => {
+  if (zoneWatchTimer !== undefined) clearInterval(zoneWatchTimer);
+  zoneWatchTimer = undefined;
+});
+
+// §15.2 紅框：SPA 換頁後 selector 全部失效。這裡只**標記 stale 不主動重建**——
+// 重建成本高，且 AI 下次呼叫 map_page_zones 時本來就會重算。
+try {
+  const mo = new MutationObserver((records) => {
+    let churn = 0;
+    for (const r of records) churn += r.addedNodes.length + r.removedNodes.length;
+    if (churn >= 10 && zoneList.length > 0) zonesStale = true;
+  });
+  mo.observe(document.documentElement, { childList: true, subtree: true });
+} catch {
+  /* 極端環境下 MutationObserver 不可用 → 就不標 stale */
+}
+
 // ── PM-339：右下角即時面板 ─────────────────────────────────────────────────
 //
 // 用 **shadow DOM** 隔離：面板注入的是任意使用者的網站，若用一般 DOM，
@@ -1609,6 +2167,22 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
     sendResponse(bridgePinElement(msg.selector, msg.description));
   } else if (msg.type === 'BRIDGE_PIN_ANALYZE') {
     sendResponse(bridgePinAnalyze(msg.selector));
+  } else if (msg.type === 'BRIDGE_MAP_ZONES') {
+    sendResponse(bridgeMapPageZones());
+  } else if (msg.type === 'BRIDGE_ZONE_HEALTH') {
+    void bridgeGetZoneHealth().then(sendResponse);
+  } else if (msg.type === 'BRIDGE_ZONE_ERRORS') {
+    void bridgeGetZoneErrors(msg.zone_id).then(sendResponse);
+  } else if (msg.type === 'BRIDGE_SHOW_ZONE_OVERLAY') {
+    void bridgeShowZoneOverlay().then(sendResponse);
+  } else if (msg.type === 'BRIDGE_HIDE_ZONE_OVERLAY') {
+    sendResponse(bridgeHideZoneOverlay());
+  } else if (msg.type === 'BRIDGE_WATCH_ZONES') {
+    sendResponse(bridgeWatchZones(msg.interval_seconds));
+  } else if (msg.type === 'BRIDGE_ZONE_CHANGES') {
+    sendResponse(bridgeGetZoneChanges());
+  } else if (msg.type === 'BRIDGE_STOP_WATCH_ZONES') {
+    sendResponse(bridgeStopWatchingZones());
   } else if (msg.type === 'BRIDGE_SHOW_PANEL') {
     sendResponse(showDebugPanel());
   } else if (msg.type === 'BRIDGE_HIDE_PANEL') {

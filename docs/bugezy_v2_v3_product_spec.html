@@ -117,7 +117,7 @@ details .details-body{padding:4px 18px 18px}
   <div>
     <div class="header-title">BugEzy v2/v3 產品規格書</div>
     <div class="header-sub">From Bug Reporter to AI Debug Partner · FOX + Claude 共同規劃</div>
-    <div class="header-date">📌 v1.2 · 2026-08-17 · Phase 1+2 完工 · Phase 3 視覺化完成 · 程式 &gt; ARCHITECTURE.md &gt; 本文</div>
+    <div class="header-date">📌 v1.3 · 2026-08-17 · Phase 1+2+3 完工（含 Zone Grid） · 程式 &gt; ARCHITECTURE.md &gt; 本文</div>
   </div>
 </div>
 
@@ -529,11 +529,11 @@ BugEzy Extension
       <li><span class="hl">PM-H</span>：藍框巡察動畫 <span class="hl-green">✅ 已完成（PM-337）</span><br><span style="font-size:11px;color:var(--text-dim)">純視覺增強、不新增 MCP 工具；已整合進 <code>click_element</code>／<code>analyze_element</code>／<code>pin_element</code>／<code>patrol_pins</code>。同時上限 5 個，先進先出。</span></li>
       <li><span class="hl">PM-I</span>：圖釘狀態顏色 <span class="hl-green">✅ 已完成（PM-338）</span></li>
       <li><span class="hl">PM-J</span>：右下角即時面板 <span class="hl-green">✅ 已完成（PM-339）</span><br><span style="font-size:11px;color:var(--text-dim)">shadow DOM 隔離；<code>show_debug_panel</code> / <code>hide_debug_panel</code> 兩支工具可由 AI 控制。</span></li>
-      <li><span class="hl-cyan">PM-X</span>：<code>map_page_zones</code> 基礎分區（<a href="#s15" style="color:var(--cyan)">§15</a>）</li>
-      <li><span class="hl-cyan">PM-Y</span>：<code>get_zone_health</code> ＋ error 歸類 <span class="hl-red">＝ Zone Grid 的地基，需先換掉 stack-trace 反推做法（§15.3）</span></li>
-      <li><span class="hl-cyan">PM-Z</span>：視覺化覆蓋層</li>
-      <li><span class="hl-cyan">PM-W</span>：<code>watch_zones</code> 持續監控</li>
-      <li><span class="hl-cyan">PM-V</span>：Zone ＋ 圖釘自動協作</li>
+      <li><span class="hl-cyan">PM-X</span>：<code>map_page_zones</code> 基礎分區（<a href="#s15" style="color:var(--cyan)">§15</a>）<span class="hl-green">✅ 已完成（PM-341）</span></li>
+      <li><span class="hl-cyan">PM-Y</span>：<code>get_zone_health</code> ＋ error 歸類 <span class="hl-green">✅ 已完成（PM-342／343）</span><br><span style="font-size:11px;color:var(--text-dim)">已依 §15.3 紅框換掉 stack-trace 反推，改為**在錯誤發生當下抓現場元素**（資源錯誤用 event.target、事件用最後互動元素、fetch 用 activeElement、抓不到 → Unassigned）。</span></li>
+      <li><span class="hl-cyan">PM-Z</span>：視覺化覆蓋層 <span class="hl-green">✅ 已完成（PM-344）</span></li>
+      <li><span class="hl-cyan">PM-W</span>：<code>watch_zones</code> 持續監控 <span class="hl-green">✅ 已完成（PM-345，Pull 模式）</span></li>
+      <li><span class="hl-cyan">PM-V</span>：Zone ＋ 圖釘自動協作 <span class="hl-green">✅ 已完成（PM-346，suggested_action）</span></li>
     </ul>
   </div>
 
@@ -1417,7 +1417,7 @@ AI 自動流程：
 </div>
 
 <div class="footer">
-  BugEzy v2/v3 產品規格書 · v1.2 · 2026-08-17 · FOX + Claude<br>
+  BugEzy v2/v3 產品規格書 · v1.3 · 2026-08-17 · FOX + Claude<br>
   程式 &gt; ARCHITECTURE.md &gt; 本文
 </div>
 

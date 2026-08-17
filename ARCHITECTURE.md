@@ -109,6 +109,15 @@ content.ts（GET_PAGE_INFO / 即時 console 與網路錯誤）→ 目標網頁
 2. **`captureVisibleTab` 需 `activeTab` 或 `<all_urls>`，而 `activeTab` 只在使用者手勢後授予** —— bridge 呼叫永遠沒有手勢，且**導航會撤銷 `activeTab`**。三條替代路線（切分頁／`chrome.debugger`／獨立視窗）**都繞不開**，門檻不在「分頁可不可見」而在「有沒有使用者手勢」（PM-312 實測）。
 3. **回傳要帶「解讀脈絡」** —— 錯誤只涵蓋 30 秒、FID 未互動時為 `null` 不是 0、資源大小是低估值、事件監聽器空清單不代表沒有處理器、`ready_state` 非 `complete` 時內容可能不完整。**少了這些，AI 會把正確的回傳讀成錯誤的結論。**
 
+#### Zone Grid 的五條（PM-341~346，規格書 §15）
+
+- 🔴 **error 歸類不能用 stack trace**：stack 只有 `檔名:行:列`，瀏覽器**沒有** frame→DOM 節點的 API。改為在錯誤發生**當下**抓現場（資源錯誤 `event.target` 最準；事件用 capture 記下的最後互動元素；fetch 用 `activeElement`）。抓不到 → **Unassigned，絕不靜默丟掉**。
+- **記 selector 字串不是元素**：這筆資料要從 MAIN world 經 `postMessage` 送到 content script，**DOM 節點不可序列化**。
+- **巢狀的內層 zone 要去掉**：`<main>` 裡的 `<section>` 若也成為 zone，同一個錯誤會同時屬於兩區，歸類沒有唯一解。
+- **`zone_id` 依名稱保持穩定**：§15.4 的健康時間軸建立在 zone_id 上，每次重算會讓時間軸換頁就斷。
+- **`unassigned` 永遠獨立回傳**，且在工具描述層要求 AI 去讀 —— §15.8 是「✅ 就跳過，省 token」，而抓不到現場的往往正是最難查的那幾筆。
+- **watch_zones 是 Pull 模式**：MCP 沒有 server 主動推播給模型的通道，只能本地累積、AI 主動取走（讀取即清空）。
+
 #### 圖釘與視覺化的四條（PM-334~339）
 
 - 🔴 **`pin_analyze` 遇到元素消失時，必須把既有圖釘標成 `stale`**，不能只回一個裸錯誤 —— 否則 `patrol_pins` 看到的還是舊的 `active`，等於「元素不見了但沒人發現」。（PM-334 的測試抓到的。）

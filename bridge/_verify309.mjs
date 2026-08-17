@@ -21,14 +21,15 @@ const seg = (from, to) => {
 const sensitive = seg('const SENSITIVE_RECT_SELECTORS', '/** PM-186：收集敏感欄位');
 const readPage = seg('const READ_PAGE_MAX_CHARS', '// background → content：控制指令');
 const clickFn = seg('function bridgeClick', '// ── PM-311：type_text');
-const typeFn = seg('const TYPE_TEXT_REJECTED_INPUT_TYPES', '// ── PM-339：右下角即時面板');
+const typeFn = seg('const TYPE_TEXT_REJECTED_INPUT_TYPES', '// ── PM-341~346：Zone Grid');
+const zonesFn = seg('interface Zone {', '// ── PM-339：右下角即時面板');
 const panelFn = seg('interface PanelData {', '// ── PM-337：藍框巡察動畫');
 const hlFn = seg('const HIGHLIGHT_MAX', '// ── PM-330／331：圖釘系統');
 const pinsFn = seg('interface Pin {', '// ── PM-317：get_page_health');
 const healthFn = seg('const HEALTH_UNLABELLED_OK_TYPES', '// ── PM-316：get_web_vitals');
 const vitalsFn = seg('const VITAL_THRESHOLDS', '// ── PM-315：analyze_element');
 const analyzeFn = seg('const ANALYZE_STYLE_PROPS', '// ── PM-309：read_page');
-const js = ts.transpileModule(sensitive + '\n' + clickFn + '\n' + typeFn + '\n' + panelFn + '\n' + hlFn + '\n' + pinsFn + '\n' + healthFn + '\n' + vitalsFn + '\n' + analyzeFn + '\n' + readPage, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
+const js = ts.transpileModule(sensitive + '\n' + clickFn + '\n' + typeFn + '\n' + zonesFn + '\n' + panelFn + '\n' + hlFn + '\n' + pinsFn + '\n' + healthFn + '\n' + vitalsFn + '\n' + analyzeFn + '\n' + readPage, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { pretendToBeVisual: true });
 const g = dom.window;
@@ -36,12 +37,21 @@ const g = dom.window;
 const run = new Function('window', 'document', 'getComputedStyle', 'Node', 'NodeFilter', 'CSS',
   'HTMLInputElement', 'HTMLTextAreaElement', 'Event', 'InputEvent', 'performance', 'PerformanceObserver',
   'requestAnimationFrame', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'CSSStyleSheet',
-  js + '\nreturn { extractPageContent, uniqueSelector, ownText, isSensitiveField, bridgeClick, bridgeTypeText, bridgeAnalyzeElement, rateVital, summarizeResources, countInputsWithoutLabel, domMaxDepth, bridgePinElement, bridgePinAnalyze, bridgeGetPinResults, bridgePatrolPins, bridgeRemovePin, bridgeClearPins, highlightElement, showDebugPanel, hideDebugPanel, PIN_STATUS_COLOR };');
+  'MutationObserver',
+  // queryInjectLiveErrors 是 content↔inject 的通道（postMessage），jsdom 裡不存在。
+  // 這裡注入一個**可控的替身** —— 測的是 zone 的分桶與歸類邏輯，通道本身已由 PM-313 涵蓋。
+  // 用替身反而更強：可以餵入已知 elementSelector 的錯誤，精確驗證它被分到哪一區。
+  'queryInjectLiveErrors',
+  js + '\nreturn { extractPageContent, uniqueSelector, ownText, isSensitiveField, bridgeClick, bridgeTypeText, bridgeAnalyzeElement, rateVital, summarizeResources, countInputsWithoutLabel, domMaxDepth, bridgePinElement, bridgePinAnalyze, bridgeGetPinResults, bridgePatrolPins, bridgeRemovePin, bridgeClearPins, highlightElement, showDebugPanel, hideDebugPanel, PIN_STATUS_COLOR, bridgeMapPageZones, bridgeGetZoneHealth, bridgeGetZoneErrors, classifyToZone, bridgeWatchZones, bridgeGetZoneChanges, bridgeStopWatchingZones, bridgeShowZoneOverlay, bridgeHideZoneOverlay };');
 const api = run(g, g.document, g.getComputedStyle.bind(g), g.Node, g.NodeFilter, g.CSS,
   g.HTMLInputElement, g.HTMLTextAreaElement, g.Event, g.InputEvent, g.performance, g.PerformanceObserver,
   (cb) => g.setTimeout(cb, 0),
-  g.setTimeout.bind(g), g.clearTimeout.bind(g), g.setInterval.bind(g), g.clearInterval.bind(g), g.CSSStyleSheet);
+  g.setTimeout.bind(g), g.clearTimeout.bind(g), g.setInterval.bind(g), g.clearInterval.bind(g), g.CSSStyleSheet,
+  g.MutationObserver,
+  () => Promise.resolve(fakeInjectErrors));
 
+// PM-343 用：注入替身回傳的假錯誤（測試中途可改）
+let fakeInjectErrors = { consoleLogs: [], networkErrors: [] };
 const setBody = (html) => { g.document.body.innerHTML = html; };
 
 console.log('\n=== ① 不重複輸出父層文字（卡片版本最大的坑）===');
@@ -419,6 +429,115 @@ check('339-3 標題列可拖動（有 mousedown 綁定 + cursor:move）',
   (host.shadowRoot.querySelector('style')?.textContent || '').includes('cursor:move'));
 api.hideDebugPanel();
 check('339-3 Close → 面板整個移除（DOM 乾淨）', !g.document.querySelector('[data-bugezy-panel]'), '仍存在');
+
+
+console.log('\n=== ⑲ PM-341 map_page_zones ===');
+setBody('<header class="site-header"><h1>頭</h1></header>'
+      + '<nav><a href="/a">連結</a></nav>'
+      + '<main><section class="cart"><h2>購物車</h2><button id="buy">買</button></section>'
+      + '<section class="product-list"><h2>商品</h2></section></main>'
+      + '<footer>底</footer>'
+      + '<div class="random-thing">沒有語意</div>');
+const zmap = api.bridgeMapPageZones();
+console.log('   ', JSON.stringify(zmap).slice(0, 300));
+const names = zmap.zones.map((x) => x.name);
+check('341-1 語意標籤都被辨識出來', ['Header', 'Nav', 'Main', 'Footer'].every((n) => names.includes(n)), JSON.stringify(names));
+check('341-2 每個 zone 有 name/selector/element_count/rect',
+  zmap.zones.every((x) => !!x.name && !!x.selector && typeof x.element_count === 'number' && !!x.rect), JSON.stringify(zmap.zones[0]));
+check('341-3 沒有語意的頂層元素計入 unassigned_count', zmap.unassigned_count >= 1, String(zmap.unassigned_count));
+check('341   巢狀的內層不重複切（main 內的 section 不另外成 zone）',
+  !names.includes('Cart') || !names.includes('Main') || zmap.zones.find((x) => x.name === 'Cart') === undefined,
+  JSON.stringify(names));
+const ids1 = zmap.zones.map((x) => x.zone_id).join(',');
+const ids2 = api.bridgeMapPageZones().zones.map((x) => x.zone_id).join(',');
+check('341-4 重複呼叫 → zone_id 穩定不變', ids1 === ids2, `${ids1} vs ${ids2}`);
+setBody('');
+const emptyZ = api.bridgeMapPageZones();
+check('341-5 空白頁 → zones 空陣列 + unassigned_count', emptyZ.zones.length === 0 && typeof emptyZ.unassigned_count === 'number', JSON.stringify(emptyZ));
+
+console.log('\n=== ⑳ PM-342 error 歸類 ===');
+setBody('<header class="site-header"><button id="hbtn">頭部按鈕</button></header>'
+      + '<main><section class="cart"><button id="cbtn">購物車按鈕</button></section></main>');
+api.bridgeMapPageZones();
+const zoneOf = (sel) => api.classifyToZone(sel);
+check('342-1 header 內元素 → 歸到 Header zone', /header/i.test(zoneOf('#hbtn')), zoneOf('#hbtn'));
+check('342-2 main 內元素 → 歸到 Main zone', /main/i.test(zoneOf('#cbtn')), zoneOf('#cbtn'));
+check('342-3 沒有現場元素（undefined）→ Unassigned', zoneOf(undefined) === 'Unassigned', zoneOf(undefined));
+check('342   selector 指向已不存在的元素 → Unassigned', zoneOf('#gone-xyz') === 'Unassigned', zoneOf('#gone-xyz'));
+check('342   非法 selector → Unassigned（不 crash）', zoneOf('a[[[bad') === 'Unassigned', zoneOf('a[[[bad'));
+
+console.log('\n=== ㉑ PM-343 get_zone_health / get_zone_errors ===');
+// 餵入四筆已知來源的錯誤：header 內、main 內（warn + network）、抓不到現場的、以及 info
+fakeInjectErrors = {
+  consoleLogs: [
+    { level: 'error', message: 'header 爆炸', timestamp: Date.now(), source: 'console', elementSelector: '#hbtn' },
+    { level: 'warn', message: 'main 警告', timestamp: Date.now(), source: 'console', elementSelector: '#cbtn' },
+    { level: 'error', message: 'setTimeout 裡的錯誤', timestamp: Date.now(), source: 'window.onerror' },
+    { level: 'info', message: 'LCP 良好', timestamp: Date.now(), source: 'web-vitals' },
+  ],
+  networkErrors: [{ method: 'GET', url: '/api/x', status: 500, timestamp: Date.now(), duration: 5, elementSelector: '#cbtn' }],
+};
+const health = await api.bridgeGetZoneHealth();
+console.log('   ', JSON.stringify(health).slice(0, 300));
+const hdrZone = health.zones.find((x) => /header/i.test(x.name));
+const mainZone = health.zones.find((x) => /main/i.test(x.name));
+check('342-1 header 的 error 歸到 Header zone', hdrZone?.error_count === 1, JSON.stringify(hdrZone));
+check('342-2 main 的 warn + network 歸到 Main zone', mainZone?.warning_count === 1 && mainZone?.error_count === 1, JSON.stringify(mainZone));
+check('342-3 🔴 抓不到現場元素的 error 進 Unassigned（不被吞掉）', health.unassigned.error_count === 1, JSON.stringify(health.unassigned));
+check('343   level:info 不計入錯誤',
+  (hdrZone?.error_count ?? 0) + (mainZone?.error_count ?? 0) + health.unassigned.error_count === 3, 'info 被算進去了');
+check('346-1 有問題的 zone 帶 suggested_action', !!hdrZone?.suggested_action && !!mainZone?.suggested_action, JSON.stringify([hdrZone?.suggested_action, mainZone?.suggested_action]));
+check('343-1 每個 zone 有 status + error_count',
+  health.zones.every((x) => !!x.status && typeof x.error_count === 'number'), JSON.stringify(health.zones?.[0]));
+check('343-2 🔴 unassigned 區單獨回報（不被省略）',
+  !!health.unassigned && typeof health.unassigned.error_count === 'number', JSON.stringify(health.unassigned));
+check('343-3 summary 統計四種狀態',
+  ['healthy', 'warning', 'error', 'unknown'].every((k) => k in health.summary), JSON.stringify(health.summary));
+check('346-2 healthy zone 的 suggested_action 為 null',
+  health.zones.filter((x) => x.status === 'healthy').every((x) => x.suggested_action === null), JSON.stringify(health.zones.map((x) => [x.status, x.suggested_action])));
+const ze = await api.bridgeGetZoneErrors(health.zones[0].zone_id);
+check('343-4 get_zone_errors 回傳 zone + errors + network_fails',
+  !!ze.zone && Array.isArray(ze.errors) && Array.isArray(ze.network_fails), JSON.stringify(ze).slice(0, 200));
+const zeBad = await api.bridgeGetZoneErrors('nope-zone');
+check('343-5 zone_id 不存在 → error 且列出可用的', !!zeBad.error && Array.isArray(zeBad.available), JSON.stringify(zeBad).slice(0, 200));
+const zeU = await api.bridgeGetZoneErrors('Unassigned');
+check('343   可查詢 Unassigned 的詳細錯誤', zeU.zone?.name === 'Unassigned', JSON.stringify(zeU.zone));
+
+console.log('\n=== ㉒ PM-344 Zone 覆蓋層 ===');
+const ov = await api.bridgeShowZoneOverlay();
+const zl = () => g.document.querySelector('[data-bugezy-zones]');
+check('344-1 覆蓋層已建立且每區一個框', ov.overlay === 'shown' && zl()?.children.length === health.zones.length, `${zl()?.children.length} vs ${health.zones.length}`);
+const firstBox = zl()?.firstChild;
+check('344-3 外層 pointer-events:none（點擊穿透）', zl()?.style.pointerEvents === 'none', zl()?.style.pointerEvents);
+check('344-3 名稱標籤與 badge 為 pointer-events:auto（可點）',
+  firstBox?.children[0]?.style.pointerEvents === 'auto' && firstBox?.children[1]?.style.pointerEvents === 'auto',
+  `${firstBox?.children[0]?.style.pointerEvents} / ${firstBox?.children[1]?.style.pointerEvents}`);
+check('344-6 DOM API only（無 innerHTML 痕跡：標籤用 textContent）', !!firstBox?.children[0]?.textContent, firstBox?.children[0]?.textContent);
+api.bridgeHideZoneOverlay();
+check('344-4 hide → 覆蓋層整個移除', !g.document.querySelector('[data-bugezy-zones]'), '仍存在');
+
+console.log('\n=== ㉓ PM-345 watch_zones（Pull 模式）===');
+const noChanges0 = api.bridgeGetZoneChanges();
+check('345   未啟動監控時查詢 → 明確說明而非空手', Array.isArray(noChanges0.changes) && /沒有在監控/.test(noChanges0.note || ''), JSON.stringify(noChanges0));
+const w1 = api.bridgeWatchZones(5);
+check('345-1 watch_zones 啟動成功', w1.watching === true && w1.interval_seconds === 5, JSON.stringify(w1));
+const w2 = api.bridgeWatchZones(20);
+check('345-6 🔴 重複呼叫 → 更新間隔而非開第二個 watcher',
+  w2.interval_seconds === 20 && /沒有建立第二個/.test(w2.note || ''), JSON.stringify(w2));
+const ch = api.bridgeGetZoneChanges();
+check('345-3 沒有變化 → changes 空陣列（不是 error）', Array.isArray(ch.changes) && ch.changes.length === 0 && !ch.error, JSON.stringify(ch));
+const st = api.bridgeStopWatchingZones();
+check('345-4 stop → 回報時長與變化總數',
+  st.stopped === true && typeof st.duration_seconds === 'number' && typeof st.total_changes_detected === 'number', JSON.stringify(st));
+check('345   重複 stop → 明確說明沒有在監控', api.bridgeStopWatchingZones().stopped === false);
+
+console.log('\n=== ㉔ PM-346 suggested_action ===');
+check('346-4 suggested_action 內含可直接用於 pin_analyze 的 selector',
+  health.zones.every((x) => x.suggested_action === null || /pin_analyze\("/.test(x.suggested_action)),
+  JSON.stringify(health.zones.map((x) => x.suggested_action)));
+check('346   Unassigned 的建議指向 get_zone_errors（它沒有 selector 可釘）',
+  health.unassigned.suggested_action === null || /get_zone_errors/.test(health.unassigned.suggested_action),
+  String(health.unassigned.suggested_action));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

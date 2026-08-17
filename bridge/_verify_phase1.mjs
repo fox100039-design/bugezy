@@ -139,7 +139,7 @@ proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initial
 
 console.log('\n=== ② MCP 工具註冊 ===');
 const tools = (await rpc('tools/list', {})).result.tools;
-check('工具總數 22（11 瀏覽器 + 3 終端機 + 6 圖釘 + 2 面板）', tools.length === 22, tools.map((t) => t.name).join(','));
+check('工具總數 30（11 瀏覽器 + 3 終端機 + 6 圖釘 + 2 面板 + 8 Zone）', tools.length === 30, tools.map((t) => t.name).join(','));
 for (const [name, req, opt] of [['navigate_to', 'url', 'tab_id'], ['click_element', 'selector', 'tab_id']]) {
   const t = tools.find((x) => x.name === name);
   check(`${name} 已註冊`, !!t, tools.map((x) => x.name).join(','));
@@ -379,6 +379,57 @@ if (/port 19850 被占用/.test(stderr)) {
 
       const badPin = await call('pin_element', { selector: '#nope-pin-330', description: 'x', tab_id: r1.tab_id });
       check('330-4 元素不存在 → error 含 selector', !!badPin.error && String(badPin.error).includes('#nope-pin-330'), JSON.stringify(badPin).slice(0, 200));
+
+      // ── PM-341~346 Zone Grid 端到端 ──
+      // 這裡**刻意不重新導航**：分頁此刻已在 /guide，多一次 navigate_to 會重載頁面、
+      // 把 performance 的 paint entries 清掉，導致後面的 get_web_vitals 拿到 LCP/FCP 為 null。
+      const zm = await call('map_page_zones', { tab_id: r1.tab_id });
+      console.log('    map_page_zones →', JSON.stringify(zm).slice(0, 260));
+      const zonesOk = Array.isArray(zm.zones) && zm.zones.length > 0;
+      check('341-1 真實頁面分出 zones', zonesOk, JSON.stringify(zm).slice(0, 200));
+      if (!zonesOk) {
+        console.log('  SKIP  341~346 其餘端到端：Zone Grid 指令尚未生效（擴充功能需重新載入）');
+      } else {
+      check('341-2 每個 zone 有 name/selector/element_count/rect',
+        zm.zones.every((x) => !!x.name && !!x.selector && typeof x.element_count === 'number' && !!x.rect), JSON.stringify(zm.zones?.[0]));
+      check('341-3 unassigned_count 有回傳（不隱藏）', typeof zm.unassigned_count === 'number', String(zm.unassigned_count));
+      const ids1 = zm.zones.map((x) => x.zone_id).join(',');
+      const zm2 = await call('map_page_zones', { tab_id: r1.tab_id });
+      check('341-4 重複呼叫 zone_id 穩定', zm2.zones.map((x) => x.zone_id).join(',') === ids1, ids1);
+
+      const zh = await call('get_zone_health', { tab_id: r1.tab_id });
+      console.log('    get_zone_health →', JSON.stringify(zh).slice(0, 260));
+      check('343-1 每個 zone 有 status + error_count',
+        zh.zones.every((x) => !!x.status && typeof x.error_count === 'number'), JSON.stringify(zh.zones?.[0]));
+      check('343-2 🔴 unassigned 單獨回報', !!zh.unassigned && typeof zh.unassigned.error_count === 'number', JSON.stringify(zh.unassigned));
+      check('343-3 summary 四種狀態齊全', ['healthy','warning','error','unknown'].every((k) => k in zh.summary), JSON.stringify(zh.summary));
+      check('346-2 healthy zone 的 suggested_action 為 null',
+        zh.zones.filter((x) => x.status === 'healthy').every((x) => x.suggested_action === null), JSON.stringify(zh.zones.map((x) => [x.status, x.suggested_action])));
+
+      const zerr = await call('get_zone_errors', { zone_id: zh.zones[0].zone_id, tab_id: r1.tab_id });
+      check('343-4 get_zone_errors 回 zone/errors/network_fails',
+        !!zerr.zone && Array.isArray(zerr.errors) && Array.isArray(zerr.network_fails), JSON.stringify(zerr).slice(0, 200));
+      const zerrU = await call('get_zone_errors', { zone_id: 'Unassigned', tab_id: r1.tab_id });
+      check('343   可查 Unassigned', zerrU.zone?.name === 'Unassigned', JSON.stringify(zerrU.zone));
+      const zerrBad = await call('get_zone_errors', { zone_id: 'nope-zone', tab_id: r1.tab_id });
+      check('343-5 zone_id 不存在 → error', !!zerrBad.error, JSON.stringify(zerrBad).slice(0, 160));
+
+      const ovOn = await call('show_zone_overlay', { tab_id: r1.tab_id });
+      check('344-1 show_zone_overlay 生效', ovOn.overlay === 'shown' && ovOn.zone_count > 0, JSON.stringify(ovOn));
+      const ovOff = await call('hide_zone_overlay', { tab_id: r1.tab_id });
+      check('344-4 hide_zone_overlay 生效', ovOff.overlay === 'hidden', JSON.stringify(ovOff));
+
+      const wz = await call('watch_zones', { interval_seconds: 3, tab_id: r1.tab_id });
+      check('345-1 watch_zones 啟動', wz.watching === true && wz.interval_seconds === 3, JSON.stringify(wz));
+      const wz2 = await call('watch_zones', { interval_seconds: 15, tab_id: r1.tab_id });
+      check('345-6 重複呼叫 → 更新間隔不開第二個', wz2.interval_seconds === 15 && /沒有建立第二個/.test(wz2.note || ''), JSON.stringify(wz2));
+      const zc = await call('get_zone_changes', { tab_id: r1.tab_id });
+      check('345-3 沒有變化 → changes 空陣列（不是 error）', Array.isArray(zc.changes) && !zc.error, JSON.stringify(zc).slice(0, 200));
+      const wzStop = await call('stop_watching_zones', { tab_id: r1.tab_id });
+      check('345-4 stop 回報時長與變化總數',
+        wzStop.stopped === true && typeof wzStop.duration_seconds === 'number' && typeof wzStop.total_changes_detected === 'number', JSON.stringify(wzStop));
+
+      }
 
       // ── PM-316 get_web_vitals 端到端 ──
       const wvR = await call('get_web_vitals', { tab_id: r1.tab_id });

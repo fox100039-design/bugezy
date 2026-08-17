@@ -354,6 +354,104 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     }),
   );
 
+  // ── 工具 23~30：Zone Grid（PM-341~346，規格書 §15）────────────────────────
+  server.tool(
+    'map_page_zones',
+    'Split the page into semantic zones (header / nav / main / aside / footer / section / role / class-name heuristics) so errors can be given an ADDRESS instead of just "somewhere on the page". Elements that fall into no zone are counted in unassigned_count — that number is never hidden. Call this first; the other zone tools build on it. 依語意結構把頁面切成區域，讓錯誤有「地址」而不只是「頁面某處」。沒落進任何區域的頂層元素計入 unassigned_count（**永不隱藏**）。其他 zone 工具都建立在這支之上，請先呼叫它。',
+    { tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。') },
+    gated(async (args) => {
+      const r = await link.send('map_page_zones', { tab_id: args.tab_id });
+      if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
+      return txt(r.data);
+    }),
+  );
+
+  server.tool(
+    'get_zone_health',
+    'Health status per zone (healthy / warning / error / unknown) with error counts, plus a separate "unassigned" bucket for errors that could not be located. IMPORTANT: a page where every zone is healthy can still be broken — always read unassigned. Each unhealthy zone carries a suggested_action you can act on directly. 各區域的健康狀態與錯誤數，另有獨立的 unassigned 統計（**無法定位的錯誤都在那裡，全綠不代表沒問題**）。有問題的區域會附上可直接執行的 suggested_action。',
+    { tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。') },
+    gated(async (args) => {
+      const r = await link.send('get_zone_health', { tab_id: args.tab_id });
+      if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
+      return txt(r.data);
+    }),
+  );
+
+  server.tool(
+    'get_zone_errors',
+    "Full error detail for one zone, including each error's element_selector (null means it could not be located and was filed under Unassigned). Pass 'Unassigned' to inspect the un-locatable ones. 取得單一區域的完整錯誤，含每筆的 element_selector（null 代表當下抓不到現場元素、已歸入 Unassigned）。傳入 Unassigned 可查看那些無法定位的錯誤。",
+    {
+      zone_id: z.string().min(1).describe('zone_id 或 zone 名稱；也可傳 Unassigned。'),
+      tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。'),
+    },
+    gated(async (args) => {
+      const r = await link.send('get_zone_errors', { zone_id: args.zone_id, tab_id: args.tab_id });
+      if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
+      return txt(r.data);
+    }),
+  );
+
+  server.tool(
+    'show_zone_overlay',
+    'Show the zone grid overlay on the page: a translucent border per zone with its name and an error badge (red zones blink). 顯示頁面上的區域覆蓋層：每區一個半透明邊框，附名稱標籤與錯誤 badge（紅色區域會閃爍）。',
+    { tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。') },
+    gated(async (args) => {
+      const r = await link.send('show_zone_overlay', { tab_id: args.tab_id });
+      if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
+      return txt(r.data);
+    }),
+  );
+
+  server.tool(
+    'hide_zone_overlay',
+    'Hide the zone grid overlay. 隱藏區域覆蓋層。',
+    { tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。') },
+    gated(async (args) => {
+      const r = await link.send('hide_zone_overlay', { tab_id: args.tab_id });
+      if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
+      return txt(r.data);
+    }),
+  );
+
+  server.tool(
+    'watch_zones',
+    'Start periodically re-checking every zone in the background. This is PULL-based: nothing is pushed to you — call get_zone_changes to collect what changed since your last check. Calling it again updates the interval instead of starting a second watcher. 開始定期重新檢查所有區域。**這是 Pull 模式**：不會主動推播給你，要用 get_zone_changes 取走自上次查詢後的變化。重複呼叫只會更新間隔，不會開第二個 watcher。',
+    {
+      interval_seconds: z.number().int().optional().describe('掃描間隔秒數，預設 10（最低 2）。'),
+      tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。'),
+    },
+    gated(async (args) => {
+      const r = await link.send('watch_zones', {
+        interval_seconds: args.interval_seconds,
+        tab_id: args.tab_id,
+      });
+      if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
+      return txt(r.data);
+    }),
+  );
+
+  server.tool(
+    'get_zone_changes',
+    'Collect zone status changes since your last call (the list is cleared once read). Empty changes means nothing changed — not that monitoring failed. Each change carries a suggested_action: deeper analysis when a zone degrades, cleanup when it recovers. 取走自上次查詢後的區域狀態變化（**讀取即清空**）。changes 為空代表沒有變化，不是監控失敗。每筆變化都附 suggested_action：惡化時建議深入分析、好轉時建議清理圖釘。',
+    { tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。') },
+    gated(async (args) => {
+      const r = await link.send('get_zone_changes', { tab_id: args.tab_id });
+      if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
+      return txt(r.data);
+    }),
+  );
+
+  server.tool(
+    'stop_watching_zones',
+    'Stop zone monitoring and report how long it ran and how many changes were seen. 停止區域監控，並回報監控時長與偵測到的變化總數。',
+    { tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。') },
+    gated(async (args) => {
+      const r = await link.send('stop_watching_zones', { tab_id: args.tab_id });
+      if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
+      return txt(r.data);
+    }),
+  );
+
   // ── 工具 21~22：即時面板（PM-339，Phase 3 PM-J）──────────────────────────
   // 頁面右下角的浮動面板，用 shadow DOM 隔離，顯示圖釘／錯誤／效能的即時狀態。
   for (const [name, cmd, zh] of [

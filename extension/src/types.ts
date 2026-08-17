@@ -8,6 +8,8 @@ export interface ConsoleLog {
   timestamp: number;
   /** PM-154/155：來源標記（'console' 省略；unhandledrejection / window.onerror / resource-error / web-vitals）。 */
   source?: string;
+  /** PM-342：錯誤發生當下的「現場元素」selector，供 Zone Grid 歸類。抓不到則 undefined → Unassigned。 */
+  elementSelector?: string;
 }
 
 /** Network 攔截紀錄（只抓 4xx / 5xx） */
@@ -15,6 +17,8 @@ export interface NetworkError {
   method: string;
   url: string;
   status: number;
+  /** PM-342：發起請求當下的現場元素 selector（activeElement／最後互動元素），供 Zone Grid 歸類。 */
+  elementSelector?: string;
   requestBody?: string;
   responseBody?: string;
   timestamp: number;
@@ -167,6 +171,14 @@ export type ControlMessage =
   | { type: 'BRIDGE_PATROL_PINS' } // PM-334
   | { type: 'BRIDGE_REMOVE_PIN'; pin_id?: string; selector?: string } // PM-335
   | { type: 'BRIDGE_CLEAR_PINS'; status?: string } // PM-335
+  | { type: 'BRIDGE_MAP_ZONES' } // PM-341
+  | { type: 'BRIDGE_ZONE_HEALTH' } // PM-343
+  | { type: 'BRIDGE_ZONE_ERRORS'; zone_id: string } // PM-343
+  | { type: 'BRIDGE_SHOW_ZONE_OVERLAY' } // PM-344
+  | { type: 'BRIDGE_HIDE_ZONE_OVERLAY' } // PM-344
+  | { type: 'BRIDGE_WATCH_ZONES'; interval_seconds?: number } // PM-345
+  | { type: 'BRIDGE_ZONE_CHANGES' } // PM-345
+  | { type: 'BRIDGE_STOP_WATCH_ZONES' } // PM-345
   | { type: 'BRIDGE_SHOW_PANEL' } // PM-339
   | { type: 'BRIDGE_HIDE_PANEL' } // PM-339
   | { type: 'START_MONITORING' }

@@ -338,11 +338,11 @@ BugEzy Extension
 - **PM-H**：藍框巡察動畫
 - **PM-I**：圖釘狀態顏色
 - **PM-J**：右下角即時面板
-- **PM-X**：`map_page_zones` 基礎分區（§15）
-- **PM-Y**：`get_zone_health` ＋ error 歸類 ← **Zone Grid 的地基，需先換掉 stack-trace 反推做法（§15.3）**
-- **PM-Z**：視覺化覆蓋層
-- **PM-W**：`watch_zones` 持續監控
-- **PM-V**：Zone ＋ 圖釘自動協作
+- **PM-X**：`map_page_zones` 基礎分區（§15）**✅ 已完成（PM-341）**
+- **PM-Y**：`get_zone_health` ＋ error 歸類 **✅ 已完成（PM-342／343）** —— 已換掉 stack-trace 反推，改為在錯誤發生當下抓現場元素；抓不到 → Unassigned。
+- **PM-Z**：視覺化覆蓋層 **✅ 已完成（PM-344）**
+- **PM-W**：`watch_zones` 持續監控 **✅ 已完成（PM-345，Pull 模式）**
+- **PM-V**：Zone ＋ 圖釘自動協作 **✅ 已完成（PM-346）**
 
 ### Phase 4：雲端模式
 - **PM-K**：WebSocket 通道（Durable Objects）
@@ -375,6 +375,7 @@ BugEzy Extension
 | 2026-08-16 | **v1.0** | **§13.2 回填 `take_screenshot` 權限實測結論**（三條路都需 `<all_urls>`）＋ FOX 決策（不急上架、1~3 個月維持 v1.1.5）|
 | 2026-08-16 | **v1.1** | **§9 Phase 1 進度更新**：PM-A~D + B2 標為已完成、PM-D2 待辦；bridge 工具總數 11 |
 | 2026-08-17 | **v1.2** | **Phase 2 完工**（圖釘 6 支工具）＋ **Phase 3 視覺化完成**（藍框動畫／狀態顏色／即時面板）；bridge 工具總數 22 |
+| 2026-08-17 | **v1.3** | **Phase 3 Zone Grid 完工**（PM-X~V）：8 支工具，error 歸類改為「錯誤發生當下抓現場」；bridge 工具總數 30 |
 
 ---
 

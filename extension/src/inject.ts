@@ -823,10 +823,73 @@ function main() {
 
   // ── A. Console 攔截（只抓 warn + error）+ 全域錯誤兜底（PM-154）──────────
   // PM-50：永遠存背景 buffer（回溯用）；recording 時也存錄製 buffer + flush。
+  // ── PM-342：錯誤發生「當下」記下現場元素（Zone Grid 的 error 歸類地基）──────
+  //
+  // 🔴 規格書 §15.3 原本寫「從 stack trace 反推 DOM 元素」——**那做不出來**：
+  //    stack trace 只有 `檔名:行:列`，瀏覽器不提供任何「frame → 節點」的 API。
+  //    照字面實作會得到一個永遠回 null 的歸類器（PM-304 已查證）。
+  //    正解是**在錯誤發生的那一刻抓現場**，而 inject 就在 MAIN world、抓得到。
+  //
+  // 記的是 **selector 字串**而不是元素本身：這筆資料要經 postMessage 送到 content script，
+  // DOM 節點不可序列化，硬塞會整包丟失。
+  let lastInteractedSelector: string | null = null;
+
+  /** 產生一個短而夠用的 selector（不求絕對唯一，歸類只需要能往上找到 zone 祖先）。 */
+  function sceneSelector(el: Element | null): string | null {
+    if (!el || !(el instanceof Element)) return null;
+    const parts: string[] = [];
+    let cur: Element | null = el;
+    let depth = 0;
+    while (cur && cur !== document.documentElement && depth < 6) {
+      if (cur.id) {
+        parts.unshift(`#${CSS.escape(cur.id)}`);
+        break; // 有 id 就夠了，不必再往上
+      }
+      const tag = cur.tagName.toLowerCase();
+      const cls =
+        typeof cur.className === 'string' && cur.className.trim()
+          ? '.' + CSS.escape(cur.className.trim().split(/\s+/)[0])
+          : '';
+      parts.unshift(tag + cls);
+      cur = cur.parentElement;
+      depth++;
+    }
+    return parts.length ? parts.join(' > ') : null;
+  }
+
+  // 使用者最後互動過的元素——fetch/XHR 失敗時多半沒有直接的「現場元素」，
+  // 這是唯一還原得出「哪一區觸發了這個請求」的線索（§15.3 的第三條路徑）。
+  for (const evt of ['click', 'input', 'focusin'] as const) {
+    window.addEventListener(
+      evt,
+      (e: Event) => {
+        const t = e.target;
+        if (t instanceof Element) lastInteractedSelector = sceneSelector(t);
+      },
+      true, // capture：即使頁面自己 stopPropagation 也收得到
+    );
+  }
+
+  /** 錯誤發生當下的現場元素 selector；抓不到回 null（→ 歸入 Unassigned，**絕不靜默丟掉**）。 */
+  function currentSceneSelector(): string | null {
+    const active = document.activeElement;
+    if (active && active !== document.body && active instanceof Element) {
+      const s = sceneSelector(active);
+      if (s) return s;
+    }
+    return lastInteractedSelector;
+  }
+
   // PM-154：統一收集入口 + 去重——console.error / window.onerror / unhandledrejection
   //         可能對同一錯誤重複觸發，去重避免報告塞滿重複列。
   const recentErrors = new Set<string>();
   function collectConsoleLog(entry: ConsoleLog): void {
+    // PM-342：呼叫端沒指定現場元素時（window.onerror / unhandledrejection / console.error），
+    //   用「當下的 activeElement 或最後互動元素」補上。抓不到就留 undefined → 歸入 Unassigned。
+    if (entry.elementSelector === undefined && entry.level !== 'info') {
+      const scene = currentSceneSelector();
+      if (scene) entry.elementSelector = scene;
+    }
     // 去重 key = level + 訊息前 100 字；5 秒後清除（允許相同錯誤日後再記）
     const key = `${entry.level}:${entry.message.slice(0, 100)}`;
     if (recentErrors.has(key)) return;
@@ -948,6 +1011,8 @@ function main() {
         message: `Resource load failed: <${tag}> ${src}`,
         timestamp: Date.now(),
         source: 'resource-error',
+        // PM-342：資源錯誤的 event.target **就是**出問題的元素——這條路徑最準，直接用
+        elementSelector: sceneSelector(target) ?? undefined,
       });
     },
     true, // capture phase：資源載入錯誤不冒泡，必須 capture
@@ -980,6 +1045,9 @@ function main() {
           responseBody: body.slice(0, 2000),
           timestamp: start,
           duration: Date.now() - start,
+          // PM-342：fetch/XHR 沒有天然的「現場元素」，用發起當下的 activeElement／
+          //   最後互動元素當線索（§15.3 第三條路徑）。抓不到 → Unassigned。
+          elementSelector: currentSceneSelector() ?? undefined,
         };
         bgNetworkErrors.push({ data: entry, timestamp: entry.timestamp });
         updateMonitorBadge(); // PM-52
@@ -1032,6 +1100,7 @@ function main() {
               typeof this.responseText === 'string' ? this.responseText.slice(0, 2000) : undefined,
             timestamp: meta.start,
             duration: Date.now() - meta.start,
+            elementSelector: currentSceneSelector() ?? undefined, // PM-342：XHR 同 fetch
           };
           bgNetworkErrors.push({ data: entry, timestamp: entry.timestamp }); // PM-50：永遠存背景 buffer
           updateMonitorBadge(); // PM-52
