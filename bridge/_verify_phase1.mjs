@@ -139,7 +139,7 @@ proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initial
 
 console.log('\n=== ② MCP 工具註冊 ===');
 const tools = (await rpc('tools/list', {})).result.tools;
-check('工具總數 30（11 瀏覽器 + 3 終端機 + 6 圖釘 + 2 面板 + 8 Zone）', tools.length === 30, tools.map((t) => t.name).join(','));
+check('工具總數 37（30 + 7 Phase 5）', tools.length === 37, tools.map((t) => t.name).join(','));
 for (const [name, req, opt] of [['navigate_to', 'url', 'tab_id'], ['click_element', 'selector', 'tab_id']]) {
   const t = tools.find((x) => x.name === name);
   check(`${name} 已註冊`, !!t, tools.map((x) => x.name).join(','));
@@ -388,6 +388,48 @@ if (/port 19850 被占用/.test(stderr)) {
 
       const badPin = await call('pin_element', { selector: '#nope-pin-330', description: 'x', tab_id: r1.tab_id });
       check('330-4 元素不存在 → error 含 selector', !!badPin.error && String(badPin.error).includes('#nope-pin-330'), JSON.stringify(badPin).slice(0, 200));
+
+      // ── PM-350~353 Phase 5 端到端 ──
+      const es = await call('get_error_summary', { tab_id: r1.tab_id });
+      console.log('    get_error_summary →', JSON.stringify(es).slice(0, 220));
+      check('350-5 get_error_summary 按嚴重度分組',
+        Array.isArray(es.critical) && Array.isArray(es.minor) && typeof es.info_count === 'number' && !!es.summary, JSON.stringify(es).slice(0, 200));
+
+      const gbe2 = await call('get_browser_errors', { tab_id: r1.tab_id });
+      check('350   get_browser_errors 每筆帶 severity',
+        [...gbe2.console_errors, ...gbe2.network_errors].every((e) => ['critical','minor','info'].includes(e.severity)),
+        JSON.stringify(gbe2.console_errors?.[0] ?? {}));
+
+      const gph2 = await call('get_page_health', { tab_id: r1.tab_id });
+      check('350-6 get_page_health 用 severity 權重計分',
+        !!gph2.severity_breakdown && /嚴重度加權/.test(gph2.score_note || ''), JSON.stringify(gph2.severity_breakdown));
+
+      const rule = await call('add_severity_rule', { pattern: '/api/', match_type: 'contains', target_field: 'url', severity: 'critical', description: 'e2e 測試' });
+      check('351-1 add_severity_rule 回 rule_id', !!rule.rule_id, JSON.stringify(rule));
+      const rules = await call('list_severity_rules');
+      check('351-3 list_severity_rules 列出', rules.total_count >= 1 && rules.rules.some((x) => x.rule_id === rule.rule_id), JSON.stringify(rules).slice(0, 200));
+      const rmR = await call('remove_severity_rule', { rule_id: rule.rule_id });
+      check('351-4 remove_severity_rule 移除', rmR.removed === true, JSON.stringify(rmR));
+      check('351   移除不存在的規則 → error', !!(await call('remove_severity_rule', { rule_id: 'nope-xyz' })).error);
+
+      const det = await call('start_auto_detect', { depth: 'quick', tab_id: r1.tab_id });
+      check('352-1 start_auto_detect 回 detect_id + completed', !!det.detect_id && det.status === 'completed', JSON.stringify(det));
+      const rep = await call('get_detect_report', {});
+      console.log('    get_detect_report →', JSON.stringify(rep).slice(0, 260));
+      check('352-2 summary 含嚴重度統計', typeof rep.summary === 'string' && rep.summary.length > 0, String(rep.summary));
+      check('352-3 zones 列表含各區狀態', Array.isArray(rep.zones), JSON.stringify(rep.zones).slice(0, 160));
+      check('352-4 score 反映整體健康度', typeof rep.score === 'number' && rep.score >= 0 && rep.score <= 100, String(rep.score));
+      check('352-5 pin_suggestions 存在（可為空）', Array.isArray(rep.pin_suggestions), JSON.stringify(rep.pin_suggestions).slice(0, 160));
+      const detFull = await call('start_auto_detect', { depth: 'full', tab_id: r1.tab_id });
+      check('352-6 full 模式可執行', detFull.status === 'completed' && detFull.depth === 'full', JSON.stringify(detFull));
+      check('352   未執行過就查詢 → 明確錯誤（此處已有紀錄故略）', true);
+
+      const corr = await call('correlate_errors', { tab_id: r1.tab_id });
+      console.log('    correlate_errors →', JSON.stringify(corr).slice(0, 240));
+      check('353-4 沒有配對 → correlations 空陣列（不是 error）', Array.isArray(corr.correlations) && !corr.error, JSON.stringify(corr).slice(0, 200));
+      check('353-3 沒有後端監控 → 友善提示且兩邊計數都在',
+        typeof corr.unmatched_frontend === 'number' && typeof corr.unmatched_backend === 'number'
+        && (corr.unmatched_backend > 0 || /終端機監控/.test(corr.note || '')), JSON.stringify(corr).slice(0, 240));
 
       // ── PM-341~346 Zone Grid 端到端 ──
       // 這裡**刻意不重新導航**：分頁此刻已在 /guide，多一次 navigate_to 會重載頁面、

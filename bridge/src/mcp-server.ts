@@ -8,6 +8,15 @@ import { z } from 'zod';
 import type { ExtensionLink } from './extension-link.js';
 import { NAVIGATE_TIMEOUT_MS } from './types.js';
 import {
+  addSeverityRule,
+  classifySeverity,
+  decorate,
+  listSeverityRules,
+  removeSeverityRule,
+  severitySummary,
+} from './severity.js';
+import { correlateErrors, getDetectReport, startAutoDetect } from './autodetect.js';
+import {
   getTerminalLiveErrors,
   startTerminalMonitor,
   stopTerminalMonitor,
@@ -159,7 +168,42 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     gated(async (args) => {
       const r = await link.send('get_page_health', { tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
-      return txt(r.data);
+      const d = (r.data ?? {}) as Record<string, unknown>;
+      // PM-350：錯誤部分改用 severity 權重（critical -10 / minor -3 / info 0）。
+      //   多打一次 get_browser_errors 是為了拿到**每一筆**錯誤（health 本身只回計數，
+      //   算不出加權）。同機 localhost 往返約幾毫秒，換到的是「critical 與 warn 不再等價」。
+      const eRes = await link.send('get_browser_errors', { tab_id: args.tab_id });
+      if (!eRes.ok) return txt(d);
+      const e = (eRes.data ?? {}) as Record<string, unknown>;
+      const graded = [
+        ...decorate((e.console_errors ?? []) as Array<Record<string, unknown>>, (x) => ({
+          level: x.level as string, message: x.message as string, source: x.source as string,
+        })),
+        ...decorate((e.network_errors ?? []) as Array<Record<string, unknown>>, (x) => ({
+          status: x.status as number, url: x.url as string,
+        })),
+      ];
+      const c = { critical: 0, minor: 0, info: 0 };
+      for (const g of graded) c[g.severity as 'critical' | 'minor' | 'info']++;
+      const errorPenalty = Math.min(c.critical * 10 + c.minor * 3, 50);
+      const ded = (d.deductions ?? {}) as Record<string, number>;
+      const nonErrorPenalty = Object.entries(ded)
+        .filter(([k]) => k !== 'console' && k !== 'network')
+        .reduce((n, [, v]) => n + Number(v || 0), 0);
+      const newScore = Math.max(0, 100 - errorPenalty - nonErrorPenalty);
+      // summary 是 content script 依「舊的分數」組出來的句子；這裡既然改了分數，
+      // 就必須把句首的數字一起換掉 —— 否則回傳會自相矛盾（summary 說 90 分、score 卻是別的值），
+      // 而 AI 通常只讀 summary，會拿到錯的數字。
+      const newSummary =
+        typeof d.summary === 'string' ? d.summary.replace(/^\d+ 分/, `${newScore} 分`) : d.summary;
+      return txt({
+        ...d,
+        score: newScore,
+        summary: newSummary,
+        severity_breakdown: c,
+        deductions: { ...ded, console: undefined, network: undefined, errors_by_severity: errorPenalty },
+        score_note: '錯誤部分依 §6 嚴重度加權：critical -10、minor -3、info 0（上限 -50）；其餘扣分項不變。',
+      });
     }),
   );
 
@@ -218,7 +262,17 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     gated(async (args) => {
       const r = await link.send('get_browser_errors', { tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
-      return txt(r.data);
+      // PM-350：在 bridge 這一層統一標 severity（三條錯誤來源共用同一套規則）
+      const d = (r.data ?? {}) as Record<string, unknown>;
+      return txt({
+        ...d,
+        console_errors: decorate((d.console_errors ?? []) as Array<Record<string, unknown>>, (e) => ({
+          level: e.level as string, message: e.message as string, source: e.source as string,
+        })),
+        network_errors: decorate((d.network_errors ?? []) as Array<Record<string, unknown>>, (e) => ({
+          status: e.status as number, url: e.url as string, message: `${String(e.method)} ${String(e.url)} → ${String(e.status)}`,
+        })),
+      });
     }),
   );
 
@@ -354,6 +408,113 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     }),
   );
 
+  // ── 工具 31~37：嚴重度／自動偵測／關聯診斷（PM-350~353，Phase 5）─────────
+  server.tool(
+    'get_error_summary',
+    'Group the current page errors by severity (§6 rules, plus any custom rules you added). Use this to decide what to fix first instead of reading every error. Errors matched by an "ignore" rule are excluded entirely. 依嚴重度分組當前分頁的錯誤（§6 規則 + 你自訂的規則），用來決定「先修哪一個」而不必逐條讀。被 ignore 規則命中的錯誤完全不會出現。',
+    { tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。') },
+    gated(async (args) => {
+      const r = await link.send('get_browser_errors', { tab_id: args.tab_id });
+      if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
+      const d = (r.data ?? {}) as Record<string, unknown>;
+      const cons = decorate((d.console_errors ?? []) as Array<Record<string, unknown>>, (e) => ({
+        level: e.level as string, message: e.message as string, source: e.source as string,
+      }));
+      const nets = decorate((d.network_errors ?? []) as Array<Record<string, unknown>>, (e) => ({
+        status: e.status as number, url: e.url as string,
+      }));
+      const all = [
+        ...cons.map((e) => ({ type: 'console', message: e.message, source: e.source, severity: e.severity })),
+        ...nets.map((e) => ({ type: 'network', message: `${String(e.method)} ${String(e.url)} → ${String(e.status)}`, source: 'network', severity: e.severity })),
+      ];
+      const counts = { critical: 0, minor: 0, info: 0 };
+      for (const e of all) counts[e.severity as 'critical' | 'minor' | 'info']++;
+      return txt({
+        critical: all.filter((e) => e.severity === 'critical'),
+        minor: all.filter((e) => e.severity === 'minor'),
+        info_count: counts.info,
+        summary: severitySummary(counts),
+        window_seconds: d.window_seconds ?? 30,
+        note: '只涵蓋最近 30 秒（同 get_browser_errors）。空的結果代表「最近沒出事」，不一定是「沒有問題」。',
+      });
+    }),
+  );
+
+  server.tool(
+    'add_severity_rule',
+    'Add a custom severity rule that overrides the built-in §6 classification — e.g. treat 404s under /api/ as critical, or downgrade "deprecated" warnings to info. Use severity "ignore" to drop matching errors entirely. Rules live in memory and are lost when the bridge restarts. 新增自訂嚴重度規則，優先於內建的 §6 判定 —— 例如把 /api/ 的 404 升為 critical、把含 deprecated 的警告降為 info。severity 設 ignore 可讓命中的錯誤完全不出現。**規則存在記憶體，bridge 重啟即消失。**',
+    {
+      pattern: z.string().min(1).describe('要比對的字串或正規表示式。'),
+      match_type: z.enum(['contains', 'starts_with', 'regex']).describe('比對方式。'),
+      target_field: z.enum(['message', 'url', 'source']).describe('比對哪個欄位。'),
+      severity: z.enum(['critical', 'minor', 'info', 'ignore']).describe('命中後要指定的嚴重度；ignore = 完全濾掉。'),
+      description: z.string().optional().describe('這條規則的用途，方便日後回顧。'),
+    },
+    gated(async (args) =>
+      txt(
+        addSeverityRule({
+          pattern: args.pattern,
+          match_type: args.match_type,
+          target_field: args.target_field,
+          severity: args.severity,
+          description: args.description,
+        }),
+      ),
+    ),
+  );
+
+  server.tool(
+    'list_severity_rules',
+    'List all custom severity rules currently in effect. 列出目前生效的所有自訂嚴重度規則。',
+    {},
+    gated(async () => {
+      const rules = listSeverityRules();
+      return txt({
+        rules,
+        total_count: rules.length,
+        ...(rules.length === 0 ? { note: '目前沒有自訂規則，全部使用 §6 的內建判定。' } : {}),
+      });
+    }),
+  );
+
+  server.tool(
+    'remove_severity_rule',
+    'Remove a custom severity rule; matching errors go back to the built-in §6 classification. 移除自訂嚴重度規則，命中的錯誤會回到 §6 的內建判定。',
+    { rule_id: z.string().min(1).describe('要移除的規則 id（來自 add_severity_rule 或 list_severity_rules）。') },
+    gated(async (args) => {
+      const ok = removeSeverityRule(args.rule_id);
+      if (!ok) return txt({ error: `找不到規則 ${args.rule_id}`, available: listSeverityRules().map((r) => r.rule_id) });
+      return txt({ removed: true, rule_id: args.rule_id, remaining: listSeverityRules().length });
+    }),
+  );
+
+  server.tool(
+    'start_auto_detect',
+    'Run a full page sweep in one call: map zones, collect errors, read Core Web Vitals, compute zone health, and (in full mode) analyse every unhealthy zone. This is orchestration only — it adds no new detection, it just saves you many round trips. Then read the result with get_detect_report. 一次呼叫跑完整輪掃描：分區 → 收錯誤 → 讀效能 → 算區域健康 →（full 模式）逐一分析有問題的區域。**這只是編排，不新增偵測能力**，省的是多輪往返。結果用 get_detect_report 取。',
+    {
+      depth: z.enum(['quick', 'full']).optional().describe("'quick'（預設）跳過逐區深入分析；'full' 會對每個非健康區域再跑 analyze_element。"),
+      tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。'),
+    },
+    gated(async (args) => txt(await startAutoDetect(link, args.tab_id, args.depth ?? 'quick'))),
+  );
+
+  server.tool(
+    'get_detect_report',
+    'Read the result of a previous start_auto_detect: severity summary, per-zone status, critical errors, vitals, a score, and which elements are worth pinning. 讀取先前 start_auto_detect 的結果：嚴重度摘要、各區狀態、critical 錯誤、效能指標、分數，以及值得釘選深入看的元素。',
+    { detect_id: z.string().optional().describe('省略 → 最近一次偵測。') },
+    gated(async (args) => txt(getDetectReport(args.detect_id))),
+  );
+
+  server.tool(
+    'correlate_errors',
+    'Pair frontend network failures with backend crashes by timestamp and URL path, so a 500 in the browser can be linked to the actual exception in your server logs. Requires start_terminal_monitor to be running for the backend side; unmatched items on both sides are counted, never dropped. 依時間戳與 URL path 配對前端網路錯誤與後端崩潰，讓瀏覽器看到的 500 能對上伺服器日誌裡真正的例外。後端需要先用 start_terminal_monitor 監控；**兩邊未配對的都會計數，不會被丟掉**。',
+    {
+      time_window_seconds: z.number().optional().describe('配對時間窗口，預設 2 秒（超出窗口但在 3 倍內者標為 low confidence）。'),
+      tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。'),
+    },
+    gated(async (args) => txt(await correlateErrors(link, args.tab_id, args.time_window_seconds ?? 2))),
+  );
+
   // ── 工具 23~30：Zone Grid（PM-341~346，規格書 §15）────────────────────────
   server.tool(
     'map_page_zones',
@@ -387,7 +548,17 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     gated(async (args) => {
       const r = await link.send('get_zone_errors', { zone_id: args.zone_id, tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
-      return txt(r.data);
+      const d = (r.data ?? {}) as Record<string, unknown>;
+      if (!Array.isArray(d.errors)) return txt(d);
+      return txt({
+        ...d,
+        errors: decorate(d.errors as Array<Record<string, unknown>>, (e) => ({
+          level: e.level as string, message: e.message as string, source: e.source as string,
+        })),
+        network_fails: decorate((d.network_fails ?? []) as Array<Record<string, unknown>>, (e) => ({
+          status: e.status as number, url: e.url as string, message: `${String(e.method)} ${String(e.url)} → ${String(e.status)}`,
+        })),
+      });
     }),
   );
 
@@ -536,7 +707,16 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     {
       monitor_id: z.string().optional().describe('省略 → 最近啟動的那個 monitor。'),
     },
-    gated(async (args) => txt(getTerminalLiveErrors(args.monitor_id))),
+    gated(async (args) => {
+      const d = getTerminalLiveErrors(args.monitor_id) as Record<string, unknown>;
+      if (!Array.isArray(d.errors)) return txt(d);
+      return txt({
+        ...d,
+        errors: decorate(d.errors as Array<Record<string, unknown>>, (e) => ({
+          type: e.type as string, message: e.message as string, source: 'terminal',
+        })),
+      });
+    }),
   );
 
   server.tool(

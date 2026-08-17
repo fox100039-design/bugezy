@@ -1,5 +1,16 @@
 # BugEzy Changelog
 
+## 2026-08-17（Phase 5 嚴重度 + 自動化 完工）
+
+**PM-350~354**：bridge 工具總數 **30 → 37**（+7 Phase 5）。全套 **0 failed**：端到端 `_verify_phase1` **159**、jsdom `_verify309` **151**、終端機 `_verify327` **21**、嚴重度 `_verify350` **27**。規格書 §9 **Phase 5 標 ✅**。
+
+- **PM-350** 嚴重度自動分類（§6）：`get_error_summary` + 三支錯誤工具每筆帶 `severity`。**分類器放 bridge 而非 content script** —— 瀏覽器／終端機／zone 三條路徑要共用同一套判定，而終端機錯誤根本不經過瀏覽器，唯一交會點就是 bridge。`get_page_health` 改用權重計分（critical −10／minor −3／info 0）。
+  🔴 **端到端抓到自己造成的矛盾**：分數重算了，但 `summary` 那句話是 content script 依**舊分數**組的 —— 回傳會同時出現「90 分」的句子和另一個 `score`。**AI 通常只讀 summary**，等於直接拿到錯的數字。已把句首數字一起換掉。
+- **PM-351** 自訂規則：`add_severity_rule` / `list_severity_rules` / `remove_severity_rule`。自訂**優先於內建**；`ignore` 的錯誤**整筆濾掉**而非只標記（使用者說忽略，就不該再出現在任何結果裡）；**不合法的 regex 當沒命中**，不讓一條打錯的規則害所有錯誤查詢都掛掉；規則存**記憶體、重啟清空**，刻意不寫檔。
+- **PM-352** `start_auto_detect` / `get_detect_report`：**不新增任何偵測能力**，只把 `map_page_zones` → `get_browser_errors` → `get_web_vitals` → `get_zone_health`（full 再加每個非健康 zone 的 `analyze_element`）串成一次呼叫，價值在省掉 AI 的多輪往返。定名 `start_auto_detect` 而非卡片草稿的 `start_monitor`，避免與 Phase 3 的 `watch_zones` 混淆。
+- **PM-353** `correlate_errors`：前端 4xx/5xx ←→ 終端機 traceback。時間窗口內 **+ URL path 命中後端訊息／堆疊** → `high`；只有時間窗口 → `medium`；3 倍窗口內 → `low`。**未配對的兩邊都計數** —— 只回配對結果會讓人誤以為「沒關聯就是沒問題」。沒有終端機監控時回**具體下一步**而非空陣列（空陣列有歧義：沒配到？還是沒在監控？）。
+- **PM-354** 收工：規格書 §9 Phase 5 標 ✅、ARCHITECTURE 補嚴重度／自動偵測／關聯診斷三節、CHANGELOG。
+
 ## 2026-08-17（Phase 3 Zone Grid 完工）
 
 **PM-341~347**：bridge 工具總數 **22 → 30**（+8 Zone Grid）。jsdom 驗證 **151 項 0 failed**；端到端 127/1（唯一 FAIL 待擴充功能重新載入）。規格書 → **v1.3**，§9 的 Phase 1/2/3 全數標 ✅。

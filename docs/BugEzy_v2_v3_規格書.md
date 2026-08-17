@@ -348,10 +348,16 @@ BugEzy Extension
 - **PM-K**：WebSocket 通道（Durable Objects）
 - **PM-L**：Extension WebSocket 連線管理
 
-### Phase 5：Bug 嚴重度 + 自動化
-- **PM-M**：嚴重度自動分類
-- **PM-N**：AI 自動偵測模式（`start_monitor` / `get_monitor_report`）
-- **PM-O**：自訂規則
+### Phase 5：Bug 嚴重度 + 自動化 ✅ 已完成
+
+> ✅ **Phase 5 完工（2026-08-17）：共 7 支工具，bridge 總數 30 → 37**
+> `get_error_summary` · `add_severity_rule` · `list_severity_rules` · `remove_severity_rule`
+> `start_auto_detect` · `get_detect_report` · `correlate_errors`
+
+- **PM-M**：嚴重度自動分類 **✅ 已完成（PM-350）** —— 分類器放在 **bridge** 而非 content script：瀏覽器／終端機／zone 三條錯誤路徑要共用同一套判定，而終端機錯誤根本不經過瀏覽器，唯一的交會點就是 bridge。`get_browser_errors` / `get_terminal_live_errors` / `get_zone_errors` 每筆都帶 `severity`，`get_page_health` 改用 §6 權重（critical −10 / minor −3 / info 0）計分。
+- **PM-N**：AI 自動偵測模式 **✅ 已完成（PM-352）** —— 最終定名 `start_auto_detect` / `get_detect_report`（非卡片草稿的 `start_monitor`，避免與 Phase 3 的 `watch_zones` 混淆）。**不新增任何偵測能力**，純粹把既有工具串成一次呼叫。
+- **PM-O**：自訂規則 **✅ 已完成（PM-351）** —— 自訂規則優先於內建；`ignore` 的錯誤會被**完全濾掉**（不只是標記）。規則存在 **bridge 記憶體、重啟即清空**，刻意不寫檔，避免在使用者機器上留下沒人記得的狀態。
+- **PM-O2**：前後端關聯診斷 **✅ 已完成（PM-353）** —— `correlate_errors` 把前端 4xx/5xx 與終端機 traceback 依時間窗口 + URL path 命中配對，信心分 high／medium／low。
 
 ### Phase 6：Max / Agent 方案上線
 - **PM-P**：方案分層完整上線（Max / Agent）—— 閘門雛形因決策 3 已提前到 PM-B2

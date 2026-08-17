@@ -59,7 +59,7 @@ content.ts（GET_PAGE_INFO / 即時 console 與網路錯誤）→ 目標網頁
 
 **位址一律寫 `127.0.0.1`，不要寫 `localhost`**：`localhost` 在許多系統上會先解析到 IPv6 的 `::1`，而 bridge 綁的是 IPv4 的 `127.0.0.1`——連線直接失敗，且錯誤訊息只說連不上，看不出是位址族群不合。兩端都已寫死（`extension/src/background.ts` 的 `BRIDGE_URL`、`bridge/src/extension-link.ts` 的 `host`）。
 
-#### bridge 的 17 支 MCP 工具（Phase 1 + Phase 2，PM-307~332）
+#### bridge 的 37 支 MCP 工具（Phase 1~3 + Phase 5，PM-307~354）
 
 | 工具 | 用途 | 端到端 |
 |---|---|---|
@@ -108,6 +108,31 @@ content.ts（GET_PAGE_INFO / 即時 console 與網路錯誤）→ 目標網頁
 1. **`tab.url` / `tab.title` 讀不到** —— 需 `tabs` 權限，只有 `activeTab` 時 Chrome **靜默回空字串**（不報錯）。一律改問 content script（PM-298）。
 2. **`captureVisibleTab` 需 `activeTab` 或 `<all_urls>`，而 `activeTab` 只在使用者手勢後授予** —— bridge 呼叫永遠沒有手勢，且**導航會撤銷 `activeTab`**。三條替代路線（切分頁／`chrome.debugger`／獨立視窗）**都繞不開**，門檻不在「分頁可不可見」而在「有沒有使用者手勢」（PM-312 實測）。
 3. **回傳要帶「解讀脈絡」** —— 錯誤只涵蓋 30 秒、FID 未互動時為 `null` 不是 0、資源大小是低估值、事件監聽器空清單不代表沒有處理器、`ready_state` 非 `complete` 時內容可能不完整。**少了這些，AI 會把正確的回傳讀成錯誤的結論。**
+
+#### 嚴重度分類（PM-350/351，規格書 §6）
+
+**分類器放在 bridge 而不是 content script** —— 三條錯誤路徑（瀏覽器 console／network、終端機 traceback、zone 歸類）都要用同一套判定，而終端機錯誤根本不經過瀏覽器。規則只能放在三者的交會點。
+
+| 情況 | 判定 |
+|---|---|
+| HTTP 5xx | `critical`（server 壞了） |
+| HTTP 4xx | `minor`（多半是找不到資源） |
+| `unhandledrejection` / `window.onerror` | `critical` |
+| 訊息含 TypeError／ReferenceError／SyntaxError／RangeError／Uncaught | `critical` |
+| `console.error` / 終端機解析出的錯誤型別 | `critical` |
+| `console.warn`、Web Vitals 超標 | `minor` |
+| `console.info`、Web Vitals 正常 | `info` |
+
+- **自訂規則優先於內建**；`severity: 'ignore'` 的錯誤**整筆被濾掉**，不只是標記 —— 使用者說要忽略，就不該再出現在任何結果裡。
+- **不合法的 regex 當作沒命中**，而不是讓整個分類拋錯 —— 一條打錯的規則不該讓所有錯誤查詢都掛掉。
+- 規則存**記憶體、重啟即清空**（刻意不寫檔，避免在使用者機器上留下沒人記得的狀態）。
+- `get_page_health` 的分數改用權重重算（critical −10／minor −3／info 0）。⚠ 分數換掉時，**`summary` 句首的數字必須一起換** —— 那句話是 content script 依舊分數組的，AI 通常只讀 summary，不同步就會拿到自相矛盾的兩個數字。
+
+#### 自動偵測與關聯診斷（PM-352/353）
+
+- `start_auto_detect` **不新增任何偵測能力**，只是把 `map_page_zones` → `get_browser_errors` → `get_web_vitals` → `get_zone_health`（full 模式再加每個非健康 zone 的 `analyze_element`）串成一次呼叫。價值在省掉 AI 的多輪往返。
+- `correlate_errors` 配對前端 4xx/5xx 與終端機 traceback：時間窗口內 **+ URL path 出現在後端訊息／堆疊裡** → `high`；只有時間窗口 → `medium`；3 倍窗口內 → `low`。**未配對的兩邊都要計數** —— 只回配對結果會讓人誤以為「沒關聯就是沒問題」。
+- 沒有終端機監控在跑時，回的是**具體下一步**（「請先用 `start_terminal_monitor` 監控 npm run dev」）而不是空陣列 —— 空陣列在這裡有歧義（沒配到？還是沒在監控？）。
 
 #### Zone Grid 的五條（PM-341~346，規格書 §15）
 
