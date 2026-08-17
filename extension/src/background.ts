@@ -1108,6 +1108,49 @@ ${String(res.hint)}` : ''}`);
       return { ...res, tab_id: tabId };
     }
 
+    // PM-339：面板顯示／隱藏（AI 可控制）
+    case 'show_debug_panel':
+    case 'hide_debug_panel': {
+      const tabId = await resolveTargetTab(cmd.params);
+      const res = await sendToContent<Record<string, unknown>>(tabId, {
+        type: cmd.command === 'show_debug_panel' ? 'BRIDGE_SHOW_PANEL' : 'BRIDGE_HIDE_PANEL',
+      });
+      return { ...res, tab_id: tabId };
+    }
+
+    case 'patrol_pins': {
+      const tabId = await resolveTargetTab(cmd.params);
+      const res = await sendToContent<Record<string, unknown>>(tabId, { type: 'BRIDGE_PATROL_PINS' });
+      return { ...res, tab_id: tabId };
+    }
+
+    case 'remove_pin': {
+      const pinId = cmd.params?.pin_id;
+      const selector = cmd.params?.selector;
+      if (typeof pinId !== 'string' && typeof selector !== 'string') {
+        throw new Error('需要提供 pin_id 或 selector 其中之一');
+      }
+      const tabId = await resolveTargetTab(cmd.params);
+      const res = await sendToContent<Record<string, unknown>>(tabId, {
+        type: 'BRIDGE_REMOVE_PIN',
+        pin_id: typeof pinId === 'string' ? pinId : undefined,
+        selector: typeof selector === 'string' ? selector : undefined,
+      });
+      if (typeof res.error === 'string') throw new Error(String(res.error));
+      return { ...res, tab_id: tabId };
+    }
+
+    case 'clear_pins': {
+      const status = cmd.params?.status;
+      const tabId = await resolveTargetTab(cmd.params);
+      const res = await sendToContent<Record<string, unknown>>(tabId, {
+        type: 'BRIDGE_CLEAR_PINS',
+        status: typeof status === 'string' ? status : undefined,
+      });
+      if (typeof res.error === 'string') throw new Error(String(res.error));
+      return { ...res, tab_id: tabId };
+    }
+
     case 'get_pin_results': {
       const tabId = await resolveTargetTab(cmd.params);
       const res = await sendToContent<Record<string, unknown>>(tabId, { type: 'BRIDGE_GET_PIN_RESULTS' });

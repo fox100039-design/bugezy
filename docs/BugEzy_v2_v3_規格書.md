@@ -324,10 +324,15 @@ BugEzy Extension
   - `take_screenshot` 程式碼已完成，但受 `activeTab` 權限限制（見 §13.2）；上架版暫不加 `<all_urls>`，開發版 manifest 可全通（PM-322）。
 - **PM-D2**：bugezy-watch 即時化（`start_terminal_monitor` / `get_terminal_live_errors`，見 §11.2）— **待辦**
 
-### Phase 2：圖釘系統
-- **PM-E**：圖釘 UI（content script 注入 + 釘選元素 + 描述）
-- **PM-F**：`pin_analyze` MCP 工具
-- **PM-G**：圖釘巡察模式（多圖釘順序檢查）
+### Phase 2：圖釘系統 ✅ 已完成
+
+> ✅ **Phase 2 完工（2026-08-17）：圖釘共 6 支工具**
+> `pin_element` · `pin_analyze` · `get_pin_results` · `patrol_pins` · `remove_pin` · `clear_pins`
+> 狀態為 `active` / `warning` / `error` / `stale`（**沒有 `resolved`**）。
+
+- **PM-E**：圖釘 UI **✅ 已完成（PM-330）**
+- **PM-F**：pinAnalyze MCP 工具 **✅ 已完成（PM-331）**
+- **PM-G**：圖釘巡察模式 **✅ 已完成（PM-334／335）** —— `patrol_pins` 標出「與上次相比的變化」，`alert_count` 數的是狀態有變（非有問題）的圖釘；另補 `remove_pin` / `clear_pins`。
 
 ### Phase 3：視覺化 ＋ Zone Grid
 - **PM-H**：藍框巡察動畫
@@ -369,6 +374,7 @@ BugEzy Extension
 | 2026-08-16 | **v0.9** | **§3 改為 localhost WebSocket**（與 PM-297~299 的實作一致）：架構圖、安裝方式、延遲 <10ms、不需新權限；附錄 A-3 標為歷史紀錄；修正原稿兩處事實錯誤（WebSocket client 在 `background.ts` 非 `content.ts`；位址是 `127.0.0.1` 非 `localhost`）|
 | 2026-08-16 | **v1.0** | **§13.2 回填 `take_screenshot` 權限實測結論**（三條路都需 `<all_urls>`）＋ FOX 決策（不急上架、1~3 個月維持 v1.1.5）|
 | 2026-08-16 | **v1.1** | **§9 Phase 1 進度更新**：PM-A~D + B2 標為已完成、PM-D2 待辦；bridge 工具總數 11 |
+| 2026-08-17 | **v1.2** | **Phase 2 完工**（圖釘 6 支工具）＋ **Phase 3 視覺化完成**（藍框動畫／狀態顏色／即時面板）；bridge 工具總數 22 |
 
 ---
 

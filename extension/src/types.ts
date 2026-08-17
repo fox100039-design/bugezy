@@ -164,6 +164,11 @@ export type ControlMessage =
   | { type: 'BRIDGE_PIN_ELEMENT'; selector: string; description: string } // PM-330
   | { type: 'BRIDGE_PIN_ANALYZE'; selector: string } // PM-331
   | { type: 'BRIDGE_GET_PIN_RESULTS' } // PM-331
+  | { type: 'BRIDGE_PATROL_PINS' } // PM-334
+  | { type: 'BRIDGE_REMOVE_PIN'; pin_id?: string; selector?: string } // PM-335
+  | { type: 'BRIDGE_CLEAR_PINS'; status?: string } // PM-335
+  | { type: 'BRIDGE_SHOW_PANEL' } // PM-339
+  | { type: 'BRIDGE_HIDE_PANEL' } // PM-339
   | { type: 'START_MONITORING' }
   | { type: 'STOP_MONITORING' }
   // PM-52：通知 content/inject 顯示/隱藏頁面浮動監控 badge

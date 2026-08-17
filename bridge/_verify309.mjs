@@ -21,23 +21,26 @@ const seg = (from, to) => {
 const sensitive = seg('const SENSITIVE_RECT_SELECTORS', '/** PM-186：收集敏感欄位');
 const readPage = seg('const READ_PAGE_MAX_CHARS', '// background → content：控制指令');
 const clickFn = seg('function bridgeClick', '// ── PM-311：type_text');
-const typeFn = seg('const TYPE_TEXT_REJECTED_INPUT_TYPES', '// ── PM-330／331：圖釘系統');
+const typeFn = seg('const TYPE_TEXT_REJECTED_INPUT_TYPES', '// ── PM-339：右下角即時面板');
+const panelFn = seg('interface PanelData {', '// ── PM-337：藍框巡察動畫');
+const hlFn = seg('const HIGHLIGHT_MAX', '// ── PM-330／331：圖釘系統');
 const pinsFn = seg('interface Pin {', '// ── PM-317：get_page_health');
 const healthFn = seg('const HEALTH_UNLABELLED_OK_TYPES', '// ── PM-316：get_web_vitals');
 const vitalsFn = seg('const VITAL_THRESHOLDS', '// ── PM-315：analyze_element');
 const analyzeFn = seg('const ANALYZE_STYLE_PROPS', '// ── PM-309：read_page');
-const js = ts.transpileModule(sensitive + '\n' + clickFn + '\n' + typeFn + '\n' + pinsFn + '\n' + healthFn + '\n' + vitalsFn + '\n' + analyzeFn + '\n' + readPage, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
+const js = ts.transpileModule(sensitive + '\n' + clickFn + '\n' + typeFn + '\n' + panelFn + '\n' + hlFn + '\n' + pinsFn + '\n' + healthFn + '\n' + vitalsFn + '\n' + analyzeFn + '\n' + readPage, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { pretendToBeVisual: true });
 const g = dom.window;
 // content script 在頁面裡有這些全域；沙箱裡要手動接進來
 const run = new Function('window', 'document', 'getComputedStyle', 'Node', 'NodeFilter', 'CSS',
   'HTMLInputElement', 'HTMLTextAreaElement', 'Event', 'InputEvent', 'performance', 'PerformanceObserver',
-  'requestAnimationFrame',
-  js + '\nreturn { extractPageContent, uniqueSelector, ownText, isSensitiveField, bridgeClick, bridgeTypeText, bridgeAnalyzeElement, rateVital, summarizeResources, countInputsWithoutLabel, domMaxDepth, bridgePinElement, bridgePinAnalyze, bridgeGetPinResults };');
+  'requestAnimationFrame', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'CSSStyleSheet',
+  js + '\nreturn { extractPageContent, uniqueSelector, ownText, isSensitiveField, bridgeClick, bridgeTypeText, bridgeAnalyzeElement, rateVital, summarizeResources, countInputsWithoutLabel, domMaxDepth, bridgePinElement, bridgePinAnalyze, bridgeGetPinResults, bridgePatrolPins, bridgeRemovePin, bridgeClearPins, highlightElement, showDebugPanel, hideDebugPanel, PIN_STATUS_COLOR };');
 const api = run(g, g.document, g.getComputedStyle.bind(g), g.Node, g.NodeFilter, g.CSS,
   g.HTMLInputElement, g.HTMLTextAreaElement, g.Event, g.InputEvent, g.performance, g.PerformanceObserver,
-  (cb) => g.setTimeout(cb, 0));
+  (cb) => g.setTimeout(cb, 0),
+  g.setTimeout.bind(g), g.clearTimeout.bind(g), g.setInterval.bind(g), g.clearInterval.bind(g), g.CSSStyleSheet);
 
 const setBody = (html) => { g.document.body.innerHTML = html; };
 
@@ -327,6 +330,95 @@ g.document.getElementById('b1').remove();
 const lst3 = api.bridgeGetPinResults();
 check('🔴 元素消失 → 標為 stale 而非刪除或報錯',
   lst3.pins.find((p) => p.selector === '#b1')?.status === 'stale', JSON.stringify(lst3).slice(0, 240));
+
+console.log('\n=== ⑭ PM-334 patrol_pins ===');
+api.bridgeClearPins('all');
+const emptyPatrol = api.bridgePatrolPins();
+check('334-4 沒有圖釘 → patrolled: 0（不是 error）',
+  !emptyPatrol.error && emptyPatrol.patrolled === 0 && emptyPatrol.alert_count === 0, JSON.stringify(emptyPatrol));
+
+setBody('<button id="p1">一</button><button id="p2">二</button><button id="p3">三</button>');
+api.bridgePinElement('#p1', '圖釘一');
+api.bridgePinElement('#p2', '圖釘二');
+api.bridgePinElement('#p3', '圖釘三');
+const pat1 = api.bridgePatrolPins();
+check('334-1 三個圖釘 → patrolled: 3，每個都有結果',
+  pat1.patrolled === 3 && pat1.results.length === 3 && pat1.results.every((r) => !!r.pin_id && !!r.status), JSON.stringify(pat1).slice(0, 240));
+check('334   巡檢順序按建立時間', pat1.results.map((r) => r.selector).join(',') === '#p1,#p2,#p3', pat1.results.map((r) => r.selector).join(','));
+check('334   每筆都有 previous_status 供判斷惡化/好轉', pat1.results.every((r) => !!r.previous_status), JSON.stringify(pat1.results[0]));
+
+const pat2 = api.bridgePatrolPins();
+check('334-3 無變化 → changed: false', pat2.results.every((r) => r.changed === false) && pat2.alert_count === 0, JSON.stringify(pat2.results.map((r) => r.changed)));
+
+g.document.getElementById('p2').remove();
+const pat3 = api.bridgePatrolPins();
+const gone = pat3.results.find((r) => r.selector === '#p2');
+check('334-2 元素消失 → status stale + changed: true', gone?.status === 'stale' && gone?.changed === true, JSON.stringify(gone));
+check('334   alert_count 只算「有變化」的（不是「有問題」的）', pat3.alert_count === 1, `alert_count=${pat3.alert_count}`);
+check('338-4 summary 含狀態顏色 emoji', /[🟢🟡🔴⚪]/.test(gone?.summary || ''), gone?.summary);
+
+console.log('\n=== ⑮ PM-338 圖釘顏色 ===');
+check('338-1 新建（可見）→ 綠 #00c853', api.PIN_STATUS_COLOR.active === '#00c853', api.PIN_STATUS_COLOR.active);
+check('338-2 warning → 黃 #ffd600', api.PIN_STATUS_COLOR.warning === '#ffd600', api.PIN_STATUS_COLOR.warning);
+check('338-2 error → 紅 #ff1744', api.PIN_STATUS_COLOR.error === '#ff1744', api.PIN_STATUS_COLOR.error);
+check('338-3 stale（元素消失）→ 灰 #9e9e9e', api.PIN_STATUS_COLOR.stale === '#9e9e9e', api.PIN_STATUS_COLOR.stale);
+
+console.log('\n=== ⑯ PM-335 remove_pin / clear_pins ===');
+api.bridgeClearPins('all'); // 前面幾節留下的圖釘不清掉，下面的數量斷言會對不上
+setBody('<button id="r1">一</button><button id="r2">二</button>');
+const rp1 = api.bridgePinElement('#r1', 'A');
+api.bridgePinElement('#r2', 'B');
+const rm = api.bridgeRemovePin(rp1.pin_id);
+check('335-1 用 pin_id 移除 → removed: true', rm.removed === true && rm.pin_id === rp1.pin_id, JSON.stringify(rm));
+check('335-1 覆蓋層標記同步減少', g.document.querySelector('[data-bugezy-pins]')?.children.length === 1, String(g.document.querySelector('[data-bugezy-pins]')?.children.length));
+const rm2 = api.bridgeRemovePin(undefined, '#r2');
+check('335-2 用 selector 移除', rm2.removed === true && rm2.selector === '#r2', JSON.stringify(rm2));
+check('335-3 pin_id 不存在 → error', !!api.bridgeRemovePin('nope-xyz').error, JSON.stringify(api.bridgeRemovePin('nope-xyz')));
+
+api.bridgeClearPins('all');
+setBody('<button id="c1">一</button><button id="c2" style="display:none">二</button>');
+api.bridgePinAnalyze('#c1'); // active
+api.bridgePinAnalyze('#c2'); // warning（不可見）
+const onlyWarn = api.bridgeClearPins('warning');
+check('335-4 依 status 清除 → 只清 warning', onlyWarn.cleared === 1 && onlyWarn.remaining === 1, JSON.stringify(onlyWarn));
+const clearAll = api.bridgeClearPins();
+check('335-5 clear_pins() 全清', clearAll.cleared === 1 && clearAll.remaining === 0, JSON.stringify(clearAll));
+const bogus = api.bridgeClearPins('resolved');
+check("🔴 status 'resolved' → 明確報錯而非靜默清 0 個",
+  !!bogus.error && /resolved/.test(bogus.error) && Array.isArray(bogus.valid_status), JSON.stringify(bogus));
+
+console.log('\n=== ⑰ PM-337 highlightElement ===');
+setBody('<button id="h1">一</button><button id="h2">二</button>');
+const hlLayer = () => g.document.querySelector('[data-bugezy-highlights]');
+// 前面的 pin_element / analyze_element 本來就會高亮（PM-337 的整合），所以看「最新加入的那個」
+const before = hlLayer()?.children.length ?? 0;
+api.highlightElement('#h1', { durationMs: 5000, label: '測試' });
+const newest = () => hlLayer()?.lastChild;
+check('337-1 高亮框已建立', (hlLayer()?.children.length ?? 0) === Math.min(before + 1, 5), `${before} → ${hlLayer()?.children.length}`);
+check('337-3 高亮框位置貼合元素（用 getBoundingClientRect）',
+  newest()?.style.width === '104px', newest()?.style.width);
+check('337   有 label 標籤', newest()?.textContent === '測試', newest()?.textContent);
+check('337   找不到元素 → 靜默略過（不拋錯、不影響呼叫端）', (() => { try { api.highlightElement('#nope-h'); return true; } catch { return false; } })());
+for (let i = 0; i < 8; i++) api.highlightElement('#h2', { durationMs: 5000 });
+check('337-4 超過 5 個同時高亮 → 最舊的自動消失', hlLayer()?.children.length === 5, String(hlLayer()?.children.length));
+
+console.log('\n=== ⑱ PM-339 即時面板 ===');
+const shown = api.showDebugPanel();
+const host = g.document.querySelector('[data-bugezy-panel]');
+check('339-1 面板已注入且用 shadow DOM 隔離', !!host && !!host.shadowRoot, `host=${!!host} shadow=${!!host?.shadowRoot}`);
+check('339-1 預設收合，只顯示 🐛 icon',
+  host?.shadowRoot?.querySelector('.icon')?.textContent === '🐛' && !host.shadowRoot.querySelector('.card'), JSON.stringify(shown));
+host.shadowRoot.querySelector('.icon').dispatchEvent(new g.MouseEvent('click', { bubbles: true }));
+const card = host.shadowRoot.querySelector('.card');
+check('339-2 點擊展開顯示卡片', !!card, 'card 不存在');
+const bodyText = host.shadowRoot.querySelector('.bd')?.textContent || '';
+check('339-2 內容含 Pins / Errors / 效能 / 狀態',
+  /Pins/.test(bodyText) && /Errors/.test(bodyText) && /FCP/.test(bodyText), bodyText.slice(0, 120));
+check('339-3 有 Collapse 與 Close 按鈕', host.shadowRoot.querySelectorAll('.ft button').length === 2, String(host.shadowRoot.querySelectorAll('.ft button').length));
+check('339-3 標題列可拖動（有 mousedown 綁定 + cursor:move）',
+  (host.shadowRoot.querySelector('style')?.textContent || '').includes('cursor:move'));
+api.hideDebugPanel();
+check('339-3 Close → 面板整個移除（DOM 乾淨）', !g.document.querySelector('[data-bugezy-panel]'), '仍存在');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -354,6 +354,72 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     }),
   );
 
+  // ── 工具 21~22：即時面板（PM-339，Phase 3 PM-J）──────────────────────────
+  // 頁面右下角的浮動面板，用 shadow DOM 隔離，顯示圖釘／錯誤／效能的即時狀態。
+  for (const [name, cmd, zh] of [
+    ['show_debug_panel', 'show_debug_panel', '顯示'],
+    ['hide_debug_panel', 'hide_debug_panel', '隱藏'],
+  ] as const) {
+    server.tool(
+      name,
+      `${zh === '顯示' ? 'Show' : 'Hide'} the floating BugEzy debug panel in the bottom-right corner of the page (pins / errors / performance, isolated in a shadow DOM so it cannot clash with the site styles). ${zh}頁面右下角的 BugEzy 即時面板（圖釘／錯誤／效能；以 shadow DOM 隔離，不會與網站樣式互相干擾）。`,
+      { tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。') },
+      gated(async (args) => {
+        const r = await link.send(cmd, { tab_id: args.tab_id });
+        if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
+        return txt(r.data);
+      }),
+    );
+  }
+
+  // ── 工具 18~20：圖釘巡察與清理（PM-334／335，Phase 2 PM-G）────────────────
+  server.tool(
+    'patrol_pins',
+    'Re-check every pin in one call: each is re-analysed, its status updated, and any CHANGE since the last check is flagged. Use alert_count to decide whether anything needs attention — it counts pins whose state changed, not pins that are merely unhealthy. Returns patrolled: 0 (not an error) when there are no pins. 一次巡檢所有圖釘：逐一重新分析、更新狀態，並標出**與上次相比的變化**。`alert_count` 數的是「狀態有變」的圖釘（不是「有問題」的圖釘），適合用來判斷需不需要深入看。沒有圖釘時回 `patrolled: 0`，不是錯誤。',
+    { tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。') },
+    gated(async (args) => {
+      const r = await link.send('patrol_pins', { tab_id: args.tab_id });
+      if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
+      return txt(r.data);
+    }),
+  );
+
+  server.tool(
+    'remove_pin',
+    'Remove one pin by pin_id (preferred) or by selector. 移除單一圖釘：優先用 pin_id，也可用 selector。',
+    {
+      pin_id: z.string().optional().describe('要移除的圖釘 id（優先）。'),
+      selector: z.string().optional().describe('也可改用 selector 指定；pin_id 存在時以 pin_id 為準。'),
+      tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。'),
+    },
+    gated(async (args) => {
+      const r = await link.send('remove_pin', {
+        pin_id: args.pin_id,
+        selector: args.selector,
+        tab_id: args.tab_id,
+      });
+      if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
+      return txt(r.data);
+    }),
+  );
+
+  server.tool(
+    'clear_pins',
+    "Remove pins in bulk, optionally filtered by status. Valid statuses are active / warning / error / stale (there is no 'resolved' — use remove_pin for pins you are done with). 批次清除圖釘，可依狀態篩選。合法狀態為 active／warning／error／stale（**沒有 resolved**，處理完的圖釘請用 remove_pin）。",
+    {
+      status: z
+        .enum(['all', 'active', 'warning', 'error', 'stale'])
+        .optional()
+        .describe("預設 'all'。注意沒有 'resolved' 這個狀態。"),
+      tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。'),
+    },
+    gated(async (args) => {
+      const r = await link.send('clear_pins', { status: args.status, tab_id: args.tab_id });
+      if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
+      return txt(r.data);
+    }),
+  );
+
   // ── 工具 12~14：終端機即時監控（PM-327 / PM-D2）──────────────────────────
   // 走的是 bridge 自己的 child_process，**不經過 Extension**——後端錯誤與瀏覽器無關。
   server.tool(

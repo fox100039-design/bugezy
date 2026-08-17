@@ -117,7 +117,7 @@ details .details-body{padding:4px 18px 18px}
   <div>
     <div class="header-title">BugEzy v2/v3 產品規格書</div>
     <div class="header-sub">From Bug Reporter to AI Debug Partner · FOX + Claude 共同規劃</div>
-    <div class="header-date">📌 v1.0 · 2026-08-16 · Phase 1 實作完成 · §13.2 回填截圖權限實測 · 程式 &gt; ARCHITECTURE.md &gt; 本文</div>
+    <div class="header-date">📌 v1.2 · 2026-08-17 · Phase 1+2 完工 · Phase 3 視覺化完成 · 程式 &gt; ARCHITECTURE.md &gt; 本文</div>
   </div>
 </div>
 
@@ -510,20 +510,25 @@ BugEzy Extension
   </div>
 
   <div class="card">
-    <div class="card-title">Phase 2：圖釘系統</div>
+    <div class="card-title">Phase 2：圖釘系統 <span class="hl-green">✅ 已完成</span></div>
+    <div class="ok-box">
+      <div class="ok-box-title">✅ Phase 2 完工（2026-08-17）：圖釘共 <strong>6 支工具</strong></div>
+      <p><code>pin_element</code> · <code>pin_analyze</code> · <code>get_pin_results</code> · <code>patrol_pins</code> · <code>remove_pin</code> · <code>clear_pins</code></p>
+      <p>圖釘存在 content script、依分頁天然隔離；狀態 <code>active</code> / <code>warning</code> / <code>error</code> / <code>stale</code>（<strong>沒有 <code>resolved</code></strong>）。</p>
+    </div>
     <ul>
-      <li><span class="hl">PM-E</span>：圖釘 UI（content script 注入 + 釘選元素 + 描述）</li>
-      <li><span class="hl">PM-F</span>：pinAnalyze MCP 工具</li>
-      <li><span class="hl">PM-G</span>：圖釘巡察模式（多圖釘順序檢查）</li>
+      <li><span class="hl">PM-E</span>：圖釘 UI（content script 注入 + 釘選元素 + 描述）<span class="hl-green">✅ 已完成（PM-330）</span></li>
+      <li><span class="hl">PM-F</span>：pinAnalyze MCP 工具 <span class="hl-green">✅ 已完成（PM-331）</span></li>
+      <li><span class="hl">PM-G</span>：圖釘巡察模式（多圖釘順序檢查）<span class="hl-green">✅ 已完成（PM-334／335）</span><br><span style="font-size:11px;color:var(--text-dim)"><code>patrol_pins</code> 一次巡檢全部並標出**與上次相比的變化**；<code>alert_count</code> 數的是「狀態有變」而非「有問題」的圖釘。另補 <code>remove_pin</code> / <code>clear_pins</code>。</span></li>
     </ul>
   </div>
 
   <div class="card">
     <div class="card-title">Phase 3：視覺化 ＋ Zone Grid</div>
     <ul>
-      <li><span class="hl">PM-H</span>：藍框巡察動畫</li>
-      <li><span class="hl">PM-I</span>：圖釘狀態顏色</li>
-      <li><span class="hl">PM-J</span>：右下角即時面板</li>
+      <li><span class="hl">PM-H</span>：藍框巡察動畫 <span class="hl-green">✅ 已完成（PM-337）</span><br><span style="font-size:11px;color:var(--text-dim)">純視覺增強、不新增 MCP 工具；已整合進 <code>click_element</code>／<code>analyze_element</code>／<code>pin_element</code>／<code>patrol_pins</code>。同時上限 5 個，先進先出。</span></li>
+      <li><span class="hl">PM-I</span>：圖釘狀態顏色 <span class="hl-green">✅ 已完成（PM-338）</span></li>
+      <li><span class="hl">PM-J</span>：右下角即時面板 <span class="hl-green">✅ 已完成（PM-339）</span><br><span style="font-size:11px;color:var(--text-dim)">shadow DOM 隔離；<code>show_debug_panel</code> / <code>hide_debug_panel</code> 兩支工具可由 AI 控制。</span></li>
       <li><span class="hl-cyan">PM-X</span>：<code>map_page_zones</code> 基礎分區（<a href="#s15" style="color:var(--cyan)">§15</a>）</li>
       <li><span class="hl-cyan">PM-Y</span>：<code>get_zone_health</code> ＋ error 歸類 <span class="hl-red">＝ Zone Grid 的地基，需先換掉 stack-trace 反推做法（§15.3）</span></li>
       <li><span class="hl-cyan">PM-Z</span>：視覺化覆蓋層</li>
@@ -1412,7 +1417,7 @@ AI 自動流程：
 </div>
 
 <div class="footer">
-  BugEzy v2/v3 產品規格書 · v1.0 · 2026-08-16 · FOX + Claude<br>
+  BugEzy v2/v3 產品規格書 · v1.2 · 2026-08-17 · FOX + Claude<br>
   程式 &gt; ARCHITECTURE.md &gt; 本文
 </div>
 

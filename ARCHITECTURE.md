@@ -90,6 +90,16 @@ content.ts（GET_PAGE_INFO / 即時 console 與網路錯誤）→ 目標網頁
 | `pin_element(selector, description, tab_id?)` | 釘選 + 視覺標記；**重複釘同一 selector 會更新而非新增** |
 | `pin_analyze(selector, tab_id?)` | 釘選 + 執行 `analyze_element`，更新狀態與顏色 |
 | `get_pin_results(tab_id?)` | 列出圖釘與最近檢查；無圖釘回**空陣列**不是 error |
+| `patrol_pins(tab_id?)` | 一次巡檢全部圖釘，標出**與上次相比的變化**；`alert_count` 數的是「狀態有變」而非「有問題」 |
+| `remove_pin(pin_id? \| selector?, tab_id?)` | 移除單一圖釘 |
+| `clear_pins(status?, tab_id?)` | 批次清除；狀態只有 `active`/`warning`/`error`/`stale`，**沒有 `resolved`** |
+
+**視覺化（PM-337~339，Phase 3）**：
+
+| 工具／函式 | 用途 |
+|---|---|
+| `highlightElement()`（內部，非 MCP 工具） | 藍色虛線框 + 脈衝；已整合進 `click_element`／`analyze_element`／`pin_element`／`patrol_pins`。同時上限 5 個，先進先出 |
+| `show_debug_panel(tab_id?)` / `hide_debug_panel(tab_id?)` | 右下角浮動面板（圖釘／錯誤／效能），**shadow DOM 隔離** |
 
 **共通約定**：所有分頁相關工具都吃可選 `tab_id`（省略＝當前分頁，見規格書 §13.3）；指到不存在的分頁**明確報錯，絕不默默退回當前分頁**。
 
@@ -98,6 +108,14 @@ content.ts（GET_PAGE_INFO / 即時 console 與網路錯誤）→ 目標網頁
 1. **`tab.url` / `tab.title` 讀不到** —— 需 `tabs` 權限，只有 `activeTab` 時 Chrome **靜默回空字串**（不報錯）。一律改問 content script（PM-298）。
 2. **`captureVisibleTab` 需 `activeTab` 或 `<all_urls>`，而 `activeTab` 只在使用者手勢後授予** —— bridge 呼叫永遠沒有手勢，且**導航會撤銷 `activeTab`**。三條替代路線（切分頁／`chrome.debugger`／獨立視窗）**都繞不開**，門檻不在「分頁可不可見」而在「有沒有使用者手勢」（PM-312 實測）。
 3. **回傳要帶「解讀脈絡」** —— 錯誤只涵蓋 30 秒、FID 未互動時為 `null` 不是 0、資源大小是低估值、事件監聽器空清單不代表沒有處理器、`ready_state` 非 `complete` 時內容可能不完整。**少了這些，AI 會把正確的回傳讀成錯誤的結論。**
+
+#### 圖釘與視覺化的四條（PM-334~339）
+
+- 🔴 **`pin_analyze` 遇到元素消失時，必須把既有圖釘標成 `stale`**，不能只回一個裸錯誤 —— 否則 `patrol_pins` 看到的還是舊的 `active`，等於「元素不見了但沒人發現」。（PM-334 的測試抓到的。）
+- **`alert_count` 數的是「狀態有變」而非「有問題」**：AI 要判斷的是「跟上次比有沒有惡化」，一個一直是 warning 的圖釘不該每次巡檢都觸發警報。
+- **沒有 `resolved` 狀態**（PM-329 已改為 `warning`）。`clear_pins({status:'resolved'})` 會**明確報錯**而不是靜默清 0 個 —— 後者會讓 AI 分不出「沒有符合的」與「這個值根本沒用」。
+- **高亮層與圖釘層分開兩層**：高亮短暫、會自動消失，圖釘常駐；混在同一層時高亮的清除邏輯會把圖釘一起洗掉。高亮層 z-index 比圖釘低一階。
+- **面板用 shadow DOM**：面板注入的是任意使用者的網站，一般 DOM 會被對方的 CSS reset 弄爛，我們的樣式也可能反過來汙染對方頁面。shadow root 是唯一雙向隔離的做法。
 
 #### 終端機監控的三個約定（PM-327）
 

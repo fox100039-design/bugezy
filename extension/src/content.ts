@@ -274,6 +274,8 @@ function bridgeClick(selector: string): Record<string, unknown> {
     return { error: `元素「${selector}」（<${tag}>）沒有 click() 方法，無法點擊`, tag, text };
   }
 
+  // PM-337：點擊前閃一下，讓使用者看得到 AI 點了哪裡
+  highlightElement(selector, { durationMs: 500, label: '點擊' });
   (el as HTMLElement).click();
   return { clicked: true, tag, text };
 }
@@ -381,6 +383,289 @@ function bridgeTypeText(selector: string, text: string): Record<string, unknown>
   };
 }
 
+// ── PM-339：右下角即時面板 ─────────────────────────────────────────────────
+//
+// 用 **shadow DOM** 隔離：面板注入的是任意使用者的網站，若用一般 DOM，
+// 對方的 CSS（`div{...}`、`* { box-sizing }`、reset）會把面板樣式弄爛，
+// 而我們的樣式也可能反過來影響對方頁面。shadow root 是唯一能雙向隔離的做法。
+
+interface PanelData {
+  pins: { total: number; byStatus: Record<string, number> };
+  errors: number | null;
+  lcp: { ms: number; rating: string } | null;
+  monitoring: boolean;
+}
+
+let panelHost: HTMLElement | null = null;
+let panelRoot: ShadowRoot | null = null;
+let panelExpanded = false;
+let panelTimer: number | undefined;
+let panelPos = { right: 16, bottom: 16 };
+
+function collectPanelData(): PanelData {
+  const byStatus: Record<string, number> = {};
+  for (const p of pins.values()) byStatus[p.status] = (byStatus[p.status] ?? 0) + 1;
+  const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+  const fcp = performance.getEntriesByType('paint').find((x) => x.name === 'first-contentful-paint');
+  // 面板不主動去要 LCP（那要 async observer），改用同步就拿得到的 FCP 當近似，並標明
+  const ms = fcp ? Math.round(fcp.startTime) : nav ? Math.round(nav.responseStart) : 0;
+  return {
+    pins: { total: pins.size, byStatus },
+    errors: lastPanelErrorCount,
+    lcp: ms ? { ms, rating: rateVital('FCP', ms) } : null,
+    monitoring: pins.size > 0,
+  };
+}
+
+/** 由 get_browser_errors / get_page_health 呼叫後更新，面板不自己去抓（避免每 10 秒打擾 inject）。 */
+let lastPanelErrorCount: number | null = null;
+
+function renderPanel(): void {
+  if (!panelRoot) return;
+  const d = collectPanelData();
+  while (panelRoot.firstChild) panelRoot.removeChild(panelRoot.firstChild);
+
+  const style = document.createElement('style');
+  style.textContent = `
+    :host{all:initial}
+    .wrap{position:fixed;right:${panelPos.right}px;bottom:${panelPos.bottom}px;z-index:2147483647;
+      font:12px/1.6 system-ui,-apple-system,"Microsoft JhengHei",sans-serif;color:#e6e6e6}
+    .icon{width:36px;height:36px;border-radius:50%;background:#1a1a2e;border:1px solid #7c3aed;
+      display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;
+      box-shadow:0 2px 10px rgba(0,0,0,.45)}
+    .card{width:210px;background:#12121f;border:1px solid #7c3aed;border-radius:10px;
+      box-shadow:0 4px 20px rgba(0,0,0,.5);overflow:hidden}
+    .hd{display:flex;align-items:center;gap:6px;padding:8px 10px;background:#1a1a2e;
+      cursor:move;user-select:none;font-weight:700}
+    .hd .sp{flex:1}
+    .bd{padding:8px 10px}
+    .row{display:flex;justify-content:space-between;padding:2px 0}
+    .dim{color:#8b8b9e}
+    .ft{display:flex;gap:6px;padding:6px 10px;border-top:1px solid #2a2a3e}
+    button{flex:1;background:#232338;color:#c4b5fd;border:1px solid #3a3a52;border-radius:6px;
+      padding:3px 0;font-size:11px;cursor:pointer;font-family:inherit}
+    button:hover{background:#2d2d47}
+  `;
+  panelRoot.appendChild(style);
+
+  const wrap = document.createElement('div');
+  wrap.className = 'wrap';
+
+  if (!panelExpanded) {
+    const icon = document.createElement('div');
+    icon.className = 'icon';
+    icon.textContent = '🐛';
+    icon.title = 'BugEzy Debug — 點擊展開';
+    icon.addEventListener('click', () => {
+      panelExpanded = true;
+      renderPanel();
+    });
+    wrap.appendChild(icon);
+    panelRoot.appendChild(wrap);
+    return;
+  }
+
+  const card = document.createElement('div');
+  card.className = 'card';
+
+  const hd = document.createElement('div');
+  hd.className = 'hd';
+  const t1 = document.createElement('span');
+  t1.textContent = '🐛 BugEzy Debug';
+  const sp = document.createElement('span');
+  sp.className = 'sp';
+  hd.append(t1, sp);
+  // 拖動：改的是 right/bottom（面板釘在右下角，用 left/top 會在 resize 後跑掉）
+  hd.addEventListener('mousedown', (e) => {
+    const sx = e.clientX;
+    const sy = e.clientY;
+    const r0 = panelPos.right;
+    const b0 = panelPos.bottom;
+    const move = (ev: MouseEvent) => {
+      panelPos = {
+        right: Math.max(0, r0 - (ev.clientX - sx)),
+        bottom: Math.max(0, b0 - (ev.clientY - sy)),
+      };
+      const w = panelRoot?.querySelector('.wrap') as HTMLElement | null;
+      if (w) {
+        w.style.right = `${panelPos.right}px`;
+        w.style.bottom = `${panelPos.bottom}px`;
+      }
+    };
+    const up = () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  });
+
+  const bd = document.createElement('div');
+  bd.className = 'bd';
+  const addRow = (label: string, value: string) => {
+    const row = document.createElement('div');
+    row.className = 'row';
+    const a = document.createElement('span');
+    a.textContent = label;
+    const b = document.createElement('span');
+    b.className = 'dim';
+    b.textContent = value;
+    row.append(a, b);
+    bd.appendChild(row);
+  };
+  const pinBits = Object.entries(d.pins.byStatus)
+    .map(([k, n]) => `${PIN_STATUS_EMOJI[k as Pin['status']] ?? ''}${n}`)
+    .join(' ');
+  addRow('📍 Pins', d.pins.total ? `${d.pins.total} (${pinBits})` : '0');
+  addRow('❌ Errors', d.errors === null ? '未查詢' : String(d.errors));
+  addRow('⚡ FCP', d.lcp ? `${(d.lcp.ms / 1000).toFixed(1)}s (${d.lcp.rating})` : '—');
+  addRow('🕐 狀態', d.monitoring ? '監控中' : '待命');
+
+  const ft = document.createElement('div');
+  ft.className = 'ft';
+  const bCollapse = document.createElement('button');
+  bCollapse.textContent = 'Collapse';
+  bCollapse.addEventListener('click', () => {
+    panelExpanded = false;
+    renderPanel();
+  });
+  const bClose = document.createElement('button');
+  bClose.textContent = 'Close';
+  bClose.addEventListener('click', () => hideDebugPanel());
+  ft.append(bCollapse, bClose);
+
+  card.append(hd, bd, ft);
+  wrap.appendChild(card);
+  panelRoot.appendChild(wrap);
+}
+
+function showDebugPanel(): Record<string, unknown> {
+  if (!panelHost || !panelHost.isConnected) {
+    panelHost = document.createElement('div');
+    panelHost.setAttribute('data-bugezy-panel', '1');
+    document.documentElement.appendChild(panelHost);
+    panelRoot = panelHost.attachShadow({ mode: 'open' });
+  }
+  renderPanel();
+  if (panelTimer === undefined) {
+    panelTimer = setInterval(renderPanel, 10_000) as unknown as number; // 每 10 秒更新
+  }
+  return { panel: 'shown', expanded: panelExpanded };
+}
+
+function hideDebugPanel(): Record<string, unknown> {
+  if (panelTimer !== undefined) {
+    clearInterval(panelTimer);
+    panelTimer = undefined;
+  }
+  panelHost?.remove();
+  panelHost = null;
+  panelRoot = null;
+  return { panel: 'hidden' };
+}
+
+// ── PM-337：藍框巡察動畫（highlightElement）────────────────────────────────
+//
+// 純視覺增強，**不新增 MCP 工具**：讓使用者看得到「AI 現在在看哪個元素」。
+// 與圖釘覆蓋層分開兩層 —— 高亮是短暫的、會自動消失，圖釘是常駐的，
+// 混在同一層會讓高亮的清除邏輯把圖釘一起洗掉。
+
+const HIGHLIGHT_MAX = 5; // 同時最多 5 個，超過先進先出
+const HIGHLIGHT_COLOR = '#00bfff';
+let highlightLayer: HTMLElement | null = null;
+const activeHighlights: Array<{ el: HTMLElement; timer: number }> = [];
+
+function ensureHighlightLayer(): HTMLElement {
+  if (highlightLayer && highlightLayer.isConnected) return highlightLayer;
+  const el = document.createElement('div');
+  el.setAttribute('data-bugezy-highlights', '1');
+  Object.assign(el.style, {
+    position: 'fixed',
+    inset: '0',
+    zIndex: '2147483645', // 比圖釘層低一階，圖釘要蓋在高亮之上
+    pointerEvents: 'none',
+  } as CSSStyleDeclaration);
+  document.documentElement.appendChild(el);
+  // 脈衝動畫用 CSSStyleSheet 而非注入 <style> 字串（Trusted Types 網站會擋字串）
+  try {
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(
+      '@keyframes bugezy-pulse{0%,100%{opacity:1}50%{opacity:.35}}' +
+        '.bugezy-hl{animation:bugezy-pulse 0.8s ease-in-out infinite}',
+    );
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+  } catch {
+    /* 舊瀏覽器不支援 adoptedStyleSheets → 沒有脈衝動畫，但框仍在 */
+  }
+  highlightLayer = el;
+  return el;
+}
+
+function dropHighlight(entry: { el: HTMLElement; timer: number }): void {
+  clearTimeout(entry.timer);
+  entry.el.remove();
+  const i = activeHighlights.indexOf(entry);
+  if (i >= 0) activeHighlights.splice(i, 1);
+}
+
+/**
+ * 在元素上畫一個藍色虛線框。找不到元素時**靜默略過** ——
+ * 這是純視覺功能，不該讓它的失敗影響到呼叫端真正的工作。
+ */
+function highlightElement(
+  selector: string,
+  opts: { durationMs?: number; color?: string; label?: string } = {},
+): void {
+  let target: Element | null;
+  try {
+    target = document.querySelector(selector);
+  } catch {
+    return;
+  }
+  if (!target) return;
+  const r = target.getBoundingClientRect();
+  if (r.width === 0 && r.height === 0) return;
+
+  const layer = ensureHighlightLayer();
+  const box = document.createElement('div');
+  box.className = 'bugezy-hl';
+  Object.assign(box.style, {
+    position: 'absolute',
+    left: `${r.left - 2}px`,
+    top: `${r.top - 2}px`,
+    width: `${r.width + 4}px`,
+    height: `${r.height + 4}px`,
+    border: `2px dashed ${opts.color || HIGHLIGHT_COLOR}`,
+    borderRadius: '4px',
+    boxSizing: 'border-box',
+    pointerEvents: 'none',
+  } as CSSStyleDeclaration);
+
+  if (opts.label) {
+    const tag = document.createElement('div');
+    tag.textContent = opts.label; // textContent 而非 innerHTML
+    Object.assign(tag.style, {
+      position: 'absolute',
+      left: '0',
+      top: '-20px',
+      padding: '1px 6px',
+      background: opts.color || HIGHLIGHT_COLOR,
+      color: '#fff',
+      fontSize: '11px',
+      borderRadius: '3px',
+      whiteSpace: 'nowrap',
+    } as CSSStyleDeclaration);
+    box.appendChild(tag);
+  }
+  layer.appendChild(box);
+
+  const entry = { el: box, timer: 0 };
+  entry.timer = setTimeout(() => dropHighlight(entry), opts.durationMs ?? 2000) as unknown as number;
+  activeHighlights.push(entry);
+  // 超過上限 → 最舊的先消失
+  while (activeHighlights.length > HIGHLIGHT_MAX) dropHighlight(activeHighlights[0]);
+}
+
 // ── PM-330／331：圖釘系統（依 PM-329 設計）──────────────────────────────────
 //
 // 圖釘存在 **content script 的模組變數**裡：content script 本來就每個分頁一份，
@@ -405,11 +690,21 @@ let pinSeq = 0;
 let pinLayer: HTMLElement | null = null;
 let pinRepositionQueued = false;
 
+// PM-338：圖釘狀態顏色系統。
+//   卡片的色表列了 `resolved → 淡綠`，但 **`resolved` 在目前的模型裡不存在**
+//   （PM-329 已把它換成 `warning`），所以這裡對應的是實際會出現的四種狀態。
 const PIN_STATUS_COLOR: Record<Pin['status'], string> = {
-  active: '#22c55e',
-  warning: '#eab308',
-  error: '#ef4444',
-  stale: '#6b7280',
+  active: '#00c853', // 正常
+  warning: '#ffd600', // 有警告（不可見／尺寸 0／disabled）
+  error: '#ff1744', // 有錯誤
+  stale: '#9e9e9e', // 元素已從 DOM 消失
+};
+/** 給 AI 掃讀用的狀態符號（patrol_pins 的 summary 前綴）。 */
+const PIN_STATUS_EMOJI: Record<Pin['status'], string> = {
+  active: '🟢',
+  warning: '🟡',
+  error: '🔴',
+  stale: '⚪',
 };
 
 /** 建立（或取得）覆蓋層容器。**一律用 DOM API，不用 innerHTML** —— Trusted Types 網站會擋掉字串賦值（PM-69）。 */
@@ -509,6 +804,7 @@ function bridgePinElement(selector: string, description: string): Record<string,
   };
   if (typeof description === 'string' && description) pin.description = description;
   pins.set(pin.id, pin);
+  highlightElement(selector, { durationMs: 1000, label: '📌 釘選' }); // PM-337
   queueReposition();
 
   return {
@@ -523,9 +819,26 @@ function bridgePinElement(selector: string, description: string): Record<string,
 }
 
 function bridgePinAnalyze(selector: string): Record<string, unknown> {
+  const existingPin = findPinBySelector(selector);
   // 先確保有圖釘（沒有就自動建立）
   const pinned = bridgePinElement(selector, '');
-  if (typeof pinned.error === 'string') return pinned;
+  if (typeof pinned.error === 'string') {
+    // 🔴 元素找不到時，**已存在的圖釘要標成 stale**，不能只回一個裸錯誤就走。
+    //    否則巡檢（patrol_pins）看到的還是舊的 active，等於「元素消失了但沒人發現」。
+    //    （這個洞是 PM-334 的測試抓到的：移除元素後巡檢仍回 status: 'active'、changed: false。）
+    if (existingPin) {
+      existingPin.status = 'stale';
+      existingPin.last_check = { at: Date.now(), summary: '元素已從頁面消失' };
+      queueReposition();
+      return {
+        pin_id: existingPin.id,
+        selector,
+        status: 'stale',
+        summary: existingPin.last_check.summary,
+      };
+    }
+    return pinned;
+  }
   const pin = pins.get(String(pinned.pin_id));
   if (!pin) return { error: '建立圖釘失敗' };
   if (!pin.description) pin.description = 'pin_analyze 自動建立';
@@ -554,6 +867,98 @@ function bridgePinAnalyze(selector: string): Record<string, unknown> {
   queueReposition();
 
   return { pin_id: pin.id, selector, status: pin.status, summary: pin.last_check.summary, analysis };
+}
+
+/**
+ * PM-334：巡檢所有圖釘。逐一跑 `analyze_element` 的邏輯，比對上次結果、回報變化。
+ *
+ * 巡檢順序**按建立時間**（先釘的先巡）—— Map 的插入順序剛好就是建立順序，
+ * 但為了不依賴這個隱含性質，明確用 `created_at` 排序。
+ */
+function bridgePatrolPins(): Record<string, unknown> {
+  const ordered = [...pins.values()].sort((a, b) => a.created_at - b.created_at);
+  const results = ordered.map((pin) => {
+    const previous_status = pin.status;
+    const prevSummary = pin.last_check?.summary ?? null;
+    // 複用 pin_analyze 的分析路徑（它本身又複用 bridgeAnalyzeElement），不另寫一套判定
+    //（bridgePinAnalyze → bridgeAnalyzeElement 內已含 PM-337 的高亮，巡檢時會依序閃過每個圖釘）
+    bridgePinAnalyze(pin.selector);
+    const changed = pin.status !== previous_status || pin.last_check?.summary !== prevSummary;
+    let summary: string;
+    if (pin.status === 'stale') {
+      summary = previous_status === 'stale' ? '元素仍不存在' : `元素已消失（${previous_status} → stale）`;
+    } else if (changed) {
+      summary = `${previous_status} → ${pin.status}：${pin.last_check?.summary ?? ''}`;
+    } else {
+      summary = pin.last_check?.summary ?? '無變化';
+    }
+    return {
+      pin_id: pin.id,
+      selector: pin.selector,
+      description: pin.description,
+      status: pin.status,
+      previous_status,
+      changed,
+      // PM-338：狀態顏色 emoji，讓 AI 掃一眼就知道輕重
+      summary: `${PIN_STATUS_EMOJI[pin.status]} ${summary}`,
+    };
+  });
+  queueReposition();
+  return {
+    patrolled: results.length,
+    results,
+    alert_count: results.filter((r) => r.changed).length,
+    ...(results.length === 0
+      ? { note: '這個分頁目前沒有任何圖釘。用 pin_element 或 pin_analyze 建立後再巡檢。' }
+      : {}),
+  };
+}
+
+/** PM-335：移除單一圖釘（pin_id 優先，其次 selector）。 */
+function bridgeRemovePin(pinId?: string, selector?: string): Record<string, unknown> {
+  const pin = pinId ? pins.get(pinId) : selector ? findPinBySelector(selector) : undefined;
+  if (!pin) {
+    return {
+      error: pinId
+        ? `找不到圖釘 ${pinId}`
+        : selector
+          ? `找不到釘在「${selector}」的圖釘`
+          : '需要提供 pin_id 或 selector 其中之一',
+      available: [...pins.values()].map((p) => ({ pin_id: p.id, selector: p.selector })),
+    };
+  }
+  pins.delete(pin.id);
+  queueReposition(); // 重畫覆蓋層 → 該圖釘的圓點隨之消失
+  return { removed: true, pin_id: pin.id, selector: pin.selector, remaining: pins.size };
+}
+
+/**
+ * PM-335：批次清除圖釘。
+ *
+ * ⚠ 卡片的 status enum 寫 `'all' | 'resolved' | 'stale'`，但 **`resolved` 在目前的模型裡不存在**——
+ *   PM-329 已把它換成 `warning`（`resolved` 當時沒有任何程式路徑會去設定它）。
+ *   若照字面接受 `resolved`，會得到一個**永遠篩不到東西的過濾器**：AI 呼叫後拿到
+ *   `cleared: 0`，卻無從得知是「沒有符合的」還是「這個值根本沒用」。
+ *   所以這裡收的是**實際存在的狀態**，並在傳入 `resolved` 時明確告知。
+ */
+function bridgeClearPins(status?: string): Record<string, unknown> {
+  const target = status || 'all';
+  const VALID = ['all', 'active', 'warning', 'error', 'stale'];
+  if (target === 'resolved') {
+    return {
+      error:
+        "目前的圖釘狀態沒有 'resolved'（PM-329 已改為 active / warning / error / stale）。" +
+        "要清掉已處理的圖釘請用 remove_pin，或改用 status: 'active'。",
+      valid_status: VALID,
+    };
+  }
+  if (!VALID.includes(target)) {
+    return { error: `不支援的 status：${target}`, valid_status: VALID };
+  }
+  const doomed = [...pins.values()].filter((p) => target === 'all' || p.status === target);
+  for (const p of doomed) pins.delete(p.id);
+  queueReposition();
+  return { cleared: doomed.length, status: target, remaining: pins.size };
 }
 
 function bridgeGetPinResults(): Record<string, unknown> {
@@ -887,6 +1292,7 @@ function bridgeAnalyzeElement(selector: string): Record<string, unknown> {
 
   const tag = el.tagName.toLowerCase();
   const sensitive = isSensitiveField(el);
+  highlightElement(selector, { durationMs: 2000, label: '分析中' }); // PM-337
 
   // 屬性：白名單 + aria-* / data-*，並對敏感欄位的值遮蔽
   const attributes: Record<string, string> = {};
@@ -1203,6 +1609,16 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
     sendResponse(bridgePinElement(msg.selector, msg.description));
   } else if (msg.type === 'BRIDGE_PIN_ANALYZE') {
     sendResponse(bridgePinAnalyze(msg.selector));
+  } else if (msg.type === 'BRIDGE_SHOW_PANEL') {
+    sendResponse(showDebugPanel());
+  } else if (msg.type === 'BRIDGE_HIDE_PANEL') {
+    sendResponse(hideDebugPanel());
+  } else if (msg.type === 'BRIDGE_PATROL_PINS') {
+    sendResponse(bridgePatrolPins());
+  } else if (msg.type === 'BRIDGE_REMOVE_PIN') {
+    sendResponse(bridgeRemovePin(msg.pin_id, msg.selector));
+  } else if (msg.type === 'BRIDGE_CLEAR_PINS') {
+    sendResponse(bridgeClearPins(msg.status));
   } else if (msg.type === 'BRIDGE_GET_PIN_RESULTS') {
     sendResponse(bridgeGetPinResults());
   } else if (msg.type === 'BRIDGE_GET_PAGE_HEALTH') {
@@ -1214,7 +1630,10 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
   } else if (msg.type === 'BRIDGE_GET_BROWSER_ERRORS') {
     // PM-313：**沿用 inject.ts 既有的攔截機制**（PM-51 的通道），不另外掛一套。
     //   inject 在 document_start 就開始收，不需要先按錄製。
-    void queryInjectLiveErrors().then(({ consoleLogs, networkErrors }) =>
+    void queryInjectLiveErrors().then(({ consoleLogs, networkErrors }) => {
+      // PM-339：順手把錯誤數餵給面板（面板不自己去打擾 inject）
+      lastPanelErrorCount =
+        consoleLogs.filter((c) => c.level !== 'info').length + networkErrors.length;
       sendResponse({
         console_errors: consoleLogs
           // 'info' 是 Web Vitals 之類的中性訊息，產品內部本來就「不計入即時監控錯誤數」，
@@ -1235,8 +1654,8 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
           timestamp: n.timestamp,
           duration: n.duration,
         })),
-      }),
-    );
+      });
+    });
   } else if (msg.type === 'BRIDGE_READ_PAGE') {
     const { content, truncated } = extractPageContent();
     sendResponse({

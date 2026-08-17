@@ -1,5 +1,21 @@
 # BugEzy Changelog
 
+## 2026-08-17（Phase 2 完工 + Phase 3 視覺化）
+
+**PM-334~339**：bridge 工具總數 **17 → 22**（11 瀏覽器 + 3 終端機 + **6 圖釘** + **2 面板**）。jsdom 真實 DOM 驗證 **115 項 0 failed**。
+
+- **PM-334** `patrol_pins`：一次巡檢全部圖釘並標出**與上次相比的變化**。
+  🔴 **測試抓到真 bug**：`pin_analyze` 在元素消失時只回一個裸錯誤、**沒有把既有圖釘標成 `stale`** —— 巡檢看到的還是舊的 `active`、`changed: false`，等於「元素不見了但沒人發現」。已修。
+  另：`alert_count` 數的是**狀態有變**而非「有問題」的圖釘 —— 一個一直 warning 的圖釘不該每次巡檢都觸發警報。
+- **PM-335** `remove_pin` / `clear_pins`。
+  🔴 **卡片的 `status: 'resolved'` 在目前模型裡不存在**（PM-329 已改為 `warning`，`resolved` 當時沒有任何路徑會設定它）。照字面接受會得到一個**永遠篩不到東西的過濾器**：AI 拿到 `cleared: 0` 卻無從得知是「沒有符合的」還是「這個值根本沒用」。改為**明確報錯並列出合法值**。
+- **PM-336** Phase 2 收工（規格書 §9 Phase 2/3 標 ✅、CHANGELOG、ARCHITECTURE）。
+- **PM-337** 藍框巡察動畫（純視覺，不新增 MCP 工具）：已整合進 `click_element`（0.5s）／`analyze_element`（2s）／`pin_element`（1s）／`patrol_pins`（依序）。同時上限 5 個先進先出；**動畫用 `CSSStyleSheet` 而非注入 `<style>` 字串**（Trusted Types 網站會擋）；**找不到元素時靜默略過** —— 純視覺功能不該讓它的失敗影響呼叫端真正的工作。
+- **PM-338** 圖釘狀態顏色（綠 `#00c853` / 黃 `#ffd600` / 紅 `#ff1744` / 灰 `#9e9e9e`）+ `patrol_pins` 的 summary 加狀態 emoji。卡片色表列的 `resolved → 淡綠`同樣因為該狀態不存在而未實作。
+- **PM-339** 右下角即時面板：**shadow DOM 隔離**（注入的是任意使用者的網站，一般 DOM 會被對方 CSS reset 弄爛，我們的樣式也可能反向汙染）；預設收合、可展開／拖動／關閉；每 10 秒更新；`show_debug_panel` / `hide_debug_panel` 兩支工具供 AI 控制。
+
+> **待 FOX**：① **重新載入擴充功能**（`npm run build:dev` 產物已備妥）② **重連 MCP** —— 目前 port 19850 由本 session 的 MCP server（舊版 17 支）占用，新工具的端到端因此尚未執行。
+
 ## 2026-08-16（Phase 2 圖釘 + PM-D2 終端機）
 
 **PM-326~332**：bridge 工具總數 **11 → 17**（11 瀏覽器 + 3 終端機 + 3 圖釘）。全套回歸 **216 項 0 failed**（`_verify_phase1` 111 + `_verify309` 84 + `_verify327` 21）。server 已 deploy（Version `b5529590`）。

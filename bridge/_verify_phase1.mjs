@@ -139,7 +139,7 @@ proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initial
 
 console.log('\n=== ② MCP 工具註冊 ===');
 const tools = (await rpc('tools/list', {})).result.tools;
-check('工具總數 17（11 瀏覽器 + 3 終端機 + 3 圖釘）', tools.length === 17, tools.map((t) => t.name).join(','));
+check('工具總數 22（11 瀏覽器 + 3 終端機 + 6 圖釘 + 2 面板）', tools.length === 22, tools.map((t) => t.name).join(','));
 for (const [name, req, opt] of [['navigate_to', 'url', 'tab_id'], ['click_element', 'selector', 'tab_id']]) {
   const t = tools.find((x) => x.name === name);
   check(`${name} 已註冊`, !!t, tools.map((x) => x.name).join(','));
@@ -335,6 +335,26 @@ if (/port 19850 被占用/.test(stderr)) {
         check('331-2 清單含狀態與 last_check',
           after.pins?.[0]?.status === an.status && !!after.pins?.[0]?.last_check, JSON.stringify(after).slice(0, 240));
       }
+      // ── PM-334／335 巡檢與清理端到端 ──
+      const pat = await call('patrol_pins', { tab_id: r1.tab_id });
+      console.log('    patrol_pins →', JSON.stringify(pat).slice(0, 240));
+      check('334-1 巡檢回 patrolled + results + alert_count',
+        typeof pat.patrolled === 'number' && Array.isArray(pat.results) && typeof pat.alert_count === 'number', JSON.stringify(pat).slice(0, 200));
+      check('338-4 summary 含狀態顏色 emoji', pat.results.every((r) => /[🟢🟡🔴⚪]/.test(r.summary || '')), JSON.stringify(pat.results?.[0]));
+      check('334   每筆有 previous_status / changed', pat.results.every((r) => 'previous_status' in r && 'changed' in r), JSON.stringify(pat.results?.[0]));
+
+      const badClear = await call('clear_pins', { status: 'resolved', tab_id: r1.tab_id });
+      check("335 status 'resolved' → 明確報錯（不靜默清 0 個）", !!badClear.error && /resolved/.test(String(badClear.error)), JSON.stringify(badClear).slice(0, 200));
+
+      // ── PM-339 面板端到端 ──
+      const panelOn = await call('show_debug_panel', { tab_id: r1.tab_id });
+      check('339-1 show_debug_panel 生效', panelOn.panel === 'shown', JSON.stringify(panelOn));
+      const panelOff = await call('hide_debug_panel', { tab_id: r1.tab_id });
+      check('339-3 hide_debug_panel 生效', panelOff.panel === 'hidden', JSON.stringify(panelOff));
+
+      const cleared = await call('clear_pins', { tab_id: r1.tab_id });
+      check('335-5 clear_pins() 全清', typeof cleared.cleared === 'number' && cleared.remaining === 0, JSON.stringify(cleared));
+
       const badPin = await call('pin_element', { selector: '#nope-pin-330', description: 'x', tab_id: r1.tab_id });
       check('330-4 元素不存在 → error 含 selector', !!badPin.error && String(badPin.error).includes('#nope-pin-330'), JSON.stringify(badPin).slice(0, 200));
 
