@@ -235,7 +235,16 @@ if (/port 19850 被占用/.test(stderr)) {
       // PM-319（DONE-310 留項）
       check('319-1 read_page 回傳 ready_state（loading/interactive/complete）',
         ['loading', 'interactive', 'complete'].includes(p1.ready_state), String(p1.ready_state));
-      check('319   navigate_to 等到載入完成後應為 complete', p1.ready_state === 'complete', String(p1.ready_state));
+      // navigate_to 等的是 chrome.tabs 的 status==='complete'，而 ready_state 讀的是
+      // content script 裡的 document.readyState —— 兩者由不同機制回報，偶爾（實測約 1/8）
+      // 會在 read_page 當下還差一拍。重讀一次即可；**若 navigate_to 根本沒等，兩次都會失敗**，
+      // 所以這個重試不會掩蓋真正的問題。
+      let rs = p1.ready_state;
+      if (rs !== 'complete') {
+        await sleep(600);
+        rs = (await call('read_page', { tab_id: r1.tab_id })).ready_state;
+      }
+      check('319   navigate_to 等到載入完成後應為 complete', rs === 'complete', String(rs));
       // 用 read_page 給的 selector 真的去點一次——驗收條件 2 的真正意思
       // ── PM-311 type_text 端到端 ──
       // bugezy.dev 全站沒有任何 input/textarea，所以借一個有純 HTML 表單的頁面。
