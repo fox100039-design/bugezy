@@ -29,6 +29,7 @@ import {
   memoryAudit, memoryPerfCheck, memoryBizValidate,
   memoryUpdate, memoryDelete, memoryList, memoryClear,
   memoryExport, memoryImport, memoryStats,
+  MAX_TOPIC_LEN, MAX_CONTENT_LEN, MAX_TAGS,
 } from './memory-ops.js';
 import { tierGateReject, autoDetectTier, TOOL_TIER_MAP } from './tier-gate.js';
 
@@ -755,9 +756,9 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     {
       layer: LAYER_ENUM.describe(LAYER_DESC),
       entry: z.object({
-        topic: z.string().min(1).describe('主題／關鍵字，越具體越容易被 memory_get 精準取回。'),
-        content: z.string().min(1).describe('記憶內容。L7 效能基準請寫成 "200 ms" 或 {"value":200,"unit":"ms"} 以便自動比對。'),
-        tags: z.array(z.string()).optional().describe('標籤，搜尋時權重 ×2。L6／L4 的規則可加 "regex:<樣式>" 讓 memory_audit／memory_biz_validate 能機器逐條檢查。'),
+        topic: z.string().min(1).max(MAX_TOPIC_LEN).describe('主題／關鍵字，越具體越容易被 memory_get 精準取回。'),
+        content: z.string().min(1).max(MAX_CONTENT_LEN).describe('記憶內容。L7 效能基準請寫成 "200 ms" 或 {"value":200,"unit":"ms"} 以便自動比對。'),
+        tags: z.array(z.string().max(MAX_TOPIC_LEN)).max(MAX_TAGS).optional().describe('標籤，搜尋時權重 ×2。L6／L4 的規則可加 "regex:<樣式>" 讓 memory_audit／memory_biz_validate 能機器逐條檢查。'),
       }),
     },
     gated('memory_save', async (args) => {
@@ -850,9 +851,9 @@ export function createMcpServer(link: ExtensionLink): McpServer {
       layer: LAYER_ENUM.describe(LAYER_DESC),
       id: z.string().min(1).describe('要更新的記憶 id，可用 memory_list 取得。'),
       entry: z.object({
-        topic: z.string().optional(),
-        content: z.string().optional(),
-        tags: z.array(z.string()).optional(),
+        topic: z.string().max(MAX_TOPIC_LEN).optional(),
+        content: z.string().max(MAX_CONTENT_LEN).optional(),
+        tags: z.array(z.string().max(MAX_TOPIC_LEN)).max(MAX_TAGS).optional(),
       }).describe('只帶要改的欄位；沒帶的保持原樣。'),
     },
     gated('memory_update', async (args) => {

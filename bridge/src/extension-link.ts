@@ -49,7 +49,25 @@ export class ExtensionLink {
 
   start(port = BRIDGE_PORT): Promise<void> {
     return new Promise((resolve, reject) => {
-      const wss = new WebSocketServer({ host: '127.0.0.1', port });
+      // PM-366（P0）：**Origin 驗證**。`ws://127.0.0.1` 被瀏覽器視為 potentially trustworthy，
+      // 不受 mixed-content 阻擋 —— 也就是說**任何使用者造訪的網站，其 JS 都能直接連上這個 port**。
+      // 而下方的連線處理會「以新連線取代舊連線」，所以一個惡意頁面可以：
+      //   ① 把真正的 Extension 踢掉（阻斷服務）
+      //   ② 冒充 Extension，餵給 AI 捏造的頁面內容與錯誤
+      // 瀏覽器對 WebSocket **一律**會送 Origin 且頁面無法竄改，因此擋掉「Origin 是網頁來源」
+      // 就能封住這條路。沒有 Origin 的連線（本機 CLI／測試工具）放行 —— 本機程式本來就能
+      // 偽造任何 header，擋它沒有意義，那是另一個層級的問題（見 DONE-365）。
+      const wss = new WebSocketServer({
+        host: '127.0.0.1',
+        port,
+        verifyClient: (info, done) => {
+          const origin = info.origin || info.req.headers.origin || '';
+          if (!origin) return done(true);
+          if (/^(chrome-extension|moz-extension|safari-web-extension):\/\//.test(origin)) return done(true);
+          log(`⛔ 拒絕來自 ${origin} 的連線（只接受擴充功能）`);
+          done(false, 403, 'Forbidden origin');
+        },
+      });
       this.wss = wss;
 
       wss.on('listening', () => {

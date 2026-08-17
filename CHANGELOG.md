@@ -1,5 +1,17 @@
 # BugEzy Changelog
 
+## 2026-08-17（安全盤點 + 修復）
+
+**PM-365~366**：攻擊面盤點 5 大類 15 項，修掉 1 個 P0、1 個 P1、2 個 P2；3 項接受風險並記錄理由。全套 **514 / 0**（新增 `_verify366` 18 項）。
+
+- **PM-365** 盤點（未改碼）。逐項讀原始碼查證，不憑推測。**已經站得住的**：`navigate_to` 白名單、content script 無 `all_frames`（跨域 iframe 點不到）、password 欄位值全數遮蔽、`captureVisibleTab` 截不到瀏覽器 UI、終端機 stderr 與指令回聲皆遮罩。
+- **PM-366** 修復：
+  - 🔴 **P0：Bridge WebSocket 加 Origin 驗證。** `ws://127.0.0.1` 被瀏覽器視為 potentially trustworthy、**不受 mixed-content 阻擋**——使用者造訪的**任何網站**都能連上 19850。而連線處理是「新連線取代舊連線」，所以惡意頁面可以把真的 Extension 踢下線，並**冒充它餵給 AI 捏造的頁面內容**（不是 RCE，但足以讓 AI 基於偽造的事實工作）。已擋。實測四種網頁 Origin 全被拒、擴充功能放行，**並驗證被拒的連線無法踢掉既有連線**——那才是真正的傷害面。最重要的回歸：**真實 Chrome 擴充功能仍連得上**（190 項端到端全過）。
+  - 🔴 **P1：`memory_export` 限制在專案目錄內**，且不覆蓋既有的非備份檔。原本 `path.resolve` 不設限 → 可覆蓋磁碟任何檔案。**這條擋的是提示注入**：AI 讀得到頁面內容，頁面內容攻擊者可控。
+  - P2：`memory_save`／`memory_update` 加長度上限、`memory_import` 加 50 MB 上限（**先 stat 再讀**——先讀進來才檢查等於沒檢查）。
+  - ⚠ **三項明確不修並附理由**：本機程式可連 bridge（Origin 擋不住，需 token 交握）、`start_terminal_monitor` 可執行任意指令（那是功能本身）、瀏覽器 console／網路 URL 未遮罩 PII（**待 FOX 決策**：錯誤裡的 token 往往正是要查的東西，遮掉會讓工具沒用）。
+  - 🔴 **順手修掉既有的測試不穩定**：`get_web_vitals` 端到端約每 3 次 FAIL 一次。原本用 `sleep(1500)` 處理導航競態——**固定等待只是把競態變慢，不是消除它**（PM-347 學過一次）。改成有界輪詢等到真的 paint；頁面若根本沒 paint 仍會 FAIL，不掩蓋真問題。連跑三次皆 190/0。
+
 ## 2026-08-17（Phase 6 方案分層 + 免費版用量）
 
 **PM-362~364**：bridge 新增 `tier-gate.ts`（工具數不變，仍 51）；Workers 端雲端 MCP **13 → 14**（新增 `get_usage_quota`），已 deploy `07ff249b`。全套 **0 failed**：`_verify_phase1` 190、`_verify309` 151、`_verify327` 21、`_verify350` 27、`_verify355` 81、**`_verify362` 26**（真的 spawn 六個不同方案的 bridge）。規格書 §9 Phase 6 的 PM-P／PM-Q 標 ✅。

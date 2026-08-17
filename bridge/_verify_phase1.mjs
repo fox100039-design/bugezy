@@ -570,8 +570,16 @@ if (/port 19850 被占用/.test(stderr)) {
       // paint entries 與 buffered LCP 都可能還沒落地 → LCP/FCP 回 null。
       // 這**不是工具壞掉**（它誠實回 null 而非編數字），但會讓測試偶發性 FAIL，
       // 所以這裡等頁面真的穩定下來再量。實測未加等待時約每 4 次出現 1 次 null。
-      await sleep(1500);
-      const wvR = await call('get_web_vitals', { tab_id: r1.tab_id });
+      // PM-366：原本是固定 sleep(1500)，但**固定等待只是把競態變慢、不是消除它**
+      //   （PM-347 已經學過一次）。改成「等到真的 paint 出來為止」的有界輪詢：
+      //   最多 6 次、每次 800ms。若頁面根本沒 paint，六次都會拿到 null → 測試照樣 FAIL，
+      //   所以這個重試不會掩蓋真正的問題。
+      let wvR = null;
+      for (let attempt = 0; attempt < 6; attempt++) {
+        await sleep(800);
+        wvR = await call('get_web_vitals', { tab_id: r1.tab_id });
+        if (wvR?.vitals?.FCP && wvR?.vitals?.LCP) break;
+      }
       console.log('    get_web_vitals →', JSON.stringify(wvR).slice(0, 300));
       if (wvR.error) {
         check('316-1 回傳 LCP/FCP/TTFB', false, String(wvR.error).slice(0, 200));

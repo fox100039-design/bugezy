@@ -276,7 +276,8 @@ writeLayer('L1', []);
 const f1 = memorySave('L1', { topic: '流程測試', content: '原始內容' });
 check('flow 1 save', memorySearch('流程測試', ['L1'], 5).total_found === 1);
 memoryUpdate('L1', f1.id, { content: '更新後內容' });
-const flowExp = memoryExport(['L1'], path.join(tmp, 'flow.json'));
+// PM-366：匯出路徑必須在專案內（proj），不能寫到 tmp 根目錄
+const flowExp = memoryExport(['L1'], path.join(proj, 'flow.json'));
 check('flow 2 export', fs.existsSync(flowExp.path) && flowExp.total_entries === 1);
 memoryClear('L1', true);
 check('flow 3 clear', readLayer('L1').length === 0 && memorySearch('流程測試', ['L1'], 5).total_found === 0);
