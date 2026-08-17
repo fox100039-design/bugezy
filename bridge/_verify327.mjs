@@ -41,7 +41,7 @@ proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initial
 
 console.log('\n=== ① 工具註冊 ===');
 const tools = (await rpc('tools/list', {})).result.tools;
-check('工具總數 37（30 + 7 Phase 5）', tools.length === 37, String(tools.length));
+check('工具總數 51（37 + 13 記憶矩陣 + memory_stats）', tools.length === 51, String(tools.length));
 for (const n of ['start_terminal_monitor', 'get_terminal_live_errors', 'stop_terminal_monitor'])
   check(`${n} 已註冊`, tools.some((t) => t.name === n), tools.map((t) => t.name).join(','));
 check('get_terminal_live_errors 描述講明「errors 為空不代表沒問題」',

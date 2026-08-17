@@ -23,6 +23,29 @@ import {
   MAX_MONITORS,
   TERMINAL_WINDOW_MS,
 } from './terminal-monitor.js';
+import { LAYERS, L3_MESSAGE, LAYER_NAMES, type Layer } from './memory-store.js';
+import {
+  memorySave, memoryLearn, memorySearch, memoryGet,
+  memoryAudit, memoryPerfCheck, memoryBizValidate,
+  memoryUpdate, memoryDelete, memoryList, memoryClear,
+  memoryExport, memoryImport, memoryStats,
+} from './memory-ops.js';
+
+// ── PM-355~360：§14 記憶矩陣 ────────────────────────────────────────────────
+// `L3` **刻意收進 enum 裡**，不是漏掉：若把它排除在 enum 外，AI 傳 L3 只會拿到
+// zod 的「Invalid enum value」，看不出「L3 在雲端」這件事，於是會一直重試。
+// 收進來再明確擋掉，才講得清楚原因。
+const LAYER_ENUM = z.enum([...LAYERS, 'L3'] as [string, ...string[]]);
+const LAYER_DESC = `記憶層：${LAYERS.map((l) => `${l}=${LAYER_NAMES[l as Layer]}`).join('、')}。L3（客服知識庫）在雲端，本機沒有。`;
+
+/** 回傳 null＝可用；回傳物件＝要直接吐給呼叫端的錯誤。 */
+function layerOrReject(layer: string): Layer | { error: string } {
+  if (layer === 'L3') return { error: L3_MESSAGE, layer: 'L3' } as unknown as { error: string };
+  return layer as Layer;
+}
+function isReject(x: unknown): x is { error: string } {
+  return typeof x === 'object' && x !== null && 'error' in x;
+}
 
 /** 統一的回傳格式：MCP 只吃 content 陣列，這裡把物件序列化成文字。 */
 function txt(data: unknown) {
@@ -726,6 +749,196 @@ export function createMcpServer(link: ExtensionLink): McpServer {
       monitor_id: z.string().optional().describe('省略 → 最近啟動的那個 monitor。'),
     },
     gated(async (args) => txt(stopTerminalMonitor(args.monitor_id))),
+  );
+
+
+  // ── 工具 38~50：§14 八層記憶矩陣（PM-355~360）────────────────────────────
+  // 全部走本機檔案系統，**不經過 Extension**——記憶跟瀏覽器無關，沒開分頁也能用。
+  server.tool(
+    'memory_save',
+    'Store a piece of knowledge into one of the seven local memory layers so future sessions do not have to re-derive it. Persists to .bugezy/ in the project root; nothing is uploaded and no source file is touched. 把一則知識存進本機七層記憶之一，讓之後的 session 不必重新推理。寫入專案根目錄的 .bugezy/，**不上傳、也不會動到任何原始碼**。',
+    {
+      layer: LAYER_ENUM.describe(LAYER_DESC),
+      entry: z.object({
+        topic: z.string().min(1).describe('主題／關鍵字，越具體越容易被 memory_get 精準取回。'),
+        content: z.string().min(1).describe('記憶內容。L7 效能基準請寫成 "200 ms" 或 {"value":200,"unit":"ms"} 以便自動比對。'),
+        tags: z.array(z.string()).optional().describe('標籤，搜尋時權重 ×2。L6／L4 的規則可加 "regex:<樣式>" 讓 memory_audit／memory_biz_validate 能機器逐條檢查。'),
+      }),
+    },
+    gated(async (args) => {
+      const layer = layerOrReject(args.layer);
+      if (isReject(layer)) return txt(layer);
+      return txt(memorySave(layer, args.entry));
+    }),
+  );
+
+  server.tool(
+    'memory_learn',
+    'Shortcut for memory_save into L1: record a finished debug session (symptom / root cause / fix) so the same bug is solved instantly next time. Tags are extracted automatically. Call this once after you actually fix something. memory_save(L1) 的快捷版：把一次除錯的症狀／根因／修法記下來，下次遇到同樣的 bug 直接給解法。tags 自動萃取。**真的修好之後呼叫一次就好。**',
+    {
+      debug_session: z.object({
+        symptom: z.string().min(1).describe('bug 的症狀，例如 "TypeError: Cannot read \'map\' of undefined"。'),
+        fix: z.string().min(1).describe('實際有效的修法。'),
+        root_cause: z.string().optional().describe('根本原因。'),
+        related_files: z.array(z.string()).optional().describe('關鍵檔案，會一併存成 tags。'),
+      }),
+    },
+    gated(async (args) => txt(memoryLearn(args.debug_session))),
+  );
+
+  server.tool(
+    'memory_search',
+    'Full-text search across memory layers. Topic hits weigh 3x, tag hits 2x, body hits 1x. Reading counts as a hit (hit_count and last_hit_at are updated) because eviction keeps whatever is still being matched. An empty result means nothing has been learned yet — not that the search failed. 跨層全文搜尋。topic 命中權重 ×3、tags ×2、內文 ×1。**讀取也算命中**（會更新 hit_count／last_hit_at），因為淘汰保留的是「還在被匹配」的記憶。空結果代表還沒學過，不是搜尋失敗。',
+    {
+      query: z.string().min(1).describe('搜尋關鍵字，可用空白分隔多個詞。'),
+      layers: z.array(LAYER_ENUM).optional().describe('省略 → 搜尋全部七層。'),
+      limit: z.number().int().positive().max(100).optional().describe('預設 10。'),
+    },
+    gated(async (args) => {
+      const bad = (args.layers ?? []).find((l) => l === 'L3');
+      if (bad) return txt({ error: L3_MESSAGE });
+      return txt(memorySearch(args.query, args.layers as Layer[] | undefined, args.limit ?? 10));
+    }),
+  );
+
+  server.tool(
+    'memory_get',
+    'Exact-match lookup: return every entry in one layer whose topic equals the given string. Unlike memory_search this does NOT update hit_count — a targeted fetch is not evidence the memory is still useful. Use memory_search for fuzzy lookup. 精準提取：回傳指定層裡 topic **完全相等**的所有記憶。**不更新 hit_count**（精準提取不算使用頻率）。要模糊找請用 memory_search。',
+    {
+      layer: LAYER_ENUM.describe(LAYER_DESC),
+      topic: z.string().min(1).describe('必須與存入時的 topic 完全相同（忽略大小寫與前後空白）。'),
+    },
+    gated(async (args) => {
+      const layer = layerOrReject(args.layer);
+      if (isReject(layer)) return txt(layer);
+      return txt(memoryGet(layer, args.topic));
+    }),
+  );
+
+  server.tool(
+    'memory_audit',
+    'Security self-review against L6: scan the ADDED lines of a git diff for hardcoded secrets (built-in patterns) plus any L6 rule that declares a "regex:" tag. IMPORTANT: passed:true only means the machine-checkable rules passed — natural-language rules are returned in rules_needing_ai_review for you to judge yourself. Writes nothing. 依 L6 資安鐵律自我審查：掃 git diff 的**新增行**，比對內建機密樣式與 L6 中宣告 `regex:` 的規則。⚠ **passed:true 只代表「可機檢的部分」通過**，自然語言的鐵律會放在 rules_needing_ai_review 交還給你自己判讀。**不寫任何檔案。**',
+    { code_diff: z.string().min(1).describe('git diff 格式的文字。只會檢查 + 開頭的新增行。') },
+    gated(async (args) => txt(memoryAudit(args.code_diff))),
+  );
+
+  server.tool(
+    'memory_perf_check',
+    'Compare a measurement against the L7 baseline for the same metric name. Understands metric direction (ops/s higher is better, ms/MB lower is better) and refuses to compare across different units. Beyond ±10% counts as improved/degraded. Writes nothing — update the baseline yourself with memory_update so a bad run cannot silently become the new normal. 拿一次量測與 L7 中同名的效能基準比對。**會判斷方向**（ops/s 越大越好、ms/MB 越小越好），**單位不同則拒絕比較**。超出 ±10% 才算進步／衰退。**不寫檔**——要更新基準請自行呼叫 memory_update，免得一次量壞的數字默默變成新標準。',
+    {
+      metrics: z.object({
+        name: z.string().min(1).describe("指標名稱，必須與 L7 基準的 topic 相同，例如 'API response time'。"),
+        value: z.number(),
+        unit: z.string().min(1).describe("單位，例如 'ms' / 'MB' / 'ops/s'。必須與基準一致才會比較。"),
+      }),
+    },
+    gated(async (args) => txt(memoryPerfCheck(args.metrics))),
+  );
+
+  server.tool(
+    'memory_biz_validate',
+    'Validate an output against the L4 business rules. Rules tagged with "regex:" are checked mechanically; the rest are handed back in rules_needing_ai_review. valid:true does NOT mean the business logic is correct — it means nothing machine-checkable was violated. Writes nothing. 拿輸出比對 L4 商業規則。標了 `regex:` 的規則會被機器逐條檢查，其餘放進 rules_needing_ai_review 交還給你。⚠ **valid:true 不代表商業邏輯正確**，只代表沒有違反可機檢的部分。**不寫任何檔案。**',
+    {
+      output: z.object({
+        context: z.string().min(1).describe("這是什麼情境的輸出，例如 'prize calculation'。"),
+        result: z.unknown().describe('要驗證的輸出，物件或字串皆可。'),
+        related_rules: z.array(z.string()).optional().describe('只比對 topic 含這些字的規則；省略 → 比對 L4 全部。'),
+      }),
+    },
+    gated(async (args) => txt(memoryBizValidate(args.output as { context: string; result: unknown; related_rules?: string[] }))),
+  );
+
+  server.tool(
+    'memory_update',
+    'Partially update one memory entry (topic / content / tags). Use this when a fix evolves — the memory should improve, not stay stuck on the first workaround. 部分更新一則記憶（topic／content／tags）。修法進化時用它覆蓋舊經驗——記憶要會進步，不該永遠停在最初級的解法。',
+    {
+      layer: LAYER_ENUM.describe(LAYER_DESC),
+      id: z.string().min(1).describe('要更新的記憶 id，可用 memory_list 取得。'),
+      entry: z.object({
+        topic: z.string().optional(),
+        content: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+      }).describe('只帶要改的欄位；沒帶的保持原樣。'),
+    },
+    gated(async (args) => {
+      const layer = layerOrReject(args.layer);
+      if (isReject(layer)) return txt(layer);
+      return txt(memoryUpdate(layer, args.id, args.entry));
+    }),
+  );
+
+  server.tool(
+    'memory_delete',
+    'Delete one memory entry by id. A missing id is reported as an error rather than a silent success. 依 id 刪除單一記憶。**id 不存在會明確報錯**，不會默默回成功。',
+    {
+      layer: LAYER_ENUM.describe(LAYER_DESC),
+      id: z.string().min(1),
+    },
+    gated(async (args) => {
+      const layer = layerOrReject(args.layer);
+      if (isReject(layer)) return txt(layer);
+      return txt(memoryDelete(layer, args.id));
+    }),
+  );
+
+  server.tool(
+    'memory_list',
+    'List the entries in one layer. content is truncated to 200 characters (content_preview) to save tokens — use memory_get or memory_search for the full text. 列出某一層的記憶。content 截斷到 200 字（content_preview）以省 token，要完整內容請用 memory_get 或 memory_search。',
+    {
+      layer: LAYER_ENUM.describe(LAYER_DESC),
+      limit: z.number().int().positive().max(500).optional().describe('預設 50。'),
+      sort_by: z.enum(['created_at', 'updated_at', 'last_hit_at', 'hit_count']).optional().describe("預設 'updated_at'，皆為由新到舊／由多到少。"),
+    },
+    gated(async (args) => {
+      const layer = layerOrReject(args.layer);
+      if (isReject(layer)) return txt(layer);
+      return txt(memoryList(layer, args.limit ?? 50, args.sort_by ?? 'updated_at'));
+    }),
+  );
+
+  server.tool(
+    'memory_clear',
+    'Wipe an entire memory layer. Requires confirm: true — without it the call is refused and tells you how many entries would be lost. Irreversible; export first if unsure. 清空整層記憶。**必須帶 confirm: true**，否則直接拒絕並告訴你會損失幾條。無法復原，不確定就先 memory_export。',
+    {
+      layer: LAYER_ENUM.describe(LAYER_DESC),
+      confirm: z.boolean().describe('必須明確傳 true 才會執行。這是防呆，不要自動帶。'),
+    },
+    gated(async (args) => {
+      const layer = layerOrReject(args.layer);
+      if (isReject(layer)) return txt(layer);
+      return txt(memoryClear(layer, args.confirm));
+    }),
+  );
+
+  server.tool(
+    'memory_export',
+    'Export memory layers to a single JSON backup for machine migration or handover. WARNING: the file contains L1 real filenames/fixes and L6 security rules, and it lands in the project root where .bugezy/.gitignore does not protect it — treat it like a credential file. 把記憶匯出成單一 JSON 備份，供換電腦或專案交接。⚠ **檔案含 L1 的真實檔名／修法與 L6 資安鐵律，且落在專案根目錄、不受 .bugezy/.gitignore 保護**——請比照憑證檔對待。',
+    {
+      layers: z.array(LAYER_ENUM).optional().describe('省略 → 匯出全部七層。'),
+      path: z.string().optional().describe('省略 → 專案根目錄的 .bugezy-backup-YYYYMMDD.json。'),
+    },
+    gated(async (args) => {
+      const bad = (args.layers ?? []).find((l) => l === 'L3');
+      if (bad) return txt({ error: L3_MESSAGE });
+      return txt(memoryExport(args.layers as Layer[] | undefined, args.path));
+    }),
+  );
+
+  server.tool(
+    'memory_import',
+    "Import a backup produced by memory_export. 'merge' keeps existing entries on id collision, 'overwrite' replaces them. Layers that are not local (e.g. L3, which lives in the cloud) are reported as ignored rather than written. Writes only into .bugezy/ — never your source code. 匯入 memory_export 產生的備份。id 相撞時 merge 保留既有、overwrite 覆蓋。**不屬於本機七層的資料（例如雲端的 L3）會被列為 ignored 而不是寫入。** 只寫 .bugezy/，不碰原始碼。",
+    {
+      path: z.string().min(1).describe('備份檔路徑。'),
+      strategy: z.enum(['merge', 'overwrite']).optional().describe("預設 'merge'（同 id 跳過，只加新的）。"),
+    },
+    gated(async (args) => txt(memoryImport(args.path, args.strategy ?? 'merge'))),
+  );
+
+  server.tool(
+    'memory_stats',
+    'Show where the .bugezy/ store lives, how many entries each layer holds, and the active config. Use this first if memory tools behave unexpectedly — a missing store is the usual cause. 顯示 .bugezy/ 的位置、各層筆數與生效中的設定。記憶工具行為不如預期時先看這個——最常見的原因是還沒建立 .bugezy/。',
+    {},
+    gated(async () => txt(memoryStats())),
   );
 
   return server;

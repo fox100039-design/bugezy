@@ -11,12 +11,19 @@ import { ExtensionLink, log } from './extension-link.js';
 import { createMcpServer } from './mcp-server.js';
 import { BRIDGE_PORT } from './types.js';
 import { stopAllTerminalMonitors } from './terminal-monitor.js';
+import { initMemoryStore } from './memory-store.js';
 
 async function main(): Promise<void> {
   const port = Number(process.env.BUGEZY_BRIDGE_PORT) || BRIDGE_PORT;
 
   log('🔌 BugEzy Bridge 已啟動');
   log('   MCP Server: stdio 模式（供 AI 工具連接）');
+
+  // PM-355：§14 記憶矩陣——從 CWD 往上找 `.bugezy/`（跟 git 找 `.git/` 一樣）。
+  // **找不到不是錯誤**：回空白記憶，等第一次 memory_save 才自動建立。
+  // bridge 由 AI 工具以 stdio 啟動，CWD 就是當下的專案目錄 → 換專案自動切換記憶（§14.12.3）。
+  const mem = initMemoryStore(process.cwd());
+  log(mem.found ? `   記憶矩陣: ${mem.root}` : '   記憶矩陣: 尚未建立（第一次 memory_save 會自動建立 .bugezy/）');
 
   const link = new ExtensionLink();
   try {

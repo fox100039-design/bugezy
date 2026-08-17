@@ -59,7 +59,7 @@ content.ts（GET_PAGE_INFO / 即時 console 與網路錯誤）→ 目標網頁
 
 **位址一律寫 `127.0.0.1`，不要寫 `localhost`**：`localhost` 在許多系統上會先解析到 IPv6 的 `::1`，而 bridge 綁的是 IPv4 的 `127.0.0.1`——連線直接失敗，且錯誤訊息只說連不上，看不出是位址族群不合。兩端都已寫死（`extension/src/background.ts` 的 `BRIDGE_URL`、`bridge/src/extension-link.ts` 的 `host`）。
 
-#### bridge 的 37 支 MCP 工具（Phase 1~3 + Phase 5，PM-307~354）
+#### bridge 的 51 支 MCP 工具（Phase 1~3 + Phase 5 + §14 記憶矩陣，PM-307~361）
 
 | 工具 | 用途 | 端到端 |
 |---|---|---|
@@ -108,6 +108,38 @@ content.ts（GET_PAGE_INFO / 即時 console 與網路錯誤）→ 目標網頁
 1. **`tab.url` / `tab.title` 讀不到** —— 需 `tabs` 權限，只有 `activeTab` 時 Chrome **靜默回空字串**（不報錯）。一律改問 content script（PM-298）。
 2. **`captureVisibleTab` 需 `activeTab` 或 `<all_urls>`，而 `activeTab` 只在使用者手勢後授予** —— bridge 呼叫永遠沒有手勢，且**導航會撤銷 `activeTab`**。三條替代路線（切分頁／`chrome.debugger`／獨立視窗）**都繞不開**，門檻不在「分頁可不可見」而在「有沒有使用者手勢」（PM-312 實測）。
 3. **回傳要帶「解讀脈絡」** —— 錯誤只涵蓋 30 秒、FID 未互動時為 `null` 不是 0、資源大小是低估值、事件監聽器空清單不代表沒有處理器、`ready_state` 非 `complete` 時內容可能不完整。**少了這些，AI 會把正確的回傳讀成錯誤的結論。**
+
+#### 八層記憶矩陣（PM-355~361，規格書 §14）
+
+`.bugezy/` 跟著專案根目錄走，bridge 啟動時**從 CWD 往上找**（跟 git 找 `.git/` 一樣）。bridge 由 AI 工具以 stdio 啟動、CWD 就是當下的專案目錄，所以**換專案＝自動換記憶**，不需要任何手動切換。
+
+```
+.bugezy/
+  config.json          L1_max_entries / L7_retention_days / auto_merge / auto_evict
+  memory/              L1-debug · L2-project · L4-business · L5-dependencies
+                       L6-security · L7-performance · L8-team   ← 7 個，沒有 L3
+  .gitignore           內容必須是 `*` + `!.gitignore`
+```
+
+- **沒有 L3 不是漏寫**：客服知識庫是 BugEzy 自己的產品手冊，每個使用者內容都一樣，依決策 4 放雲端。但 `L3` 仍**收在工具的 enum 裡**再明確擋掉——排除在 enum 外的話，AI 只會拿到 zod 的「Invalid enum value」，看不出原因而一直重試。
+- **`.gitignore` 必須自我忽略**：目錄內的 `.gitignore` 只能管同層與子層，且要自己排除自己，否則規則檔會連同被忽略掉，下一個 clone 的人就沒有這道防線。
+- **淘汰看 `last_hit_at` 不看 `created_at`**：三年前寫、但每月都命中的經驗，價值遠高於上週寫完再也沒用過的那條。因此 `memory_search` **讀取也算命中**（會回寫 hit_count／last_hit_at），`memory_get` 則不算——精準提取不代表這條記憶還有用。
+- **只有 L1 有筆數上限、只有 L7 有保存天數**（§14.12.4 就只定義這兩條，config 也只有這兩個鍵）。
+- **`memory_export` 的預設落點在專案根目錄，不受 `.bugezy/.gitignore` 保護**，且內含 L1 的真實檔名修法與 L6 的資安鐵律——回傳帶明確警告，請比照憑證檔對待。
+
+##### 三支守衛的核心約束：`passed: true` 不能等於「我檢查不了」
+
+L6 的資安鐵律與 L4 的商業規則多半是自然語言（「勝率加總必須等於 1」），機器評不了。實作採兩段式：
+
+1. 規則可在 tags 宣告 `regex:<樣式>` → 機器逐條檢查
+2. 其餘規則**原文放進 `rules_needing_ai_review`** 交還給 AI 判讀，summary 明講「還有 N 條只能人工判讀」
+
+**少了第 2 步，AI 會把「我沒辦法檢查」讀成「檢查過沒問題」——那比沒有這支工具更危險。**
+
+其他三點：
+- `memory_audit` 內建硬編碼金鑰／含帳密連線字串／AWS Key／私鑰區塊四類樣式，L6 還空著時也有東西可查；**違規只回樣式名稱與行號、不回原始行**（回了等於把機密再複製一份進 context）；只掃 diff 的 `+` 新增行。
+- `memory_perf_check` **會判斷指標方向**（`ops/s` 越大越好、`ms`/`MB` 越小越好），**單位不同直接拒絕比較**——硬算 ms vs MB 會產生一個看起來很像結論的錯誤數字。
+- **三支守衛一個檔案都不寫**。效能基準要更新請自己呼叫 `memory_update`，否則一次量壞的數字會默默變成新標準。
 
 #### 嚴重度分類（PM-350/351，規格書 §6）
 

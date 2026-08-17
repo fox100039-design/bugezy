@@ -1,5 +1,19 @@
 # BugEzy Changelog
 
+## 2026-08-17（§14 八層記憶矩陣 完工）
+
+**PM-355~361**：bridge 工具總數 **37 → 51**（+13 記憶工具 +1 `memory_stats`）。全套 **0 failed**：端到端 `_verify_phase1` **190**、jsdom `_verify309` **151**、終端機 `_verify327` **21**、嚴重度 `_verify350` **27**、記憶矩陣 `_verify355` **81**。規格書 §9 加 **§14 ✅**，並新增 **§14.13 實作註記**列出十處落差。
+
+- **PM-355** `.bugezy/` 基礎建設：從 CWD 往上找（跟 git 找 `.git/` 一樣），找不到就是空白記憶、等第一次 `memory_save` 才建立。本機 **7 個 JSON，沒有 L3**（決策 4：客服知識庫在雲端）。`.gitignore` 內容是 `*` + `!.gitignore` —— **必須自我忽略**，否則規則檔連同被忽略，下一個 clone 的人就沒有這道防線。
+  ⚠ **`auto_merge` 目前是保留欄位**（§14.12.4 的自動合併未實作），這件事直接寫進 `config.json` 的 `_note`，免得使用者設了以為有效。
+- **PM-356** `memory_save` / `memory_learn` ＋ 淘汰。**淘汰看 `last_hit_at` 不看 `created_at`** —— 三年前寫但每月命中的經驗，價值遠高於上週寫完再也沒用過的那條（已用「舊但熱／新但冷」兩條資料實測）。只有 L1 有筆數上限、只有 L7 有保存天數（§14.12.4 就只定義這兩條）。**`L3` 收在 enum 裡再明確擋掉**，不然 AI 只會看到 zod 的「Invalid enum value」而一直重試。
+- **PM-357** `memory_search` / `memory_get`。topic ×3、tags ×2、內文 ×1。**search 更新 hit_count、get 不更新**（精準提取不算使用頻率）；搜不到時回空陣列＋「還沒學過，不是搜尋失敗」。
+- **PM-358** 三支守衛。🔴 **這張卡最重要的一件事：`passed: true` 不能等於「我檢查不了」。** L6／L4 的規則多半是自然語言，機器評不了；實作改成兩段式——標了 `regex:` 的機器逐條查，其餘原文放進 `rules_needing_ai_review` 交還給 AI，summary 明講「還有 N 條只能人工判讀」。少了這段，AI 會把「沒辦法檢查」讀成「檢查過沒問題」。
+  另：`memory_audit` 內建四類機密樣式（L6 空著時也有東西可查）、**只掃 diff 的 `+` 行**、**違規不回原始行**（回了等於把機密再複製一份進 context）；`memory_perf_check` **會判斷指標方向**（ops/s 變大是進步不是衰退）、**單位不同直接拒絕比較**；**三支一個檔案都不寫**。
+- **PM-359** `memory_update` / `delete` / `list` / `clear`。list 的 content 截到 200 字省 token；**`memory_clear` 沒帶 `confirm: true` 直接拒絕，並告訴你會損失幾條**。
+- **PM-360** `memory_export` / `memory_import`。merge 同 id 跳過、overwrite 覆蓋；**匯入檔裡的 L3 列為 ignored 而非寫進本機**。🔴 匯出檔落在專案根目錄、**不受 `.bugezy/.gitignore` 保護**，又含 L1 真實檔名修法與 L6 資安鐵律 —— 回傳帶明確警告。
+- **PM-361** 全套驗收 ＋ 收工。端到端把 bridge 的 CWD 指到暫存專案，**避免在 repo 裡真的長出一個 `.bugezy/` 被 commit 進去**。
+
 ## 2026-08-17（Phase 5 嚴重度 + 自動化 完工）
 
 **PM-350~354**：bridge 工具總數 **30 → 37**（+7 Phase 5）。全套 **0 failed**：端到端 `_verify_phase1` **159**、jsdom `_verify309` **151**、終端機 `_verify327` **21**、嚴重度 `_verify350` **27**。規格書 §9 **Phase 5 標 ✅**。

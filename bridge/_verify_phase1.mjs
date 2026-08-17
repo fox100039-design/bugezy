@@ -3,6 +3,9 @@
 //   ② 真 MCP JSON-RPC 檢查工具註冊與 schema
 //   ③ 接真 Chrome 跑端到端（需擴充功能已重新載入 + port 19850 未被其他 bridge 占用）
 import { spawn, execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
 import { readFileSync } from 'node:fs';
 
 // ── Windows 上的程序回收 ───────────────────────────────────────────────────
@@ -105,7 +108,13 @@ if (holder) {
   }
 }
 
-const proc = spawn(process.execPath, ['dist/index.js'], { stdio: ['pipe', 'pipe', 'pipe'] });
+// PM-361：bridge 的 CWD 決定記憶矩陣落在哪裡（§14.12.3 從 CWD 往上找 .bugezy/）。
+// 這裡指到暫存專案，**絕不能讓端到端在 repo 裡真的長出一個 .bugezy/**——那會被 commit 進去。
+const MEM_PROJ = fs.mkdtempSync(path.join(os.tmpdir(), 'bugezy-e2e-mem-'));
+const proc = spawn(process.execPath, [path.resolve('dist/index.js')], {
+  cwd: MEM_PROJ,
+  stdio: ['pipe', 'pipe', 'pipe'],
+});
 // 不論正常結束、例外、還是 Ctrl-C，都要把 bridge 收乾淨
 const cleanup = () => killTree(proc.pid);
 process.on('exit', cleanup);
@@ -139,7 +148,7 @@ proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initial
 
 console.log('\n=== ② MCP 工具註冊 ===');
 const tools = (await rpc('tools/list', {})).result.tools;
-check('工具總數 37（30 + 7 Phase 5）', tools.length === 37, tools.map((t) => t.name).join(','));
+check('工具總數 51（37 + 13 記憶矩陣 + memory_stats）', tools.length === 51, tools.map((t) => t.name).join(','));
 for (const [name, req, opt] of [['navigate_to', 'url', 'tab_id'], ['click_element', 'selector', 'tab_id']]) {
   const t = tools.find((x) => x.name === name);
   check(`${name} 已註冊`, !!t, tools.map((x) => x.name).join(','));
@@ -388,6 +397,78 @@ if (/port 19850 被占用/.test(stderr)) {
 
       const badPin = await call('pin_element', { selector: '#nope-pin-330', description: 'x', tab_id: r1.tab_id });
       check('330-4 元素不存在 → error 含 selector', !!badPin.error && String(badPin.error).includes('#nope-pin-330'), JSON.stringify(badPin).slice(0, 200));
+
+      // ── PM-355~360 §14 記憶矩陣端到端 ──
+      const st0 = await call('memory_stats');
+      check('355-2 沒有 .bugezy/ → 空白記憶不報錯', st0.initialized === false && !st0.error, JSON.stringify(st0).slice(0, 160));
+
+      const ms = await call('memory_save', { layer: 'L1', entry: { topic: 'e2e TypeError', content: 'API 回 null，加 ?? [] 防護', tags: ['e2e'] } });
+      check('356-1 memory_save 回 id', !!ms.id && ms.layer === 'L1', JSON.stringify(ms).slice(0, 160));
+      check('355-1 第一次寫入自動建立 .bugezy/', fs.existsSync(path.join(MEM_PROJ, '.bugezy', 'memory', 'L1-debug.json')));
+      check('355-3 .gitignore 是自我忽略樣式',
+        fs.readFileSync(path.join(MEM_PROJ, '.bugezy', '.gitignore'), 'utf8') === '*\n!.gitignore\n');
+      // 各層的 JSON 是**用到才建**，所以這裡驗的是「只可能出現這 7 個檔名」而不是「一定有 7 個」
+      const MEM_FILES = ['L1-debug.json', 'L2-project.json', 'L4-business.json', 'L5-dependencies.json', 'L6-security.json', 'L7-performance.json', 'L8-team.json'];
+      check('355-5 memory/ 只會出現本機 7 層的檔名、沒有 L3',
+        fs.readdirSync(path.join(MEM_PROJ, '.bugezy', 'memory')).every((f) => MEM_FILES.includes(f)),
+        fs.readdirSync(path.join(MEM_PROJ, '.bugezy', 'memory')).join(','));
+
+      const l3 = await call('memory_save', { layer: 'L3', entry: { topic: 'x', content: 'y' } });
+      check('356-4 L3 被拒且說明在雲端', !!l3.error && /雲端/.test(l3.error), String(l3.error).slice(0, 80));
+
+      const ml = await call('memory_learn', { debug_session: { symptom: 'ReferenceError: cartTotal is not defined', fix: '補上初始值', related_files: ['src/useCart.ts'] } });
+      check('356-2 memory_learn 存入 L1', ml.layer === 'L1' && !!ml.id, JSON.stringify(ml).slice(0, 160));
+
+      await call('memory_save', { layer: 'L5', entry: { topic: 'stripe API', content: '每天 8:30 維護回 503 屬正常' } });
+      const srch = await call('memory_search', { query: 'stripe' });
+      check('357-1 memory_search 跨層搜到', srch.total_found >= 1 && srch.results[0].layer === 'L5', JSON.stringify(srch.results).slice(0, 160));
+      const mg = await call('memory_get', { layer: 'L5', topic: 'stripe API' });
+      check('357-3 memory_get 精準回傳', mg.count === 1, JSON.stringify(mg).slice(0, 140));
+      check('357-5 搜不到 → 空陣列不是 error', (await call('memory_search', { query: '絕對不存在的詞xyz' })).results.length === 0);
+
+      await call('memory_save', { layer: 'L6', entry: { topic: '嚴禁寫死金鑰', content: 'API_KEY 必須走 process.env' } });
+      const au = await call('memory_audit', { code_diff: '+++ b/pay.ts\n@@ -1 +1,2 @@\n+const API_KEY = "sk-live-e2e-secret-9876";' });
+      check('358-1 memory_audit 抓到違規', au.passed === false && au.violations.length >= 1, JSON.stringify(au.violations).slice(0, 200));
+      check('358   audit 不把機密原文回傳', !JSON.stringify(au).includes('sk-live-e2e-secret-9876'));
+
+      await call('memory_save', { layer: 'L7', entry: { topic: 'API response time', content: '200 ms' } });
+      const pc = await call('memory_perf_check', { metrics: { name: 'API response time', value: 2000, unit: 'ms' } });
+      check('358-2 memory_perf_check 判定 degraded', pc.status === 'degraded' && pc.change_percent === 900, JSON.stringify(pc).slice(0, 180));
+      check('358   單位不同 → 拒絕比較',
+        (await call('memory_perf_check', { metrics: { name: 'API response time', value: 128, unit: 'MB' } })).status === 'unknown');
+
+      await call('memory_save', { layer: 'L4', entry: { topic: '勝率加總必須等於 1', content: '權重加總必須剛好 100%', tags: ['regex:"total"\\s*:\\s*1(\\.0+)?[,}]'] } });
+      const bv = await call('memory_biz_validate', { output: { context: 'prize calculation', result: { total: 1.2 } } });
+      check('358-3 memory_biz_validate 抓到衝突', bv.valid === false && bv.conflicts.length === 1, JSON.stringify(bv).slice(0, 220));
+
+      const mu = await call('memory_update', { layer: 'L1', id: ms.id, entry: { content: '更好的修法：改用 Zod schema' } });
+      check('359-1 memory_update 部分更新', mu.id === ms.id && !!mu.updated_at, JSON.stringify(mu).slice(0, 140));
+      const mlist = await call('memory_list', { layer: 'L1' });
+      check('359-3 memory_list 回 content_preview', mlist.entries.every((e) => 'content_preview' in e) && mlist.total >= 2, JSON.stringify(mlist).slice(0, 180));
+      check('359-6 memory_delete id 不存在 → error', !!(await call('memory_delete', { layer: 'L1', id: 'no-such-id' })).error);
+
+      const mexp = await call('memory_export', {});
+      check('360-1 memory_export 產出檔案', !!mexp.path && fs.existsSync(mexp.path) && mexp.total_entries >= 4, JSON.stringify({ p: mexp.path, n: mexp.total_entries }));
+      check('360   匯出附敏感警告', /憑證/.test(mexp.warning || ''), String(mexp.warning).slice(0, 80));
+
+      const noConfirm = await call('memory_clear', { layer: 'L1', confirm: false });
+      check('359-5 memory_clear 沒 confirm → 拒絕且說明會損失幾條', noConfirm.cleared === 0 && !!noConfirm.error && noConfirm.would_clear >= 1, JSON.stringify(noConfirm).slice(0, 160));
+      const memCleared = await call('memory_clear', { layer: 'L1', confirm: true });
+      check('359-4 memory_clear({confirm:true}) → 清空', memCleared.cleared >= 1 && (await call('memory_list', { layer: 'L1' })).total === 0, JSON.stringify(memCleared));
+
+      const mimp = await call('memory_import', { path: mexp.path, strategy: 'merge' });
+      check('360-2 memory_import merge 匯回', mimp.imported >= 1 && mimp.layers_affected.includes('L1'), JSON.stringify(mimp).slice(0, 180));
+      check('360-5 匯出→清空→匯入後搜得回來',
+        (await call('memory_search', { query: 'Zod' })).total_found >= 1, JSON.stringify(await call('memory_search', { query: 'Zod' })).slice(0, 180));
+      check('360-4 匯入檔格式錯誤 → error', !!(await call('memory_import', { path: 'C:/nope/nope.json' })).error);
+
+      for (const l of ['L2', 'L8']) await call('memory_save', { layer: l, entry: { topic: `seed ${l}`, content: 'x' } });
+      check('355-5 七層都寫過後剛好 7 個 JSON、仍然沒有 L3',
+        fs.readdirSync(path.join(MEM_PROJ, '.bugezy', 'memory')).sort().join(',') === MEM_FILES.sort().join(','),
+        fs.readdirSync(path.join(MEM_PROJ, '.bugezy', 'memory')).join(','));
+
+      const st1 = await call('memory_stats');
+      check('355   memory_stats 回七層筆數 + config', Object.keys(st1.entries_per_layer).length === 7 && st1.config.L1_max_entries === 2000, JSON.stringify(st1.entries_per_layer));
 
       // ── PM-350~353 Phase 5 端到端 ──
       const es = await call('get_error_summary', { tab_id: r1.tab_id });
