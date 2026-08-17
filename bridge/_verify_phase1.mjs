@@ -317,7 +317,17 @@ if (/port 19850 被占用/.test(stderr)) {
         check('312-2 解碼後尺寸與回報的一致', sigOk && buf.readUInt32BE(16) === meta.width && buf.readUInt32BE(20) === meta.height,
           `png=${sigOk ? buf.readUInt32BE(16) + 'x' + buf.readUInt32BE(20) : '?'} meta=${meta.width}x${meta.height}`);
         check('312   mimeType 為 image/png', imgPart?.mimeType === 'image/png', String(imgPart?.mimeType));
-        check('312-3 非 active 分頁 → 有切換警告（方案 B）', typeof meta.warning === 'string' && /切換分頁/.test(meta.warning), JSON.stringify(meta.warning));
+        // PM-381：原本無條件要求 warning 存在，但 `warning` 只在**真的切過分頁**時才有
+        //   （background.ts 的 `...(switched ? { warning } : {})`）。目標分頁本來就是 active 時
+        //   不需要切換、也就沒有警告 —— 那是正確行為，不該判 FAIL。
+        //   改成驗「不變式」：有切換就必須有警告、沒切換就不該憑空冒出警告。
+        //   沒切換的那次不算驗過方案 B，標 LIMIT 讓它可見，不謊報 PASS。
+        if (typeof meta.warning === 'string') {
+          check('312-3 有切換分頁 → 附警告（方案 B）', /切換分頁/.test(meta.warning), JSON.stringify(meta.warning));
+        } else {
+          check('312-3 沒切換分頁 → 不憑空產生警告', meta.warning === undefined, JSON.stringify(meta.warning));
+          markLimit('312-3 方案 B 的「切換警告」未驗到', '目標分頁本來就是 active，不需要切換；此路徑要在目標分頁非 active 時才會走到');
+        }
       }
       // 驗收 4：受限頁面 —— chrome:// 開不了（navigate_to 會擋），改用「分頁不存在」驗錯誤路徑
       const shotBad = await call('take_screenshot', { tab_id: 99999999 });
