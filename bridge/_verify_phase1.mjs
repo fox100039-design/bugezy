@@ -343,8 +343,30 @@ if (/port 19850 被占用/.test(stderr)) {
       check('338-4 summary 含狀態顏色 emoji', pat.results.every((r) => /[🟢🟡🔴⚪]/.test(r.summary || '')), JSON.stringify(pat.results?.[0]));
       check('334   每筆有 previous_status / changed', pat.results.every((r) => 'previous_status' in r && 'changed' in r), JSON.stringify(pat.results?.[0]));
 
+      // 'resolved' 現在會在 **zod enum 層**就被擋下（比到 content script 才擋更早），
+      // 所以錯誤會以 _toolError 回來而不是回傳物件的 error 欄位——兩種都算正確擋下。
       const badClear = await call('clear_pins', { status: 'resolved', tab_id: r1.tab_id });
-      check("335 status 'resolved' → 明確報錯（不靜默清 0 個）", !!badClear.error && /resolved/.test(String(badClear.error)), JSON.stringify(badClear).slice(0, 200));
+      const badClearMsg = String(badClear.error || badClear._toolError || badClear._rpcError || '');
+      check("335 status 'resolved' → 明確報錯（不靜默清 0 個）",
+        /resolved/.test(badClearMsg) && /all|active|warning|stale/.test(badClearMsg), JSON.stringify(badClear).slice(0, 220));
+
+      // ── PM-340：stale 修復的真瀏覽器驗證 ──
+      // 圖釘不會跨導航保留（content script 會重建），所以不能用「換頁」讓元素消失。
+      // 改用我們自己控制得了的元素：面板的 host —— show 之後釘它，再 hide 讓它真的從 DOM 消失。
+      await call('show_debug_panel', { tab_id: r1.tab_id });
+      const panelPin = await call('pin_element', { selector: '[data-bugezy-panel]', description: '面板 host', tab_id: r1.tab_id });
+      const beforeGone = await call('patrol_pins', { tab_id: r1.tab_id });
+      const pinBefore = beforeGone.results.find((r) => r.selector === '[data-bugezy-panel]');
+      check('340 元素存在時巡檢為非 stale', !!panelPin.pin_id && pinBefore?.status !== 'stale', JSON.stringify(pinBefore));
+      await call('hide_debug_panel', { tab_id: r1.tab_id });
+      const afterGone = await call('patrol_pins', { tab_id: r1.tab_id });
+      const pinAfter = afterGone.results.find((r) => r.selector === '[data-bugezy-panel]');
+      console.log('    patrol(元素消失後) →', JSON.stringify(pinAfter));
+      check('340-1 🔴 元素消失 → status stale + changed:true（不再回 active）',
+        pinAfter?.status === 'stale' && pinAfter?.changed === true, JSON.stringify(pinAfter));
+      check('340-4 stale 的 summary 用灰色 ⚪', /⚪/.test(pinAfter?.summary || ''), pinAfter?.summary);
+      const rmPanel = await call('remove_pin', { selector: '[data-bugezy-panel]', tab_id: r1.tab_id });
+      check('340-2 remove_pin 以 selector 移除', rmPanel.removed === true, JSON.stringify(rmPanel));
 
       // ── PM-339 面板端到端 ──
       const panelOn = await call('show_debug_panel', { tab_id: r1.tab_id });
