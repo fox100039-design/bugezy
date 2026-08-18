@@ -96,6 +96,45 @@
       .main-action.rewind { background: linear-gradient(135deg, #f59e0b, #d97706); }
       .main-action.screenshot { background: linear-gradient(135deg, #059669, #047857); }
       .action-icon { font-size: 32px; }
+
+      /* PM-383~386：釘選模式與圖釘清單 */
+      .pin-section { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+      .pin-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+      .pin-title { font-size: 13px; font-weight: 700; }
+      .pin-mode-btn {
+        padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line);
+        background: rgba(255,255,255,.06); color: var(--fg);
+        font-size: 12px; font-weight: 600; cursor: pointer; transition: all .15s ease;
+      }
+      .pin-mode-btn:hover { filter: brightness(1.15); }
+      /* 啟動中 → BugEzy 藍，狀態一眼可辨 */
+      .pin-mode-btn.on { background: #00bfff; border-color: #00bfff; color: #04222e; }
+      .pin-list { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+      .pin-empty { font-size: 12px; opacity: .6; padding: 8px 0; }
+      .pin-item {
+        padding: 8px; border-radius: 8px; background: rgba(255,255,255,.04);
+        border: 1px solid var(--line);
+      }
+      .pin-item.resolved { opacity: .55; }
+      .pin-sel { font: 11px/1.4 ui-monospace, monospace; word-break: break-all; }
+      .pin-desc { font-size: 12px; margin-top: 2px; opacity: .85; }
+      .pin-acts { display: flex; gap: 6px; margin-top: 6px; }
+      .pin-act {
+        padding: 3px 10px; border-radius: 6px; border: 1px solid var(--line);
+        background: transparent; color: var(--fg); font-size: 11px; cursor: pointer;
+      }
+      .pin-act:disabled { opacity: .35; cursor: not-allowed; }
+      .pin-bulk { display: flex; gap: 8px; margin-top: 10px; }
+      .pin-bulk-btn {
+        flex: 1; padding: 6px; border-radius: 8px; border: 1px solid var(--line);
+        background: rgba(255,255,255,.06); color: var(--fg); font-size: 12px; cursor: pointer;
+      }
+      .pin-bulk-btn.danger { color: #ff6b6b; }
+      .pin-result {
+        margin-top: 8px; padding: 8px; border-radius: 8px; font-size: 11px;
+        background: rgba(0,191,255,.08); border: 1px solid rgba(0,191,255,.25);
+        white-space: pre-wrap; word-break: break-word; max-height: 140px; overflow: auto;
+      }
       .action-label { font-size: 15px; font-weight: 700; }
       .action-desc { font-size: 11px; opacity: 0.8; }
 
@@ -481,6 +520,20 @@
         </button>
       </div>
       <div id="lastScreenshot" class="meta" style="display:none;"></div>
+
+      <!-- PM-383~386：手動釘選模式 + 圖釘清單 -->
+      <section id="pinSection" class="pin-section">
+        <div class="pin-head">
+          <span id="pinCount" class="pin-title">📌 圖釘</span>
+          <button id="pinModeBtn" class="pin-mode-btn">📌 釘選模式</button>
+        </div>
+        <div id="pinList" class="pin-list"></div>
+        <div id="pinBulk" class="pin-bulk hidden">
+          <button id="pinPatrolBtn" class="pin-bulk-btn">🔄 巡檢全部</button>
+          <button id="pinClearBtn" class="pin-bulk-btn danger">🗑️ 清除全部</button>
+        </div>
+        <div id="pinResult" class="pin-result hidden"></div>
+      </section>
       <!-- PM-184：我的報告列表入口（帶 session token 開網頁）-->
       <button id="myReportsBtn" class="my-reports-btn" data-i18n="my-reports">📋 我的報告</button>
       <div id="upgradeHint" class="upgrade-hint hidden">

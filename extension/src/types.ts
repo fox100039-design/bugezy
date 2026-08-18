@@ -168,6 +168,12 @@ export type ControlMessage =
   | { type: 'BRIDGE_PIN_ELEMENT'; selector: string; description: string } // PM-330
   | { type: 'BRIDGE_PIN_ANALYZE'; selector: string } // PM-331
   | { type: 'BRIDGE_GET_PIN_RESULTS' } // PM-331
+  // PM-383~386：手動釘選模式（popup → content）
+  | { type: 'PIN_MODE_ON' }
+  | { type: 'PIN_MODE_OFF' }
+  | { type: 'PIN_MODE_STATUS' }
+  | { type: 'GET_PIN_LIST' }
+  | { type: 'PIN_MODE_CHANGED'; on: boolean } // content → background/popup
   | { type: 'BRIDGE_PATROL_PINS' } // PM-334
   | { type: 'BRIDGE_REMOVE_PIN'; pin_id?: string; selector?: string } // PM-335
   | { type: 'BRIDGE_CLEAR_PINS'; status?: string } // PM-335

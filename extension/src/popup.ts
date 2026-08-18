@@ -1656,3 +1656,187 @@ void checkAuth().then((session) => {
     showLoginView();
   }
 });
+
+// ── PM-383~386：手動釘選模式 + 圖釘清單 ──────────────────────────────────
+//
+// ⚠ **釘選模式不會因為 popup 關閉而結束。** 卡片 PM-383 的驗收 3 寫「popup 關閉 →
+//   自動結束釘選模式」，但 popup 一失焦就會關閉，而使用者要點的正是頁面上的元素——
+//   自動結束等於這個功能永遠用不到（詳見 DONE-383）。改為：再按一次按鈕、或在頁面上
+//   按 ESC 才結束；模式啟動期間頁面上一直有一條橫幅，不會有「不知不覺還開著」的情況。
+
+const PIN_MODE_KEY = 'bugezy_pin_mode';
+
+interface PopupPin {
+  pin_id: string;
+  selector: string;
+  description: string;
+  status: 'active' | 'warning' | 'error' | 'stale';
+  resolved: boolean;
+  emoji: string;
+}
+
+/** 送訊息給當前分頁的 content script。沒有 content script（chrome:// 等）→ 回 null。 */
+async function toContent<T = unknown>(msg: Record<string, unknown>): Promise<T | null> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id) return null;
+  return (await chrome.tabs.sendMessage(tab.id, msg).catch(() => null)) as T | null;
+}
+
+function pinResultShow(text: string): void {
+  const box = document.getElementById('pinResult');
+  if (!box) return;
+  box.textContent = text;
+  box.classList.remove('hidden');
+}
+
+function renderPinModeBtn(on: boolean): void {
+  const btn = document.getElementById('pinModeBtn');
+  if (!btn) return;
+  btn.classList.toggle('on', on);
+  btn.textContent = on ? '📌 釘選中... 點擊結束' : '📌 釘選模式';
+}
+
+async function refreshPinList(): Promise<void> {
+  const list = document.getElementById('pinList');
+  const bulk = document.getElementById('pinBulk');
+  const count = document.getElementById('pinCount');
+  if (!list || !bulk || !count) return;
+
+  const data = await toContent<{ pins: PopupPin[]; total_count: number; pin_mode: boolean }>({
+    type: 'GET_PIN_LIST',
+  });
+  while (list.firstChild) list.removeChild(list.firstChild);
+
+  if (!data) {
+    // 分頁沒有 content script（chrome://、應用程式商店、PDF）——講清楚而不是顯示成「沒有圖釘」
+    count.textContent = '📌 圖釘';
+    const p = document.createElement('div');
+    p.className = 'pin-empty';
+    p.textContent = '這個分頁不支援釘選（chrome:// 或商店頁面），請切換到一般網頁。';
+    list.appendChild(p);
+    bulk.classList.add('hidden');
+    return;
+  }
+
+  renderPinModeBtn(data.pin_mode);
+  count.textContent = `📌 圖釘（${data.total_count}）`;
+
+  if (data.total_count === 0) {
+    const p = document.createElement('div');
+    p.className = 'pin-empty';
+    p.textContent = '尚無圖釘，啟動釘選模式開始偵察';
+    list.appendChild(p);
+    bulk.classList.add('hidden');
+    return;
+  }
+  bulk.classList.remove('hidden');
+
+  for (const pin of data.pins) {
+    const item = document.createElement('div');
+    item.className = pin.resolved ? 'pin-item resolved' : 'pin-item';
+
+    const sel = document.createElement('div');
+    sel.className = 'pin-sel';
+    sel.textContent = `${pin.emoji} ${pin.selector}${pin.status === 'stale' ? '（stale）' : ''}`;
+    item.appendChild(sel);
+
+    if (pin.description) {
+      const d = document.createElement('div');
+      d.className = 'pin-desc';
+      d.textContent = `「${pin.description}」`;
+      item.appendChild(d);
+    }
+
+    const acts = document.createElement('div');
+    acts.className = 'pin-acts';
+
+    const analyze = document.createElement('button');
+    analyze.className = 'pin-act';
+    analyze.textContent = '分析';
+    // stale = 元素已從 DOM 消失，沒有東西可分析。禁用比讓它跑出一個錯誤誠實。
+    analyze.disabled = pin.status === 'stale';
+    analyze.addEventListener('click', () => {
+      void (async () => {
+        analyze.disabled = true;
+        const r = await toContent<Record<string, unknown>>({
+          type: 'BRIDGE_PIN_ANALYZE',
+          selector: pin.selector,
+        });
+        pinResultShow(
+          r && typeof r.error === 'string'
+            ? `⚠ ${r.error}`
+            : `🔍 ${pin.selector}\n${String(r?.summary ?? JSON.stringify(r ?? {}, null, 1).slice(0, 400))}`,
+        );
+        await refreshPinList();
+      })();
+    });
+    acts.appendChild(analyze);
+
+    const remove = document.createElement('button');
+    remove.className = 'pin-act';
+    remove.textContent = '移除';
+    remove.addEventListener('click', () => {
+      void (async () => {
+        await toContent({ type: 'BRIDGE_REMOVE_PIN', pin_id: pin.pin_id });
+        await refreshPinList();
+      })();
+    });
+    acts.appendChild(remove);
+
+    item.appendChild(acts);
+    list.appendChild(item);
+  }
+}
+
+async function togglePinMode(): Promise<void> {
+  const cur = await toContent<{ pin_mode: boolean }>({ type: 'PIN_MODE_STATUS' });
+  if (!cur) {
+    pinResultShow('這個分頁不支援釘選（chrome:// 或商店頁面）。');
+    return;
+  }
+  const next = !cur.pin_mode;
+  const r = await toContent<{ pin_mode: boolean }>({ type: next ? 'PIN_MODE_ON' : 'PIN_MODE_OFF' });
+  const on = r?.pin_mode === true;
+  renderPinModeBtn(on);
+  // chrome.storage.session：popup 重開時先用它畫，避免閃一下錯的狀態
+  try {
+    await chrome.storage.session.set({ [PIN_MODE_KEY]: on });
+  } catch {
+    /* session storage 不可用時只是少了預先渲染，不影響功能 */
+  }
+  if (on) {
+    pinResultShow('已進入釘選模式：回到頁面點擊要標記的元素，按 ESC 或再按一次按鈕結束。');
+  }
+}
+
+function initPinUi(): void {
+  document.getElementById('pinModeBtn')?.addEventListener('click', () => void togglePinMode());
+  document.getElementById('pinPatrolBtn')?.addEventListener('click', () => {
+    void (async () => {
+      const r = await toContent<Record<string, unknown>>({ type: 'BRIDGE_PATROL_PINS' });
+      pinResultShow(r ? `🔄 ${String(r.summary ?? JSON.stringify(r).slice(0, 400))}` : '巡檢失敗');
+      await refreshPinList();
+    })();
+  });
+  document.getElementById('pinClearBtn')?.addEventListener('click', () => {
+    void (async () => {
+      if (!confirm('確定要清除這個分頁的所有圖釘嗎？此操作無法復原。')) return;
+      await toContent({ type: 'BRIDGE_CLEAR_PINS', status: 'all' });
+      document.getElementById('pinResult')?.classList.add('hidden');
+      await refreshPinList();
+    })();
+  });
+
+  // 先用 session 記住的狀態畫一次（避免閃爍），再向 content script 要真實狀態校正
+  void (async () => {
+    try {
+      const cached = await chrome.storage.session.get(PIN_MODE_KEY);
+      renderPinModeBtn(cached?.[PIN_MODE_KEY] === true);
+    } catch {
+      /* 忽略 */
+    }
+    await refreshPinList();
+  })();
+}
+
+initPinUi();

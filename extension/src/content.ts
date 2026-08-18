@@ -1251,6 +1251,16 @@ interface Pin {
   status: 'active' | 'warning' | 'error' | 'stale';
   created_at: number;
   last_check: { at: number; summary: string } | null;
+  /**
+   * PM-387：使用者手動標記「我處理完了」。
+   *
+   * ⚠ **刻意做成獨立欄位，而不是加進 `status` 的列舉。** PM-329／335 已經確認
+   * `resolved` 不是這個模型裡的狀態（合法值只有 active/warning/error/stale，
+   * `clear_pins` 的參數驗證也是照這四種寫的）。而且語意上兩者是垂直的：
+   * 一個被標記為「已解決」的圖釘，其元素狀態仍然可能是 active 或 error。
+   * 混進同一個欄位會讓 `patrol_pins` 的狀態變化偵測失去意義。
+   */
+  resolved?: boolean;
 }
 
 const pins = new Map<string, Pin>();
@@ -1316,15 +1326,25 @@ function repositionPins(): void {
       width: '14px',
       height: '14px',
       borderRadius: '50%',
-      background: PIN_STATUS_COLOR[pin.status],
+      // PM-387：已解決 → 淡綠（卡片色表裡的那一格，現在真的有東西對應了）
+      background: pin.resolved ? '#a5d6a7' : PIN_STATUS_COLOR[pin.status],
       border: '2px solid #fff',
       boxShadow: '0 1px 4px rgba(0,0,0,.4)',
       pointerEvents: 'auto', // 只有圓點可點（PM-304 的結論：整層 none 就收不到點擊）
-      cursor: 'help',
+      cursor: 'context-menu',
+      opacity: pin.resolved ? '0.75' : '1',
     } as CSSStyleDeclaration);
     dot.title = `📌 ${pin.description || '(無描述)'}
 ${pin.selector}
-狀態：${pin.status}`;
+狀態：${pin.status}${pin.resolved ? '（已標記解決）' : ''}
+右鍵：分析／修改描述／標記已解決／移除`;
+    // PM-387：右鍵開自訂選單。**preventDefault 只針對圖釘本身**——
+    //   釘選模式下頁面其他地方的右鍵不攔（卡片明訂保留正常右鍵選單）。
+    dot.addEventListener('contextmenu', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      openPinMenu(ev.clientX, ev.clientY, pin);
+    });
     layer.appendChild(dot);
   }
 }
@@ -1537,12 +1557,453 @@ function bridgeGetPinResults(): Record<string, unknown> {
       selector: p.selector,
       description: p.description,
       status: p.status,
+      // PM-387：人工標記「已處理」。status 仍是四種之一，這是額外的一維資訊。
+      resolved: p.resolved === true,
       created_at: p.created_at,
       last_check: p.last_check,
     })),
     total_count: pins.size,
     // 無圖釘時回**空陣列**而不是 error（驗收條件 3）
     ...(pins.size === 0 ? { note: '這個分頁目前沒有任何圖釘。用 pin_element 或 pin_analyze 建立。' } : {}),
+  };
+}
+
+// ── PM-383~387：手動釘選模式（人放圖釘，AI 去查）─────────────────────────
+//
+// 這是 §7「第三層：人指路，AI 偵測」的入口。原本圖釘只能由 AI 用 `pin_element`
+// 建立，使用者沒有辦法把「我覺得這裡怪怪的」直接標出來。
+//
+// 三個一致的設計原則（沿用既有做法，不另立一套）：
+//   ① **所有 UI 都在 shadow DOM 裡**——注入的是任意使用者的網站，一般 DOM 會被對方
+//      的 CSS reset 弄爛，我們的樣式也可能反過來汙染人家（PM-339 的結論）。
+//   ② **一律用 DOM API，不用 innerHTML**——Trusted Types 網站會擋掉字串賦值（PM-69）。
+//   ③ 高亮沿用 `highlightElement`、selector 沿用 `uniqueSelector`，不重寫。
+
+let pinModeActive = false;
+let pinModeHost: HTMLElement | null = null;
+let pinModeRoot: ShadowRoot | null = null;
+let pinModeTooltip: HTMLElement | null = null;
+let pinModeBanner: HTMLElement | null = null;
+let pinModeStyleSheet: CSSStyleSheet | null = null;
+let pinModeLastHover: Element | null = null;
+
+/** 釘選模式的游標。用 CSSStyleSheet 而不是注入 `<style>` 字串——Trusted Types 會擋。 */
+function ensurePinModeCursor(on: boolean): void {
+  try {
+    if (!pinModeStyleSheet) {
+      pinModeStyleSheet = new CSSStyleSheet();
+      pinModeStyleSheet.replaceSync(
+        'html[data-bugezy-pin-mode], html[data-bugezy-pin-mode] * { cursor: crosshair !important; }',
+      );
+      document.adoptedStyleSheets = [...document.adoptedStyleSheets, pinModeStyleSheet];
+    }
+  } catch {
+    /* 舊瀏覽器不支援 adoptedStyleSheets → 沒有 crosshair，但功能仍可用 */
+  }
+  if (on) document.documentElement.setAttribute('data-bugezy-pin-mode', '1');
+  else document.documentElement.removeAttribute('data-bugezy-pin-mode');
+}
+
+/** 釘選模式的 shadow DOM 容器（tooltip／輸入框／toast／右鍵選單共用）。 */
+function ensurePinModeRoot(): ShadowRoot {
+  if (pinModeRoot && pinModeHost?.isConnected) return pinModeRoot;
+  const host = document.createElement('div');
+  host.setAttribute('data-bugezy-pin-ui', '1');
+  Object.assign(host.style, {
+    position: 'fixed',
+    inset: '0',
+    zIndex: '2147483647', // 在圖釘層（…646）之上
+    pointerEvents: 'none',
+  } as CSSStyleDeclaration);
+  const root = host.attachShadow({ mode: 'open' });
+  const sheet = new CSSStyleSheet();
+  sheet.replaceSync(`
+    :host { all: initial; }
+    .bz-tip {
+      position: absolute; max-width: 320px; padding: 5px 9px; border-radius: 6px;
+      background: rgba(17,24,39,.94); color: #e5e7eb; font: 12px/1.5 ui-monospace, monospace;
+      pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      box-shadow: 0 2px 10px rgba(0,0,0,.4);
+    }
+    .bz-tip.warn { background: rgba(180,83,9,.96); color: #fff; font-family: system-ui, sans-serif; }
+    .bz-banner {
+      position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+      padding: 8px 16px; border-radius: 999px; pointer-events: none;
+      background: #00bfff; color: #04222e; font: 600 13px/1 system-ui, sans-serif;
+      box-shadow: 0 4px 16px rgba(0,0,0,.35);
+    }
+    .bz-card {
+      position: absolute; width: 280px; padding: 12px; border-radius: 10px;
+      background: #111827; color: #e5e7eb; font: 13px/1.5 system-ui, sans-serif;
+      pointer-events: auto; box-shadow: 0 10px 30px rgba(0,0,0,.5);
+      border: 1px solid rgba(255,255,255,.12);
+    }
+    .bz-card h4 { margin: 0 0 8px; font-size: 13px; font-weight: 700; }
+    .bz-card input {
+      width: 100%; box-sizing: border-box; padding: 7px 9px; border-radius: 6px;
+      border: 1px solid rgba(255,255,255,.18); background: #0b1220; color: #e5e7eb;
+      font: 13px system-ui, sans-serif; outline: none;
+    }
+    .bz-card input:focus { border-color: #00bfff; }
+    .bz-row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+    .bz-btn {
+      padding: 6px 14px; border-radius: 6px; border: none; cursor: pointer;
+      font: 600 12px system-ui, sans-serif;
+    }
+    .bz-btn.primary { background: #00bfff; color: #04222e; }
+    .bz-btn.ghost { background: rgba(255,255,255,.1); color: #e5e7eb; }
+    .bz-toast {
+      position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%);
+      padding: 9px 16px; border-radius: 8px; pointer-events: none;
+      background: rgba(0,200,83,.96); color: #04220e; font: 600 13px system-ui, sans-serif;
+      box-shadow: 0 6px 20px rgba(0,0,0,.35);
+    }
+    .bz-menu {
+      position: absolute; min-width: 160px; padding: 5px; border-radius: 8px;
+      background: #111827; border: 1px solid rgba(255,255,255,.12);
+      pointer-events: auto; box-shadow: 0 10px 30px rgba(0,0,0,.5);
+    }
+    .bz-menu button {
+      display: block; width: 100%; text-align: left; padding: 7px 10px; border: none;
+      border-radius: 5px; background: transparent; color: #e5e7eb; cursor: pointer;
+      font: 13px system-ui, sans-serif;
+    }
+    .bz-menu button:hover { background: rgba(255,255,255,.1); }
+    .bz-menu button:disabled { opacity: .4; cursor: not-allowed; }
+  `);
+  root.adoptedStyleSheets = [sheet];
+  document.documentElement.appendChild(host);
+  pinModeHost = host;
+  pinModeRoot = root;
+  return root;
+}
+
+/** 把浮層放進視窗內（靠近右下角時會超出邊界）。 */
+function clampToViewport(el: HTMLElement, x: number, y: number): void {
+  const w = el.offsetWidth || 280;
+  const h = el.offsetHeight || 120;
+  el.style.left = `${Math.max(6, Math.min(x, window.innerWidth - w - 6))}px`;
+  el.style.top = `${Math.max(6, Math.min(y, window.innerHeight - h - 6))}px`;
+}
+
+function pinModeToast(text: string): void {
+  const root = ensurePinModeRoot();
+  root.querySelector('.bz-toast')?.remove();
+  const t = document.createElement('div');
+  t.className = 'bz-toast';
+  t.textContent = text;
+  root.appendChild(t);
+  setTimeout(() => t.remove(), 2000);
+}
+
+// 元素簡短描述沿用檔案下方既有的 `describeElement`（PM-315），不另寫一份。
+
+function autoDescription(el: Element): string {
+  const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 40);
+  return text ? `${describeElement(el)}「${text}」` : describeElement(el);
+}
+
+/** 這個元素是不是 BugEzy 自己的 UI（圖釘、面板、覆蓋層）——不能把自己釘起來。 */
+function isBugezyOwnUi(el: Element | null): boolean {
+  for (let cur: Element | null = el; cur; cur = cur.parentElement) {
+    if (
+      cur.hasAttribute?.('data-bugezy-pins') ||
+      cur.hasAttribute?.('data-bugezy-pin-ui') ||
+      cur.hasAttribute?.('data-bugezy-zones') ||
+      cur.id === 'bugezy-debug-panel'
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// ── PM-385：描述輸入彈窗 ───────────────────────────────────────────────────
+let pinPromptOpen = false;
+
+/**
+ * 彈出描述輸入框。`onDone(null)` = 取消、`onDone(text)` = 要釘（空字串代表跳過）。
+ * 回傳前會把彈窗關掉。
+ */
+function openPinPrompt(
+  x: number,
+  y: number,
+  target: Element,
+  initial: string,
+  onDone: (description: string | null) => void,
+): void {
+  const root = ensurePinModeRoot();
+  root.querySelector('.bz-card')?.remove();
+  pinPromptOpen = true;
+
+  const card = document.createElement('div');
+  card.className = 'bz-card';
+
+  const title = document.createElement('h4');
+  title.textContent = `📌 描述這個問題（選填）`;
+  card.appendChild(title);
+
+  const sub = document.createElement('div');
+  Object.assign(sub.style, { fontSize: '11px', opacity: '.65', marginBottom: '8px' } as CSSStyleDeclaration);
+  sub.textContent = describeElement(target);
+  card.appendChild(sub);
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = '例如：這個按鈕點了沒反應';
+  input.value = initial;
+  card.appendChild(input);
+
+  const row = document.createElement('div');
+  row.className = 'bz-row';
+  const skip = document.createElement('button');
+  skip.className = 'bz-btn ghost';
+  skip.textContent = '跳過';
+  const ok = document.createElement('button');
+  ok.className = 'bz-btn primary';
+  ok.textContent = '釘選';
+  row.appendChild(skip);
+  row.appendChild(ok);
+  card.appendChild(row);
+
+  root.appendChild(card);
+  clampToViewport(card, x + 12, y + 12);
+  // 自動 focus：**要等元素進 DOM 之後**，否則某些瀏覽器會忽略
+  setTimeout(() => input.focus(), 0);
+
+  const close = (result: string | null): void => {
+    pinPromptOpen = false;
+    document.removeEventListener('mousedown', onOutside, true);
+    card.remove();
+    onDone(result);
+  };
+  /** 點彈窗外 = 取消。用 capture 才不會被頁面自己的 handler 先吃掉。 */
+  const onOutside = (ev: MouseEvent): void => {
+    // 事件從 shadow DOM 冒出來時 target 是 host，用 composedPath 才看得到真正的節點
+    if (ev.composedPath().includes(card)) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    close(null);
+  };
+  setTimeout(() => document.addEventListener('mousedown', onOutside, true), 0);
+
+  skip.addEventListener('click', () => close(''));
+  ok.addEventListener('click', () => close(input.value.trim()));
+  input.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') {
+      ev.preventDefault();
+      close(input.value.trim());
+    } else if (ev.key === 'Escape') {
+      ev.preventDefault();
+      ev.stopPropagation(); // 不要讓 ESC 一路傳上去把整個釘選模式也關掉
+      close(null);
+    }
+  });
+}
+
+// ── PM-384：hover 高亮 + 點擊放圖釘 ────────────────────────────────────────
+function onPinModeMove(ev: MouseEvent): void {
+  if (pinPromptOpen) return;
+  const el = ev.target as Element | null;
+  if (!el || isBugezyOwnUi(el)) return;
+
+  const root = ensurePinModeRoot();
+  if (!pinModeTooltip) {
+    pinModeTooltip = document.createElement('div');
+    pinModeTooltip.className = 'bz-tip';
+    root.appendChild(pinModeTooltip);
+  }
+  // iframe 內的元素抓不到（content script 只跑在最上層框架），如實說明而不是假裝可以
+  const isFrame = el.tagName === 'IFRAME' || el.tagName === 'FRAME';
+  pinModeTooltip.className = isFrame ? 'bz-tip warn' : 'bz-tip';
+  pinModeTooltip.textContent = isFrame
+    ? '⚠ iframe 內的元素暫不支援（跨框架限制）'
+    : describeElement(el);
+  clampToViewport(pinModeTooltip, ev.clientX + 14, ev.clientY + 18);
+
+  if (el !== pinModeLastHover && !isFrame) {
+    pinModeLastHover = el;
+    try {
+      highlightElement(uniqueSelector(el), { durationMs: 600, color: '#00bfff' });
+    } catch {
+      /* selector 算不出來 → 只是沒有高亮，不影響點擊 */
+    }
+  }
+}
+
+function onPinModeClick(ev: MouseEvent): void {
+  if (pinPromptOpen) return;
+  const el = ev.target as Element | null;
+  if (!el || isBugezyOwnUi(el)) return;
+
+  // 🔴 一定要攔截：不攔的話點連結會導航、點按鈕會觸發表單送出，
+  //    使用者只是想「標記這裡有問題」，結果把頁面狀態改掉了。
+  ev.preventDefault();
+  ev.stopPropagation();
+  ev.stopImmediatePropagation();
+
+  if (el.tagName === 'IFRAME' || el.tagName === 'FRAME') {
+    pinModeToast('⚠ iframe 內的元素暫不支援');
+    return;
+  }
+
+  const selector = uniqueSelector(el);
+  const auto = autoDescription(el);
+  openPinPrompt(ev.clientX, ev.clientY, el, '', (description) => {
+    if (description === null) return; // 取消
+    const r = bridgePinElement(selector, description || auto);
+    if (typeof r.error === 'string') {
+      pinModeToast(`⚠ ${r.error}`);
+      return;
+    }
+    pinModeToast(`📌 已釘選 ${describeElement(el)}`);
+    // 留在釘選模式，可以繼續釘下一個
+  });
+}
+
+function onPinModeKey(ev: KeyboardEvent): void {
+  if (ev.key === 'Escape' && !pinPromptOpen) {
+    ev.preventDefault();
+    setPinMode(false);
+    pinModeToast('已結束釘選模式');
+  }
+}
+
+/**
+ * 開關釘選模式。
+ *
+ * ⚠ **不會因為 popup 關閉而自動結束**——popup 一失焦就會關閉，而使用者要點的正是
+ * 頁面上的元素，自動結束等於這個功能永遠用不了（卡片 PM-383 的驗收 3 與功能本身相衝突，
+ * 見 DONE-383 的說明）。改為：再按一次按鈕、或在頁面上按 ESC 才結束，
+ * 並且**模式啟動期間頁面上一直有一條橫幅**，不會有「不知不覺還開著」的情況。
+ */
+function setPinMode(on: boolean): Record<string, unknown> {
+  if (on === pinModeActive) return { pin_mode: pinModeActive };
+  pinModeActive = on;
+  ensurePinModeCursor(on);
+
+  if (on) {
+    const root = ensurePinModeRoot();
+    pinModeBanner = document.createElement('div');
+    pinModeBanner.className = 'bz-banner';
+    pinModeBanner.textContent = '📌 釘選模式：點擊要標記的元素（ESC 結束）';
+    root.appendChild(pinModeBanner);
+    document.addEventListener('mousemove', onPinModeMove, true);
+    document.addEventListener('click', onPinModeClick, true); // capture：最早攔到
+    document.addEventListener('keydown', onPinModeKey, true);
+  } else {
+    document.removeEventListener('mousemove', onPinModeMove, true);
+    document.removeEventListener('click', onPinModeClick, true);
+    document.removeEventListener('keydown', onPinModeKey, true);
+    pinModeBanner?.remove();
+    pinModeBanner = null;
+    pinModeTooltip?.remove();
+    pinModeTooltip = null;
+    pinModeLastHover = null;
+    pinModeRoot?.querySelector('.bz-card')?.remove();
+    pinPromptOpen = false;
+  }
+  // 通知 background：跨頁導航後 popup 才知道要不要恢復按鈕狀態
+  try {
+    chrome.runtime.sendMessage({ type: 'PIN_MODE_CHANGED', on: pinModeActive });
+  } catch {
+    /* background 可能正在休眠，不影響頁面行為 */
+  }
+  return { pin_mode: pinModeActive };
+}
+
+// ── PM-387：圖釘右鍵選單 ───────────────────────────────────────────────────
+function closePinMenu(): void {
+  pinModeRoot?.querySelector('.bz-menu')?.remove();
+}
+
+function openPinMenu(x: number, y: number, pin: Pin): void {
+  const root = ensurePinModeRoot();
+  closePinMenu();
+  const menu = document.createElement('div');
+  menu.className = 'bz-menu';
+
+  const item = (label: string, disabled: boolean, fn: () => void): void => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.disabled = disabled;
+    b.addEventListener('click', () => {
+      closePinMenu();
+      fn();
+    });
+    menu.appendChild(b);
+  };
+
+  // 元素已消失的圖釘沒有東西可分析，禁用而不是讓它跑出一個錯誤
+  const stale = pin.status === 'stale';
+  item('🔍 分析', stale, () => {
+    const r = bridgePinAnalyze(pin.selector);
+    pinModeToast(
+      typeof r.error === 'string' ? `⚠ ${String(r.error).slice(0, 60)}` : `🔍 ${String(r.summary ?? '分析完成')}`,
+    );
+  });
+  item('✏️ 修改描述', false, () => {
+    const el = document.querySelector(pin.selector);
+    if (!el) {
+      pinModeToast('⚠ 元素已不存在，無法定位');
+      return;
+    }
+    const r = el.getBoundingClientRect();
+    openPinPrompt(r.left, r.bottom, el, pin.description, (d) => {
+      if (d === null) return;
+      pin.description = d || autoDescription(el);
+      queueReposition();
+      pinModeToast('✏️ 描述已更新');
+    });
+  });
+  item(pin.resolved ? '↩️ 取消已解決' : '✅ 標記已解決', false, () => {
+    pin.resolved = !pin.resolved;
+    queueReposition();
+    pinModeToast(pin.resolved ? '✅ 已標記為解決' : '↩️ 已取消解決標記');
+  });
+  item('🗑️ 移除', false, () => {
+    bridgeRemovePin(pin.id);
+    pinModeToast('🗑️ 圖釘已移除');
+  });
+
+  root.appendChild(menu);
+  clampToViewport(menu, x, y);
+
+  const onOutside = (ev: Event): void => {
+    if (ev.composedPath().includes(menu)) return;
+    closePinMenu();
+    document.removeEventListener('mousedown', onOutside, true);
+    document.removeEventListener('keydown', onEsc, true);
+  };
+  const onEsc = (ev: KeyboardEvent): void => {
+    if (ev.key !== 'Escape') return;
+    ev.preventDefault();
+    ev.stopPropagation(); // ESC 只關選單，不要順手把釘選模式也關掉
+    closePinMenu();
+    document.removeEventListener('mousedown', onOutside, true);
+    document.removeEventListener('keydown', onEsc, true);
+  };
+  setTimeout(() => {
+    document.addEventListener('mousedown', onOutside, true);
+    document.addEventListener('keydown', onEsc, true);
+  }, 0);
+}
+
+// ── PM-386：popup 圖釘清單用的資料 ─────────────────────────────────────────
+function getPinListForPopup(): Record<string, unknown> {
+  repositionPins(); // 順便更新 stale
+  return {
+    pin_mode: pinModeActive,
+    pins: [...pins.values()].map((p) => ({
+      pin_id: p.id,
+      selector: p.selector,
+      description: p.description,
+      status: p.status,
+      resolved: p.resolved === true,
+      emoji: p.resolved ? '✅' : PIN_STATUS_EMOJI[p.status],
+      last_check: p.last_check,
+    })),
+    total_count: pins.size,
   };
 }
 
@@ -2205,6 +2666,14 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
     sendResponse(bridgeClearPins(msg.status));
   } else if (msg.type === 'BRIDGE_GET_PIN_RESULTS') {
     sendResponse(bridgeGetPinResults());
+  } else if (msg.type === 'PIN_MODE_ON') {
+    sendResponse(setPinMode(true));
+  } else if (msg.type === 'PIN_MODE_OFF') {
+    sendResponse(setPinMode(false));
+  } else if (msg.type === 'PIN_MODE_STATUS') {
+    sendResponse({ pin_mode: pinModeActive });
+  } else if (msg.type === 'GET_PIN_LIST') {
+    sendResponse(getPinListForPopup());
   } else if (msg.type === 'BRIDGE_GET_PAGE_HEALTH') {
     void bridgeGetPageHealth().then(sendResponse);
   } else if (msg.type === 'BRIDGE_GET_WEB_VITALS') {

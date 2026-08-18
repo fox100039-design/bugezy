@@ -426,6 +426,26 @@ if (/port 19850 被占用/.test(stderr)) {
       const badPin = await call('pin_element', { selector: '#nope-pin-330', description: 'x', tab_id: r1.tab_id });
       check('330-4 元素不存在 → error 含 selector', !!badPin.error && String(badPin.error).includes('#nope-pin-330'), JSON.stringify(badPin).slice(0, 200));
 
+      // ── PM-383~387 手動釘選：MCP 側相容性 ──
+      // `resolved` 欄位是 PM-387 新加的，**它同時是「擴充功能有沒有重新載入」的探針**：
+      // 舊的 content.js 不會有這個欄位。缺了就標 LIMIT 而不是 FAIL —— 那代表沒重載，不是壞掉。
+      {
+        await call('pin_element', { selector: 'body', description: 'PM-388 相容性檢查', tab_id: r1.tab_id });
+        const pr = await call('get_pin_results', { tab_id: r1.tab_id });
+        const one = (pr.pins || []).find((p) => p.selector === 'body');
+        check('388-4 手動釘選的圖釘結構能被 MCP 讀到', !!one && typeof one.status === 'string', JSON.stringify(pr).slice(0, 200));
+        if (one && 'resolved' in one) {
+          check('387 get_pin_results 帶 resolved 欄位（新版 content.js 已載入）', one.resolved === false, JSON.stringify(one));
+          check('387 status 仍是原本四種之一（resolved 沒污染狀態列舉）',
+            ['active', 'warning', 'error', 'stale'].includes(one.status), one.status);
+        } else {
+          markLimit('387 resolved 欄位未驗到', '擴充功能尚未重新載入，Chrome 跑的仍是舊的 content.js；重新載入後再跑一次即可');
+        }
+        const pat = await call('patrol_pins', { tab_id: r1.tab_id });
+        check('388-4 patrol_pins 讀得到手動釘選的圖釘', pat.patrolled >= 1, JSON.stringify(pat).slice(0, 200));
+        await call('clear_pins', { status: 'all', tab_id: r1.tab_id });
+      }
+
       // ── PM-367 PII 遮罩端到端（真的從瀏覽器抓錯誤）──
       {
         const be = await call('get_browser_errors', { tab_id: r1.tab_id });

@@ -267,6 +267,26 @@ L6 的資安鐵律與 L4 的商業規則多半是自然語言（「勝率加總�
 - **`unparsed_stderr` 必須保留**：解析器只支援 Python／Node，Go／Rust／Java 會解析不出來；只回 `errors` 會讓那些語言的使用者拿到空陣列並以為沒事。
 - **Windows 用 `taskkill /T`**：`shell:true` 多一層 `cmd.exe`，只 kill child 會留孫程序。
 
+#### 手動釘選模式（PM-383~387）
+
+§7 的「第三層：人指路，AI 偵測」的入口。原本圖釘只能由 AI 用 `pin_element` 建立，使用者沒辦法把「我覺得這裡怪怪的」直接標出來。
+
+```
+popup 📌 釘選模式  →  頁面 crosshair + 橫幅
+                   →  hover 高亮 + tooltip（tag#id.class）
+                   →  click 攔截 → 描述輸入框 → 放圖釘（走同一個 bridgePinElement）
+                   →  ESC 或再按一次按鈕結束
+圖釘圓點右鍵        →  分析／修改描述／標記已解決／移除
+popup 清單          →  狀態符號 + 描述 + 分析／移除 + 巡檢全部／清除全部
+```
+
+- 🔴 **釘選模式不會因為 popup 關閉而結束。** popup 一失焦就關閉，而使用者要點的正是頁面上的元素 —— 自動結束等於這個功能一次都不可能成功（卡片 PM-383 驗收 3 與功能本身相衝突）。改為按鈕再按一次或頁面 ESC；**啟動期間頁面上一直有橫幅**，不會有「不知不覺還開著」的情況。
+- 🔴 **click 用 capture 階段攔並下滿三個停止**（`preventDefault` + `stopPropagation` + `stopImmediatePropagation`）。不攔的話，使用者想標記的連結會在下一秒把頁面導走，標記目標就不存在了。
+- **手動釘的圖釘與 AI 釘的是同一批**：走同一個 `bridgePinElement`，所以 `get_pin_results` / `patrol_pins` 立刻讀得到。popup 的操作也直接複用 `BRIDGE_*` handler，不另立一套訊息。
+- **`resolved` 是獨立欄位，不是第五種 `status`**：`clear_pins` 的驗證寫死四個合法值、工具描述也寫著「沒有 resolved」；而且語意上兩者垂直——標記已解決的圖釘其元素狀態仍可能是 `active` 或 `error`，混在一起會讓 `patrol_pins` 的「狀態有變」偵測失去意義。
+- **UI 全在 shadow DOM、全用 DOM API**（Trusted Types 網站會擋字串賦值）；crosshair 用 `CSSStyleSheet` 而非注入 `<style>`。
+- **邊界**：iframe 內元素不支援（content script 只跑最上層框架）→ 如實提示；不能把 BugEzy 自己的 UI 釘起來；`chrome://` 等分頁明說「不支援釘選」而不是顯示成「沒有圖釘」。
+
 #### 圖釘系統的儲存決策（PM-329/330）
 
 圖釘存在 **content script 的模組變數**，不是 background 的 Map、也不是 `chrome.storage.session`：
