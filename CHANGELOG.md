@@ -1,28 +1,58 @@
 # BugEzy Changelog
 
-## Day 45（2026-08-18）— 手動釘選模式（PM-383~388）
+## Day 45（2026-08-18）— PM-383~396，14 張卡
 
-讓**使用者自己放圖釘**，補上 §7「人指路，AI 偵測」缺的那一半：popup 一個按鈕進入釘選模式，在頁面上點要標記的元素、填一句描述，AI 立刻用 `get_pin_results` / `patrol_pins` 讀得到。
+> **端到端 686 項 0 failed**（12 套）。**MCP 工具總數 65 支不變**（bridge 51 + 雲端 14）——這一天做的全是既有工具的能力升級與 UI，沒有新增工具。
+
+### 圖釘手動放置 UI（PM-383~388）
+
+補上 §7「人指路，AI 偵測」缺的那一半：popup 一個按鈕進入釘選模式，在頁面上點要標記的元素、填一句描述，AI 立刻用 `get_pin_results` / `patrol_pins` 讀得到。
 
 - **PM-383** popup「📌 釘選模式」按鈕。🔴 **卡片驗收 3「popup 關閉 → 自動結束」與功能本身相衝突**：popup 一失焦就關閉，而使用者要點的正是頁面上的元素——照做的話這功能一次都不可能成功。改為按鈕再按一次或頁面 ESC 結束，並在頁面上放一條**常駐橫幅**，讓「還開著」永遠看得見。
 - **PM-384** hover 高亮 + 點擊放圖釘。🔴 **click 用 capture 階段攔並下滿三個停止**——不攔的話，使用者想標記的連結會在下一秒把頁面導走，標記目標就不存在了。已用真的 `<a href>` 驗證頁面 handler 一次都沒被觸發。邊界：iframe 內元素如實提示不支援、不能把 BugEzy 自己的 UI 釘起來。
 - **PM-385** 描述輸入彈窗（shadow DOM）。「跳過」不是不填，而是用元素的自動描述——留空的圖釘之後在清單裡完全認不出是哪一個。點外部取消用 `composedPath()` 判斷（用 `target` 會變成「點自己也取消」）；彈窗內的 ESC 只關彈窗，不會順手把釘選模式一起關掉。
 - **PM-386** popup 圖釘清單。**直接複用 `BRIDGE_*` handler**（跟 MCP 工具同一組），不另立一套 popup 專用訊息。stale 圖釘的「分析」禁用；`chrome://` 等分頁明說「不支援釘選」而不是顯示成「沒有圖釘」。
 - **PM-387** 圖釘右鍵選單。🔴 **「標記已解決」做成獨立的 `resolved` 欄位，不是第五種 `status`**：`clear_pins` 的驗證寫死四個合法值、工具描述也寫著「沒有 resolved」；而且語意上兩者垂直——標記已解決的圖釘其元素狀態仍可能是 `active` 或 `error`，混在一起會讓 `patrol_pins` 的「狀態有變」偵測失去意義。
-- **PM-388** 驗收與收工。新增 `_verify383.mjs` **60 項**（jsdom 真實 DOM 跑 content.ts 裡真正的函式 + popup 原始碼靜態檢查）。
-- **PM-389** stderr critical 信號。🔴 **但它不是推播通道**：MCP 沒有 server → 模型的通道（PM-345 已確認），stderr 會被 client 收走寫進自己的 log，**不會自動進入對話脈絡**。用途是給人看／可 grep／`--debug` 看得到；AI 仍得自己呼叫工具。四個來源的「叫或不叫」都刻意設計：zone 只有轉 error 才叫、pin 只有惡化才叫（沿用 PM-334 `alert_count` 的取捨），去重 30 秒，遮罩在寫出之前。
+- **PM-388** 驗收與收工。新增 `_verify383.mjs`（jsdom 真實 DOM 跑 content.ts 裡真正的函式 + popup 原始碼靜態檢查）。
+
+### stderr 信號 + BUGEZY.md（PM-389~391）
+
+- **PM-389** bridge 偵測 🔴 → stderr 一行警告（四來源 Browser／Terminal／Zone／Pin）。🔴 **但它不是推播通道**：MCP 沒有 server → 模型的通道（PM-345 已確認），stderr 會被 client 收走寫進自己的 log，**不會自動進入對話脈絡**。用途是給人看／可 grep／`--debug` 看得到；AI 仍得自己呼叫工具。四個來源的「叫或不叫」都刻意設計：zone 只有轉 error 才叫、pin 只有惡化才叫（沿用 PM-334 `alert_count` 的取捨），去重 30 秒，遮罩在寫出之前。
 - **PM-390** `docs/BUGEZY.md`（純文件）。除了卡片指定的四條規則，另補了 stderr 限制說明、`start_terminal_monitor` 白名單、以及 🔴 **「工具回需要 Pro 方案怎麼辦」**——PM-374 之後沒設 token 的使用者第一次照這份文件操作就會全部卡住。
-- **PM-392~394** 🔴 **`pin_analyze` 動態探測**：從「看」升級成「試」——按鈕會被點、輸入框會被填再還原、下拉與勾選會切換再還原、連結只用 HEAD 檢查（**絕不點擊**）、圖片影片檢查載入。互動觸發的錯誤讓圖釘變 🔴。
+- **PM-391** 驗收收工。🔴 **順手抓到一個 PM-327 漏掉的洩漏**：`terminal-monitor.ts` 在 monitor 啟動／結束時把**原始指令**寫進 stderr。PM-327 遮了四處回傳值的指令回聲，**漏了這兩行 log** —— `DATABASE_URL=postgres://u:pw@h/db npm run dev` 就這樣落地成明文。已補遮罩並加測試鎖住「bridge 整份 stderr 都不得含明文機密」。
+
+### 動態探測：`pin_analyze` 從「看」升級成「試」（PM-392~396）
+
+- **PM-392~394** 依元素類型自動操作八種：按鈕會被點、輸入框會被填再還原、下拉與勾選會切換再還原、連結只用 HEAD 檢查（**絕不點擊**）、圖片影片檢查載入、動畫檢查 playState、其餘 static_only。互動觸發的錯誤讓圖釘變 🔴；`patrol_pins` 走同一套。
   - 🔴 **加了一條卡片沒有的安全措施：破壞性按鈕不點。** `patrol_pins` 每次巡檢都重跑探測，一個「刪除帳號」按鈕被反覆按下是**必然發生**的事。保守樣式比對——擋錯只是少測一個元素，漏擋是幫使用者按下刪除。
   - **錯誤收集不能用 content script 的 `window.addEventListener('error')`**（ISOLATED world 收不到頁面的 console.error），改走 `queryInjectLiveErrors()` 前後差集。
   - **`link_check` 的 status 誠實回 `null`**：`no-cors` 是 opaque response，規範上讀不到狀態碼，編一個 200 比不給答案更糟。
   - `patrol_pins` 有 20 秒總預算，超過只做靜態檢查**並說明**；bridge 端逾時相應放寬（20s/40s），否則使用者只會看到「逾時」。
   - 狀態判定是靜態 + 動態合併，**靜態問題不會被探測結果洗掉**；popup 不重新解讀 JSON，直接用 content script 算好的 summary。
-  - 新增 `_verify392.mjs` **63 項**。全套 **660 / 0**。
-- **PM-396** 🔴 **動態探測補網路監控**：原本只看 console，於是「點按鈕 → 打 API → 回 500」會被判成 🟢——而那正是使用者最想抓到的 bug。`collectErrorsDuring` 改為同時對 `consoleLogs` 與 `networkErrors` 做**前後差集**（差集不是快照，探測前就存在的失敗不算在這次頭上）。5xx／status 0 = 🔴、4xx = 🟡，與 §6 一致。summary 只留 path 不塞 query string。**觀測窗口誠實揭露**：沒抓到東西時 note 明說「只涵蓋點擊後 2 秒內完成的請求」，不讓「這次沒看到」被讀成「沒問題」。全套 **686 / 0**。
-- **PM-395** 🔴 **修掉 PM-384 與 PM-392 合在一起才出現的 bug**：釘選模式在 capture 攔所有 click，而探測會 `el.click()` 模擬點擊——結果按 [分析] 竟然跳出描述輸入框，而且模擬點擊被 `preventDefault` 吃掉、根本沒測到頁面反應。三道獨立防線：探測旗標（瞬間）、分析／巡檢暫停計數器（整段，`try/finally` 保證恢復）、釘選後自動分析（使用者直接看到 🟢/🔴）。**用計數器而非布林**——巡檢會對每個圖釘各跑一次分析，巢狀時不能被內層提前解除。新增 11 項測試，其中「探測的模擬 click 真的送達頁面」是這個 bug 的直接回歸守衛。全套 **671 / 0**。
-- **PM-391** 驗收收工。🔴 **順手抓到一個 PM-327 漏掉的洩漏**：`terminal-monitor.ts` 在 monitor 啟動／結束時把**原始指令**寫進 stderr。PM-327 遮了四處回傳值的指令回聲，**漏了這兩行 log** —— `DATABASE_URL=postgres://u:pw@h/db npm run dev` 就這樣落地成明文。已補遮罩並加測試鎖住「bridge 整份 stderr 都不得含明文機密」。全套 **597 / 0**（新增 `_verify389` 43 項）。
+- **PM-395** 🔴 **修掉 PM-384 與 PM-392 合在一起才出現的 bug**：釘選模式在 capture 攔所有 click，而探測會 `el.click()` 模擬點擊——結果按 [分析] 竟然跳出描述輸入框，而且模擬點擊被 `preventDefault` 吃掉、**根本沒測到頁面反應卻回報「測試通過」**。三道獨立防線：探測旗標（瞬間）、分析／巡檢暫停計數器（整段，`try/finally` 保證恢復）、釘選後自動分析（使用者直接看到 🟢/🔴）。**用計數器而非布林**——巡檢會對每個圖釘各跑一次分析，巢狀時不能被內層提前解除。
+- **PM-396** 🔴 **補網路監控**：原本只看 console，於是「點按鈕 → 打 API → 回 500」會被判成 🟢——而那正是使用者最想抓到的 bug。`collectErrorsDuring` 改為同時對 `consoleLogs` 與 `networkErrors` 做**前後差集**（差集不是快照，探測前就存在的失敗不算在這次頭上）。5xx／status 0 = 🔴、4xx = 🟡，與 §6 一致。summary 只留 path 不塞 query string（避免把 token 印進去）。**觀測窗口誠實揭露**：沒抓到東西時 note 明說「只涵蓋點擊後 2 秒內完成的請求」。
 
+### 其他
+
+- **PM-379** Supabase RLS 手動查核（8 張表全 Enabled + deny all）— FOX 手動完成。
+- **BUG10 十天體驗券建立完成** — FOX 手動完成（DB 操作，**非本 session 驗證**）。
+
+### 數據
+
+| 項目 | 數字 |
+|---|---|
+| 端到端測試 | **686 項，0 failed**（12 套） |
+| MCP 工具總數 | **65**（bridge 51 + 雲端 14，**不變**） |
+| 新增測試套件 | `_verify383`（71）、`_verify389`（43）、`_verify392`（78） |
+
+### ⚠ Day 45 之後要 FOX 處理的
+
+1. **重新載入擴充功能** — 本日大量改動 `content.ts` / `popup.ts` / `popup.html` / `types.ts`。
+2. **重連 MCP** — bridge 也改了（stderr 信號、探測逾時放寬、工具描述）。
+3. 🔴 **真 Chrome 端到端一直沒跑到**：port 19850 被 Claude Code 自己的 bugezy-bridge MCP server 占用，驗收腳本**刻意不去殺它**；而 live MCP 的圖釘工具又被方案閘門擋住（PM-374 之後需要 `BUGEZY_SESSION_TOKEN`）。要補完：① 設 `BUGEZY_SESSION_TOKEN` + `BUGEZY_USER_EMAIL`（臨時可用 `ENFORCE_TIER_GATE=false`）② 重新載入擴充功能 ③ 暫時關掉 MCP server 再跑 `cd bridge && node _verify_phase1.mjs --reclaim`。
+4. **popup 的實際點擊互動無法自動化**，需要實機走一次（釘選 → 描述 → 清單 → 右鍵選單）。
+5. **要不要讓「釘選就只是釘選、絕不觸發」** — 目前釘選後會自動分析，而分析會探測性地點一次那個按鈕（破壞性按鈕除外）。改成只做靜態檢查是一行的事，等你決定。
+6. `npm start` 仍不在 `start_terminal_monitor` 的白名單內（PM-368 只列 `npm run *`）。
 
 ## Day 44（2026-08-17）— PM-334~381，46 張卡
 
