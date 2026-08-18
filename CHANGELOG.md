@@ -12,6 +12,13 @@
 - **PM-388** 驗收與收工。新增 `_verify383.mjs` **60 項**（jsdom 真實 DOM 跑 content.ts 裡真正的函式 + popup 原始碼靜態檢查）。
 - **PM-389** stderr critical 信號。🔴 **但它不是推播通道**：MCP 沒有 server → 模型的通道（PM-345 已確認），stderr 會被 client 收走寫進自己的 log，**不會自動進入對話脈絡**。用途是給人看／可 grep／`--debug` 看得到；AI 仍得自己呼叫工具。四個來源的「叫或不叫」都刻意設計：zone 只有轉 error 才叫、pin 只有惡化才叫（沿用 PM-334 `alert_count` 的取捨），去重 30 秒，遮罩在寫出之前。
 - **PM-390** `docs/BUGEZY.md`（純文件）。除了卡片指定的四條規則，另補了 stderr 限制說明、`start_terminal_monitor` 白名單、以及 🔴 **「工具回需要 Pro 方案怎麼辦」**——PM-374 之後沒設 token 的使用者第一次照這份文件操作就會全部卡住。
+- **PM-392~394** 🔴 **`pin_analyze` 動態探測**：從「看」升級成「試」——按鈕會被點、輸入框會被填再還原、下拉與勾選會切換再還原、連結只用 HEAD 檢查（**絕不點擊**）、圖片影片檢查載入。互動觸發的錯誤讓圖釘變 🔴。
+  - 🔴 **加了一條卡片沒有的安全措施：破壞性按鈕不點。** `patrol_pins` 每次巡檢都重跑探測，一個「刪除帳號」按鈕被反覆按下是**必然發生**的事。保守樣式比對——擋錯只是少測一個元素，漏擋是幫使用者按下刪除。
+  - **錯誤收集不能用 content script 的 `window.addEventListener('error')`**（ISOLATED world 收不到頁面的 console.error），改走 `queryInjectLiveErrors()` 前後差集。
+  - **`link_check` 的 status 誠實回 `null`**：`no-cors` 是 opaque response，規範上讀不到狀態碼，編一個 200 比不給答案更糟。
+  - `patrol_pins` 有 20 秒總預算，超過只做靜態檢查**並說明**；bridge 端逾時相應放寬（20s/40s），否則使用者只會看到「逾時」。
+  - 狀態判定是靜態 + 動態合併，**靜態問題不會被探測結果洗掉**；popup 不重新解讀 JSON，直接用 content script 算好的 summary。
+  - 新增 `_verify392.mjs` **63 項**。全套 **660 / 0**。
 - **PM-391** 驗收收工。🔴 **順手抓到一個 PM-327 漏掉的洩漏**：`terminal-monitor.ts` 在 monitor 啟動／結束時把**原始指令**寫進 stderr。PM-327 遮了四處回傳值的指令回聲，**漏了這兩行 log** —— `DATABASE_URL=postgres://u:pw@h/db npm run dev` 就這樣落地成明文。已補遮罩並加測試鎖住「bridge 整份 stderr 都不得含明文機密」。全套 **597 / 0**（新增 `_verify389` 43 項）。
 
 

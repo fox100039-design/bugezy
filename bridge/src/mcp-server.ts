@@ -7,6 +7,11 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ExtensionLink } from './extension-link.js';
 import { NAVIGATE_TIMEOUT_MS } from './types.js';
+
+// PM-392／394：動態探測的逾時。content script 端每次探測上限 5 秒、巡檢總預算 20 秒，
+// 這裡各留一段餘裕，讓「探測慢」不會被誤報成「bridge 逾時」。
+const PROBE_TIMEOUT_MS = 20_000;
+const PATROL_TIMEOUT_MS = 40_000;
 import {
   addSeverityRule,
   classifySeverity,
@@ -408,13 +413,14 @@ export function createMcpServer(link: ExtensionLink): McpServer {
 
   server.tool(
     'pin_analyze',
-    'Pin an element (creating the pin if needed) and immediately run the full analyze_element inspection on it, storing the result as that pin latest check and updating its marker colour (green ok / yellow problem / grey element gone). 釘選元素（尚未釘則自動建立）並立刻對它執行完整的 analyze_element 分析，結果存為該圖釘的最近一次檢查並更新標記顏色（綠＝正常／黃＝有問題／灰＝元素已消失）。',
+    'Pin an element and analyse it — then ACTIVELY PROBE it: buttons get clicked, text fields get typed into and restored, selects/checkboxes get toggled and restored, links are checked with HEAD (never clicked), images/videos are checked for load failure. Any errors the interaction triggers are reported in probe.errors_triggered and turn the pin red. Destructive-looking buttons (delete/pay/submit...) and password fields are SKIPPED, not clicked. 釘選並分析元素，**並且會實際操作它**：按鈕會被點擊、文字欄位會被輸入再還原、下拉與勾選會被切換再還原、連結只用 HEAD 檢查（**絕不點擊**）、圖片影片檢查是否載入失敗。互動觸發的錯誤會出現在 probe.errors_triggered 並讓圖釘變 🔴。**看起來具破壞性的按鈕（刪除／付款／送出…）與密碼欄位會被跳過，不會點下去。**',
     {
       selector: z.string().min(1).describe('CSS 選擇器。'),
       tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。'),
     },
     gated('pin_analyze', async (args) => {
-      const r = await link.send('pin_analyze', { selector: args.selector, tab_id: args.tab_id });
+      // PM-392：動態探測會實際操作元素並等錯誤浮現，10 秒的預設逾時不夠用
+      const r = await link.send('pin_analyze', { selector: args.selector, tab_id: args.tab_id }, PROBE_TIMEOUT_MS);
       if (!r.ok) return txt({ error: r.error, selector: args.selector, extension_connected: link.connected });
       return txt(r.data);
     }),
@@ -683,10 +689,11 @@ export function createMcpServer(link: ExtensionLink): McpServer {
   // ── 工具 18~20：圖釘巡察與清理（PM-334／335，Phase 2 PM-G）────────────────
   server.tool(
     'patrol_pins',
-    'Re-check every pin in one call: each is re-analysed, its status updated, and any CHANGE since the last check is flagged. Use alert_count to decide whether anything needs attention — it counts pins whose state changed, not pins that are merely unhealthy. Returns patrolled: 0 (not an error) when there are no pins. 一次巡檢所有圖釘：逐一重新分析、更新狀態，並標出**與上次相比的變化**。`alert_count` 數的是「狀態有變」的圖釘（不是「有問題」的圖釘），適合用來判斷需不需要深入看。沒有圖釘時回 `patrolled: 0`，不是錯誤。',
+    'Re-check every pin in one call, INCLUDING the active probe described in pin_analyze (buttons get clicked, inputs typed and restored). Each pin is re-analysed, its status updated, and any CHANGE since the last check is flagged. alert_count counts pins that changed OR are currently in error; changed_count and problem_count are also returned separately. Probing has a 20-second total budget — beyond it the remaining pins get a static check only, and the response says so. 一次巡檢所有圖釘，**包含 pin_analyze 那套實際操作的探測**（按鈕會被點、輸入框會被填再還原）。逐一重新分析、更新狀態，並標出**與上次相比的變化**。`alert_count` 數的是「狀態有變**或**目前是 error」的圖釘，另外分開回 `changed_count` 與 `problem_count`。探測有 20 秒總預算，超過的圖釘只做靜態檢查並在回傳中說明。沒有圖釘時回 `patrolled: 0`，不是錯誤。',
     { tab_id: z.number().int().optional().describe('省略 → 使用者當前分頁；指定 → 該分頁。') },
     gated('patrol_pins', async (args) => {
-      const r = await link.send('patrol_pins', { tab_id: args.tab_id });
+      // PM-394：逐一探測每個圖釘，content script 端另有 20 秒總預算
+      const r = await link.send('patrol_pins', { tab_id: args.tab_id }, PATROL_TIMEOUT_MS);
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
       const d = (r.data ?? {}) as Record<string, unknown>;
       // PM-389：只有**惡化**才叫（一直是 error 的圖釘不該每次巡檢都刷屏）

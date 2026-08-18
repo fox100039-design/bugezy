@@ -289,6 +289,33 @@ bridge 偵測到 critical 時往 stderr 寫一行，格式固定方便 grep：
 
 `docs/BUGEZY.md` 是給使用者複製到自己專案根目錄的 AI 指引：每次改前端／後端後該呼叫哪支工具、debug 完要 `memory_learn`、以及「不要在沒確認 🟢 之前說修好了」。它**不含任何相對於本 repo 的連結**，複製過去就能用。
 
+#### 動態探測（PM-392~394）
+
+`pin_analyze` 與 `patrol_pins` 從「看」升級成「試」：依元素類型自動操作，收集期間新增的錯誤。
+
+| 元素 | 探測 |
+|---|---|
+| button / `[role=button]` / submit | **點擊**，等 2 秒收錯誤 |
+| `a[href]` | **絕不點擊** —— 用 `HEAD` + `no-cors` 檢查可達性 |
+| text input / textarea | 填入 `BugEzy_probe_test` → 收錯誤 → **還原** |
+| select / checkbox / radio | 切換 → 收錯誤 → **還原** |
+| img / video / audio | 檢查 `naturalWidth` / `readyState` / `MediaError` |
+| 有動畫的元素 | `getAnimations()` 的 `playState` |
+| 其他 | `static_only` |
+
+🔴 **這是整個專案裡唯一會主動操作使用者頁面的功能**，所以每一項都必須是「可還原」或「明確拒絕」：
+
+- **破壞性按鈕直接跳過**（刪除／清空／登出／送出／下單／購買／付款／轉帳／重設…中英文樣式）。卡片沒列這條，但 `patrol_pins` **每次巡檢都重跑探測** —— 一個「刪除帳號」按鈕被反覆按下是必然發生的事。這是保守的樣式比對而非完備判定：擋錯只是少測一個元素，漏擋是幫使用者按下刪除，兩邊代價不對稱。
+- 密碼與敏感欄位不碰（沿用既有的 `isSensitiveField`）；表單送出在探測期間被 capture 攔下；`disabled`／`readonly`／單一選項不操作；**不可見或尺寸 0 的元素不探測**。
+- 單次硬上限 5 秒；**探測拋例外不會讓 `pin_analyze` 整支失敗**，靜態結果照樣回傳。
+- `patrol_pins` 有 **20 秒總預算**，超過的圖釘只做靜態檢查**並在回傳中說明** —— 不是默默截斷。bridge 端 `pin_analyze` / `patrol_pins` 的逾時也相應放寬（20s / 40s），否則使用者只會看到「逾時」而不知原因。
+
+**兩處與原始設計不同，因為原做法在這個架構下行不通**：
+- 錯誤收集**不能**在 content script 掛 `window.addEventListener('error')` —— content script 在 **ISOLATED world**，頁面的 `console.error` 不會經過它。走 `queryInjectLiveErrors()` 的前後差集（PM-51／181／313 已驗證的路）。
+- `link_check` 的 `status` **誠實回 `null`** —— `no-cors` 拿到的是 opaque response，規範上就讀不到狀態碼。編一個 200 出來比不給答案更糟。
+
+**狀態判定是「靜態 + 動態」合併**，而且**靜態問題不會被探測結果洗掉**：一個「不可見但點下去沒噴錯」的元素仍然是 🟡。popup **不重新解讀 JSON**，直接用 content script 算好的 summary——兩邊各算一次判定遲早會分岔（PM-350 的 score/summary 不同步已經吃過這個虧）。
+
 #### 手動釘選模式（PM-383~387）
 
 §7 的「第三層：人指路，AI 偵測」的入口。原本圖釘只能由 AI 用 `pin_element` 建立，使用者沒辦法把「我覺得這裡怪怪的」直接標出來。

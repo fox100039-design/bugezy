@@ -1682,6 +1682,38 @@ async function toContent<T = unknown>(msg: Record<string, unknown>): Promise<T |
   return (await chrome.tabs.sendMessage(tab.id, msg).catch(() => null)) as T | null;
 }
 
+/**
+ * PM-393：把一次探測結果整理成一行人話。
+ *
+ * content script 的 `summary` 已經是「🔴 點擊觸發 TypeError: …」這種形式，
+ * 這裡只負責接上 selector 與補充欄位（連結狀態／媒體載入／還原與否），
+ * **不重新解讀 JSON** —— 兩邊各算一次判定遲早會分岔。
+ */
+function formatProbeLine(selector: string, r: Record<string, unknown> | null): string {
+  if (!r) return `⚠ ${selector} — 沒有回應`;
+  const probe = (r.probe ?? {}) as Record<string, unknown>;
+  const bits: string[] = [`${String(r.summary ?? '分析完成')}`];
+  if (probe.type === 'skipped_destructive' || probe.type === 'skipped_sensitive') {
+    bits.push(String(probe.note ?? ''));
+  }
+  if (probe.restored === false) bits.push('⚠ 未能還原原值');
+  if (typeof probe.duration_ms === 'number' && probe.duration_ms > 0) bits.push(`（${probe.duration_ms} ms）`);
+  return `${selector}\n${bits.filter(Boolean).join(' ')}`;
+}
+
+/** PM-393：巡檢結果每行一個圖釘，一眼看得出誰有問題。 */
+function formatPatrolResult(r: Record<string, unknown> | null): string {
+  if (!r) return '巡檢失敗（分頁可能不支援）';
+  if (typeof r.error === 'string') return `⚠ ${r.error}`;
+  const results = (r.results ?? []) as Array<Record<string, unknown>>;
+  if (results.length === 0) return String(r.note ?? '這個分頁沒有圖釘。');
+  const lines = results.map((x) => `${String(x.summary ?? '')} — ${String(x.selector ?? '')}`);
+  const head = `巡檢 ${results.length} 個圖釘`
+    + (Number(r.problem_count ?? 0) > 0 ? `，${r.problem_count} 個有問題` : '，全部正常')
+    + (Number(r.changed_count ?? 0) > 0 ? `（${r.changed_count} 個狀態有變化）` : '');
+  return [head, ...lines, r.note ? `\n${String(r.note)}` : ''].filter(Boolean).join('\n');
+}
+
 function pinResultShow(text: string): void {
   const box = document.getElementById('pinResult');
   if (!box) return;
@@ -1762,10 +1794,12 @@ async function refreshPinList(): Promise<void> {
           type: 'BRIDGE_PIN_ANALYZE',
           selector: pin.selector,
         });
+        // PM-393：顯示人話而不是 JSON。summary 已經由 content script 組成
+        //   「🔴 點擊觸發 TypeError: …」這種形式，直接用即可。
         pinResultShow(
           r && typeof r.error === 'string'
             ? `⚠ ${r.error}`
-            : `🔍 ${pin.selector}\n${String(r?.summary ?? JSON.stringify(r ?? {}, null, 1).slice(0, 400))}`,
+            : formatProbeLine(pin.selector, r),
         );
         await refreshPinList();
       })();
@@ -1813,8 +1847,9 @@ function initPinUi(): void {
   document.getElementById('pinModeBtn')?.addEventListener('click', () => void togglePinMode());
   document.getElementById('pinPatrolBtn')?.addEventListener('click', () => {
     void (async () => {
+      pinResultShow('🔄 巡檢中…（每個圖釘都會做一次動態探測，可能需要幾秒）');
       const r = await toContent<Record<string, unknown>>({ type: 'BRIDGE_PATROL_PINS' });
-      pinResultShow(r ? `🔄 ${String(r.summary ?? JSON.stringify(r).slice(0, 400))}` : '巡檢失敗');
+      pinResultShow(formatPatrolResult(r));
       await refreshPinList();
     })();
   });

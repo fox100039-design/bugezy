@@ -1406,7 +1406,7 @@ function bridgePinElement(selector: string, description: string): Record<string,
   };
 }
 
-function bridgePinAnalyze(selector: string): Record<string, unknown> {
+async function bridgePinAnalyze(selector: string): Promise<Record<string, unknown>> {
   const existingPin = findPinBySelector(selector);
   // 先確保有圖釘（沒有就自動建立）
   const pinned = bridgePinElement(selector, '');
@@ -1440,21 +1440,27 @@ function bridgePinAnalyze(selector: string): Record<string, unknown> {
     return { pin_id: pin.id, selector, status: pin.status, error: analysis.error };
   }
 
-  // status 只用 analyze_element 已算出的資訊推導，**不引入新的錯誤來源**
   const vis = analysis.visibility as { visible?: boolean; has_size?: boolean } | undefined;
   const attrs = (analysis.attributes ?? {}) as Record<string, string>;
   const problems: string[] = [];
   if (!vis?.visible) problems.push('元素不可見');
   if (!vis?.has_size) problems.push('尺寸為 0');
   if ('disabled' in attrs) problems.push('disabled');
-  pin.status = problems.length ? 'warning' : 'active';
-  pin.last_check = {
-    at: Date.now(),
-    summary: problems.length ? `⚠ ${problems.join('、')}` : '✅ 可見且可互動',
-  };
+
+  // PM-392／393：靜態分析之後**再做動態探測**（追加，不取代）。
+  //   不可見／尺寸 0 的元素不探測——點一個看不到的東西沒有意義，而且風險不對稱。
+  const el2 = document.querySelector(selector);
+  const probe: ProbeResult =
+    el2 && vis?.visible && vis?.has_size
+      ? await probeWithTimeout(el2)
+      : { type: 'static_only', errors_triggered: [], duration_ms: 0, note: '元素不可見或尺寸為 0，未做動態探測。' };
+
+  const [status, summary] = pinStatusFromProbe(problems, probe);
+  pin.status = status;
+  pin.last_check = { at: Date.now(), summary };
   queueReposition();
 
-  return { pin_id: pin.id, selector, status: pin.status, summary: pin.last_check.summary, analysis };
+  return { pin_id: pin.id, selector, status: pin.status, summary, analysis, probe };
 }
 
 /**
@@ -1463,14 +1469,31 @@ function bridgePinAnalyze(selector: string): Record<string, unknown> {
  * 巡檢順序**按建立時間**（先釘的先巡）—— Map 的插入順序剛好就是建立順序，
  * 但為了不依賴這個隱含性質，明確用 `created_at` 排序。
  */
-function bridgePatrolPins(): Record<string, unknown> {
+/**
+ * PM-394：巡檢的**總時間預算**。
+ *
+ * 每個圖釘的動態探測最多 5 秒，N 個圖釘就可能是 N×5 秒——bridge 那端的指令逾時
+ * 會先炸掉，使用者只會看到「逾時」而完全不知道發生什麼事。所以這裡設總預算，
+ * 超過之後剩下的圖釘**只做靜態分析並如實說明**，而不是默默截斷或整支失敗。
+ */
+const PATROL_PROBE_BUDGET_MS = 20_000;
+
+async function bridgePatrolPins(): Promise<Record<string, unknown>> {
   const ordered = [...pins.values()].sort((a, b) => a.created_at - b.created_at);
-  const results = ordered.map((pin) => {
+  const startedAt = Date.now();
+  let budgetExceeded = 0;
+  const results = [];
+  for (const pin of ordered) {
     const previous_status = pin.status;
     const prevSummary = pin.last_check?.summary ?? null;
-    // 複用 pin_analyze 的分析路徑（它本身又複用 bridgeAnalyzeElement），不另寫一套判定
+    // 複用 pin_analyze 的分析路徑（它本身又複用 bridgeAnalyzeElement），不另寫一套
     //（bridgePinAnalyze → bridgeAnalyzeElement 內已含 PM-337 的高亮，巡檢時會依序閃過每個圖釘）
-    bridgePinAnalyze(pin.selector);
+    if (Date.now() - startedAt < PATROL_PROBE_BUDGET_MS) {
+      await bridgePinAnalyze(pin.selector);
+    } else {
+      budgetExceeded++;
+      probeSkipForBudget(pin);
+    }
     const changed = pin.status !== previous_status || pin.last_check?.summary !== prevSummary;
     let summary: string;
     if (pin.status === 'stale') {
@@ -1480,7 +1503,7 @@ function bridgePatrolPins(): Record<string, unknown> {
     } else {
       summary = pin.last_check?.summary ?? '無變化';
     }
-    return {
+    results.push({
       pin_id: pin.id,
       selector: pin.selector,
       description: pin.description,
@@ -1489,17 +1512,37 @@ function bridgePatrolPins(): Record<string, unknown> {
       changed,
       // PM-338：狀態顏色 emoji，讓 AI 掃一眼就知道輕重
       summary: `${PIN_STATUS_EMOJI[pin.status]} ${summary}`,
-    };
-  });
+    });
+  }
   queueReposition();
+  // PM-394：alert_count 把「動態探測發現的問題」也算進去 ——
+  //   一個狀態沒變但一直是 error 的圖釘，對「這次巡檢要不要理它」而言仍然是需要注意的。
+  //   兩個數字都給，因為它們回答的是不同問題。
+  const problem_count = results.filter((r) => r.status === 'error' || r.status === 'stale').length;
   return {
     patrolled: results.length,
     results,
-    alert_count: results.filter((r) => r.changed).length,
+    alert_count: results.filter((r) => r.changed || r.status === 'error').length,
+    changed_count: results.filter((r) => r.changed).length,
+    problem_count,
+    ...(budgetExceeded
+      ? { note: `時間預算（${PATROL_PROBE_BUDGET_MS / 1000} 秒）用完，最後 ${budgetExceeded} 個圖釘只做了靜態檢查。要完整探測請分批或減少圖釘數量。` }
+      : {}),
     ...(results.length === 0
       ? { note: '這個分頁目前沒有任何圖釘。用 pin_element 或 pin_analyze 建立後再巡檢。' }
       : {}),
   };
+}
+
+/** 預算用完時的退路：只做靜態檢查，並如實寫進 summary。 */
+function probeSkipForBudget(pin: Pin): void {
+  const el = document.querySelector(pin.selector);
+  if (!el) {
+    pin.status = 'stale';
+    pin.last_check = { at: Date.now(), summary: '元素已從頁面消失' };
+    return;
+  }
+  pin.last_check = { at: Date.now(), summary: '（巡檢時間預算用完，本次只做靜態檢查）' };
 }
 
 /** PM-335：移除單一圖釘（pin_id 優先，其次 selector）。 */
@@ -1566,6 +1609,376 @@ function bridgeGetPinResults(): Record<string, unknown> {
     // 無圖釘時回**空陣列**而不是 error（驗收條件 3）
     ...(pins.size === 0 ? { note: '這個分頁目前沒有任何圖釘。用 pin_element 或 pin_analyze 建立。' } : {}),
   };
+}
+
+// ── PM-392～394：動態探測（pin_analyze 從「看」升級成「試」）──────────────
+//
+// 🔴 **這是整個專案裡唯一會主動操作使用者頁面的功能。** 靜態分析只是讀 DOM，
+//    動態探測會真的按下按鈕、真的往輸入框打字。因此每一項都必須是「可還原」或
+//    「明確拒絕」，沒有中間地帶：
+//
+//    ① 改過的東西一定還原（值／checked／selectedIndex），並回報 `restored`
+//    ② `a[href]` 絕對不 click（會導航，把使用者的頁面狀態帶走）
+//    ③ 密碼欄位不碰
+//    ④ 表單送出在探測期間被攔下來（click 一個 submit 鈕不該真的送出訂單）
+//    ⑤ **看起來會造成破壞的按鈕直接跳過**（刪除／付款／送出…）——卡片沒列這條，
+//       但 `patrol_pins` 會**每次巡檢都重跑一遍探測**，一個「刪除帳號」按鈕被反覆點
+//       是不可接受的。寧可少測一個按鈕，也不要幫使用者按下他不想按的東西。
+//    ⑥ 全程有時間上限，不會 hang 住
+
+/** 單次探測的硬上限（卡片指定 5 秒）。 */
+const PROBE_HARD_TIMEOUT_MS = 5000;
+/** 點擊之後等錯誤浮現的時間（卡片指定 2 秒）。 */
+const PROBE_CLICK_WAIT_MS = 2000;
+/** 其餘互動的等待時間（卡片指定 1 秒）。 */
+const PROBE_INTERACT_WAIT_MS = 1000;
+/** 探測時填進輸入框的值。刻意用一眼看得出是誰放的字串。 */
+const PROBE_INPUT_VALUE = 'BugEzy_probe_test';
+
+interface ProbeError {
+  level: string;
+  message: string;
+  timestamp: number;
+}
+
+interface ProbeResult {
+  type:
+    | 'click'
+    | 'link_check'
+    | 'input'
+    | 'select'
+    | 'toggle'
+    | 'media_check'
+    | 'animation_check'
+    | 'static_only'
+    | 'skipped_destructive'
+    | 'skipped_sensitive';
+  errors_triggered: ProbeError[];
+  duration_ms: number;
+  restored?: boolean;
+  status?: number | null;
+  reachable?: boolean;
+  loaded?: boolean;
+  media_error?: string;
+  animations?: number;
+  all_running?: boolean;
+  note?: string;
+}
+
+/**
+ * 看起來會造成破壞的動作。比對按鈕的可見文字、`aria-label`、`name`、`value`、`id`、class。
+ *
+ * 這是**保守的樣式比對，不是完備的判定** —— 它擋掉最明顯的那一類。
+ * 擋錯（把安全的按鈕當成危險）的代價只是少測一個元素並如實說明；
+ * 漏擋的代價是幫使用者按下刪除。兩邊不對稱，所以寧可寬鬆地擋。
+ */
+const DESTRUCTIVE_PATTERN =
+  /(刪除|删除|移除|清除|清空|註銷|注销|登出|登出帳號|停用|解除|退訂|取消訂閱|送出|提交|下單|訂購|購買|付款|結帳|支付|確認付款|轉帳|匯款|發送|寄出|重設|重置|回復原廠)|(\b(delete|remove|destroy|erase|clear|wipe|drop|purge|deactivate|disable|unsubscribe|logout|sign\s*out|submit|checkout|purchase|buy|pay|order|charge|transfer|send|reset|revoke|terminate|cancel)\b)/i;
+
+function looksDestructive(el: Element): string | null {
+  const bits = [
+    (el.textContent ?? '').slice(0, 120),
+    el.getAttribute('aria-label') ?? '',
+    el.getAttribute('title') ?? '',
+    el.getAttribute('name') ?? '',
+    (el as HTMLInputElement).value ?? '',
+    el.id ?? '',
+    typeof el.className === 'string' ? el.className : '',
+  ].join(' ');
+  const m = DESTRUCTIVE_PATTERN.exec(bits);
+  return m ? m[0] : null;
+}
+
+/**
+ * 執行 `action`，並收集這段期間**新增**的瀏覽器錯誤。
+ *
+ * ⚠ 用的是 `queryInjectLiveErrors()`（inject.ts 在 MAIN world 攔下來的那一份），
+ *   **不是在 content script 掛 `window.addEventListener('error')`** —— content script
+ *   跑在 ISOLATED world，頁面 script 的 `console.error` 根本不會經過它。
+ *   走既有的 inject 通道是這個專案裡唯一已經驗證過可行的路（PM-51／181／313）。
+ */
+async function collectErrorsDuring(action: () => void | Promise<void>, waitMs: number): Promise<ProbeError[]> {
+  let before: Array<{ level?: string; message?: string; timestamp?: number }> = [];
+  try {
+    before = (await queryInjectLiveErrors()).consoleLogs ?? [];
+  } catch {
+    /* 拿不到基準就當作空的——寧可多報幾筆，也不要因此整支探測失敗 */
+  }
+  const seen = new Set(before.map((e) => `${e.level}:${e.message}:${e.timestamp}`));
+
+  try {
+    await action();
+  } catch (e) {
+    // action 自己丟出來的例外也是一種「這個操作會炸」的證據，要記下來
+    return [{ level: 'error', message: `探測動作本身拋出例外：${String(e)}`, timestamp: Date.now() }];
+  }
+
+  await new Promise((r) => setTimeout(r, waitMs));
+
+  let after: Array<{ level?: string; message?: string; timestamp?: number }> = [];
+  try {
+    after = (await queryInjectLiveErrors()).consoleLogs ?? [];
+  } catch {
+    return [];
+  }
+  return after
+    .filter((e) => e.level !== 'info' && !seen.has(`${e.level}:${e.message}:${e.timestamp}`))
+    .map((e) => ({
+      level: String(e.level ?? 'error'),
+      message: String(e.message ?? ''),
+      timestamp: Number(e.timestamp ?? Date.now()),
+    }));
+}
+
+/** 探測期間把表單送出攔下來。回傳解除函式。 */
+function suppressFormSubmit(el: Element): () => void {
+  const form = el.closest('form');
+  if (!form) return () => {};
+  const stop = (ev: Event): void => {
+    ev.preventDefault();
+    ev.stopPropagation();
+  };
+  form.addEventListener('submit', stop, true);
+  return () => form.removeEventListener('submit', stop, true);
+}
+
+/** 依元素類型選擇探測動作。**一定回傳結果，不會拋例外。** */
+async function probeElement(el: Element): Promise<ProbeResult> {
+  const t0 = Date.now();
+  const done = (r: Omit<ProbeResult, 'duration_ms'>): ProbeResult => ({ ...r, duration_ms: Date.now() - t0 });
+  const tag = el.tagName.toLowerCase();
+
+  try {
+    // ── 敏感欄位一律不碰 ──
+    if (isSensitiveField(el) || (el as HTMLInputElement).type === 'password') {
+      return done({ type: 'skipped_sensitive', errors_triggered: [], note: '敏感欄位（密碼／個資）不做動態探測。' });
+    }
+
+    // ── a[href]：**絕對不 click**，改用 HEAD 檢查可達性 ──
+    if (tag === 'a' && el.hasAttribute('href')) {
+      const href = (el as HTMLAnchorElement).href;
+      if (!/^https?:/i.test(href)) {
+        return done({ type: 'link_check', errors_triggered: [], status: null, reachable: false, note: `非 http(s) 連結（${href.slice(0, 40)}），未檢查。` });
+      }
+      try {
+        // no-cors 拿不到真實 status（opaque response），所以 status 誠實回 null，
+        // 只回報「連得上／連不上」——編一個 200 出來比不給答案更糟。
+        await fetch(href, { method: 'HEAD', mode: 'no-cors' });
+        return done({ type: 'link_check', errors_triggered: [], status: null, reachable: true, note: 'no-cors 模式拿不到實際狀態碼，只能確認連得上。' });
+      } catch {
+        return done({ type: 'link_check', errors_triggered: [], status: null, reachable: false, note: '連線失敗（可能是網址錯誤或伺服器沒回應）。' });
+      }
+    }
+
+    // ── button / [role=button] / input[type=submit|button] ──
+    const isButton =
+      tag === 'button' ||
+      el.getAttribute('role') === 'button' ||
+      (tag === 'input' && ['submit', 'button', 'reset', 'image'].includes((el as HTMLInputElement).type));
+    if (isButton) {
+      const danger = looksDestructive(el);
+      if (danger) {
+        return done({
+          type: 'skipped_destructive',
+          errors_triggered: [],
+          note: `按鈕文字／屬性含「${danger}」，看起來會造成破壞性操作，已跳過點擊。要測請自己點一次再看 get_browser_errors()。`,
+        });
+      }
+      const release = suppressFormSubmit(el);
+      const errors = await collectErrorsDuring(() => {
+        (el as HTMLElement).click();
+      }, PROBE_CLICK_WAIT_MS);
+      release();
+      return done({ type: 'click', errors_triggered: errors, restored: true, note: '探測期間已攔下表單送出。' });
+    }
+
+    // ── 文字輸入 ──
+    const isTextInput =
+      (tag === 'input' && ['text', 'search', 'url', 'tel', 'number', ''].includes((el as HTMLInputElement).type)) ||
+      tag === 'textarea';
+    if (isTextInput) {
+      const input = el as HTMLInputElement | HTMLTextAreaElement;
+      if (input.disabled || input.readOnly) {
+        return done({ type: 'static_only', errors_triggered: [], note: 'disabled／readonly 欄位，不做輸入探測。' });
+      }
+      const original = input.value;
+      const setValue = (v: string): void => {
+        // 繞過 React 的 _valueTracker（沿用 bridgeTypeText 的做法，不另寫一套）
+        const proto = tag === 'textarea' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+        const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+        if (setter) setter.call(input, v);
+        else input.value = v;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      const errors = await collectErrorsDuring(() => {
+        input.focus?.();
+        setValue(PROBE_INPUT_VALUE);
+        input.blur?.();
+      }, PROBE_INTERACT_WAIT_MS);
+      setValue(original); // 還原
+      return done({ type: 'input', errors_triggered: errors, restored: input.value === original });
+    }
+
+    // ── select ──
+    if (tag === 'select') {
+      const sel = el as HTMLSelectElement;
+      if (sel.disabled || sel.options.length < 2) {
+        return done({ type: 'static_only', errors_triggered: [], note: sel.disabled ? 'disabled 的下拉選單。' : '只有一個選項，沒有可切換的對象。' });
+      }
+      const original = sel.selectedIndex;
+      const next = (original + 1) % sel.options.length;
+      const errors = await collectErrorsDuring(() => {
+        sel.selectedIndex = next;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+      }, PROBE_INTERACT_WAIT_MS);
+      sel.selectedIndex = original;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      return done({ type: 'select', errors_triggered: errors, restored: sel.selectedIndex === original });
+    }
+
+    // ── checkbox / radio ──
+    if (tag === 'input' && ['checkbox', 'radio'].includes((el as HTMLInputElement).type)) {
+      const box = el as HTMLInputElement;
+      if (box.disabled) return done({ type: 'static_only', errors_triggered: [], note: 'disabled 的勾選欄位。' });
+      // radio 一旦切走就回不到「全部都沒選」的狀態，但切回原本那顆是等價的
+      const original = box.checked;
+      const release = suppressFormSubmit(el);
+      const errors = await collectErrorsDuring(() => {
+        box.checked = !original;
+        box.dispatchEvent(new Event('input', { bubbles: true }));
+        box.dispatchEvent(new Event('change', { bubbles: true }));
+      }, PROBE_INTERACT_WAIT_MS);
+      box.checked = original;
+      box.dispatchEvent(new Event('input', { bubbles: true }));
+      box.dispatchEvent(new Event('change', { bubbles: true }));
+      release();
+      return done({ type: 'toggle', errors_triggered: errors, restored: box.checked === original });
+    }
+
+    // ── 媒體（純檢查，不播放）──
+    if (tag === 'img') {
+      const img = el as HTMLImageElement;
+      const loaded = img.complete && img.naturalWidth > 0;
+      return done({
+        type: 'media_check',
+        errors_triggered: [],
+        loaded,
+        ...(loaded ? {} : { media_error: img.complete ? '已載入完成但寬度為 0（圖片壞掉或格式不支援）' : '尚未載入完成' }),
+        note: img.currentSrc || img.src ? `來源：${(img.currentSrc || img.src).slice(0, 120)}` : '沒有 src',
+      });
+    }
+    if (tag === 'video' || tag === 'audio' || tag === 'source') {
+      const media = (tag === 'source' ? el.parentElement : el) as HTMLMediaElement | null;
+      const readyState = media?.readyState ?? 0;
+      const err = media?.error;
+      return done({
+        type: 'media_check',
+        errors_triggered: [],
+        loaded: readyState >= 2, // HAVE_CURRENT_DATA 以上才算真的有東西
+        ...(err ? { media_error: `MediaError code ${err.code}` } : {}),
+        note: `readyState=${readyState}`,
+      });
+    }
+
+    // ── 動畫 ──
+    const anims = typeof (el as Element & { getAnimations?: () => Animation[] }).getAnimations === 'function'
+      ? (el as Element & { getAnimations: () => Animation[] }).getAnimations()
+      : [];
+    if (anims.length > 0) {
+      const running = anims.filter((a) => a.playState === 'running' || a.playState === 'finished');
+      return done({
+        type: 'animation_check',
+        errors_triggered: [],
+        animations: anims.length,
+        all_running: running.length === anims.length,
+        ...(running.length === anims.length
+          ? {}
+          : { note: `${anims.length - running.length} 個動畫處於 ${anims.map((a) => a.playState).join('／')} 狀態` }),
+      });
+    }
+
+    return done({ type: 'static_only', errors_triggered: [], note: '這個元素沒有可自動探測的互動方式。' });
+  } catch (e) {
+    // 探測**永遠不該讓 pin_analyze 整支失敗** —— 靜態分析的結果仍然有價值
+    return done({ type: 'static_only', errors_triggered: [], note: `探測過程發生例外，已略過：${String(e).slice(0, 120)}` });
+  }
+}
+
+/** 套上硬性逾時，避免頁面自己的 handler 卡住整個探測。 */
+async function probeWithTimeout(el: Element): Promise<ProbeResult> {
+  const t0 = Date.now();
+  return Promise.race([
+    probeElement(el),
+    new Promise<ProbeResult>((resolve) =>
+      setTimeout(
+        () =>
+          resolve({
+            type: 'static_only',
+            errors_triggered: [],
+            duration_ms: Date.now() - t0,
+            note: `探測超過 ${PROBE_HARD_TIMEOUT_MS / 1000} 秒上限已中止（頁面的 handler 可能卡住了，這本身就值得看一下）。`,
+          }),
+        PROBE_HARD_TIMEOUT_MS,
+      ),
+    ),
+  ]);
+}
+
+/**
+ * PM-393：把靜態問題與探測結果合起來決定圖釘狀態。
+ * 回傳 `[status, summary]`。
+ */
+function pinStatusFromProbe(
+  staticProblems: string[],
+  probe: ProbeResult,
+): ['active' | 'warning' | 'error', string] {
+  const errs = probe.errors_triggered;
+  // critical 的判定與 §6 一致：error 級的 console 訊息、或經典 JS 錯誤型別
+  const critical = errs.filter(
+    (e) => e.level === 'error' || /\b(TypeError|ReferenceError|SyntaxError|RangeError|Uncaught)\b/.test(e.message),
+  );
+  const minor = errs.filter((e) => !critical.includes(e));
+
+  if (critical.length) {
+    const first = critical[0].message.replace(/\s+/g, ' ').slice(0, 120);
+    return ['error', `🔴 ${probeVerb(probe.type)}觸發 ${first}`];
+  }
+
+  const warnings: string[] = [...staticProblems];
+  if (minor.length) warnings.push(`${probeVerb(probe.type)}產生 ${minor.length} 筆警告`);
+  if (probe.type === 'media_check' && probe.loaded === false) warnings.push(probe.media_error || '媒體未載入');
+  if (probe.type === 'link_check' && probe.reachable === false) warnings.push('連結無法連線');
+  if (probe.type === 'animation_check' && probe.all_running === false) warnings.push('有動畫沒有在跑');
+  if (probe.restored === false) warnings.push('探測後未能還原原值（請自行確認欄位內容）');
+
+  if (warnings.length) return ['warning', `⚠ ${warnings.join('、')}`];
+  return ['active', `✅ ${probeSummaryOk(probe)}`];
+}
+
+function probeVerb(type: ProbeResult['type']): string {
+  switch (type) {
+    case 'click': return '點擊';
+    case 'input': return '輸入';
+    case 'select': return '切換選項';
+    case 'toggle': return '勾選';
+    default: return '探測';
+  }
+}
+
+function probeSummaryOk(probe: ProbeResult): string {
+  switch (probe.type) {
+    case 'click': return '點擊測試通過（沒有觸發錯誤）';
+    case 'input': return '輸入測試通過，已還原';
+    case 'select': return '切換選項測試通過，已還原';
+    case 'toggle': return '勾選測試通過，已還原';
+    case 'link_check': return '連結可連線';
+    case 'media_check': return '媒體已載入';
+    case 'animation_check': return `${probe.animations} 個動畫都在跑`;
+    case 'skipped_destructive': return '可見且可互動（破壞性按鈕，未點擊）';
+    case 'skipped_sensitive': return '可見且可互動（敏感欄位，未探測）';
+    default: return '可見且可互動';
+  }
 }
 
 // ── PM-383~387：手動釘選模式（人放圖釘，AI 去查）─────────────────────────
@@ -1937,10 +2350,12 @@ function openPinMenu(x: number, y: number, pin: Pin): void {
   // 元素已消失的圖釘沒有東西可分析，禁用而不是讓它跑出一個錯誤
   const stale = pin.status === 'stale';
   item('🔍 分析', stale, () => {
-    const r = bridgePinAnalyze(pin.selector);
-    pinModeToast(
-      typeof r.error === 'string' ? `⚠ ${String(r.error).slice(0, 60)}` : `🔍 ${String(r.summary ?? '分析完成')}`,
-    );
+    pinModeToast('🔍 分析中…');
+    void bridgePinAnalyze(pin.selector).then((r) => {
+      pinModeToast(
+        typeof r.error === 'string' ? `⚠ ${String(r.error).slice(0, 60)}` : `🔍 ${String(r.summary ?? '分析完成')}`,
+      );
+    });
   });
   item('✏️ 修改描述', false, () => {
     const el = document.querySelector(pin.selector);
@@ -2637,7 +3052,7 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
   } else if (msg.type === 'BRIDGE_PIN_ELEMENT') {
     sendResponse(bridgePinElement(msg.selector, msg.description));
   } else if (msg.type === 'BRIDGE_PIN_ANALYZE') {
-    sendResponse(bridgePinAnalyze(msg.selector));
+    void bridgePinAnalyze(msg.selector).then(sendResponse); // PM-392：動態探測是非同步的
   } else if (msg.type === 'BRIDGE_MAP_ZONES') {
     sendResponse(bridgeMapPageZones());
   } else if (msg.type === 'BRIDGE_ZONE_HEALTH') {
@@ -2659,7 +3074,7 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
   } else if (msg.type === 'BRIDGE_HIDE_PANEL') {
     sendResponse(hideDebugPanel());
   } else if (msg.type === 'BRIDGE_PATROL_PINS') {
-    sendResponse(bridgePatrolPins());
+    void bridgePatrolPins().then(sendResponse); // PM-394：逐一動態探測，非同步
   } else if (msg.type === 'BRIDGE_REMOVE_PIN') {
     sendResponse(bridgeRemovePin(msg.pin_id, msg.selector));
   } else if (msg.type === 'BRIDGE_CLEAR_PINS') {

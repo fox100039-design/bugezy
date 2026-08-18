@@ -329,10 +329,10 @@ check('330-2 標記數量與圖釘數一致', g.document.querySelector('[data-bu
 const badPin = api.bridgePinElement('#nope-330', 'x');
 check('330-4 元素不存在 → error 含 selector', !!badPin.error && String(badPin.error).includes('#nope-330'), JSON.stringify(badPin));
 
-const an1 = api.bridgePinAnalyze('#b1');
+const an1 = await api.bridgePinAnalyze('#b1');
 check('331-1 pin_analyze 回傳完整 analysis', !!an1.analysis?.computed_styles && !!an1.analysis?.box_model, JSON.stringify(an1).slice(0, 200));
 check('331-4 可見元素 → status active', an1.status === 'active', JSON.stringify({ s: an1.status, m: an1.summary }));
-const an2 = api.bridgePinAnalyze('#b2');
+const an2 = await api.bridgePinAnalyze('#b2');
 check('331-4 隱藏元素 → status warning 且說明原因', an2.status === 'warning' && /不可見|尺寸/.test(an2.summary || ''), JSON.stringify({ s: an2.status, m: an2.summary }));
 const lst2 = api.bridgeGetPinResults();
 check('331-2 清單含 status 與 last_check', lst2.pins.every((p) => !!p.status && !!p.last_check), JSON.stringify(lst2).slice(0, 240));
@@ -343,7 +343,7 @@ check('🔴 元素消失 → 標為 stale 而非刪除或報錯',
 
 console.log('\n=== ⑭ PM-334 patrol_pins ===');
 api.bridgeClearPins('all');
-const emptyPatrol = api.bridgePatrolPins();
+const emptyPatrol = await api.bridgePatrolPins();
 check('334-4 沒有圖釘 → patrolled: 0（不是 error）',
   !emptyPatrol.error && emptyPatrol.patrolled === 0 && emptyPatrol.alert_count === 0, JSON.stringify(emptyPatrol));
 
@@ -351,17 +351,17 @@ setBody('<button id="p1">一</button><button id="p2">二</button><button id="p3"
 api.bridgePinElement('#p1', '圖釘一');
 api.bridgePinElement('#p2', '圖釘二');
 api.bridgePinElement('#p3', '圖釘三');
-const pat1 = api.bridgePatrolPins();
+const pat1 = await api.bridgePatrolPins();
 check('334-1 三個圖釘 → patrolled: 3，每個都有結果',
   pat1.patrolled === 3 && pat1.results.length === 3 && pat1.results.every((r) => !!r.pin_id && !!r.status), JSON.stringify(pat1).slice(0, 240));
 check('334   巡檢順序按建立時間', pat1.results.map((r) => r.selector).join(',') === '#p1,#p2,#p3', pat1.results.map((r) => r.selector).join(','));
 check('334   每筆都有 previous_status 供判斷惡化/好轉', pat1.results.every((r) => !!r.previous_status), JSON.stringify(pat1.results[0]));
 
-const pat2 = api.bridgePatrolPins();
+const pat2 = await api.bridgePatrolPins();
 check('334-3 無變化 → changed: false', pat2.results.every((r) => r.changed === false) && pat2.alert_count === 0, JSON.stringify(pat2.results.map((r) => r.changed)));
 
 g.document.getElementById('p2').remove();
-const pat3 = api.bridgePatrolPins();
+const pat3 = await api.bridgePatrolPins();
 const gone = pat3.results.find((r) => r.selector === '#p2');
 check('334-2 元素消失 → status stale + changed: true', gone?.status === 'stale' && gone?.changed === true, JSON.stringify(gone));
 check('334   alert_count 只算「有變化」的（不是「有問題」的）', pat3.alert_count === 1, `alert_count=${pat3.alert_count}`);
@@ -380,15 +380,18 @@ const rp1 = api.bridgePinElement('#r1', 'A');
 api.bridgePinElement('#r2', 'B');
 const rm = api.bridgeRemovePin(rp1.pin_id);
 check('335-1 用 pin_id 移除 → removed: true', rm.removed === true && rm.pin_id === rp1.pin_id, JSON.stringify(rm));
-check('335-1 覆蓋層標記同步減少', g.document.querySelector('[data-bugezy-pins]')?.children.length === 1, String(g.document.querySelector('[data-bugezy-pins]')?.children.length));
+// PM-392：覆蓋層重畫是 rAF 節流的（queueReposition），本來就不是同步發生。
+// 之前能同步斷言只是湊巧；pin_analyze 改成非同步後時序變了才暴露出來。等它 flush 再驗。
+await new Promise((r) => g.setTimeout(r, 10));
+check('335-1 覆蓋層標記減少（等 rAF flush 後）', g.document.querySelector('[data-bugezy-pins]')?.children.length === 1, String(g.document.querySelector('[data-bugezy-pins]')?.children.length));
 const rm2 = api.bridgeRemovePin(undefined, '#r2');
 check('335-2 用 selector 移除', rm2.removed === true && rm2.selector === '#r2', JSON.stringify(rm2));
 check('335-3 pin_id 不存在 → error', !!api.bridgeRemovePin('nope-xyz').error, JSON.stringify(api.bridgeRemovePin('nope-xyz')));
 
 api.bridgeClearPins('all');
 setBody('<button id="c1">一</button><button id="c2" style="display:none">二</button>');
-api.bridgePinAnalyze('#c1'); // active
-api.bridgePinAnalyze('#c2'); // warning（不可見）
+await api.bridgePinAnalyze('#c1'); // active
+await api.bridgePinAnalyze('#c2'); // warning（不可見）
 const onlyWarn = api.bridgeClearPins('warning');
 check('335-4 依 status 清除 → 只清 warning', onlyWarn.cleared === 1 && onlyWarn.remaining === 1, JSON.stringify(onlyWarn));
 const clearAll = api.bridgeClearPins();
