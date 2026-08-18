@@ -123,7 +123,10 @@ export function startTerminalMonitor(command: string, cwd?: string): Record<stri
   child.on('exit', (code) => {
     m.status = 'stopped';
     m.exitCode = code;
-    log(`⏹ terminal monitor ${id} 結束（exit ${code}）：${command}`);
+    // PM-391：**這裡也要遮罩**。PM-327 當時把四處「回傳值」的指令回聲都遮了，
+    //   但漏掉這兩行 log —— 而 stderr 會被 MCP client 寫進 log 檔，那份檔案通常沒人在管權限，
+    //   `DATABASE_URL=postgres://u:pw@h/db npm run dev` 這種寫法就這樣落地成明文。
+    log(`⏹ terminal monitor ${id} 結束（exit ${code}）：${maskStderr(command)}`);
   });
   child.on('error', (e) => {
     m.status = 'stopped';
@@ -141,7 +144,7 @@ export function startTerminalMonitor(command: string, cwd?: string): Record<stri
   });
 
   monitors.set(id, m);
-  log(`▶ terminal monitor ${id} 已啟動（pid ${child.pid}）：${command}`);
+  log(`▶ terminal monitor ${id} 已啟動（pid ${child.pid}）：${maskStderr(command)}`); // PM-391：同上，遮罩後才寫 stderr
   return { monitor_id: id, command: maskStderr(command), cwd: m.cwd, pid: child.pid ?? null, status: 'running' };
 }
 

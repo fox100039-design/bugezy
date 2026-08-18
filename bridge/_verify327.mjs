@@ -19,6 +19,9 @@ const mockW = await startMockWorkers('agent');
 const proc = spawn(process.execPath, ['dist/index.js'], { stdio: ['pipe', 'pipe', 'pipe'],
   // PM-374：閘門預設開啟 → 需要能查到方案
   env: { ...process.env, BUGEZY_WORKERS_URL: mockW.url, BUGEZY_SESSION_TOKEN: 'e2e-token-0123456789', BUGEZY_USER_EMAIL: 'e2e@example.com' } });
+// PM-389：bridge 的 critical 信號寫在 stderr，這裡收下來驗證
+let bridgeStderr = '';
+proc.stderr.on('data', (d) => { bridgeStderr += d.toString(); });
 let buf = ''; const w = new Map(); let id = 1;
 proc.stdout.on('data', (d) => {
   buf += d.toString(); let k;
@@ -116,6 +119,23 @@ check('3. DB 密碼未外洩', !dump.includes('pw123'), dump.slice(0, 200));
 check('3. OpenAI 形式 token 未外洩', !dump.includes('sk-ABCDEFGHIJKLMNOPQRSTUVWXYZ012345'), dump.slice(0, 200));
 check('3. email 未外洩', !dump.includes('a@b.com'), dump.slice(0, 200));
 check('3. 但錯誤本身仍看得到（不是整段吞掉）', /fail/.test(dump));
+
+console.log('\n=== ⑥b PM-389 stderr critical 信號（真的經過 MCP server）===');
+const sigLines = bridgeStderr.split('\n').filter((l) => l.includes('⚠ [BugEzy]'));
+check('389-1 終端機 critical → stderr 有一行 ⚠ [BugEzy] 🔴 Terminal',
+  sigLines.some((l) => /🔴 Terminal \|/.test(l)), sigLines.join(' / ').slice(0, 220) || '(沒有任何信號)');
+check('389   信號是單行且帶「建議」',
+  sigLines.some((l) => /🔴 Terminal \|.*\| 建議：/.test(l)), sigLines[0] || '(沒有)');
+check('389-5 🔴 stderr 信號有做 PII 遮罩', 
+  !sigLines.some((l) => l.includes('a@b.com') || l.includes('sk-ABCDEFGHIJKLMNOPQRSTUVWXYZ012345') || l.includes('pw123')),
+  sigLines.join(' / ').slice(0, 220));
+// PM-391 抓到的：指令回聲在 log 那兩行漏遮（PM-327 只遮了回傳值）
+check('391 🔴 bridge 整份 stderr 都不含明文機密（含 monitor 啟動／結束的指令回聲）',
+  !bridgeStderr.includes('pw123')
+  && !bridgeStderr.includes('sk-ABCDEFGHIJKLMNOPQRSTUVWXYZ012345')
+  && !bridgeStderr.includes('a@b.com'),
+  bridgeStderr.split('\n').filter((l) => /pw123|sk-ABC|a@b\.com/.test(l)).join(' / ').slice(0, 220));
+check('389-3 同一則錯誤沒有被重複刷屏', sigLines.length <= 3, `共 ${sigLines.length} 行`);
 
 console.log('\n=== ⑦ 上限與 stop ===');
 const ids = [];

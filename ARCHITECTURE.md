@@ -267,6 +267,28 @@ L6 的資安鐵律與 L4 的商業規則多半是自然語言（「勝率加總�
 - **`unparsed_stderr` 必須保留**：解析器只支援 Python／Node，Go／Rust／Java 會解析不出來；只回 `errors` 會讓那些語言的使用者拿到空陣列並以為沒事。
 - **Windows 用 `taskkill /T`**：`shell:true` 多一層 `cmd.exe`，只 kill child 會留孫程序。
 
+#### stderr critical 信號（PM-389）與 `docs/BUGEZY.md`（PM-390）
+
+bridge 偵測到 critical 時往 stderr 寫一行，格式固定方便 grep：
+
+```
+⚠ [BugEzy] 🔴 {Browser|Terminal|Zone|Pin} | {摘要} | 建議：{下一步}
+```
+
+🔴 **這不是推播通道。** MCP **沒有 server → 模型的通道**（PM-345 為了 `watch_zones` 已經確認過，所以那組才做成 PULL 模式）；**stderr 不是例外** —— stdio 模式下 client 會收走 server 的 stderr，但多數 client 寫進自己的 log／debug 輸出，**不會自動進入模型的對話脈絡**。所以它的用途是「給人看 + 可 grep + `--debug` 時看得到」，**AI 仍然得自己呼叫工具**。這一點明寫在 `docs/BUGEZY.md`，避免使用者以為設定完就有人會來救。
+
+四個來源的「叫或不叫」都是刻意的：
+- **Zone**：只有**轉成 error** 才叫；轉 warning、好轉都不叫
+- **Pin**：只有**惡化**才叫（沿用 PM-334 `alert_count` 的取捨——一個一直壞著的圖釘不該每次巡檢都叫，否則警告很快被當雜訊）
+- **Browser／Terminal**：只有 `severity: critical`
+- **去重 30 秒**（來源 + 摘要前 160 字為指紋）
+
+**遮罩在寫出之前**：stderr 會被 MCP client 寫進 log 檔，那份檔案通常沒人在管權限，比 AI 的 context 更容易外流。**摘要與建議欄位都遮。**
+
+> 🔴 **PM-391 順手抓到的洩漏**：`terminal-monitor.ts` 在 monitor 啟動／結束時把**原始指令**寫進 stderr。PM-327 當時遮了四處「回傳值」的指令回聲，**漏了這兩行 log** —— `DATABASE_URL=postgres://u:pw@h/db npm run dev` 這種常見寫法就這樣落地成明文。已補上 `maskStderr`，並加測試鎖住「bridge 整份 stderr 都不得含明文機密」。
+
+`docs/BUGEZY.md` 是給使用者複製到自己專案根目錄的 AI 指引：每次改前端／後端後該呼叫哪支工具、debug 完要 `memory_learn`、以及「不要在沒確認 🟢 之前說修好了」。它**不含任何相對於本 repo 的連結**，複製過去就能用。
+
 #### 手動釘選模式（PM-383~387）
 
 §7 的「第三層：人指路，AI 偵測」的入口。原本圖釘只能由 AI 用 `pin_element` 建立，使用者沒辦法把「我覺得這裡怪怪的」直接標出來。

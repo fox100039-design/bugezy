@@ -33,6 +33,9 @@ import {
 } from './memory-ops.js';
 import { tierGateReject, autoDetectTier, TOOL_TIER_MAP } from './tier-gate.js';
 import { maskBrowserError, maskUrl, maskErrorPayload, maskConsoleEntry, maskNetworkEntry } from './pii-browser.js';
+import {
+  signalBrowserErrors, signalTerminalErrors, signalZoneChanges, signalPinPatrol,
+} from './stderr-signal.js';
 
 // ── PM-355~360：§14 記憶矩陣 ────────────────────────────────────────────────
 // `L3` **刻意收進 enum 裡**，不是漏掉：若把它排除在 enum 外，AI 傳 L3 只會拿到
@@ -282,17 +285,19 @@ export function createMcpServer(link: ExtensionLink): McpServer {
       const d = (r.data ?? {}) as Record<string, unknown>;
       // PM-367：**先分級再遮罩**。順序反過來的話，使用者自訂的嚴重度規則
       //   （例如 pattern 比對某個 email 或 token）會比對到已經被遮掉的字串而失效。
-      return txt(
-        maskErrorPayload({
-          ...d,
-          console_errors: decorate((d.console_errors ?? []) as Array<Record<string, unknown>>, (e) => ({
-            level: e.level as string, message: e.message as string, source: e.source as string,
-          })),
-          network_errors: decorate((d.network_errors ?? []) as Array<Record<string, unknown>>, (e) => ({
-            status: e.status as number, url: e.url as string, message: `${String(e.method)} ${String(e.url)} → ${String(e.status)}`,
-          })),
-        }),
-      );
+      const graded = {
+        ...d,
+        console_errors: decorate((d.console_errors ?? []) as Array<Record<string, unknown>>, (e) => ({
+          level: e.level as string, message: e.message as string, source: e.source as string,
+        })),
+        network_errors: decorate((d.network_errors ?? []) as Array<Record<string, unknown>>, (e) => ({
+          status: e.status as number, url: e.url as string, message: `${String(e.method)} ${String(e.url)} → ${String(e.status)}`,
+        })),
+      };
+      // PM-389：critical → 往 stderr 寫一行。**在遮罩之前取用原始資料，但 signal 內部
+      //   自己會遮罩**；而且這裡完全不動 `graded`，回傳值一個位元組都沒變（卡片明訂）。
+      signalBrowserErrors(graded.console_errors, graded.network_errors);
+      return txt(maskErrorPayload(graded));
     }),
   );
 
@@ -639,7 +644,10 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     gated('get_zone_changes', async (args) => {
       const r = await link.send('get_zone_changes', { tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
-      return txt(r.data);
+      const d = (r.data ?? {}) as Record<string, unknown>;
+      // PM-389：只有「轉成 error」才叫；好轉與轉 warning 不吵
+      if (Array.isArray(d.changes)) signalZoneChanges(d.changes as Array<Record<string, unknown>>);
+      return txt(d);
     }),
   );
 
@@ -680,7 +688,10 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     gated('patrol_pins', async (args) => {
       const r = await link.send('patrol_pins', { tab_id: args.tab_id });
       if (!r.ok) return txt({ error: r.error, extension_connected: link.connected });
-      return txt(r.data);
+      const d = (r.data ?? {}) as Record<string, unknown>;
+      // PM-389：只有**惡化**才叫（一直是 error 的圖釘不該每次巡檢都刷屏）
+      if (Array.isArray(d.results)) signalPinPatrol(d.results as Array<Record<string, unknown>>);
+      return txt(d);
     }),
   );
 
@@ -741,12 +752,11 @@ export function createMcpServer(link: ExtensionLink): McpServer {
     gated('get_terminal_live_errors', async (args) => {
       const d = getTerminalLiveErrors(args.monitor_id) as Record<string, unknown>;
       if (!Array.isArray(d.errors)) return txt(d);
-      return txt({
-        ...d,
-        errors: decorate(d.errors as Array<Record<string, unknown>>, (e) => ({
-          type: e.type as string, message: e.message as string, source: 'terminal',
-        })),
-      });
+      const errs = decorate(d.errors as Array<Record<string, unknown>>, (e) => ({
+        type: e.type as string, message: e.message as string, source: 'terminal',
+      }));
+      signalTerminalErrors(errs); // PM-389
+      return txt({ ...d, errors: errs });
     }),
   );
 

@@ -10,6 +10,9 @@
 - **PM-386** popup 圖釘清單。**直接複用 `BRIDGE_*` handler**（跟 MCP 工具同一組），不另立一套 popup 專用訊息。stale 圖釘的「分析」禁用；`chrome://` 等分頁明說「不支援釘選」而不是顯示成「沒有圖釘」。
 - **PM-387** 圖釘右鍵選單。🔴 **「標記已解決」做成獨立的 `resolved` 欄位，不是第五種 `status`**：`clear_pins` 的驗證寫死四個合法值、工具描述也寫著「沒有 resolved」；而且語意上兩者垂直——標記已解決的圖釘其元素狀態仍可能是 `active` 或 `error`，混在一起會讓 `patrol_pins` 的「狀態有變」偵測失去意義。
 - **PM-388** 驗收與收工。新增 `_verify383.mjs` **60 項**（jsdom 真實 DOM 跑 content.ts 裡真正的函式 + popup 原始碼靜態檢查）。
+- **PM-389** stderr critical 信號。🔴 **但它不是推播通道**：MCP 沒有 server → 模型的通道（PM-345 已確認），stderr 會被 client 收走寫進自己的 log，**不會自動進入對話脈絡**。用途是給人看／可 grep／`--debug` 看得到；AI 仍得自己呼叫工具。四個來源的「叫或不叫」都刻意設計：zone 只有轉 error 才叫、pin 只有惡化才叫（沿用 PM-334 `alert_count` 的取捨），去重 30 秒，遮罩在寫出之前。
+- **PM-390** `docs/BUGEZY.md`（純文件）。除了卡片指定的四條規則，另補了 stderr 限制說明、`start_terminal_monitor` 白名單、以及 🔴 **「工具回需要 Pro 方案怎麼辦」**——PM-374 之後沒設 token 的使用者第一次照這份文件操作就會全部卡住。
+- **PM-391** 驗收收工。🔴 **順手抓到一個 PM-327 漏掉的洩漏**：`terminal-monitor.ts` 在 monitor 啟動／結束時把**原始指令**寫進 stderr。PM-327 遮了四處回傳值的指令回聲，**漏了這兩行 log** —— `DATABASE_URL=postgres://u:pw@h/db npm run dev` 就這樣落地成明文。已補遮罩並加測試鎖住「bridge 整份 stderr 都不得含明文機密」。全套 **597 / 0**（新增 `_verify389` 43 項）。
 
 
 ## Day 44（2026-08-17）— PM-334~381，46 張卡
