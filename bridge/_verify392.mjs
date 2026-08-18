@@ -53,6 +53,11 @@ const errorsOnAction = (list) => {
   injectErrors = { consoleLogs: [], networkErrors: [] };
   return () => { injectErrors = { consoleLogs: list, networkErrors: [] }; };
 };
+/** PM-396：只餵網路錯誤、**完全沒有 JS error** —— 這才是這張卡要修的情境。 */
+const networkOnAction = (nets) => {
+  injectErrors = { consoleLogs: [], networkErrors: [] };
+  return () => { injectErrors = { consoleLogs: [], networkErrors: nets }; };
+};
 
 console.log('\n=== ① PM-392 驗收 1/2：按鈕點擊探測 ===');
 setBody('<button id="bad">觸發錯誤</button><button id="ok">正常按鈕</button>');
@@ -122,6 +127,72 @@ check('392-6 🔴 password 欄位 → skipped_sensitive，值沒有被動過',
   r.type === 'skipped_sensitive' && el('#pw').value === 'hunter2', JSON.stringify(r));
 check('392   名稱含 password 的一般欄位也跳過（沿用既有敏感欄位判定）',
   (await api.probeWithTimeout(el('#pw2'))).type === 'skipped_sensitive');
+
+console.log('\n=== ⑤b PM-396：點擊觸發的網路失敗也要算 ===');
+setBody('<button id="n500">觸發 fetch 500</button><button id="n403">觸發 403</button><button id="n404">觸發 404</button><button id="n0">觸發 CORS 失敗</button><button id="nok">正常按鈕</button>');
+const netCase = async (id, nets) => {
+  const arm = networkOnAction(nets);
+  el(`#${id}`).addEventListener('click', arm);
+  return api.probeWithTimeout(el(`#${id}`));
+};
+
+let nr = await netCase('n500', [{ method: 'POST', url: 'https://api.example.com/cart', status: 500, timestamp: 1 }]);
+check('396-1 🔴 點擊觸發 fetch 500 → 收進 network_errors_triggered',
+  nr.network_errors_triggered?.length === 1 && nr.network_errors_triggered[0].status === 500, JSON.stringify(nr));
+check('396-1 🔴 **完全沒有 JS error**（這正是修好前會被誤判成 🟢 的情境）',
+  nr.errors_triggered.length === 0, JSON.stringify(nr.errors_triggered));
+check('396-1 5xx → status error（🔴）',
+  api.pinStatusFromProbe([], nr)[0] === 'error', JSON.stringify(api.pinStatusFromProbe([], nr)));
+check('396-1 summary 帶方法、路徑與狀態碼（人看得懂）',
+  /POST \/cart → 500/.test(api.pinStatusFromProbe([], nr)[1]), api.pinStatusFromProbe([], nr)[1]);
+
+nr = await netCase('n403', [{ method: 'GET', url: 'https://api.example.com/me?token=abc', status: 403, timestamp: 2 }]);
+check('396-2 4xx（403）→ status warning（🟡）', api.pinStatusFromProbe([], nr)[0] === 'warning', JSON.stringify(api.pinStatusFromProbe([], nr)));
+check('396-2 網址只留 path，不把 query string 塞進 summary',
+  /\/me/.test(api.pinStatusFromProbe([], nr)[1]) && !/token=abc/.test(api.pinStatusFromProbe([], nr)[1]),
+  api.pinStatusFromProbe([], nr)[1]);
+
+nr = await netCase('n404', [{ method: 'GET', url: 'https://api.example.com/x', status: 404, timestamp: 3 }]);
+check('396-3 4xx（404）→ status warning（🟡）', api.pinStatusFromProbe([], nr)[0] === 'warning');
+
+nr = await netCase('n0', [{ method: 'GET', url: 'https://other.example.com/y', status: 0, timestamp: 4 }]);
+check('396   status 0（CORS／連不上）→ error（🔴）', api.pinStatusFromProbe([], nr)[0] === 'error', JSON.stringify(api.pinStatusFromProbe([], nr)));
+check('396   0 的說明是人話而不是「→ 0」',
+  /CORS 或連不上/.test(api.pinStatusFromProbe([], nr)[1]), api.pinStatusFromProbe([], nr)[1]);
+
+injectErrors = { consoleLogs: [], networkErrors: [] };
+nr = await api.probeWithTimeout(el('#nok'));
+check('396-4 正常按鈕（無 JS 無 network）→ active（🟢）',
+  nr.network_errors_triggered.length === 0 && api.pinStatusFromProbe([], nr)[0] === 'active', JSON.stringify(nr).slice(0, 160));
+check('396   🔴 沒抓到東西時誠實揭露觀測窗口（慢請求可能看不到）',
+  /只涵蓋點擊後 2 秒內完成的請求/.test(nr.note || ''), nr.note);
+
+// 既有行為不退化
+setBody('<button id="js">觸發 console.error</button>');
+const armJs = errorsOnAction([{ level: 'error', message: 'TypeError: 既有行為', timestamp: 9 }]);
+el('#js').addEventListener('click', armJs);
+nr = await api.probeWithTimeout(el('#js'));
+check('396-5 JS error 的既有行為不退化 → 仍是 error（🔴）',
+  api.pinStatusFromProbe([], nr)[0] === 'error' && /TypeError/.test(api.pinStatusFromProbe([], nr)[1]),
+  api.pinStatusFromProbe([], nr)[1]);
+check('396   JS critical 優先於 network（先報最嚴重的那個）', (() => {
+  const both = { type: 'click', errors_triggered: [{ level: 'error', message: 'TypeError: x', timestamp: 1 }],
+    network_errors_triggered: [{ method: 'GET', url: '/a', status: 500, timestamp: 1 }], duration_ms: 1 };
+  return /TypeError/.test(api.pinStatusFromProbe([], both)[1]);
+})());
+
+// 探測前就已存在的網路錯誤不該被算成「這次點擊造成的」
+setBody('<button id="pre">按鈕</button>');
+injectErrors = { consoleLogs: [], networkErrors: [{ method: 'GET', url: '/old', status: 500, timestamp: 100 }] };
+nr = await api.probeWithTimeout(el('#pre'));
+check('396   🔴 探測前就存在的網路錯誤不算進來（差集，不是快照）',
+  nr.network_errors_triggered.length === 0, JSON.stringify(nr.network_errors_triggered));
+
+// 非互動型探測也要有這個欄位（形狀一致，呼叫端不必到處判 undefined）
+setBody('<h2 id="h2">標題</h2>');
+nr = await api.probeWithTimeout(el('#h2'));
+check('396   static_only 也有 network_errors_triggered 欄位（形狀一致）',
+  Array.isArray(nr.network_errors_triggered), JSON.stringify(nr));
 
 console.log('\n=== ⑥ select / checkbox 探測與還原 ===');
 setBody('<select id="s"><option>A</option><option>B</option><option>C</option></select><select id="one"><option>只有一個</option></select><input id="cb" type="checkbox"><input id="cbd" type="checkbox" disabled>');

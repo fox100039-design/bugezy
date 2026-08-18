@@ -314,6 +314,10 @@ bridge 偵測到 critical 時往 stderr 寫一行，格式固定方便 grep：
 - 錯誤收集**不能**在 content script 掛 `window.addEventListener('error')` —— content script 在 **ISOLATED world**，頁面的 `console.error` 不會經過它。走 `queryInjectLiveErrors()` 的前後差集（PM-51／181／313 已驗證的路）。
 - `link_check` 的 `status` **誠實回 `null`** —— `no-cors` 拿到的是 opaque response，規範上就讀不到狀態碼。編一個 200 出來比不給答案更糟。
 
+**網路失敗與 JS 錯誤同等重要（PM-396）**：點一個按鈕最常見的後果**不是拋例外，而是打出去的 API 回了 500**。只看 console 會把那種情況判成 🟢——而那正是使用者最想抓到的 bug。`collectErrorsDuring` 因此同時對 `consoleLogs` 與 `networkErrors` 做**前後差集**（差集不是快照，探測前就存在的失敗不會被算成「這次點擊造成的」），分級與 §6 一致：**5xx／status 0（CORS 或連不上）= critical、4xx = minor**。summary 裡的網址只留 path，query string 會把整行撐爆。
+
+> ⚠ **觀測窗口是誠實揭露的**：只涵蓋點擊後 2 秒內完成的請求。什麼都沒抓到時，`note` 會明說這件事——不能讓「這次沒看到」被讀成「沒問題」。
+
 **狀態判定是「靜態 + 動態」合併**，而且**靜態問題不會被探測結果洗掉**：一個「不可見但點下去沒噴錯」的元素仍然是 🟡。popup **不重新解讀 JSON**，直接用 content script 算好的 summary——兩邊各算一次判定遲早會分岔（PM-350 的 score/summary 不同步已經吃過這個虧）。
 
 #### 釘選模式與探測的事件衝突（PM-395）

@@ -1453,7 +1453,7 @@ async function bridgePinAnalyze(selector: string): Promise<Record<string, unknow
   const probe: ProbeResult =
     el2 && vis?.visible && vis?.has_size
       ? await probeWithTimeout(el2)
-      : { type: 'static_only', errors_triggered: [], duration_ms: 0, note: '元素不可見或尺寸為 0，未做動態探測。' };
+      : { type: 'static_only', errors_triggered: [], network_errors_triggered: [], duration_ms: 0, note: '元素不可見或尺寸為 0，未做動態探測。' };
 
   const [status, summary] = pinStatusFromProbe(problems, probe);
   pin.status = status;
@@ -1673,6 +1673,13 @@ interface ProbeError {
   timestamp: number;
 }
 
+interface ProbeNetworkError {
+  url: string;
+  status: number;
+  method: string;
+  timestamp: number;
+}
+
 interface ProbeResult {
   type:
     | 'click'
@@ -1686,6 +1693,8 @@ interface ProbeResult {
     | 'skipped_destructive'
     | 'skipped_sensitive';
   errors_triggered: ProbeError[];
+  /** PM-396：探測期間新增的失敗請求（4xx/5xx/網路失敗）。 */
+  network_errors_triggered: ProbeNetworkError[];
   duration_ms: number;
   restored?: boolean;
   status?: number | null;
@@ -1729,37 +1738,70 @@ function looksDestructive(el: Element): string | null {
  *   跑在 ISOLATED world，頁面 script 的 `console.error` 根本不會經過它。
  *   走既有的 inject 通道是這個專案裡唯一已經驗證過可行的路（PM-51／181／313）。
  */
-async function collectErrorsDuring(action: () => void | Promise<void>, waitMs: number): Promise<ProbeError[]> {
-  let before: Array<{ level?: string; message?: string; timestamp?: number }> = [];
+interface CollectedDuring {
+  errors: ProbeError[];
+  networkErrors: ProbeNetworkError[];
+}
+
+type RawNet = { url?: string; status?: number; method?: string; timestamp?: number };
+const netKey = (n: RawNet): string => `${n.method}:${n.url}:${n.status}:${n.timestamp}`;
+
+async function collectErrorsDuring(action: () => void | Promise<void>, waitMs: number): Promise<CollectedDuring> {
+  let beforeLogs: Array<{ level?: string; message?: string; timestamp?: number }> = [];
+  let beforeNet: RawNet[] = [];
   try {
-    before = (await queryInjectLiveErrors()).consoleLogs ?? [];
+    const b = await queryInjectLiveErrors();
+    beforeLogs = b.consoleLogs ?? [];
+    beforeNet = (b.networkErrors ?? []) as RawNet[];
   } catch {
     /* 拿不到基準就當作空的——寧可多報幾筆，也不要因此整支探測失敗 */
   }
-  const seen = new Set(before.map((e) => `${e.level}:${e.message}:${e.timestamp}`));
+  const seenLogs = new Set(beforeLogs.map((e) => `${e.level}:${e.message}:${e.timestamp}`));
+  const seenNet = new Set(beforeNet.map(netKey));
 
   try {
     await action();
   } catch (e) {
     // action 自己丟出來的例外也是一種「這個操作會炸」的證據，要記下來
-    return [{ level: 'error', message: `探測動作本身拋出例外：${String(e)}`, timestamp: Date.now() }];
+    return {
+      errors: [{ level: 'error', message: `探測動作本身拋出例外：${String(e)}`, timestamp: Date.now() }],
+      networkErrors: [],
+    };
   }
 
   await new Promise((r) => setTimeout(r, waitMs));
 
-  let after: Array<{ level?: string; message?: string; timestamp?: number }> = [];
   try {
-    after = (await queryInjectLiveErrors()).consoleLogs ?? [];
+    const a = await queryInjectLiveErrors();
+    return {
+      errors: (a.consoleLogs ?? [])
+        .filter((e) => e.level !== 'info' && !seenLogs.has(`${e.level}:${e.message}:${e.timestamp}`))
+        .map((e) => ({
+          level: String(e.level ?? 'error'),
+          message: String(e.message ?? ''),
+          timestamp: Number(e.timestamp ?? Date.now()),
+        })),
+      // PM-396：**點擊的後果常常不是 JS 例外，而是一個失敗的請求。**
+      //   只看 console 的話，「點了按鈕 → 打 API → 回 500」會被判成 🟢，
+      //   而那正是使用者最想抓到的那種 bug。
+      //   inject.ts 的 network 攔截本來就只收 4xx/5xx（智能過濾），所以這裡不必再篩狀態碼。
+      networkErrors: ((a.networkErrors ?? []) as RawNet[])
+        .filter((n) => !seenNet.has(netKey(n)))
+        .map((n) => ({
+          url: String(n.url ?? ''),
+          status: Number(n.status ?? 0),
+          method: String(n.method ?? 'GET'),
+          timestamp: Number(n.timestamp ?? Date.now()),
+        })),
+    };
   } catch {
-    return [];
+    return { errors: [], networkErrors: [] };
   }
-  return after
-    .filter((e) => e.level !== 'info' && !seen.has(`${e.level}:${e.message}:${e.timestamp}`))
-    .map((e) => ({
-      level: String(e.level ?? 'error'),
-      message: String(e.message ?? ''),
-      timestamp: Number(e.timestamp ?? Date.now()),
-    }));
+}
+
+/** PM-396：網路失敗的嚴重度。5xx 與 0（CORS／連不上）算 critical，4xx 算 minor。 */
+function isCriticalNetwork(n: ProbeNetworkError): boolean {
+  return n.status >= 500 || n.status === 0;
 }
 
 /** 探測期間把表單送出攔下來。回傳解除函式。 */
@@ -1783,22 +1825,22 @@ async function probeElement(el: Element): Promise<ProbeResult> {
   try {
     // ── 敏感欄位一律不碰 ──
     if (isSensitiveField(el) || (el as HTMLInputElement).type === 'password') {
-      return done({ type: 'skipped_sensitive', errors_triggered: [], note: '敏感欄位（密碼／個資）不做動態探測。' });
+      return done({ type: 'skipped_sensitive', errors_triggered: [], network_errors_triggered: [], note: '敏感欄位（密碼／個資）不做動態探測。' });
     }
 
     // ── a[href]：**絕對不 click**，改用 HEAD 檢查可達性 ──
     if (tag === 'a' && el.hasAttribute('href')) {
       const href = (el as HTMLAnchorElement).href;
       if (!/^https?:/i.test(href)) {
-        return done({ type: 'link_check', errors_triggered: [], status: null, reachable: false, note: `非 http(s) 連結（${href.slice(0, 40)}），未檢查。` });
+        return done({ type: 'link_check', errors_triggered: [], network_errors_triggered: [], status: null, reachable: false, note: `非 http(s) 連結（${href.slice(0, 40)}），未檢查。` });
       }
       try {
         // no-cors 拿不到真實 status（opaque response），所以 status 誠實回 null，
         // 只回報「連得上／連不上」——編一個 200 出來比不給答案更糟。
         await fetch(href, { method: 'HEAD', mode: 'no-cors' });
-        return done({ type: 'link_check', errors_triggered: [], status: null, reachable: true, note: 'no-cors 模式拿不到實際狀態碼，只能確認連得上。' });
+        return done({ type: 'link_check', errors_triggered: [], network_errors_triggered: [], status: null, reachable: true, note: 'no-cors 模式拿不到實際狀態碼，只能確認連得上。' });
       } catch {
-        return done({ type: 'link_check', errors_triggered: [], status: null, reachable: false, note: '連線失敗（可能是網址錯誤或伺服器沒回應）。' });
+        return done({ type: 'link_check', errors_triggered: [], network_errors_triggered: [], status: null, reachable: false, note: '連線失敗（可能是網址錯誤或伺服器沒回應）。' });
       }
     }
 
@@ -1812,12 +1854,12 @@ async function probeElement(el: Element): Promise<ProbeResult> {
       if (danger) {
         return done({
           type: 'skipped_destructive',
-          errors_triggered: [],
+          errors_triggered: [], network_errors_triggered: [],
           note: `按鈕文字／屬性含「${danger}」，看起來會造成破壞性操作，已跳過點擊。要測請自己點一次再看 get_browser_errors()。`,
         });
       }
       const release = suppressFormSubmit(el);
-      const errors = await collectErrorsDuring(() => {
+      const got = await collectErrorsDuring(() => {
         // PM-395：模擬點擊期間掛旗標，讓釘選模式的 capture handler 放行
         isProbing = true;
         try {
@@ -1827,7 +1869,16 @@ async function probeElement(el: Element): Promise<ProbeResult> {
         }
       }, PROBE_CLICK_WAIT_MS);
       release();
-      return done({ type: 'click', errors_triggered: errors, restored: true, note: '探測期間已攔下表單送出。' });
+      return done({
+        type: 'click',
+        errors_triggered: got.errors,
+        network_errors_triggered: got.networkErrors,
+        restored: true,
+        note: got.errors.length === 0 && got.networkErrors.length === 0
+          // 誠實揭露觀測窗口：慢於 2 秒才回來的請求這次看不到，不代表沒問題
+          ? `探測期間已攔下表單送出；只涵蓋點擊後 ${PROBE_CLICK_WAIT_MS / 1000} 秒內完成的請求。`
+          : '探測期間已攔下表單送出。',
+      });
     }
 
     // ── 文字輸入 ──
@@ -1837,7 +1888,7 @@ async function probeElement(el: Element): Promise<ProbeResult> {
     if (isTextInput) {
       const input = el as HTMLInputElement | HTMLTextAreaElement;
       if (input.disabled || input.readOnly) {
-        return done({ type: 'static_only', errors_triggered: [], note: 'disabled／readonly 欄位，不做輸入探測。' });
+        return done({ type: 'static_only', errors_triggered: [], network_errors_triggered: [], note: 'disabled／readonly 欄位，不做輸入探測。' });
       }
       const original = input.value;
       const setValue = (v: string): void => {
@@ -1849,40 +1900,50 @@ async function probeElement(el: Element): Promise<ProbeResult> {
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new Event('change', { bubbles: true }));
       };
-      const errors = await collectErrorsDuring(() => {
+      const got = await collectErrorsDuring(() => {
         input.focus?.();
         setValue(PROBE_INPUT_VALUE);
         input.blur?.();
       }, PROBE_INTERACT_WAIT_MS);
       setValue(original); // 還原
-      return done({ type: 'input', errors_triggered: errors, restored: input.value === original });
+      return done({
+        type: 'input',
+        errors_triggered: got.errors,
+        network_errors_triggered: got.networkErrors,
+        restored: input.value === original,
+      });
     }
 
     // ── select ──
     if (tag === 'select') {
       const sel = el as HTMLSelectElement;
       if (sel.disabled || sel.options.length < 2) {
-        return done({ type: 'static_only', errors_triggered: [], note: sel.disabled ? 'disabled 的下拉選單。' : '只有一個選項，沒有可切換的對象。' });
+        return done({ type: 'static_only', errors_triggered: [], network_errors_triggered: [], note: sel.disabled ? 'disabled 的下拉選單。' : '只有一個選項，沒有可切換的對象。' });
       }
       const original = sel.selectedIndex;
       const next = (original + 1) % sel.options.length;
-      const errors = await collectErrorsDuring(() => {
+      const got = await collectErrorsDuring(() => {
         sel.selectedIndex = next;
         sel.dispatchEvent(new Event('change', { bubbles: true }));
       }, PROBE_INTERACT_WAIT_MS);
       sel.selectedIndex = original;
       sel.dispatchEvent(new Event('change', { bubbles: true }));
-      return done({ type: 'select', errors_triggered: errors, restored: sel.selectedIndex === original });
+      return done({
+        type: 'select',
+        errors_triggered: got.errors,
+        network_errors_triggered: got.networkErrors,
+        restored: sel.selectedIndex === original,
+      });
     }
 
     // ── checkbox / radio ──
     if (tag === 'input' && ['checkbox', 'radio'].includes((el as HTMLInputElement).type)) {
       const box = el as HTMLInputElement;
-      if (box.disabled) return done({ type: 'static_only', errors_triggered: [], note: 'disabled 的勾選欄位。' });
+      if (box.disabled) return done({ type: 'static_only', errors_triggered: [], network_errors_triggered: [], note: 'disabled 的勾選欄位。' });
       // radio 一旦切走就回不到「全部都沒選」的狀態，但切回原本那顆是等價的
       const original = box.checked;
       const release = suppressFormSubmit(el);
-      const errors = await collectErrorsDuring(() => {
+      const got = await collectErrorsDuring(() => {
         isProbing = true; // PM-395：同上，change 也可能同步引發頁面的 click 邏輯
         try {
           box.checked = !original;
@@ -1896,7 +1957,12 @@ async function probeElement(el: Element): Promise<ProbeResult> {
       box.dispatchEvent(new Event('input', { bubbles: true }));
       box.dispatchEvent(new Event('change', { bubbles: true }));
       release();
-      return done({ type: 'toggle', errors_triggered: errors, restored: box.checked === original });
+      return done({
+        type: 'toggle',
+        errors_triggered: got.errors,
+        network_errors_triggered: got.networkErrors,
+        restored: box.checked === original,
+      });
     }
 
     // ── 媒體（純檢查，不播放）──
@@ -1905,7 +1971,7 @@ async function probeElement(el: Element): Promise<ProbeResult> {
       const loaded = img.complete && img.naturalWidth > 0;
       return done({
         type: 'media_check',
-        errors_triggered: [],
+        errors_triggered: [], network_errors_triggered: [],
         loaded,
         ...(loaded ? {} : { media_error: img.complete ? '已載入完成但寬度為 0（圖片壞掉或格式不支援）' : '尚未載入完成' }),
         note: img.currentSrc || img.src ? `來源：${(img.currentSrc || img.src).slice(0, 120)}` : '沒有 src',
@@ -1917,7 +1983,7 @@ async function probeElement(el: Element): Promise<ProbeResult> {
       const err = media?.error;
       return done({
         type: 'media_check',
-        errors_triggered: [],
+        errors_triggered: [], network_errors_triggered: [],
         loaded: readyState >= 2, // HAVE_CURRENT_DATA 以上才算真的有東西
         ...(err ? { media_error: `MediaError code ${err.code}` } : {}),
         note: `readyState=${readyState}`,
@@ -1932,7 +1998,7 @@ async function probeElement(el: Element): Promise<ProbeResult> {
       const running = anims.filter((a) => a.playState === 'running' || a.playState === 'finished');
       return done({
         type: 'animation_check',
-        errors_triggered: [],
+        errors_triggered: [], network_errors_triggered: [],
         animations: anims.length,
         all_running: running.length === anims.length,
         ...(running.length === anims.length
@@ -1941,10 +2007,10 @@ async function probeElement(el: Element): Promise<ProbeResult> {
       });
     }
 
-    return done({ type: 'static_only', errors_triggered: [], note: '這個元素沒有可自動探測的互動方式。' });
+    return done({ type: 'static_only', errors_triggered: [], network_errors_triggered: [], note: '這個元素沒有可自動探測的互動方式。' });
   } catch (e) {
     // 探測**永遠不該讓 pin_analyze 整支失敗** —— 靜態分析的結果仍然有價值
-    return done({ type: 'static_only', errors_triggered: [], note: `探測過程發生例外，已略過：${String(e).slice(0, 120)}` });
+    return done({ type: 'static_only', errors_triggered: [], network_errors_triggered: [], note: `探測過程發生例外，已略過：${String(e).slice(0, 120)}` });
   }
 }
 
@@ -1958,7 +2024,7 @@ async function probeWithTimeout(el: Element): Promise<ProbeResult> {
         () =>
           resolve({
             type: 'static_only',
-            errors_triggered: [],
+            errors_triggered: [], network_errors_triggered: [],
             duration_ms: Date.now() - t0,
             note: `探測超過 ${PROBE_HARD_TIMEOUT_MS / 1000} 秒上限已中止（頁面的 handler 可能卡住了，這本身就值得看一下）。`,
           }),
@@ -1983,13 +2049,32 @@ function pinStatusFromProbe(
   );
   const minor = errs.filter((e) => !critical.includes(e));
 
+  // PM-396：網路失敗與 JS 錯誤**同等重要**。點一個按鈕最常見的後果不是拋例外，
+  //   而是打出去的 API 回了 500 —— 只看 console 會把那種情況判成 🟢，
+  //   而那正是使用者最想抓到的 bug。分級與 §6 一致：5xx／0 = critical、4xx = minor。
+  const net = probe.network_errors_triggered ?? [];
+  const netCritical = net.filter(isCriticalNetwork);
+  const netMinor = net.filter((n) => !isCriticalNetwork(n));
+
   if (critical.length) {
     const first = critical[0].message.replace(/\s+/g, ' ').slice(0, 120);
     return ['error', `🔴 ${probeVerb(probe.type)}觸發 ${first}`];
   }
+  if (netCritical.length) {
+    const n = netCritical[0];
+    const what = n.status === 0 ? '請求失敗（CORS 或連不上）' : String(n.status);
+    return ['error', `🔴 ${probeVerb(probe.type)}觸發 ${n.method} ${shortenUrl(n.url)} → ${what}`];
+  }
 
   const warnings: string[] = [...staticProblems];
   if (minor.length) warnings.push(`${probeVerb(probe.type)}產生 ${minor.length} 筆警告`);
+  if (netMinor.length) {
+    const n = netMinor[0];
+    warnings.push(
+      `${probeVerb(probe.type)}觸發 ${n.method} ${shortenUrl(n.url)} → ${n.status}`
+        + (netMinor.length > 1 ? `（另有 ${netMinor.length - 1} 筆）` : ''),
+    );
+  }
   if (probe.type === 'media_check' && probe.loaded === false) warnings.push(probe.media_error || '媒體未載入');
   if (probe.type === 'link_check' && probe.reachable === false) warnings.push('連結無法連線');
   if (probe.type === 'animation_check' && probe.all_running === false) warnings.push('有動畫沒有在跑');
@@ -1997,6 +2082,16 @@ function pinStatusFromProbe(
 
   if (warnings.length) return ['warning', `⚠ ${warnings.join('、')}`];
   return ['active', `✅ ${probeSummaryOk(probe)}`];
+}
+
+/** summary 是給人看的一行字，網址只留 path 就夠辨識——query string 會把整行撐爆。 */
+function shortenUrl(url: string): string {
+  try {
+    const u = new URL(url, window.location.href); // 用 window.location 而非裸 location：兩者在瀏覽器等價，但前者不依賴「location 是全域」這個假設
+    return u.pathname.length > 1 ? u.pathname : u.host;
+  } catch {
+    return url.slice(0, 60);
+  }
 }
 
 function probeVerb(type: ProbeResult['type']): string {
