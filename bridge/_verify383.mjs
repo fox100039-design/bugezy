@@ -28,14 +28,19 @@ const js = ts.transpileModule(
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { pretendToBeVisual: true });
 const g = dom.window;
+// PM-395：分析／探測要用到這兩個替身（inject 在 MAIN world，jsdom 裡不存在）
+let injectErrors = { consoleLogs: [], networkErrors: [] };
 const run = new Function('window', 'document', 'getComputedStyle', 'Node', 'NodeFilter', 'CSS',
-  'HTMLInputElement', 'HTMLTextAreaElement', 'Event', 'InputEvent', 'performance',
-  'requestAnimationFrame', 'setTimeout', 'clearTimeout', 'CSSStyleSheet', 'MutationObserver',
-  js + '\nreturn { setPinMode, getPinListForPopup, openPinPrompt, openPinMenu, bridgePinElement, bridgeGetPinResults, bridgeRemovePin, uniqueSelector, pins, repositionPins, isBugezyOwnUi, autoDescription };');
+  'HTMLInputElement', 'HTMLTextAreaElement', 'HTMLSelectElement', 'Event', 'InputEvent', 'performance',
+  'requestAnimationFrame', 'setTimeout', 'clearTimeout', 'CSSStyleSheet', 'MutationObserver', 'fetch',
+  'queryInjectLiveErrors',
+  js + '\nreturn { setPinMode, getPinListForPopup, openPinPrompt, openPinMenu, bridgePinElement, bridgeGetPinResults, bridgeRemovePin, bridgePinAnalyze, bridgePatrolPins, uniqueSelector, pins, repositionPins, isBugezyOwnUi, autoDescription };');
 const api = run(g, g.document, g.getComputedStyle.bind(g), g.Node, g.NodeFilter, g.CSS,
-  g.HTMLInputElement, g.HTMLTextAreaElement, g.Event, g.InputEvent, g.performance,
+  g.HTMLInputElement, g.HTMLTextAreaElement, g.HTMLSelectElement, g.Event, g.InputEvent, g.performance,
   (cb) => g.setTimeout(cb, 0),
-  g.setTimeout.bind(g), g.clearTimeout.bind(g), g.CSSStyleSheet, g.MutationObserver);
+  g.setTimeout.bind(g), g.clearTimeout.bind(g), g.CSSStyleSheet, g.MutationObserver,
+  () => Promise.resolve({}),
+  () => Promise.resolve(injectErrors));
 
 const setBody = (html) => { g.document.body.innerHTML = html; };
 const tick = (ms = 5) => new Promise((r) => g.setTimeout(r, ms));
@@ -88,11 +93,13 @@ check('385   自動 focus 到輸入框', ui().activeElement === q('.bz-card inpu
 // 輸入描述 + 按「釘選」
 q('.bz-card input').value = '這個連結點了沒反應';
 [...ui().querySelectorAll('.bz-card .bz-btn')].find((b) => b.textContent === '釘選').click();
+// PM-395：toast 要**在 await 之前**檢查——釘選後會自動跑一次分析，分析結果會把 toast 換掉。
+check('385-4 釘選成功 → toast 通知', /已釘選/.test(q('.bz-toast')?.textContent || ''), q('.bz-toast')?.textContent);
+check('395-3 toast 同時告知「分析中」（釘完會自動分析）', /分析中/.test(q('.bz-toast')?.textContent || ''), q('.bz-toast')?.textContent);
 await tick();
 let list = api.getPinListForPopup();
 check('385-2 輸入描述 + 釘選 → 圖釘帶描述',
   list.total_count === 1 && list.pins[0].description === '這個連結點了沒反應', JSON.stringify(list.pins));
-check('385-4 釘選成功 → toast 通知', /已釘選/.test(q('.bz-toast')?.textContent || ''), q('.bz-toast')?.textContent);
 check('385   釘完仍留在釘選模式（可以繼續釘下一個）', api.getPinListForPopup().pin_mode === true);
 check('385   彈窗已關閉', !q('.bz-card'));
 
@@ -197,6 +204,56 @@ check('387-5 點外部 → 選單消失', !q('.bz-menu'));
 g.document.querySelector('[data-bugezy-pins] div').dispatchEvent(new g.MouseEvent('contextmenu', { bubbles: true, cancelable: true, composed: true, clientX: 60, clientY: 60 }));
 [...ui().querySelectorAll('.bz-menu button')].find((b) => /移除/.test(b.textContent)).click();
 check('387-2 移除 → 圖釘從清單消失', api.getPinListForPopup().total_count === 0);
+
+console.log('\n=== ⑦b PM-395：釘選模式與探測／分析的事件衝突 ===');
+api.pins.clear();
+setBody('<button id="probe-me">一般按鈕</button>');
+injectErrors = { consoleLogs: [], networkErrors: [] };
+// jsdom 沒有版面計算 → 撐出尺寸，否則 analyze 判成「尺寸為 0」而跳過探測
+const realRect = g.Element.prototype.getBoundingClientRect;
+g.Element.prototype.getBoundingClientRect = function () {
+  return { x: 0, y: 0, top: 0, left: 0, right: 100, bottom: 40, width: 100, height: 40, toJSON() { return this; } };
+};
+api.setPinMode(true);
+let pageClicks = 0;
+g.document.getElementById('probe-me').addEventListener('click', () => { pageClicks++; });
+// 🔴 這就是 PM-395 要修的 bug：分析會 el.click()，而釘選模式在 capture 攜所有 click，
+//    修好之前會跳出描述輸入框，而且那個模擬點擊會被 preventDefault 吃掉。
+const anRes = await api.bridgePinAnalyze('#probe-me');
+check('395-1 🔴 釘選模式開著時分析 → **不會**跳出描述輸入框', !q('.bz-card'), '竟然跳出了輸入框');
+check('395-4 🔴 探測的模擬 click 真的送達頁面（沒被攜截吃掉）', pageClicks === 1, `頁面收到 ${pageClicks} 次 click`);
+check('395   分析結果正常回傳', !anRes.error && !!anRes.probe && anRes.probe.type === 'click', JSON.stringify(anRes).slice(0, 160));
+check('395-5 探測完釘選模式仍然開著', api.getPinListForPopup().pin_mode === true);
+const userClickPrevented = !fire(g.document.getElementById('probe-me'), 'click', { clientX: 10, clientY: 10 });
+check('395-5 🔴 恢復後使用者的真實點擊仍被正常攜截（防線沒卡在放行狀態）',
+  userClickPrevented && !!q('.bz-card'), `prevented=${userClickPrevented} card=${!!q('.bz-card')}`);
+await tick();
+g.document.dispatchEvent(new g.MouseEvent('mousedown', { bubbles: true, cancelable: true, composed: true }));
+await tick();
+
+const patRes = await api.bridgePatrolPins();
+check('395-2 🔴 釘選模式開著時巡檢 → 不跳描述框', !q('.bz-card'), '竟然跳出了輸入框');
+check('395-2 巡檢結果正常', patRes.patrolled >= 1, JSON.stringify(patRes).slice(0, 160));
+check('395-5 巡檢後釘選模式仍然開著', api.getPinListForPopup().pin_mode === true);
+api.setPinMode(false);
+
+console.log('\n=== ⑦c PM-395 防線②：釘選後自動分析 ===');
+api.pins.clear();
+setBody('<button id="auto">自動分析我</button>');
+injectErrors = { consoleLogs: [], networkErrors: [] };
+api.setPinMode(true);
+fire(g.document.getElementById('auto'), 'click', { clientX: 20, clientY: 20 });
+await tick();
+[...ui().querySelectorAll('.bz-card .bz-btn')].find((b) => b.textContent === '跳過').click();
+// 自動分析是非同步的（含 2 秒等待），給它足夠時間
+await new Promise((r) => g.setTimeout(r, 2600));
+const autoPin = api.bridgeGetPinResults().pins.find((p) => p.selector === '#auto');
+check('395-3 🔴 釘選後自動分析，圖釘直接有狀態（不需再手動點分析）',
+  !!autoPin && !!autoPin.last_check && /測試通過|觸發|可見/.test(String(autoPin.last_check.summary)),
+  JSON.stringify(autoPin));
+check('395   自動分析期間不會又彈出一個描述框', !q('.bz-card'));
+api.setPinMode(false);
+g.Element.prototype.getBoundingClientRect = realRect;
 
 console.log('\n=== ⑧ PM-386：popup 清單資料 ===');
 api.pins.clear();

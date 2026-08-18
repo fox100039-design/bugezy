@@ -1626,6 +1626,38 @@ function bridgeGetPinResults(): Record<string, unknown> {
 //       是不可接受的。寧可少測一個按鈕，也不要幫使用者按下他不想按的東西。
 //    ⑥ 全程有時間上限，不會 hang 住
 
+/**
+ * PM-395 防線①：**探測期間**。
+ *
+ * `probeElement` 會呼叫 `el.click()` 模擬點擊，而釘選模式在 capture 階段攔所有 click——
+ * 結果是「使用者在 popup 按 [分析]」竟然會跳出描述輸入框。這兩個功能單獨看都對，
+ * 合在一起才壞掉（PM-384 的攔截 + PM-392 的模擬點擊）。
+ *
+ * ⚠ 用**模組層變數**而不是卡片寫的 `window.__bugezy_probing`：
+ *   content script 的 window 雖然是 isolated 的，但把內部狀態掛上 window 沒有任何好處，
+ *   反而多一個會被誤改的表面。這個旗標只有本檔案需要看得到。
+ */
+let isProbing = false;
+
+/**
+ * PM-395 防線③：**整個分析／巡檢期間**。
+ *
+ * 防線①只涵蓋 `el.click()` 那一瞬間；探測還會 dispatch input／change，
+ * 頁面自己的 handler 也可能在稍後同步觸發 click。用計數器而不是布林——
+ * 巡檢會對每個圖釘各跑一次分析，巢狀時不能被內層的「恢復」提前解除。
+ */
+let pinModeSuspendDepth = 0;
+
+/** 分析／巡檢期間暫停釘選模式的攔截。**一定要用 try/finally**，否則探測一拋例外就永久卡住。 */
+async function withPinModeSuspended<T>(fn: () => Promise<T>): Promise<T> {
+  pinModeSuspendDepth++;
+  try {
+    return await fn();
+  } finally {
+    pinModeSuspendDepth--;
+  }
+}
+
 /** 單次探測的硬上限（卡片指定 5 秒）。 */
 const PROBE_HARD_TIMEOUT_MS = 5000;
 /** 點擊之後等錯誤浮現的時間（卡片指定 2 秒）。 */
@@ -1786,7 +1818,13 @@ async function probeElement(el: Element): Promise<ProbeResult> {
       }
       const release = suppressFormSubmit(el);
       const errors = await collectErrorsDuring(() => {
-        (el as HTMLElement).click();
+        // PM-395：模擬點擊期間掛旗標，讓釘選模式的 capture handler 放行
+        isProbing = true;
+        try {
+          (el as HTMLElement).click();
+        } finally {
+          isProbing = false;
+        }
       }, PROBE_CLICK_WAIT_MS);
       release();
       return done({ type: 'click', errors_triggered: errors, restored: true, note: '探測期間已攔下表單送出。' });
@@ -1845,9 +1883,14 @@ async function probeElement(el: Element): Promise<ProbeResult> {
       const original = box.checked;
       const release = suppressFormSubmit(el);
       const errors = await collectErrorsDuring(() => {
-        box.checked = !original;
-        box.dispatchEvent(new Event('input', { bubbles: true }));
-        box.dispatchEvent(new Event('change', { bubbles: true }));
+        isProbing = true; // PM-395：同上，change 也可能同步引發頁面的 click 邏輯
+        try {
+          box.checked = !original;
+          box.dispatchEvent(new Event('input', { bubbles: true }));
+          box.dispatchEvent(new Event('change', { bubbles: true }));
+        } finally {
+          isProbing = false;
+        }
       }, PROBE_INTERACT_WAIT_MS);
       box.checked = original;
       box.dispatchEvent(new Event('input', { bubbles: true }));
@@ -2216,7 +2259,7 @@ function openPinPrompt(
 
 // ── PM-384：hover 高亮 + 點擊放圖釘 ────────────────────────────────────────
 function onPinModeMove(ev: MouseEvent): void {
-  if (pinPromptOpen) return;
+  if (pinPromptOpen || isProbing || pinModeSuspendDepth > 0) return; // PM-395
   const el = ev.target as Element | null;
   if (!el || isBugezyOwnUi(el)) return;
 
@@ -2245,7 +2288,10 @@ function onPinModeMove(ev: MouseEvent): void {
 }
 
 function onPinModeClick(ev: MouseEvent): void {
-  if (pinPromptOpen) return;
+  // 🔴 PM-395：**這一行是這張卡的核心。** 探測的模擬 click 與分析／巡檢期間的任何 click
+  //    都要原樣放行——不 preventDefault、不彈描述框，否則 popup 按 [分析] 會跳出輸入框，
+  //    而且探測的點擊會被吃掉、根本測不到頁面的反應。
+  if (pinPromptOpen || isProbing || pinModeSuspendDepth > 0) return;
   const el = ev.target as Element | null;
   if (!el || isBugezyOwnUi(el)) return;
 
@@ -2269,12 +2315,21 @@ function onPinModeClick(ev: MouseEvent): void {
       pinModeToast(`⚠ ${r.error}`);
       return;
     }
-    pinModeToast(`📌 已釘選 ${describeElement(el)}`);
+    // PM-395 防線②：釘完**立刻自動分析一次**，使用者釘上去就直接看到紅綠，
+    //   不用再回 popup 多點一次 [分析]。
+    //   ⚠ 分析包含動態探測，也就是說**剛剛被攔下來沒觸發的按鈕，這時會被探測點一次**。
+    //     這是刻意的（釘一個按鈕的意思就是「幫我盯著它」），具破壞性的按鈕仍然會被跳過。
+    pinModeToast(`📌 已釘選 ${describeElement(el)}，分析中…`);
+    void withPinModeSuspended(() => bridgePinAnalyze(selector)).then((res) => {
+      const emoji = PIN_STATUS_EMOJI[(res.status as Pin['status']) ?? 'active'] ?? '';
+      pinModeToast(`${emoji} ${String(res.summary ?? '已釘選')}`);
+    });
     // 留在釘選模式，可以繼續釘下一個
   });
 }
 
 function onPinModeKey(ev: KeyboardEvent): void {
+  if (pinModeSuspendDepth > 0) return; // PM-395：分析中不要因為誤按 ESC 就把模式關掉
   if (ev.key === 'Escape' && !pinPromptOpen) {
     ev.preventDefault();
     setPinMode(false);
@@ -2351,7 +2406,7 @@ function openPinMenu(x: number, y: number, pin: Pin): void {
   const stale = pin.status === 'stale';
   item('🔍 分析', stale, () => {
     pinModeToast('🔍 分析中…');
-    void bridgePinAnalyze(pin.selector).then((r) => {
+    void withPinModeSuspended(() => bridgePinAnalyze(pin.selector)).then((r) => {
       pinModeToast(
         typeof r.error === 'string' ? `⚠ ${String(r.error).slice(0, 60)}` : `🔍 ${String(r.summary ?? '分析完成')}`,
       );
@@ -3052,7 +3107,8 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
   } else if (msg.type === 'BRIDGE_PIN_ELEMENT') {
     sendResponse(bridgePinElement(msg.selector, msg.description));
   } else if (msg.type === 'BRIDGE_PIN_ANALYZE') {
-    void bridgePinAnalyze(msg.selector).then(sendResponse); // PM-392：動態探測是非同步的
+    // PM-395 防線③：整個分析期間暫停釘選攔截（popup 按 [分析] 不該跳出描述框）
+    void withPinModeSuspended(() => bridgePinAnalyze(msg.selector)).then(sendResponse);
   } else if (msg.type === 'BRIDGE_MAP_ZONES') {
     sendResponse(bridgeMapPageZones());
   } else if (msg.type === 'BRIDGE_ZONE_HEALTH') {
@@ -3074,7 +3130,8 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
   } else if (msg.type === 'BRIDGE_HIDE_PANEL') {
     sendResponse(hideDebugPanel());
   } else if (msg.type === 'BRIDGE_PATROL_PINS') {
-    void bridgePatrolPins().then(sendResponse); // PM-394：逐一動態探測，非同步
+    // PM-395 防線③：巡檢會對每個圖釘各探測一次，全程暫停釘選攔截
+    void withPinModeSuspended(() => bridgePatrolPins()).then(sendResponse);
   } else if (msg.type === 'BRIDGE_REMOVE_PIN') {
     sendResponse(bridgeRemovePin(msg.pin_id, msg.selector));
   } else if (msg.type === 'BRIDGE_CLEAR_PINS') {
