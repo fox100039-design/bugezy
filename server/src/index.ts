@@ -7091,6 +7091,31 @@ async function expireDueTickets(userId: string, env: Env): Promise<void> {
     .lt('expires_at', nowIso);
 }
 
+/**
+ * PM-398：需要「已完成 MCP 對接」才能兌換的代碼。
+ * 用 Set 而不是寫死字串比對——之後要再發同類代碼只要加一行。
+ */
+const MCP_VERIFIED_CODES = new Set(['MCP30']);
+
+/**
+ * 這個帳號有沒有 MCP 呼叫紀錄。
+ *
+ * 回傳 `null` 代表**查不出來**（例如 `user_id` 欄位還沒建），與「確定沒有」要分開處理：
+ * 前者是系統設定問題，不該讓使用者以為是自己沒接好。
+ */
+async function hasMcpUsage(userId: string, env: Env): Promise<boolean | null> {
+  const { data, error } = await supa(env)
+    .from('mcp_usage')
+    .select('id')
+    .eq('user_id', userId)
+    .limit(1);
+  if (error) {
+    console.error('mcp_usage 查詢失敗（user_id 欄位可能尚未建立）:', error.message);
+    return null;
+  }
+  return (data?.length ?? 0) > 0;
+}
+
 // POST /api/promo/redeem — 兌換活動代碼，成功後票券進錢包（SAVED，尚未開始計時）
 async function redeemPromoCode(request: Request, env: Env): Promise<Response> {
   const userId = await getAuthUserId(request, env);
@@ -7135,6 +7160,26 @@ async function redeemPromoCode(request: Request, env: Env): Promise<Response> {
       .eq('code', code)
       .limit(1);
     if (existing?.length) return jsonNoStore({ error: '你已兌換過此代碼' }, 409);
+
+    // PM-398：MCP 對接專屬代碼 —— 要有實際的 MCP 呼叫紀錄才發。
+    //   **擺在重複兌換檢查之後、搶名額之前**：資格不符的人不該占掉限量代碼的名額。
+    if (MCP_VERIFIED_CODES.has(code)) {
+      const used = await hasMcpUsage(userId, env);
+      if (used === null) {
+        // 查不出來 → **不發**（fail closed）。反過來寫的話，資料庫一出問題就變成人人可領。
+        //   但訊息要與「你還沒接 MCP」區分開，否則使用者會一直重試自己根本沒做錯的事。
+        return jsonNoStore({ error: '目前無法驗證 MCP 使用紀錄，請稍後再試或聯絡我們。' }, 503);
+      }
+      if (!used) {
+        return jsonNoStore(
+          {
+            error: '請先完成 MCP 對接並實際使用一次，再輸入此代碼。教學請見 https://bugezy.dev/guide',
+            need_mcp: true,
+          },
+          403,
+        );
+      }
+    }
 
     // 有名額上限的代碼：先「搶名額」再發票券。
     // PostgREST 不支援 `current_uses = current_uses + 1` 這種欄位運算，故用 compare-and-swap：
@@ -8194,21 +8239,42 @@ async function logMcpUsage(
 ): Promise<void> {
   try {
     const key = supaKey(env); // PM-93：service_role（繞 RLS）或退回 anon
-    await fetch(`${env.SUPABASE_URL}/rest/v1/mcp_usage`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: key,
-        Authorization: `Bearer ${key}`,
-        Prefer: 'return=minimal',
-      },
-      body: JSON.stringify({
-        tool_name: toolName,
-        tokens_estimated: est.bugezyTokens,
-        chrome_tokens_estimated: est.chromeTokens,
-        report_id: reportId ?? null,
-      }),
-    });
+    // PM-398：**記下是誰呼叫的**。
+    //   在此之前 mcp_usage 完全沒有使用者維度（PM-380 的稽核已標紅），
+    //   所以既無法做 per-user 統計，也無法回答「這個帳號到底有沒有接上 MCP」——
+    //   而 MCP30 票券的資格判定正是靠後者。
+    //   身分來自 MCP URL 的 ?token=（每個請求一份 env 副本，見 /mcp 路由）。
+    const token = env.__mcp_session_token || '';
+    const userId = token ? await verifySessionByToken(token, env) : null;
+
+    const post = (row: Record<string, unknown>) =>
+      fetch(`${env.SUPABASE_URL}/rest/v1/mcp_usage`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: key,
+          Authorization: `Bearer ${key}`,
+          Prefer: 'return=minimal',
+        },
+        body: JSON.stringify(row),
+      });
+
+    const base = {
+      tool_name: toolName,
+      tokens_estimated: est.bugezyTokens,
+      chrome_tokens_estimated: est.chromeTokens,
+      report_id: reportId ?? null,
+    };
+    if (!userId) {
+      await post(base);
+      return;
+    }
+    // 🔴 `user_id` 欄位要等 FOX 跑完 ALTER 才存在。**這裡必須有退路**：
+    //    PostgREST 對未知欄位是整筆拒絕，而這支的錯誤是被吞掉的——
+    //    先部署程式碼再跑 SQL 的話，全站的 MCP 用量記錄會**靜靜地停止寫入**，
+    //    而且沒有任何人會發現。（同 PM-82 對 allow_screenshot_images 的處理方式。）
+    const res = await post({ ...base, user_id: userId });
+    if (!res.ok) await post(base);
   } catch {
     // 記錄失敗不影響 MCP 回應
   }
