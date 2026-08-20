@@ -48,6 +48,26 @@ check('398-5 🔴 欄位還沒建時有退路（否則會靜靜停止寫入所�
 check('398-5 沒有 token（未帶 ?token=）仍照舊寫入，不會因此漏記',
   /if \(!userId\) \{[\s\S]{0,60}await post\(base\);[\s\S]{0,30}return;/.test(code));
 
+console.log('\n=== ③b PM-401：工具參數的 session_token 也要記到 user_id ===');
+check('401   logMcpUsage 接受呼叫端已驗證的 userId', /knownUserId\?: string,/.test(code));
+check('401   優先用已驗證的 userId，沒有才退回 URL token',
+  /const userId = knownUserId \|\| \(token \? await verifySessionByToken\(token, env\) : null\);/.test(code));
+check('401   txtWithTokens 有透傳 knownUserId',
+  /await logMcpUsage\(env, toolName, est, reportId, knownUserId\);/.test(code));
+for (const tool of ['list_reports', 'get_live_errors', 'get_terminal_logs', 'get_usage_quota']) {
+  check(`401-1 ${tool} 把已驗證的 userId 傳給用量記錄`,
+    new RegExp(`'${tool}', undefined, `).test(code), '沒看到第四個參數');
+}
+check('401   🔴 沒有改用「把 token 回填進 env」的做法（那是 PM-190 明確提醒要避開的競態樣式）',
+  !/env\.__mcp_session_token\s*=[^=]/.test(code), '出現了對 env.__mcp_session_token 的賦值');
+check('401-3 🔴 完全沒有 token 時 userId 為 null，照舊寫入不報錯',
+  /if \(!userId\) \{[\s\S]{0,60}await post\(base\);[\s\S]{0,30}return;/.test(code));
+check('401   🔴 只有「驗證過 token 屬於該使用者」之後才帶 userId',
+  /return txtWithTokens\(\[\], 'list_reports'\);/.test(code),
+  'list_reports 在「查無此 email」時不該帶 userId —— 那時根本還沒驗證身分');
+check('401-2 🔴 URL 帶 token 的舊路徑沒有被拿掉（向下相容）',
+  /const token = env\.__mcp_session_token \|\| '';/.test(code));
+
 console.log('\n=== ④ SQL 腳本（FOX 手動執行的部分）===');
 const sql = readFileSync('mcp30-ticket.sql', 'utf8');
 check('398-1 有建立 MCP30 的 INSERT（30 天、不限量、啟用）',

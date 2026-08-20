@@ -8236,6 +8236,23 @@ async function logMcpUsage(
   toolName: string,
   est: TokenEstimate,
   reportId?: string,
+  /**
+   * PM-401：呼叫端**已經驗證過**的使用者 id。
+   *
+   * 為什麼需要這個參數：Claude Connector 的 MCP 網址不帶 `?token=`，使用者的 token 是
+   * 從**工具參數** `session_token` 傳進來的——而 `logMcpUsage` 看不到工具參數，
+   * 只看得到 `env.__mcp_session_token`。結果是「用參數帶 token」的使用者一切正常，
+   * 但用量永遠記不到 user_id，因此永遠拿不到 MCP30（PM-400 實測確認）。
+   *
+   * ⚠ **刻意不用「把 token 回填進 env」那個做法**：`mcpEnv` 是每個請求一份的副本，
+   *   跨 await 去改它，正是 PM-190 在 `/mcp` 路由註解裡特別提醒要避免的競態樣式
+   *   （同 isolate 併發時互相覆寫）。傳一個明確的值沒有這個風險，也好讀得多。
+   *
+   * ⚠ **只有驗證過 token 屬於該使用者之後才可以傳**，否則等於讓人隨便宣稱身分。
+   *   目前四個呼叫端（list_reports / get_live_errors / get_terminal_logs / get_usage_quota）
+   *   都是在比對成功之後才走到 txtWithTokens。
+   */
+  knownUserId?: string,
 ): Promise<void> {
   try {
     const key = supaKey(env); // PM-93：service_role（繞 RLS）或退回 anon
@@ -8243,9 +8260,10 @@ async function logMcpUsage(
     //   在此之前 mcp_usage 完全沒有使用者維度（PM-380 的稽核已標紅），
     //   所以既無法做 per-user 統計，也無法回答「這個帳號到底有沒有接上 MCP」——
     //   而 MCP30 票券的資格判定正是靠後者。
-    //   身分來自 MCP URL 的 ?token=（每個請求一份 env 副本，見 /mcp 路由）。
+    // PM-401：身分有兩條來源，**優先用呼叫端已經驗證過的那個**（省一次查詢），
+    //   沒有才退回 MCP URL 的 ?token=（每個請求一份 env 副本，見 /mcp 路由）。
     const token = env.__mcp_session_token || '';
-    const userId = token ? await verifySessionByToken(token, env) : null;
+    const userId = knownUserId || (token ? await verifySessionByToken(token, env) : null);
 
     const post = (row: Record<string, unknown>) =>
       fetch(`${env.SUPABASE_URL}/rest/v1/mcp_usage`, {
@@ -8334,10 +8352,16 @@ function createMcpServer(env: Env): McpServer {
    * PM-56b：改 async + `await logMcpUsage` —— Workers 在回應送出後立刻終止，
    * fire-and-forget 的背景 fetch 來不及完成，導致記錄沒寫入。多等幾十毫秒不影響體驗。
    */
-  const txtWithTokens = async (data: unknown, toolName: string, reportId?: string) => {
+  const txtWithTokens = async (
+    data: unknown,
+    toolName: string,
+    reportId?: string,
+    /** PM-401：呼叫端已驗證過的使用者 id（見 logMcpUsage 的說明）。 */
+    knownUserId?: string,
+  ) => {
     const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
     const est = estimateTokens(text, toolName);
-    await logMcpUsage(env, toolName, est, reportId);
+    await logMcpUsage(env, toolName, est, reportId, knownUserId);
     return { content: [{ type: 'text' as const, text: text + formatTokenFooter(est) }] };
   };
 
@@ -8407,7 +8431,8 @@ function createMcpServer(env: Env): McpServer {
         console.error('MCP list_reports query failed:', error.message); // PM-142：原始錯誤只記 log
         return txt('查詢失敗，請稍後再試。');
       }
-      return txtWithTokens(data ?? [], 'list_reports');
+      // PM-401：token 已在上面比對過屬於這個 user，可以安全地記到用量上
+      return txtWithTokens(data ?? [], 'list_reports', undefined, (user as { user_id: string }).user_id);
     },
   );
 
@@ -8609,7 +8634,7 @@ function createMcpServer(env: Env): McpServer {
       if (data.stale) {
         return txt('即時監控未啟用或資料已過期（>30 秒）。請在 BugEzy popup 開啟「🔍 即時監控」後再查。');
       }
-      return txtWithTokens(data, 'get_live_errors');
+      return txtWithTokens(data, 'get_live_errors', undefined, userId); // PM-401：已過 sessionMatchesUser
     },
   );
 
@@ -8647,7 +8672,7 @@ function createMcpServer(env: Env): McpServer {
       }
       // PM-179：最前面插入 AI 導航摘要（根因+白話+位置）；PM-178：後接結構化文字 + 原始 stderr
       const summary = generateTerminalSummary(data);
-      return txtWithTokens(summary + '\n\n' + formatTerminalLogs(data), 'get_terminal_logs');
+      return txtWithTokens(summary + '\n\n' + formatTerminalLogs(data), 'get_terminal_logs', undefined, userId); // PM-401
     },
   );
 
@@ -8713,7 +8738,7 @@ function createMcpServer(env: Env): McpServer {
 
       const quota = await readUsageQuota((user as { user_id: string }).user_id, env);
       if (!quota) return txt('查詢失敗，請稍後再試。');
-      return txtWithTokens(quota, 'get_usage_quota');
+      return txtWithTokens(quota, 'get_usage_quota', undefined, (user as { user_id: string }).user_id); // PM-401
     },
   );
 
