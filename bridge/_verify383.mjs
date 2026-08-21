@@ -276,9 +276,11 @@ console.log('\n=== ⑨ PM-383 / 386：popup 側原始碼檢查 ===');
 const html = readFileSync('../extension/src/popup.html', 'utf8');
 const ptsRaw = readFileSync('../extension/src/popup.ts', 'utf8');
 const pts = ptsRaw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*/g, '');
+const i18n = readFileSync('../extension/src/i18n.ts', 'utf8'); // PM-408：文案移進字典了
 check('383-1 popup 有 📌 釘選模式按鈕', /id="pinModeBtn"/.test(html) && /📌 釘選模式/.test(html));
 check('383-2 有「啟動中」的視覺樣式（BugEzy 藍 #00bfff）', /\.pin-mode-btn\.on\s*{[^}]*#00bfff/.test(html), '找不到 .pin-mode-btn.on 的藍色樣式');
-check('383-2 按鈕文字會切換為「釘選中... 點擊結束」', /釘選中\.\.\. 點擊結束/.test(pts));
+check('383-2 按鈕文字會切換為「釘選中... 點擊結束」（PM-408 起走 i18n）',
+  /'pin-mode-btn-on'/.test(pts) && /釘選中\.\.\. 點擊結束/.test(i18n));
 check('383-4 用 chrome.storage.session 記住狀態', /chrome\.storage\.session/.test(pts));
 check('383   切換時真的送 PIN_MODE_ON / PIN_MODE_OFF', /PIN_MODE_ON/.test(pts) && /PIN_MODE_OFF/.test(pts));
 check('383   開啟前先查真實狀態（不靠快取猜）', /PIN_MODE_STATUS/.test(pts));
@@ -286,9 +288,10 @@ check('386-1 popup 有圖釘清單容器', /id="pinList"/.test(html) && /GET_PIN
 check('386-3/4 每筆有分析與移除', /BRIDGE_PIN_ANALYZE/.test(pts) && /BRIDGE_REMOVE_PIN/.test(pts));
 check('386-5 有巡檢全部', /BRIDGE_PATROL_PINS/.test(pts) && /id="pinPatrolBtn"/.test(html));
 check('386   清除全部有確認對話框（防誤清）', /BRIDGE_CLEAR_PINS/.test(pts) && /confirm\(/.test(pts));
-check('386-6 沒有圖釘 → 顯示引導文案', /尚無圖釘，啟動釘選模式開始偵察/.test(pts));
+check('386-6 沒有圖釘 → 顯示引導文案', /'pin-empty'/.test(pts) && /尚無圖釘，啟動釘選模式開始偵察/.test(i18n));
 check('386-7 stale 圖釘的「分析」按鈕禁用', /analyze\.disabled\s*=\s*pin\.status === 'stale'/.test(pts), '沒看到 stale 禁用');
-check('386   不支援的分頁（chrome://）有明確說明，不會顯示成「沒有圖釘」', /不支援釘選/.test(pts));
+check('386   不支援的分頁（chrome://）有明確說明，不會顯示成「沒有圖釘」',
+  /'pin-unsupported'/.test(pts) && /不支援釘選/.test(i18n));
 check('383/386 全部用 DOM API 建構，沒有 innerHTML（Trusted Types 安全）',
   !/innerHTML/.test(pts.slice(pts.indexOf('PM-383~386'))), 'popup 的釘選區塊出現 innerHTML');
 

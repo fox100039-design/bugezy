@@ -187,6 +187,10 @@ function applyTranslations() {
     if (key) (el as HTMLInputElement | HTMLTextAreaElement).placeholder = t(key, currentUILang);
   });
   renderTicketWallet(); // PM-267：票券區含動態文字，語言切換後要重繪
+  // PM-408：第二層（圖釘清單／AI 監測／記憶矩陣）同樣是動態產生的文字。
+  //   只跑 applyTranslations 的話，那些內容會停留在切換前的語言。
+  void refreshPinList();
+  void refreshMemoryStats();
   updateJsonLockUI(); // PM-189：靜態翻譯會把 copy/export 還原為預設文字，依付費狀態覆寫鎖頭
 }
 
@@ -1747,7 +1751,7 @@ function renderPinModeBtn(on: boolean): void {
   const btn = document.getElementById('pinModeBtn');
   if (!btn) return;
   btn.classList.toggle('on', on);
-  btn.textContent = on ? '📌 釘選中... 點擊結束' : '📌 釘選模式';
+  btn.textContent = on ? t('pin-mode-btn-on', currentUILang) : `📌 ${t('pin-mode', currentUILang)}`;
 }
 
 async function refreshPinList(): Promise<void> {
@@ -1766,19 +1770,19 @@ async function refreshPinList(): Promise<void> {
     count.textContent = '📌 圖釘';
     const p = document.createElement('div');
     p.className = 'pin-empty';
-    p.textContent = '這個分頁不支援釘選（chrome:// 或商店頁面），請切換到一般網頁。';
+    p.textContent = t('pin-unsupported', currentUILang);
     list.appendChild(p);
     bulk.classList.add('hidden');
     return;
   }
 
   renderPinModeBtn(data.pin_mode);
-  count.textContent = `📌 圖釘（${data.total_count}）`;
+  count.textContent = t('pin-count', currentUILang, { n: data.total_count });
 
   if (data.total_count === 0) {
     const p = document.createElement('div');
     p.className = 'pin-empty';
-    p.textContent = '尚無圖釘，啟動釘選模式開始偵察';
+    p.textContent = t('pin-empty', currentUILang);
     list.appendChild(p);
     bulk.classList.add('hidden');
     return;
@@ -1806,7 +1810,7 @@ async function refreshPinList(): Promise<void> {
 
     const analyze = document.createElement('button');
     analyze.className = 'pin-act';
-    analyze.textContent = '分析';
+    analyze.textContent = t('pin-analyze', currentUILang);
     // stale = 元素已從 DOM 消失，沒有東西可分析。禁用比讓它跑出一個錯誤誠實。
     analyze.disabled = pin.status === 'stale';
     analyze.addEventListener('click', () => {
@@ -1827,7 +1831,7 @@ async function refreshPinList(): Promise<void> {
 
     const remove = document.createElement('button');
     remove.className = 'pin-act';
-    remove.textContent = '移除';
+    remove.textContent = t('pin-remove', currentUILang);
     remove.addEventListener('click', () => {
       void (async () => {
         await toContent({ type: 'BRIDGE_REMOVE_PIN', pin_id: pin.pin_id });
@@ -1844,7 +1848,7 @@ async function refreshPinList(): Promise<void> {
 async function togglePinMode(): Promise<void> {
   const cur = await toContent<{ pin_mode: boolean }>({ type: 'PIN_MODE_STATUS' });
   if (!cur) {
-    pinResultShow('這個分頁不支援釘選（chrome:// 或商店頁面）。');
+    pinResultShow(t('pin-unsupported', currentUILang));
     return;
   }
   const next = !cur.pin_mode;
@@ -1858,7 +1862,7 @@ async function togglePinMode(): Promise<void> {
     /* session storage 不可用時只是少了預先渲染，不影響功能 */
   }
   if (on) {
-    pinResultShow('已進入釘選模式：回到頁面點擊要標記的元素，按 ESC 或再按一次按鈕結束。');
+    pinResultShow(t('pin-mode-on-hint', currentUILang));
   }
 }
 
@@ -1866,7 +1870,7 @@ function initPinUi(): void {
   document.getElementById('pinModeBtn')?.addEventListener('click', () => void togglePinMode());
   document.getElementById('pinPatrolBtn')?.addEventListener('click', () => {
     void (async () => {
-      pinResultShow('🔄 巡檢中…（每個圖釘都會做一次動態探測，可能需要幾秒）');
+      pinResultShow(t('patrol-running', currentUILang));
       const r = await toContent<Record<string, unknown>>({ type: 'BRIDGE_PATROL_PINS' });
       renderPatrolResult(r);
       await refreshPinList();
@@ -1874,7 +1878,7 @@ function initPinUi(): void {
   });
   document.getElementById('pinClearBtn')?.addEventListener('click', () => {
     void (async () => {
-      if (!confirm('確定要清除這個分頁的所有圖釘嗎？此操作無法復原。')) return;
+      if (!confirm(t('pin-clear-confirm', currentUILang))) return;
       await toContent({ type: 'BRIDGE_CLEAR_PINS', status: 'all' });
       document.getElementById('pinResult')?.classList.add('hidden');
       await refreshPinList();
@@ -1938,7 +1942,7 @@ async function runScanAll(): Promise<void> {
   const btn = document.getElementById('scanAllBtn') as HTMLButtonElement | null;
   if (!box) return;
   if (btn) btn.disabled = true;
-  box.textContent = '掃描中…';
+  box.textContent = t('scout-scanning', currentUILang);
   try {
     await toContent({ type: 'BRIDGE_MAP_ZONES' }); // 先分區，get_zone_health 才有東西可算
     const [health, zones, errs] = await Promise.all([
@@ -1947,7 +1951,7 @@ async function runScanAll(): Promise<void> {
       toContent<Record<string, unknown>>({ type: 'BRIDGE_GET_BROWSER_ERRORS' }),
     ]);
     if (!health && !zones && !errs) {
-      box.textContent = '這個分頁不支援掃描（chrome:// 或商店頁面）。';
+      box.textContent = t('scout-unsupported', currentUILang);
       return;
     }
     const zoneList = (zones?.zones ?? []) as Array<{ status?: string }>;
@@ -1963,33 +1967,33 @@ async function runScanAll(): Promise<void> {
       d.textContent = `${label}${value}`;
       box.appendChild(d);
     };
-    line('Zone：', zoneList.length
-      ? `${zoneList.length} 區（🟢${count('healthy')} 🟡${count('warning')} 🔴${count('error')}）`
-      : '這一頁沒有可辨識的語意區域');
-    line('Error：', critical || minor ? `🔴 ${critical} critical ／ 🟡 ${minor} minor` : '沒有錯誤');
-    if (typeof health?.score === 'number') line('Score：', `${health.score}/100`);
+    line(t('scout-zone', currentUILang), zoneList.length
+      ? t('scout-zone-fmt', currentUILang, { n: zoneList.length, ok: count('healthy'), warn: count('warning'), err: count('error') })
+      : t('scout-zone-none', currentUILang));
+    line(t('scout-error', currentUILang), critical || minor
+      ? t('scout-error-fmt', currentUILang, { critical, minor })
+      : t('scout-error-none', currentUILang));
+    if (typeof health?.score === 'number') line(t('scout-score', currentUILang), `${health.score}/100`);
     // 空結果的意思是「最近 30 秒沒出事」，不是「沒問題」——這句話不能省
     const note = document.createElement('div');
     note.className = 'scout-note';
-    note.textContent = '錯誤只涵蓋最近約 30 秒；zone 為 0 時所有錯誤都會落在 Unassigned。';
+    note.textContent = t('scout-window-note', currentUILang);
     box.appendChild(note);
   } catch (e) {
-    box.textContent = `掃描失敗：${String(e).slice(0, 120)}`;
+    box.textContent = `${t('scout-scan-failed', currentUILang)}：${String(e).slice(0, 120)}`;
   } finally {
     if (btn) btn.disabled = false;
   }
 }
 
 // ── PM-404：記憶矩陣 ───────────────────────────────────────────────────────
-const MEM_LAYER_NAMES: Record<string, string> = {
-  L1: 'Debug 經驗', L2: '專案知識', L4: '商業邏輯',
-  L5: '外部依賴', L6: '資安合規', L7: '效能基準', L8: '團隊協作',
-};
+// PM-408：層名走字典（原本是硬編碼中文，英文模式下會中英夾雜）
+const memLayerName = (layer: string): string => t(`mem-${layer.toLowerCase()}`, currentUILang);
 
 async function refreshMemoryStats(): Promise<void> {
   const box = document.getElementById('memResult');
   if (!box) return;
-  box.textContent = '讀取中…';
+  box.textContent = t('scout-loading', currentUILang);
   const r = (await chrome.runtime.sendMessage({ type: 'BRIDGE_QUERY_MEMORY_STATS' }).catch(() => null)) as
     | { ok: boolean; data?: Record<string, unknown>; error?: string }
     | null;
@@ -1998,16 +2002,16 @@ async function refreshMemoryStats(): Promise<void> {
   if (!r || !r.ok) {
     // 「連不上」與「連上但出錯」是兩件事，訊息要分開，否則使用者不知道要去修哪個
     const d = document.createElement('div');
-    d.textContent = r?.error === 'Bridge 未連線'
-      ? 'Bridge 未連線 —— 記憶矩陣由本機 bridge 管理，請先啟動 bugezy-bridge。'
-      : `讀取失敗：${r?.error ?? '未知原因'}`;
+    d.textContent = r?.error === 'bridge_offline' || r?.error === 'bridge_timeout'
+      ? t('mem-bridge-off', currentUILang)
+      : `${t('mem-read-failed', currentUILang)}：${r?.error ?? t('mem-unknown', currentUILang)}`;
     box.appendChild(d);
     return;
   }
   const data = r.data ?? {};
   if (data.initialized === false) {
     const d = document.createElement('div');
-    d.textContent = '尚未建立 .bugezy/ —— 第一次用 AI 呼叫 memory_save 時會自動建立。';
+    d.textContent = t('mem-not-init', currentUILang);
     box.appendChild(d);
     return;
   }
@@ -2015,37 +2019,37 @@ async function refreshMemoryStats(): Promise<void> {
   const total = Object.values(per).reduce((a, b) => a + Number(b || 0), 0);
 
   const head = document.createElement('div');
-  head.textContent = `${total} 筆經驗 ｜ ${Object.keys(per).length} 層`;
+  head.textContent = t('mem-summary', currentUILang, { n: total, layers: Object.keys(per).length });
   box.appendChild(head);
   for (const [layer, n] of Object.entries(per)) {
     const row = document.createElement('div');
-    row.textContent = `${layer} ${MEM_LAYER_NAMES[layer] ?? ''}（${n} 筆）`;
+    row.textContent = t('mem-layer-row', currentUILang, { layer, name: memLayerName(layer), n });
     box.appendChild(row);
   }
   const note = document.createElement('div');
   note.className = 'scout-note';
   // 🔴 為什麼不提供「清除全部」按鈕：見 DONE-404
-  note.textContent = '這條通道是唯讀的。要清除記憶請用 AI 呼叫 memory_clear（那條路徑才有方案閘門與確認機制）。';
+  note.textContent = t('mem-readonly-note', currentUILang);
   box.appendChild(note);
 }
 
 // ── PM-405：巡檢／分析結果改成人類可讀 ─────────────────────────────────────
 /** PM-405：巡檢結果 —— 每個圖釘一列，底部給「問題 N ｜ 正常 M」。 */
 function renderPatrolResult(r: Record<string, unknown> | null): void {
-  if (!r) return pinResultShow('巡檢失敗（分頁可能不支援）');
+  if (!r) return pinResultShow(t('patrol-failed', currentUILang));
   if (typeof r.error === 'string') return pinResultShow(`⚠ ${r.error}`);
   const results = (r.results ?? []) as Array<Record<string, unknown>>;
-  if (results.length === 0) return pinResultShow(String(r.note ?? '這個分頁沒有圖釘。'));
+  if (results.length === 0) return pinResultShow(String(r.note ?? t('patrol-no-pins', currentUILang)));
 
   const problems = Number(r.problem_count ?? 0);
   pinResultRender(
-    `📋 巡檢結果（${results.length} 個圖釘）`,
+    t('patrol-title', currentUILang, { n: results.length }),
     results.map((x) => ({
       summary: String(x.summary ?? ''),
       selector: String(x.selector ?? ''),
-      detail: x.changed ? `狀態變化：${String(x.previous_status)} → ${String(x.status)}` : undefined,
+      detail: x.changed ? t('patrol-changed', currentUILang, { from: String(x.previous_status), to: String(x.status) }) : undefined,
     })),
-    `問題：${problems} ｜ 正常：${results.length - problems}`
+    t('patrol-footer', currentUILang, { bad: problems, ok: results.length - problems })
       + (r.note ? `
 ${String(r.note)}` : ''),
   );
@@ -2053,7 +2057,7 @@ ${String(r.note)}` : ''),
 
 /** PM-405：單一圖釘的分析結果 —— 探測類型／耗時／可見性都攤開。 */
 function renderAnalyzeResult(selector: string, r: Record<string, unknown> | null): void {
-  if (!r) return pinResultShow('分析失敗（分頁可能不支援）');
+  if (!r) return pinResultShow(t('analyze-failed', currentUILang));
   const probe = (r.probe ?? {}) as Record<string, unknown>;
   const analysis = (r.analysis ?? {}) as Record<string, unknown>;
   const vis = (analysis.visibility ?? {}) as Record<string, unknown>;
@@ -2061,14 +2065,17 @@ function renderAnalyzeResult(selector: string, r: Record<string, unknown> | null
 
   const bits: string[] = [];
   if (probe.type) {
-    bits.push(`探測：${String(probe.type)}${typeof probe.duration_ms === 'number' ? `（${probe.duration_ms} ms）` : ''}`);
+    bits.push(t('analyze-probe', currentUILang, { type: String(probe.type) })
+      + (typeof probe.duration_ms === 'number' ? `（${probe.duration_ms} ms）` : ''));
   }
-  if (probe.restored === false) bits.push('⚠ 未能還原原值');
+  if (probe.restored === false) bits.push(t('analyze-not-restored', currentUILang));
   if (typeof probe.note === 'string' && probe.note) bits.push(probe.note);
-  bits.push(`可見：${vis.visible ? '✅' : '❌'}　可互動：${vis.has_size ? '✅' : '❌'}`);
-  if (typeof box.width === 'number') bits.push(`尺寸：${Math.round(Number(box.width))}×${Math.round(Number(box.height))}`);
+  bits.push(t('analyze-visible', currentUILang, { v: vis.visible ? '✅' : '❌', i: vis.has_size ? '✅' : '❌' }));
+  if (typeof box.width === 'number') {
+    bits.push(t('analyze-size', currentUILang, { w: Math.round(Number(box.width)), h: Math.round(Number(box.height)) }));
+  }
 
-  pinResultRender('🔍 分析結果', [{
+  pinResultRender(t('analyze-title', currentUILang), [{
     summary: String(r.summary ?? ''),
     selector,
     detail: bits.join('　'),

@@ -1379,13 +1379,15 @@ let bridgeQuerySeq = 0;
 function queryBridge(query: 'memory_stats'): Promise<{ ok: boolean; data?: unknown; error?: string }> {
   const ws = bridgeSocket;
   if (!ws || ws.readyState !== WebSocket.OPEN) {
-    return Promise.resolve({ ok: false, error: 'Bridge 未連線' });
+    // PM-408：回**穩定的機器碼**而不是中文句子——popup 要據此挑翻譯，
+    //   拿人類語言當判斷依據的話，改一個字就會讓另一個檔案的分支默默失效。
+    return Promise.resolve({ ok: false, error: 'bridge_offline' });
   }
   const id = `q${++bridgeQuerySeq}-${Date.now().toString(36)}`;
   return new Promise((resolve) => {
     const timer = setTimeout(() => {
       bridgeQueries.delete(id);
-      resolve({ ok: false, error: 'Bridge 未在時間內回應' });
+      resolve({ ok: false, error: 'bridge_timeout' });
     }, 5000);
     bridgeQueries.set(id, { resolve, timer });
     try {

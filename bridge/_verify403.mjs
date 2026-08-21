@@ -10,6 +10,8 @@ const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*/g, '');
 const html = readFileSync('../extension/src/popup.html', 'utf8');
 const ptsRaw = readFileSync('../extension/src/popup.ts', 'utf8');
 const pts = strip(ptsRaw);
+const i18n = readFileSync('../extension/src/i18n.ts', 'utf8');
+const bg = strip(readFileSync('../extension/src/background.ts', 'utf8'));
 
 console.log('\n=== ① PM-403：第一層主門面 ===');
 check('403-2 🔴 圖釘區塊已經不在第一層（idleView）裡', (() => {
@@ -36,18 +38,22 @@ check('404-3 圖釘清單整段搬進第二層、功能完整', (() => {
 check('404-4 AI 監測區塊 + 一鍵全掃', /id="scanAllBtn"/.test(html) && /id="scanResult"/.test(html) && /function runScanAll/.test(pts));
 check('404-4 🔴 一鍵全掃是重跑既有工具，不是另寫一套偵測',
   /BRIDGE_MAP_ZONES/.test(pts) && /BRIDGE_ZONE_HEALTH/.test(pts) && /BRIDGE_GET_PAGE_HEALTH/.test(pts) && /BRIDGE_GET_BROWSER_ERRORS/.test(pts));
-check('404-4 掃描結果含 Zone／Error／Score', /Zone：/.test(ptsRaw) && /Error：/.test(ptsRaw) && /Score：/.test(ptsRaw));
-check('404   🔴 掃描結果揭露 30 秒視窗（空結果不等於沒問題）', /只涵蓋最近約 30 秒/.test(ptsRaw));
+check('404-4 掃描結果含 Zone／Error／Score（PM-408 後改走 i18n 鍵）',
+  /'scout-zone'/.test(pts) && /'scout-error'/.test(pts) && /'scout-score'/.test(pts));
+check('404   🔴 掃描結果揭露 30 秒視窗（空結果不等於沒問題）',
+  /'scout-window-note'/.test(pts) && /只涵蓋最近約 30 秒/.test(i18n));
 check('404-5 記憶矩陣區塊顯示筆數與各層摘要',
-  /id="memResult"/.test(html) && /entries_per_layer/.test(pts) && /MEM_LAYER_NAMES/.test(pts));
+  /id="memResult"/.test(html) && /entries_per_layer/.test(pts) && /memLayerName/.test(pts));
 check('404-6 🔴 Bridge 未連線 → 明確訊息（與「連上但出錯」分開）',
-  /Bridge 未連線/.test(ptsRaw) && /讀取失敗/.test(ptsRaw));
-check('404   尚未建立 .bugezy/ 也有專屬說明（不會顯示成 0 筆）', /尚未建立 \.bugezy\//.test(ptsRaw));
+  /'mem-bridge-off'/.test(pts) && /'mem-read-failed'/.test(pts));
+check('408   🔴 未連線的判斷用穩定機器碼，不是比對中文句子',
+  /'bridge_offline'/.test(pts) && /'bridge_offline'/.test(bg), 'popup 或 background 還在用中文字串當判斷依據');
+check('404   尚未建立 .bugezy/ 也有專屬說明（不會顯示成 0 筆）',
+  /'mem-not-init'/.test(pts) && /尚未建立 \.bugezy\//.test(i18n));
 
 console.log('\n=== ③ PM-404：Extension → bridge 的唯讀查詢通道 ===');
 const link = strip(readFileSync('src/extension-link.ts', 'utf8'));
 const types = strip(readFileSync('src/types.ts', 'utf8'));
-const bg = strip(readFileSync('../extension/src/background.ts', 'utf8'));
 check('404   bridge 端會處理 query 訊息', /isQuery\(msg\)/.test(link) && /onQuery/.test(link));
 check('404   🔴 白名單是硬編碼的 switch（不是查表，新增能力一定要動程式碼）',
   /switch \(query\)/.test(link) && /case 'memory_stats'/.test(link));
@@ -57,11 +63,11 @@ check('404   不支援的查詢回明確拒絕，不是靜默忽略', /不支援
 check('404   型別層也標明只有 memory_stats 合法', /query: 'memory_stats'/.test(types));
 check('404   extension 端有送出與對回（含逾時）', /queryBridge/.test(bg) && /query_result/.test(bg) && /bridgeQueries/.test(bg));
 check('404   🔴 未連線時立刻回覆，不重試（popup 只是要顯示數字，不該卡住）',
-  /readyState !== WebSocket\.OPEN[\s\S]{0,120}Bridge 未連線/.test(bg));
+  /readyState !== WebSocket\.OPEN[\s\S]{0,200}bridge_offline/.test(bg));
 check('404   popup 走 background 轉發，沒有自己開 WebSocket',
   /BRIDGE_QUERY_MEMORY_STATS/.test(pts) && !/new WebSocket/.test(pts));
 check('404   🔴 popup 明說這條通道是唯讀的、清除要走 AI',
-  /唯讀的。要清除記憶請用 AI 呼叫 memory_clear/.test(ptsRaw));
+  /'mem-readonly-note'/.test(pts) && /要清除記憶請用 AI 呼叫 memory_clear/.test(i18n));
 
 console.log('\n=== ④ PM-405：巡檢／分析結果人類可讀 ===');
 check('405-1 巡檢有專屬渲染函式', /function renderPatrolResult/.test(pts));
@@ -69,12 +75,66 @@ check('405-2 單一分析有專屬渲染函式', /function renderAnalyzeResult/.
 check('405-3/4 依嚴重度上色（紅／黃／綠）', /SEV_COLOR/.test(pts) && /#ff6b6b/.test(ptsRaw) && /#4ade80/.test(ptsRaw));
 check('405   🔴 顏色取自 content script 已算好的 emoji，popup 不重新判定嚴重度',
   /顏色來自 summary 開頭的 emoji/.test(ptsRaw));
-check('405-5 分析顯示探測類型與耗時', /探測：\$\{String\(probe\.type\)\}/.test(ptsRaw) && /duration_ms/.test(pts));
-check('405   分析也顯示可見性與尺寸', /可見：/.test(ptsRaw) && /尺寸：/.test(ptsRaw));
+check('405-5 分析顯示探測類型與耗時', /'analyze-probe'/.test(pts) && /duration_ms/.test(pts));
+check('405   分析也顯示可見性與尺寸', /'analyze-visible'/.test(pts) && /'analyze-size'/.test(pts));
 check('405-1 🔴 結果不再是 JSON.stringify', !/JSON\.stringify\(r\)\.slice/.test(pts), '還有直接 stringify 的顯示路徑');
 check('405   舊的純文字版已移除，不留第二條顯示路徑',
   !/function formatPatrolResult/.test(pts) && !/function formatProbeLine/.test(pts));
 check('405   全部用 DOM API 建構（Trusted Types 安全）', !/innerHTML/.test(pts.slice(pts.indexOf('pinResultRender'))));
+
+console.log('\n=== ④b PM-408：翻譯完整性 ===');
+/** 字典的鍵可能有引號也可能沒有（logout: {…} / 'scout-mode': {…}）。 */
+const hasKey = (k) => new RegExp(`(^|\\s|\\{)'?${k.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}'?\\s*:\\s*\\{\\s*zh:`, 'm').test(i18n);
+
+// 🔴 這一條就是 PM-408 的根因守衛：`t()` 找不到鍵時會回傳鍵本身，
+//    所以漏一個字典項＝畫面上直接顯示 "scout-mode" 這種原始字串，而且不會有任何錯誤。
+const htmlKeys = [...new Set([...html.matchAll(/data-i18n(?:-ph)?="([^"]+)"/g)].map((m) => m[1]))];
+const missingHtml = htmlKeys.filter((k) => !hasKey(k));
+check(`408-1 🔴 popup.html 的 ${htmlKeys.length} 個 data-i18n 鍵字典裡全都有`,
+  missingHtml.length === 0, `缺：${missingHtml.join(', ')}`);
+
+// popup.ts 裡 t('key', …) 用到的鍵同樣要存在
+const tsKeys = [...new Set([...ptsRaw.matchAll(/\bt\(\s*'([a-z0-9_-]+)'\s*,/gi)].map((m) => m[1]))];
+const missingTs = tsKeys.filter((k) => !hasKey(k));
+check(`408-1 🔴 popup.ts 裡 t() 用到的 ${tsKeys.length} 個鍵字典裡全都有`,
+  missingTs.length === 0, `缺：${missingTs.join(', ')}`);
+
+// 卡片點名的六個鍵，逐一確認繁中與英文都真的有值
+for (const [key, zh, en] of [
+  ['scout-mode', '偵察模式', 'Scout Mode'],
+  ['back', '返回', 'Back'],
+  ['ai-monitor', 'AI 監測', 'AI Monitor'],
+  ['scan-all', '一鍵全掃', 'Scan all'],
+  ['memory-matrix', '記憶矩陣', 'Memory Matrix'],
+  ['refresh', '重新整理', 'Refresh'],
+]) {
+  const line = i18n.split('\n').find((l) => new RegExp(`(^|\\s|\\{)'?${key}'?\\s*:\\s*\\{\\s*zh:`).test(l)) ?? '';
+  check(`408-1/2 ${key} → 繁中「${zh}」／英文「${en}」`,
+    line.includes(`'${zh}'`) && line.includes(`'${en}'`), line.slice(0, 120) || '(找不到)');
+}
+
+// 五種語言都要有值（型別要求，但空字串照樣通過型別檢查）
+const scoutLines = i18n.split('\n').filter((l) => /'(scout|mem|patrol|analyze|pin)-[a-z0-9-]+'?\s*:\s*\{\s*zh:/.test(l));
+check(`408-2 第二層的 ${scoutLines.length} 條字串五種語言都有非空值`,
+  scoutLines.length > 20 && scoutLines.every((l) =>
+    ['zh', 'en', 'ja', 'ko', 'vi'].every((lg) => new RegExp(`${lg}: '[^']+'`).test(l))),
+  scoutLines.find((l) => !['zh', 'en', 'ja', 'ko', 'vi'].every((lg) => new RegExp(`${lg}: '[^']+'`).test(l)))?.slice(0, 120) ?? '');
+
+// 🔴 動態文字也必須走 t()：只補 data-i18n 的話，英文模式下第二層仍是滿滿中文
+const scoutCode = strip(ptsRaw.slice(ptsRaw.indexOf('兩層架構')));
+const cjkLiterals = [...scoutCode.matchAll(/'([^'\n]{2,90})'/g)]
+  .map((m) => m[1])
+  .filter((x) => /[一-鿿]/.test(x));
+check('408-2 🔴 第二層的動態文字沒有殘留硬編碼中文（英文模式才會真的是英文）',
+  cjkLiterals.length === 0, `殘留 ${cjkLiterals.length} 條：${cjkLiterals.slice(0, 3).join(' / ')}`);
+
+check('408   語言切換時第二層會重繪（否則會停在切換前的語言）',
+  /applyTranslations[\s\S]{0,600}refreshPinList\(\)[\s\S]{0,200}refreshMemoryStats\(\)/.test(ptsRaw),
+  'applyTranslations 沒有重繪第二層');
+
+check('408-3 按鈕沒有寫死寬度（文字變長不會被截斷）',
+  !/\.scout-act\s*\{[^}]*width\s*:/.test(html) && !/\.scout-back\s*\{[^}]*width\s*:/.test(html)
+  && !/\.pin-mode-btn\s*\{[^}]*width\s*:/.test(html));
 
 console.log('\n=== ⑤ PM-406：guide 的 MCP30 章節（線上實測）===');
 const BASE = 'https://bugezy-api.bugezy-api.workers.dev';
