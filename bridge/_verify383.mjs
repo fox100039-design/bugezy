@@ -277,7 +277,9 @@ const html = readFileSync('../extension/src/popup.html', 'utf8');
 const ptsRaw = readFileSync('../extension/src/popup.ts', 'utf8');
 const pts = ptsRaw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*/g, '');
 const i18n = readFileSync('../extension/src/i18n.ts', 'utf8'); // PM-408：文案移進字典了
-check('383-1 popup 有 📌 釘選模式按鈕', /id="pinModeBtn"/.test(html) && /📌 釘選模式/.test(html));
+// PM-410：按鈕文字拆成「emoji + data-i18n span」，literal 不再連續 → 改驗結構 + 字典值
+check('383-1 popup 有 📌 釘選模式按鈕',
+  /id="pinModeBtn"/.test(html) && /data-i18n="pin-mode"/.test(html) && /釘選模式/.test(i18n));
 check('383-2 有「啟動中」的視覺樣式（BugEzy 藍 #00bfff）', /\.pin-mode-btn\.on\s*{[^}]*#00bfff/.test(html), '找不到 .pin-mode-btn.on 的藍色樣式');
 check('383-2 按鈕文字會切換為「釘選中... 點擊結束」（PM-408 起走 i18n）',
   /'pin-mode-btn-on'/.test(pts) && /釘選中\.\.\. 點擊結束/.test(i18n));

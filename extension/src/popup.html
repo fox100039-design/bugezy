@@ -120,13 +120,20 @@
       .scout-enter-right {
         flex-shrink: 0;
       }
-      /* 可縮的那一側要允許縮到 0，否則 flex 仍會以內容寬度為下限而把整列撐開 */
+      /* 🔴 PM-410：**標題也不讓步**。
+         PM-409 當時給標題加了 `min-width: 0; overflow: hidden`，想讓它在擠不下時 ellipsis——
+         但那正是「flex item 被壓到 0 寬、整個消失」的典型成因，而標題只有 3~5 個字，
+         本來就不該是會讓步的那一方。改成兩側都 `flex: 0 0 auto`，
+         真的擠不下時讓**容器**去裁切，而不是讓某個子元素憑空不見。 */
       .scout-title,
       .scout-block-title,
       .pin-title {
-        min-width: 0;
+        flex: 0 0 auto;
+      }
+      .scout-head,
+      .scout-block-head,
+      .pin-head {
         overflow: hidden;
-        text-overflow: ellipsis;
       }
 
       /* PM-403／404：兩層架構 */
@@ -158,6 +165,8 @@
       .scout-back:hover { filter: brightness(1.2); }
       .scout-title { font-size: 14px; font-weight: 700; }
       .scout-block { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+      /* 第一個區塊緊接在 scout-head 的分隔線下方，再畫一條會變雙線 */
+      #scoutView > .scout-block:first-of-type { border-top: none; padding-top: 4px; }
       .scout-block-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
       .scout-block-title { font-size: 13px; font-weight: 700; }
       .scout-act {
@@ -778,11 +787,13 @@
         <span class="scout-title">📌 <span data-i18n="scout-mode">偵察模式</span></span>
       </div>
 
-      <!-- PM-383~386：手動釘選（PM-403 起位於第二層） -->
-      <section id="pinSection" class="pin-section">
-        <div class="pin-head">
-          <span id="pinCount" class="pin-title">📌 圖釘</span>
-          <button id="pinModeBtn" class="pin-mode-btn">📌 釘選模式</button>
+      <!-- PM-383~386：手動釘選（PM-403 起位於第二層）
+           PM-410：改用與另外兩個 section 相同的 .scout-block / .scout-block-head 結構，
+           這樣三個區塊的標題列與分隔線才會一致（原本圖釘這一段沒有分隔線）。 -->
+      <section id="pinSection" class="pin-section scout-block">
+        <div class="pin-head scout-block-head">
+          <span id="pinCount" class="pin-title scout-block-title">📌 <span data-i18n="pin-section-title">圖釘</span></span>
+          <button id="pinModeBtn" class="pin-mode-btn scout-act">📌 <span data-i18n="pin-mode">釘選模式</span></button>
         </div>
         <div id="pinList" class="pin-list"></div>
         <div id="pinBulk" class="pin-bulk hidden">

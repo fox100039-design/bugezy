@@ -1767,7 +1767,7 @@ async function refreshPinList(): Promise<void> {
 
   if (!data) {
     // 分頁沒有 content script（chrome://、應用程式商店、PDF）——講清楚而不是顯示成「沒有圖釘」
-    count.textContent = '📌 圖釘';
+    count.textContent = `📌 ${t('pin-section-title', currentUILang)}`;
     const p = document.createElement('div');
     p.className = 'pin-empty';
     p.textContent = t('pin-unsupported', currentUILang);

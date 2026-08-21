@@ -155,10 +155,14 @@ check('409-2 🔴 按鈕不讓步（flex-shrink: 0）—— 否則會被壓成�
   const rule = html.slice(i, html.indexOf('}', i));
   return ['.scout-back', '.scout-act', '.pin-mode-btn', '.scout-enter-right'].every((sel) => rule.includes(sel));
 })());
-check('409   🔴 可縮的那一側有 min-width: 0（flex 的預設 min-width:auto 才是折行的真正原因）',
-  /min-width: 0;[\s\S]{0,80}overflow: hidden;[\s\S]{0,80}text-overflow: ellipsis;/.test(html));
-check('409   標題擠不下時用 ellipsis 而不是折行（優先保住按鈕完整）',
-  /text-overflow: ellipsis;/.test(html.slice(html.indexOf('PM-409'), html.indexOf('PM-403／404：兩層架構'))));
+// 🔴 PM-410 撤掉了 PM-409 給標題加的 min-width:0 + overflow:hidden ——
+//    那組合會讓 flex item 被壓到 0 寬而整個消失（正是 PM-410 回報的症狀）。
+check('410   🔴 標題不再有 min-width:0 + overflow:hidden（那會讓它被壓到 0 寬而消失）',
+  !/\.scout-block-title,\s*\n\s*\.pin-title \{\s*\n\s*min-width: 0;/.test(html), '標題仍可能被壓縮到消失');
+check('410   🔴 標題與按鈕兩側都不讓步（flex: 0 0 auto ／ flex-shrink: 0）',
+  /\.pin-title \{[\s\S]{0,60}flex: 0 0 auto;/.test(html));
+check('410   真的擠不下時由容器裁切，而不是讓子元素憑空不見',
+  /\.scout-head,\s*\n\s*\.scout-block-head,\s*\n\s*\.pin-head \{\s*\n\s*overflow: hidden;/.test(html));
 check('409-4/5 三個 head 都是 flex row 且左右對齊',
   /\.scout-head \{[\s\S]{0,200}justify-content: space-between/.test(html)
   && /\.scout-block-head \{[^}]*justify-content: space-between/.test(html)
@@ -168,6 +172,33 @@ check('409-3 🔴 第一層不受寬度影響（欄位用 1fr，沒有寫死像�
   && !/\.action-grid \{[^}]*width: \d+px/.test(html));
 check('409-3 第一層既有元素一個都沒少',
   ['startBtn', 'rewindBtn', 'screenshotBtn', 'myReportsBtn', 'scoutEnterBtn', 'promoCode'].every((id) => html.includes(`id="${id}"`)));
+
+console.log('\n=== ④d PM-410：三個 section 的標題與分隔線 ===');
+const scoutHtml = html.slice(html.indexOf('id="scoutView"'), html.indexOf('<section id="recordingView"'));
+for (const [label, key] of [['圖釘', 'pin-section-title'], ['AI 監測', 'ai-monitor'], ['記憶矩陣', 'memory-matrix']]) {
+  check(`410-1 ${label} section 有標題元素`, scoutHtml.includes(`data-i18n="${key}"`), `找不到 data-i18n="${key}"`);
+}
+check('410-1 三個標題都帶 emoji（與第一層風格一致）',
+  (scoutHtml.match(/scout-block-title">(📌|🤖|🧠)/g) ?? []).length === 3,
+  String((scoutHtml.match(/scout-block-title">(📌|🤖|🧠)/g) ?? []).length));
+check('410-2 🔴 三個 section 的標題列用同一組 class（結構一致，不是三種寫法）',
+  (scoutHtml.match(/class="[^"]*scout-block-head[^"]*"/g) ?? []).length === 3,
+  String((scoutHtml.match(/class="[^"]*scout-block-head[^"]*"/g) ?? []).length));
+check('410-2 標題左、按鈕右、同一行',
+  /\.scout-block-head \{[^}]*display: flex[^}]*justify-content: space-between/.test(html));
+check('410-3 🔴 三個 section 都有分隔線（圖釘那段原本沒有）',
+  (scoutHtml.match(/class="[^"]*scout-block[^"]*"/g) ?? []).filter((c) => !c.includes('scout-block-head') && !c.includes('scout-block-title')).length === 3,
+  String((scoutHtml.match(/class="[^"]*scout-block[^"]*"/g) ?? []).filter((c) => !c.includes('scout-block-head') && !c.includes('scout-block-title')).length));
+check('410-3 第一個區塊不畫上分隔線（否則與 scout-head 的線變雙線）',
+  /#scoutView > \.scout-block:first-of-type \{ border-top: none;/.test(html));
+check('410-4 標題不斷行', /\.pin-title,?[\s\S]{0,120}white-space: nowrap;/.test(html) || /white-space: nowrap;/.test(html.slice(html.indexOf('.scout-title'), html.indexOf('.scout-title') + 400)));
+check('410-5 🔴 既有功能一個都沒少（id 全部保留，只是多加 class）',
+  ['pinSection', 'pinCount', 'pinModeBtn', 'pinList', 'pinBulk', 'pinPatrolBtn', 'pinClearBtn', 'pinResult', 'scanAllBtn', 'memRefreshBtn']
+    .every((id) => scoutHtml.includes(`id="${id}"`)));
+check('410   新的標題鍵也在字典裡（五語）', (() => {
+  const line = i18n.split('\n').find((l) => /'pin-section-title'\s*:/.test(l)) ?? '';
+  return ['zh', 'en', 'ja', 'ko', 'vi'].every((lg) => new RegExp(`${lg}: '[^']+'`).test(line));
+})(), '缺 pin-section-title 或語言不全');
 
 console.log('\n=== ⑤ PM-406：guide 的 MCP30 章節（線上實測）===');
 const BASE = 'https://bugezy-api.bugezy-api.workers.dev';

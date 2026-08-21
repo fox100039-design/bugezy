@@ -48,6 +48,7 @@ const dict: Record<string, { zh: string; en: string; ja: string; ko: string; vi:
   // ── PM-403~405：第二層「偵察模式」（PM-408 補齊翻譯）──
   // ⚠ 這些鍵在 PM-403/404 加 data-i18n 時漏了字典項，而 `t()` 找不到就回傳 key 本身，
   //   所以畫面上直接顯示 "scout-mode"、"back" 這種原始字串。已加測試防止再犯（見 _verify403）。
+  'pin-section-title': { zh: '圖釘', en: 'Pins', ja: 'ピン', ko: '핀', vi: 'Ghim' },
   'pin-mode': { zh: '釘選模式', en: 'Pin Mode', ja: 'ピンモード', ko: '핀 모드', vi: 'Chế độ ghim' },
   'scout-mode': { zh: '偵察模式', en: 'Scout Mode', ja: '偵察モード', ko: '정찰 모드', vi: 'Chế độ trinh sát' },
   back: { zh: '返回', en: 'Back', ja: '戻る', ko: '뒤로', vi: 'Quay lại' },
