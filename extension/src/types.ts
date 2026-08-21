@@ -174,6 +174,7 @@ export type ControlMessage =
   | { type: 'PIN_MODE_STATUS' }
   | { type: 'GET_PIN_LIST' }
   | { type: 'PIN_MODE_CHANGED'; on: boolean } // content → background/popup
+  | { type: 'BRIDGE_QUERY_MEMORY_STATS' } // PM-404：popup → background → bridge（唯讀）
   | { type: 'BRIDGE_PATROL_PINS' } // PM-334
   | { type: 'BRIDGE_REMOVE_PIN'; pin_id?: string; selector?: string } // PM-335
   | { type: 'BRIDGE_CLEAR_PINS'; status?: string } // PM-335

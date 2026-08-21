@@ -783,6 +783,11 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage | { type: string; summ
           sendResponse({ segments: (r[BUFFER_VOICE_KEY] as VoiceSegment[]) ?? [] });
           break;
         }
+        // PM-404：popup 的記憶矩陣區塊 —— 向 bridge 發唯讀查詢
+        case 'BRIDGE_QUERY_MEMORY_STATS': {
+          sendResponse(await queryBridge('memory_stats'));
+          break;
+        }
         // PM-86：麥克風錄音 — 建 offscreen + 開始錄音
         case 'MIC_START': {
           await ensureOffscreen();
@@ -1357,6 +1362,42 @@ ${String(res.hint)}` : ''}`);
   }
 }
 
+/**
+ * PM-404：向 bridge 發一則**唯讀**查詢並等回覆。
+ *
+ * bridge 那端是硬編碼白名單（目前只有 `memory_stats`）。這裡不做重試——
+ * popup 只是要顯示一個數字，連不上就如實說「Bridge 未連線」，
+ * 硬撐重試只會讓 popup 卡住。
+ */
+interface BridgeQueryWaiter {
+  resolve: (r: { ok: boolean; data?: unknown; error?: string }) => void;
+  timer: ReturnType<typeof setTimeout>;
+}
+const bridgeQueries = new Map<string, BridgeQueryWaiter>();
+let bridgeQuerySeq = 0;
+
+function queryBridge(query: 'memory_stats'): Promise<{ ok: boolean; data?: unknown; error?: string }> {
+  const ws = bridgeSocket;
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    return Promise.resolve({ ok: false, error: 'Bridge 未連線' });
+  }
+  const id = `q${++bridgeQuerySeq}-${Date.now().toString(36)}`;
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      bridgeQueries.delete(id);
+      resolve({ ok: false, error: 'Bridge 未在時間內回應' });
+    }, 5000);
+    bridgeQueries.set(id, { resolve, timer });
+    try {
+      ws.send(JSON.stringify({ type: 'query', id, query }));
+    } catch (e) {
+      clearTimeout(timer);
+      bridgeQueries.delete(id);
+      resolve({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  });
+}
+
 function scheduleBridgeReconnect(): void {
   if (bridgeRetryTimer !== undefined) return;
   bridgeRetryTimer = setTimeout(() => {
@@ -1393,6 +1434,17 @@ function connectBridge(): void {
     // 心跳：回 pong（同時讓 service worker 的閒置計時器歸零）
     if (typeof msg === 'object' && msg !== null && (msg as { type?: string }).type === 'ping') {
       ws.send(JSON.stringify({ type: 'pong', t: Date.now() }));
+      return;
+    }
+    // PM-404：bridge 對「唯讀查詢」的回覆（popup 的記憶矩陣區塊用）
+    if (typeof msg === 'object' && msg !== null && (msg as { type?: string }).type === 'query_result') {
+      const qr = msg as { id: string; ok: boolean; data?: unknown; error?: string };
+      const waiter = bridgeQueries.get(qr.id);
+      if (waiter) {
+        clearTimeout(waiter.timer);
+        bridgeQueries.delete(qr.id);
+        waiter.resolve(qr.ok ? { ok: true, data: qr.data } : { ok: false, error: qr.error ?? '查詢失敗' });
+      }
       return;
     }
     const cmd = msg as BridgeCommandMsg;

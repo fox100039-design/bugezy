@@ -9,6 +9,7 @@ import {
   COMMAND_TIMEOUT_MS,
   HEARTBEAT_MS,
   isHeartbeat,
+  isQuery,
   isResult,
   type BridgeCommand,
   type BridgeResult,
@@ -150,6 +151,11 @@ export class ExtensionLink {
       return;
     }
     if (isHeartbeat(msg)) return; // pong，不需處理
+    // PM-404：Extension 主動發起的**唯讀**查詢（popup 的記憶矩陣區塊用）
+    if (isQuery(msg)) {
+      void this.onQuery(msg.id, msg.query);
+      return;
+    }
     if (!isResult(msg)) {
       log('⚠ 收到非預期格式的訊息，已忽略');
       return;
@@ -159,6 +165,31 @@ export class ExtensionLink {
     clearTimeout(p.timer);
     this.pending.delete(msg.id);
     p.resolve(msg);
+  }
+
+  /**
+   * PM-404：回應 Extension 的唯讀查詢。
+   *
+   * **白名單是硬編碼的**——不是「查表後找不到就拒絕」，而是 switch 只認得這幾個字串。
+   * 這樣新增能力一定要有人動這段程式碼，不會因為某個設定檔被改掉就多開一條路。
+   */
+  private async onQuery(id: string, query: string): Promise<void> {
+    const send = (r: { ok: boolean; data?: unknown; error?: string }) => {
+      if (this.connected) this.socket!.send(JSON.stringify({ type: 'query_result', id, ...r }));
+    };
+    try {
+      switch (query) {
+        case 'memory_stats': {
+          const { memoryStats } = await import('./memory-ops.js');
+          send({ ok: true, data: memoryStats() });
+          return;
+        }
+        default:
+          send({ ok: false, error: `不支援的查詢：${query}（這條通道只開放唯讀查詢）` });
+      }
+    } catch (e) {
+      send({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
   }
 
   /**

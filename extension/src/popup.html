@@ -97,6 +97,44 @@
       .main-action.screenshot { background: linear-gradient(135deg, #059669, #047857); }
       .action-icon { font-size: 32px; }
 
+      /* PM-403／404：兩層架構 */
+      .scout-enter {
+        width: 100%; margin-top: 10px; padding: 12px 14px; border-radius: 10px;
+        border: 1px solid var(--line); background: rgba(255,255,255,.05); color: var(--fg);
+        font-size: 14px; cursor: pointer; display: flex; align-items: center;
+        justify-content: space-between; transition: all .15s ease;
+      }
+      .scout-enter:hover { background: rgba(0,191,255,.12); border-color: #00bfff; }
+      .scout-enter-right { display: flex; align-items: center; gap: 8px; opacity: .7; }
+      .scout-badge {
+        padding: 1px 7px; border-radius: 999px; background: #00bfff; color: #04222e;
+        font-size: 11px; font-weight: 700;
+      }
+      /* 切頁動畫：第二層由右滑入。用 animation 而非 transition —— 元素是從
+         display:none 變出來的，transition 不會有起始狀態可以過渡。 */
+      #scoutView.slide-in { animation: scoutIn .18s ease; }
+      @keyframes scoutIn { from { transform: translateX(14px); opacity: 0; } to { transform: none; opacity: 1; } }
+      .scout-head { display: flex; align-items: center; gap: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+      .scout-back {
+        padding: 5px 12px; border-radius: 8px; border: 1px solid var(--line);
+        background: rgba(255,255,255,.06); color: var(--fg); font-size: 12px; cursor: pointer;
+      }
+      .scout-back:hover { filter: brightness(1.2); }
+      .scout-title { font-size: 14px; font-weight: 700; }
+      .scout-block { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+      .scout-block-head { display: flex; align-items: center; justify-content: space-between; }
+      .scout-block-title { font-size: 13px; font-weight: 700; }
+      .scout-act {
+        padding: 4px 11px; border-radius: 7px; border: 1px solid var(--line);
+        background: rgba(255,255,255,.06); color: var(--fg); font-size: 11px; cursor: pointer;
+      }
+      .scout-act:disabled { opacity: .4; cursor: not-allowed; }
+      .scout-body {
+        margin-top: 8px; font-size: 12px; line-height: 1.6; opacity: .9;
+        white-space: pre-wrap; word-break: break-word;
+      }
+      .scout-note { font-size: 11px; opacity: .6; margin-top: 6px; }
+
       /* PM-383~386：釘選模式與圖釘清單 */
       .pin-section { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
       .pin-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -521,19 +559,11 @@
       </div>
       <div id="lastScreenshot" class="meta" style="display:none;"></div>
 
-      <!-- PM-383~386：手動釘選模式 + 圖釘清單 -->
-      <section id="pinSection" class="pin-section">
-        <div class="pin-head">
-          <span id="pinCount" class="pin-title">📌 圖釘</span>
-          <button id="pinModeBtn" class="pin-mode-btn">📌 釘選模式</button>
-        </div>
-        <div id="pinList" class="pin-list"></div>
-        <div id="pinBulk" class="pin-bulk hidden">
-          <button id="pinPatrolBtn" class="pin-bulk-btn">🔄 巡檢全部</button>
-          <button id="pinClearBtn" class="pin-bulk-btn danger">🗑️ 清除全部</button>
-        </div>
-        <div id="pinResult" class="pin-result hidden"></div>
-      </section>
+      <!-- PM-403：圖釘與進階功能搬到第二層（偵察模式）。第一層只留入口。 -->
+      <button id="scoutEnterBtn" class="scout-enter">
+        <span>📌 <b data-i18n="scout-mode">偵察模式</b></span>
+        <span class="scout-enter-right"><span id="scoutPinBadge" class="scout-badge hidden"></span> &rarr;</span>
+      </button>
       <!-- PM-184：我的報告列表入口（帶 session token 開網頁）-->
       <button id="myReportsBtn" class="my-reports-btn" data-i18n="my-reports">📋 我的報告</button>
       <div id="upgradeHint" class="upgrade-hint hidden">
@@ -704,6 +734,45 @@
     </section>
 
     <!-- 狀態二：錄製中 -->
+
+    <!-- PM-404：第二層「偵察模式」——圖釘 + AI 監測 + 記憶矩陣 -->
+    <section id="scoutView" class="hidden">
+      <div class="scout-head">
+        <button id="scoutBackBtn" class="scout-back">&larr;&nbsp;<span data-i18n="back">返回</span></button>
+        <span class="scout-title">📌 <span data-i18n="scout-mode">偵察模式</span></span>
+      </div>
+
+      <!-- PM-383~386：手動釘選（PM-403 起位於第二層） -->
+      <section id="pinSection" class="pin-section">
+        <div class="pin-head">
+          <span id="pinCount" class="pin-title">📌 圖釘</span>
+          <button id="pinModeBtn" class="pin-mode-btn">📌 釘選模式</button>
+        </div>
+        <div id="pinList" class="pin-list"></div>
+        <div id="pinBulk" class="pin-bulk hidden">
+          <button id="pinPatrolBtn" class="pin-bulk-btn">🔄 巡檢全部</button>
+          <button id="pinClearBtn" class="pin-bulk-btn danger">🗑️ 清除全部</button>
+        </div>
+        <div id="pinResult" class="pin-result hidden"></div>
+      </section>
+
+      <div class="scout-block">
+        <div class="scout-block-head">
+          <span class="scout-block-title">🤖 <span data-i18n="ai-monitor">AI 監測</span></span>
+          <button id="scanAllBtn" class="scout-act" data-i18n="scan-all">一鍵全掃</button>
+        </div>
+        <div id="scanResult" class="scout-body">尚未掃描，點「一鍵全掃」開始</div>
+      </div>
+
+      <div class="scout-block">
+        <div class="scout-block-head">
+          <span class="scout-block-title">🧠 <span data-i18n="memory-matrix">記憶矩陣</span></span>
+          <button id="memRefreshBtn" class="scout-act" data-i18n="refresh">重新整理</button>
+        </div>
+        <div id="memResult" class="scout-body">讀取中…</div>
+      </div>
+    </section>
+
     <section id="recordingView" class="hidden">
       <div class="recording-timer"><span class="rec-dot"></span><span id="elapsed">00:00</span></div>
       <button id="stopBtn" data-i18n="stop-recording">⏹ 停止錄製</button>

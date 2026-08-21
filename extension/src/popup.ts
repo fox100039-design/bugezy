@@ -1682,43 +1682,65 @@ async function toContent<T = unknown>(msg: Record<string, unknown>): Promise<T |
   return (await chrome.tabs.sendMessage(tab.id, msg).catch(() => null)) as T | null;
 }
 
-/**
- * PM-393：把一次探測結果整理成一行人話。
- *
- * content script 的 `summary` 已經是「🔴 點擊觸發 TypeError: …」這種形式，
- * 這裡只負責接上 selector 與補充欄位（連結狀態／媒體載入／還原與否），
- * **不重新解讀 JSON** —— 兩邊各算一次判定遲早會分岔。
- */
-function formatProbeLine(selector: string, r: Record<string, unknown> | null): string {
-  if (!r) return `⚠ ${selector} — 沒有回應`;
-  const probe = (r.probe ?? {}) as Record<string, unknown>;
-  const bits: string[] = [`${String(r.summary ?? '分析完成')}`];
-  if (probe.type === 'skipped_destructive' || probe.type === 'skipped_sensitive') {
-    bits.push(String(probe.note ?? ''));
-  }
-  if (probe.restored === false) bits.push('⚠ 未能還原原值');
-  if (typeof probe.duration_ms === 'number' && probe.duration_ms > 0) bits.push(`（${probe.duration_ms} ms）`);
-  return `${selector}\n${bits.filter(Boolean).join(' ')}`;
-}
-
-/** PM-393：巡檢結果每行一個圖釘，一眼看得出誰有問題。 */
-function formatPatrolResult(r: Record<string, unknown> | null): string {
-  if (!r) return '巡檢失敗（分頁可能不支援）';
-  if (typeof r.error === 'string') return `⚠ ${r.error}`;
-  const results = (r.results ?? []) as Array<Record<string, unknown>>;
-  if (results.length === 0) return String(r.note ?? '這個分頁沒有圖釘。');
-  const lines = results.map((x) => `${String(x.summary ?? '')} — ${String(x.selector ?? '')}`);
-  const head = `巡檢 ${results.length} 個圖釘`
-    + (Number(r.problem_count ?? 0) > 0 ? `，${r.problem_count} 個有問題` : '，全部正常')
-    + (Number(r.changed_count ?? 0) > 0 ? `（${r.changed_count} 個狀態有變化）` : '');
-  return [head, ...lines, r.note ? `\n${String(r.note)}` : ''].filter(Boolean).join('\n');
-}
+// PM-393 的純文字版 formatProbeLine／formatPatrolResult 已於 PM-405 由結構化渲染取代，
+// 沒有呼叫端就不留（死碼會讓下一個人以為還有第二條顯示路徑）。
 
 function pinResultShow(text: string): void {
   const box = document.getElementById('pinResult');
   if (!box) return;
   box.textContent = text;
   box.classList.remove('hidden');
+}
+
+/**
+ * PM-405：把巡檢／分析結果畫成有顏色的區塊，而不是一坨文字。
+ *
+ * **顏色來自 summary 開頭的 emoji**（🔴/🟡/🟢/⚪），那是 content script 已經算好的判定——
+ * popup 不重新解讀 JSON 去猜嚴重度。兩邊各算一次判定遲早會分岔（PM-350 的
+ * score/summary 不同步已經吃過這個虧）。
+ */
+const SEV_COLOR: Record<string, string> = { '🔴': '#ff6b6b', '🟡': '#ffd600', '🟢': '#4ade80', '⚪': '#9e9e9e', '✅': '#a5d6a7' };
+
+function pinResultRender(title: string, rows: Array<{ summary: string; selector: string; detail?: string }>, footer?: string): void {
+  const box = document.getElementById('pinResult');
+  if (!box) return;
+  while (box.firstChild) box.removeChild(box.firstChild);
+  box.classList.remove('hidden');
+
+  const h = document.createElement('div');
+  h.style.fontWeight = '700';
+  h.style.marginBottom = '6px';
+  h.textContent = title;
+  box.appendChild(h);
+
+  for (const r of rows) {
+    const emoji = [...r.summary][0] ?? '';
+    const item = document.createElement('div');
+    item.style.cssText = `margin:6px 0;padding-left:8px;border-left:3px solid ${SEV_COLOR[emoji] ?? 'rgba(255,255,255,.2)'};`;
+    const sel = document.createElement('div');
+    sel.style.cssText = 'font-family:ui-monospace,monospace;font-size:11px;word-break:break-all;';
+    sel.textContent = `${emoji} ${r.selector}`;
+    item.appendChild(sel);
+    const sum = document.createElement('div');
+    sum.style.cssText = 'font-size:11px;opacity:.85;';
+    // 去掉開頭的 emoji（已經畫在 selector 那行了），避免重複
+    sum.textContent = r.summary.replace(/^[🔴🟡🟢⚪✅]\s*/u, '');
+    item.appendChild(sum);
+    if (r.detail) {
+      const d = document.createElement('div');
+      d.style.cssText = 'font-size:10px;opacity:.6;margin-top:2px;';
+      d.textContent = r.detail;
+      item.appendChild(d);
+    }
+    box.appendChild(item);
+  }
+
+  if (footer) {
+    const f = document.createElement('div');
+    f.style.cssText = 'margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.12);font-size:11px;opacity:.75;';
+    f.textContent = footer;
+    box.appendChild(f);
+  }
 }
 
 function renderPinModeBtn(on: boolean): void {
@@ -1796,11 +1818,8 @@ async function refreshPinList(): Promise<void> {
         });
         // PM-393：顯示人話而不是 JSON。summary 已經由 content script 組成
         //   「🔴 點擊觸發 TypeError: …」這種形式，直接用即可。
-        pinResultShow(
-          r && typeof r.error === 'string'
-            ? `⚠ ${r.error}`
-            : formatProbeLine(pin.selector, r),
-        );
+        if (r && typeof r.error === 'string') pinResultShow(`⚠ ${r.error}`);
+        else renderAnalyzeResult(pin.selector, r);
         await refreshPinList();
       })();
     });
@@ -1849,7 +1868,7 @@ function initPinUi(): void {
     void (async () => {
       pinResultShow('🔄 巡檢中…（每個圖釘都會做一次動態探測，可能需要幾秒）');
       const r = await toContent<Record<string, unknown>>({ type: 'BRIDGE_PATROL_PINS' });
-      pinResultShow(formatPatrolResult(r));
+      renderPatrolResult(r);
       await refreshPinList();
     })();
   });
@@ -1875,3 +1894,193 @@ function initPinUi(): void {
 }
 
 initPinUi();
+
+// ── PM-403／404：兩層架構（第一層日常功能 ／ 第二層偵察模式）────────────────
+//
+// 實作方式刻意保守：**不去重排既有的 idleView**，而是把圖釘那一段整段搬到新的
+// `#scoutView`，兩個 section 用既有的 `.hidden` 機制切換。popup 有太多既有功能
+// 掛在 idleView 上（錄製／截圖／票券／提示詞／設定），把它拆成兩個滑動面板
+// 風險遠大於收益，而使用者看到的結果是一樣的。
+
+function showScout(on: boolean): void {
+  const idle = document.getElementById('idleView');
+  const scout = document.getElementById('scoutView');
+  if (!idle || !scout) return;
+  idle.classList.toggle('hidden', on);
+  scout.classList.toggle('hidden', !on);
+  if (on) {
+    scout.classList.remove('slide-in');
+    void scout.offsetWidth; // 重新觸發動畫（不 reflow 的話同一個 class 不會再播一次）
+    scout.classList.add('slide-in');
+    void refreshPinList();
+    void refreshMemoryStats();
+  }
+}
+
+/** 第一層的入口按鈕上顯示圖釘數，不進第二層也知道有沒有東西在盯。 */
+async function refreshScoutBadge(): Promise<void> {
+  const badge = document.getElementById('scoutPinBadge');
+  if (!badge) return;
+  const data = await toContent<{ total_count: number }>({ type: 'GET_PIN_LIST' });
+  const n = data?.total_count ?? 0;
+  badge.textContent = String(n);
+  badge.classList.toggle('hidden', n === 0);
+}
+
+// ── PM-404：AI 監測 ────────────────────────────────────────────────────────
+//
+// ⚠ `start_auto_detect` 本身在 **bridge** 裡（它是編排既有工具的呼叫序列），
+//   popup 沒有那條通道。但它編排的每一支底層工具 content script 都有，
+//   所以這裡直接照同樣的順序問一遍 —— **不是重寫偵測邏輯，是重跑同一組查詢**。
+
+async function runScanAll(): Promise<void> {
+  const box = document.getElementById('scanResult');
+  const btn = document.getElementById('scanAllBtn') as HTMLButtonElement | null;
+  if (!box) return;
+  if (btn) btn.disabled = true;
+  box.textContent = '掃描中…';
+  try {
+    await toContent({ type: 'BRIDGE_MAP_ZONES' }); // 先分區，get_zone_health 才有東西可算
+    const [health, zones, errs] = await Promise.all([
+      toContent<Record<string, unknown>>({ type: 'BRIDGE_GET_PAGE_HEALTH' }),
+      toContent<Record<string, unknown>>({ type: 'BRIDGE_ZONE_HEALTH' }),
+      toContent<Record<string, unknown>>({ type: 'BRIDGE_GET_BROWSER_ERRORS' }),
+    ]);
+    if (!health && !zones && !errs) {
+      box.textContent = '這個分頁不支援掃描（chrome:// 或商店頁面）。';
+      return;
+    }
+    const zoneList = (zones?.zones ?? []) as Array<{ status?: string }>;
+    const count = (st: string) => zoneList.filter((z) => z.status === st).length;
+    const cons = (errs?.console_errors ?? []) as Array<{ severity?: string }>;
+    const nets = (errs?.network_errors ?? []) as Array<{ severity?: string }>;
+    const critical = [...cons, ...nets].filter((e) => e.severity === 'critical').length;
+    const minor = [...cons, ...nets].filter((e) => e.severity === 'minor').length;
+
+    while (box.firstChild) box.removeChild(box.firstChild);
+    const line = (label: string, value: string) => {
+      const d = document.createElement('div');
+      d.textContent = `${label}${value}`;
+      box.appendChild(d);
+    };
+    line('Zone：', zoneList.length
+      ? `${zoneList.length} 區（🟢${count('healthy')} 🟡${count('warning')} 🔴${count('error')}）`
+      : '這一頁沒有可辨識的語意區域');
+    line('Error：', critical || minor ? `🔴 ${critical} critical ／ 🟡 ${minor} minor` : '沒有錯誤');
+    if (typeof health?.score === 'number') line('Score：', `${health.score}/100`);
+    // 空結果的意思是「最近 30 秒沒出事」，不是「沒問題」——這句話不能省
+    const note = document.createElement('div');
+    note.className = 'scout-note';
+    note.textContent = '錯誤只涵蓋最近約 30 秒；zone 為 0 時所有錯誤都會落在 Unassigned。';
+    box.appendChild(note);
+  } catch (e) {
+    box.textContent = `掃描失敗：${String(e).slice(0, 120)}`;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ── PM-404：記憶矩陣 ───────────────────────────────────────────────────────
+const MEM_LAYER_NAMES: Record<string, string> = {
+  L1: 'Debug 經驗', L2: '專案知識', L4: '商業邏輯',
+  L5: '外部依賴', L6: '資安合規', L7: '效能基準', L8: '團隊協作',
+};
+
+async function refreshMemoryStats(): Promise<void> {
+  const box = document.getElementById('memResult');
+  if (!box) return;
+  box.textContent = '讀取中…';
+  const r = (await chrome.runtime.sendMessage({ type: 'BRIDGE_QUERY_MEMORY_STATS' }).catch(() => null)) as
+    | { ok: boolean; data?: Record<string, unknown>; error?: string }
+    | null;
+
+  while (box.firstChild) box.removeChild(box.firstChild);
+  if (!r || !r.ok) {
+    // 「連不上」與「連上但出錯」是兩件事，訊息要分開，否則使用者不知道要去修哪個
+    const d = document.createElement('div');
+    d.textContent = r?.error === 'Bridge 未連線'
+      ? 'Bridge 未連線 —— 記憶矩陣由本機 bridge 管理，請先啟動 bugezy-bridge。'
+      : `讀取失敗：${r?.error ?? '未知原因'}`;
+    box.appendChild(d);
+    return;
+  }
+  const data = r.data ?? {};
+  if (data.initialized === false) {
+    const d = document.createElement('div');
+    d.textContent = '尚未建立 .bugezy/ —— 第一次用 AI 呼叫 memory_save 時會自動建立。';
+    box.appendChild(d);
+    return;
+  }
+  const per = (data.entries_per_layer ?? {}) as Record<string, number>;
+  const total = Object.values(per).reduce((a, b) => a + Number(b || 0), 0);
+
+  const head = document.createElement('div');
+  head.textContent = `${total} 筆經驗 ｜ ${Object.keys(per).length} 層`;
+  box.appendChild(head);
+  for (const [layer, n] of Object.entries(per)) {
+    const row = document.createElement('div');
+    row.textContent = `${layer} ${MEM_LAYER_NAMES[layer] ?? ''}（${n} 筆）`;
+    box.appendChild(row);
+  }
+  const note = document.createElement('div');
+  note.className = 'scout-note';
+  // 🔴 為什麼不提供「清除全部」按鈕：見 DONE-404
+  note.textContent = '這條通道是唯讀的。要清除記憶請用 AI 呼叫 memory_clear（那條路徑才有方案閘門與確認機制）。';
+  box.appendChild(note);
+}
+
+// ── PM-405：巡檢／分析結果改成人類可讀 ─────────────────────────────────────
+/** PM-405：巡檢結果 —— 每個圖釘一列，底部給「問題 N ｜ 正常 M」。 */
+function renderPatrolResult(r: Record<string, unknown> | null): void {
+  if (!r) return pinResultShow('巡檢失敗（分頁可能不支援）');
+  if (typeof r.error === 'string') return pinResultShow(`⚠ ${r.error}`);
+  const results = (r.results ?? []) as Array<Record<string, unknown>>;
+  if (results.length === 0) return pinResultShow(String(r.note ?? '這個分頁沒有圖釘。'));
+
+  const problems = Number(r.problem_count ?? 0);
+  pinResultRender(
+    `📋 巡檢結果（${results.length} 個圖釘）`,
+    results.map((x) => ({
+      summary: String(x.summary ?? ''),
+      selector: String(x.selector ?? ''),
+      detail: x.changed ? `狀態變化：${String(x.previous_status)} → ${String(x.status)}` : undefined,
+    })),
+    `問題：${problems} ｜ 正常：${results.length - problems}`
+      + (r.note ? `
+${String(r.note)}` : ''),
+  );
+}
+
+/** PM-405：單一圖釘的分析結果 —— 探測類型／耗時／可見性都攤開。 */
+function renderAnalyzeResult(selector: string, r: Record<string, unknown> | null): void {
+  if (!r) return pinResultShow('分析失敗（分頁可能不支援）');
+  const probe = (r.probe ?? {}) as Record<string, unknown>;
+  const analysis = (r.analysis ?? {}) as Record<string, unknown>;
+  const vis = (analysis.visibility ?? {}) as Record<string, unknown>;
+  const box = (analysis.box_model ?? {}) as Record<string, unknown>;
+
+  const bits: string[] = [];
+  if (probe.type) {
+    bits.push(`探測：${String(probe.type)}${typeof probe.duration_ms === 'number' ? `（${probe.duration_ms} ms）` : ''}`);
+  }
+  if (probe.restored === false) bits.push('⚠ 未能還原原值');
+  if (typeof probe.note === 'string' && probe.note) bits.push(probe.note);
+  bits.push(`可見：${vis.visible ? '✅' : '❌'}　可互動：${vis.has_size ? '✅' : '❌'}`);
+  if (typeof box.width === 'number') bits.push(`尺寸：${Math.round(Number(box.width))}×${Math.round(Number(box.height))}`);
+
+  pinResultRender('🔍 分析結果', [{
+    summary: String(r.summary ?? ''),
+    selector,
+    detail: bits.join('　'),
+  }]);
+}
+
+function initScoutUi(): void {
+  document.getElementById('scoutEnterBtn')?.addEventListener('click', () => showScout(true));
+  document.getElementById('scoutBackBtn')?.addEventListener('click', () => showScout(false));
+  document.getElementById('scanAllBtn')?.addEventListener('click', () => void runScanAll());
+  document.getElementById('memRefreshBtn')?.addEventListener('click', () => void refreshMemoryStats());
+  void refreshScoutBadge();
+}
+
+initScoutUi();

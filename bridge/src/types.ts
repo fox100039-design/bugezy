@@ -27,7 +27,41 @@ export interface BridgeHeartbeat {
   t: number;
 }
 
-export type BridgeMessage = BridgeCommand | BridgeResult | BridgeHeartbeat;
+/**
+ * PM-404：**Extension → bridge 的唯讀查詢**。
+ *
+ * 原本的協定是單向的：bridge 送 `BridgeCommand`、Extension 回 `BridgeResult`，
+ * Extension 沒有辦法主動問 bridge 任何事。popup 要顯示記憶矩陣的筆數就卡在這裡。
+ *
+ * 🔴 **刻意做成「唯讀 + 白名單」**：這條通道打開的是「網頁旁邊的擴充功能可以呼叫 bridge」，
+ *   所以只放行明確列舉的**查詢類**能力（目前只有 `memory_stats`）。
+ *   破壞性操作（`memory_clear` 等）**不走這條路** —— 要清記憶請透過 AI 呼叫 MCP 工具，
+ *   那條路徑有方案閘門與工具描述把關，這條沒有。
+ */
+export interface BridgeQuery {
+  type: 'query';
+  id: string;
+  /** 目前唯一合法值。新增前請先想清楚它是不是唯讀的。 */
+  query: 'memory_stats';
+}
+
+export interface BridgeQueryResult {
+  type: 'query_result';
+  id: string;
+  ok: boolean;
+  data?: unknown;
+  error?: string;
+}
+
+export function isQuery(m: unknown): m is BridgeQuery {
+  return (
+    typeof m === 'object' && m !== null &&
+    (m as { type?: unknown }).type === 'query' &&
+    typeof (m as { id?: unknown }).id === 'string'
+  );
+}
+
+export type BridgeMessage = BridgeCommand | BridgeResult | BridgeHeartbeat | BridgeQuery | BridgeQueryResult;
 
 export function isResult(m: unknown): m is BridgeResult {
   return typeof m === 'object' && m !== null && 'id' in m && 'ok' in m;

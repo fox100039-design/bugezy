@@ -2872,6 +2872,14 @@ ${ogMeta('/guide', 'User Guide — BugEzy', 'Step-by-step guide to using BugEzy 
   .mode .mname { font-size: 16px; font-weight: 700; color: #fff; }
   .mode .mrow { font-size: 14px; color: #ccc; margin-top: 4px; }
   .mode .mrow b { color: #a78bfa; font-weight: 600; }
+  /* PM-406：MCP30 卡關警告框 —— 用醒目的橘色，因為這是最多人卡住的地方 */
+  .warn-box {
+    margin-top: 12px; padding: 12px 14px; border-radius: 8px; font-size: 14px; line-height: 1.7;
+    background: rgba(245,158,11,.10); border: 1px solid rgba(245,158,11,.45); color: #fcd34d;
+  }
+  .warn-box code { background: #1a1a2e; padding: 1px 6px; border-radius: 4px; color: #fcd34d; }
+  .warn-box a { color: #fcd34d; text-decoration: underline; }
+  .mcp-box ol.qs { margin: 8px 0 0; padding-left: 20px; line-height: 1.9; }
   .mcp-box {
     margin-top: 14px; padding: 14px 16px; background: #15152a;
     border: 1px solid #7c3aed; border-radius: 10px; font-size: 14px;
@@ -3042,6 +3050,36 @@ ${ogMeta('/guide', 'User Guide — BugEzy', 'Step-by-step guide to using BugEzy 
   </div>
 
   <div class="step">
+    <h2>${t('🎁 領 MCP30：30 天免費體驗', '🎁 Claim MCP30: 30 days free')}</h2>
+    <div class="mcp-box">
+      <p>${t('MCP 接好之後，輸入代碼 <b>MCP30</b> 就能領 30 天完整功能體驗（可與 BUG10 疊加，共 40 天）。', 'Once MCP is connected, enter the code <b>MCP30</b> for 30 days of full access (stacks with BUG10 for 40 days total).')}</p>
+      <ol class="qs">
+        <li>${t('照上面的步驟把 MCP 網址加進你的 AI 工具', 'Add the MCP URL to your AI tool as described above')}</li>
+        <li>${t('跟 AI 說「讀我最新的 BugEzy 報告」——<b>要真的成功呼叫一次</b>', 'Ask your AI to "read my latest BugEzy report" — it must actually succeed once')}</li>
+        <li>${t('打開 BugEzy 擴充功能 → 活動代碼欄位輸入 <b>MCP30</b>', 'Open the BugEzy extension → enter <b>MCP30</b> in the promo code field')}</li>
+      </ol>
+
+      <div class="warn-box">
+        <b>${t('⚠ 最常見的卡關：MCP 網址少了 ?token=', '⚠ The most common blocker: the MCP URL is missing ?token=')}</b><br />
+        ${t('BugEzy 要能認出「這次呼叫是誰打的」，才算你完成對接。認人的依據就是網址結尾的 <code>?token=…</code>。', 'BugEzy has to know <em>who</em> made the call to count it as connected — and that comes from the <code>?token=…</code> at the end of the URL.')}<br />
+        ${t('如果你複製到的網址是 <code>https://bugezy.dev/mcp</code>（後面沒有東西），那 AI 讀得到報告、但這次呼叫<b>不會算在你頭上</b>，MCP30 就會一直說「請先完成 MCP 對接」。', 'If the URL you copied is just <code>https://bugezy.dev/mcp</code> with nothing after it, your AI can still read reports — but the call <b>will not be attributed to you</b>, and MCP30 will keep saying "please connect MCP first".')}<br /><br />
+        <b>${t('怎麼確認：', 'How to check:')}</b>${t('本頁上方那幾個網址，在你登入後會自動補上 token。如果沒有補上，請先點一次 ', 'The URLs above are auto-filled with your token once you are signed in. If they are not, first open ')}<a href="/reports">${t('📋 我的報告', '📋 My Reports')}</a>${t('（那一步會把登入狀態帶到本站），再回到這頁複製一次。', ' (that step carries your sign-in over to this site), then come back here and copy again.')}<br />
+        ${t('或者直接從擴充功能 → 進階設定 → MCP 網址複製，那份一定帶 token。', 'Or copy it straight from the extension → Advanced settings → MCP URL, which always includes the token.')}
+      </div>
+    </div>
+
+    <h2>${t('❓ 常見問題', '❓ FAQ')}</h2>
+    <div class="mcp-box">
+      <p><b>${t('Q：輸入 MCP30 顯示「請先完成 MCP 對接」？', 'Q: MCP30 says "please complete MCP setup first"?')}</b><br />
+      ${t('A：代表 BugEzy 沒有看到任何屬於你的 MCP 呼叫紀錄。九成是網址少了 <code>?token=</code>（見上方警告）。補上之後，請 AI 再讀一次報告，然後重新輸入代碼。', 'A: BugEzy sees no MCP calls attributed to your account. Nine times out of ten the URL is missing <code>?token=</code> (see the warning above). Fix it, ask your AI to read a report again, then re-enter the code.')}</p>
+      <p><b>${t('Q：顯示「目前無法驗證 MCP 使用紀錄」？', 'Q: It says "cannot verify MCP usage right now"?')}</b><br />
+      ${t('A：這是我們這邊的問題，不是你的設定。請稍後再試或來信告訴我們。', 'A: That one is on our side, not your setup. Please try again later or email us.')}</p>
+      <p><b>${t('Q：設定後 AI 說找不到 BugEzy？', 'Q: My AI says it cannot find BugEzy after setup?')}</b><br />
+      ${t('A：確認網址完整（含 https://）、重新連線一次。Claude 需要在 Settings → Connectors 看到 BugEzy 呈現已連接狀態。', 'A: Check the URL is complete (including https://) and reconnect. In Claude, BugEzy should show as connected under Settings → Connectors.')}</p>
+      <p><b>${t('Q：Gemini 支援嗎？', 'Q: Is Gemini supported?')}</b><br />
+      ${t('A：Gemini 目前還沒有開放通用的 MCP 連接器，等官方支援後我們會第一時間更新這頁。', 'A: Gemini does not yet expose a general MCP connector. We will update this page as soon as it does.')}</p>
+    </div>
+
     <h2>${t('💡 小技巧', '💡 Tips')}</h2>
     <ul class="tips">
       <li>${t('錄製時對著麥克風說「這個按鈕按下去沒反應」比打字快 10 倍', 'Saying "this button does nothing when clicked" by voice is 10× faster than typing')}</li>
