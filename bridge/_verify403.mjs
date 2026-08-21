@@ -200,6 +200,40 @@ check('410   新的標題鍵也在字典裡（五語）', (() => {
   return ['zh', 'en', 'ja', 'ko', 'vi'].every((lg) => new RegExp(`${lg}: '[^']+'`).test(line));
 })(), '缺 pin-section-title 或語言不全');
 
+console.log('\n=== ④e PM-411：國際付款「即將開放」不對外顯示 ===');
+check('411-1 有單一開關且為 false', /const SHOW_INTL_COMING_SOON = false;/.test(pts));
+// 🔴 光有開關不夠——每一個「取消隱藏」的呼叫點都要真的被它擋住，漏一處就會照樣冒出來。
+const ptsLines = pts.split(String.fromCharCode(10));
+// 守衛可能寫在同一行（`toggle('hidden', … || !FLAG)`）或前一行（`} else if (FLAG) {`），
+// 所以看的是「該行 ±2 行的視窗內有沒有這個開關」，而不是只看同一行。
+const unhideSites = ptsLines
+  .map((l, k) => ({ l, k }))
+  .filter(({ l }) => /intlNotice/i.test(l) && /(remove|toggle)\('hidden'/.test(l) && !l.includes("add('hidden')"));
+const unguarded = unhideSites.filter(({ k }) =>
+  !ptsLines.slice(Math.max(0, k - 2), k + 3).join(String.fromCharCode(10)).includes('SHOW_INTL_COMING_SOON'));
+check(`411-1 🔴 ${unhideSites.length} 個顯示點全都被開關擋住`,
+  unhideSites.length >= 4 && unguarded.length === 0,
+  unguarded.map((x) => x.l.trim()).join(' / ') || `只找到 ${unhideSites.length} 個顯示點`);
+check('411-1 兩個 overlay/第一層元素在 HTML 裡預設就是 hidden',
+  /id="intlNotice" class="intl-notice hidden"/.test(html) && /id="overlayIntlNotice" class="intl-notice hidden"/.test(html));
+
+check('411   🔴 用開關而不是 CSS 蓋掉（避免「程式說顯示、樣式說不顯示」兩個真相）',
+  !/\.intl-notice\s*\{[^}]*display:\s*none/.test(html.replace(/\.intl-notice\.hidden \{ display: none; \}/, '')),
+  '出現了直接把 .intl-notice 蓋掉的樣式');
+check('411   markup 與翻譯都留著，重新開啟只要改一行',
+  /data-i18n="intl-coming-soon"/.test(html) && /'intl-coming-soon'/.test(i18n));
+check('411   PM-171/172 的國家判斷沒有被一起拆掉',
+  /isTaiwanUser/.test(pts) && /currentCountry/.test(pts));
+
+check('411-2 🔴 台灣使用者的付費按鈕完全不受影響',
+  /upgradeHint\.classList\.remove\('hidden'\)/.test(pts)
+  && /id="dayPassBtn"/.test(html) && /id="upgradeBtn"/.test(html)
+  && /id="overlayDayPassBtn"/.test(html) && /id="overlayMonthlyBtn"/.test(html));
+check('411-2 票券錢包／兌換不受影響',
+  /id="ticketWallet"/.test(html) && /id="promoCode"/.test(html) && /renderTicketWallet/.test(pts));
+check('411   🔴 額度用完的 overlay 不會變成死路（仍有關閉鈕與重置提示）',
+  /id="upgradeOverlayClose"/.test(html) && /data-i18n="usage-reset-hint"/.test(html));
+
 console.log('\n=== ⑤ PM-406：guide 的 MCP30 章節（線上實測）===');
 const BASE = 'https://bugezy-api.bugezy-api.workers.dev';
 for (const [lang, url] of [['繁中', `${BASE}/guide`], ['English', `${BASE}/guide?lang=en`]]) {

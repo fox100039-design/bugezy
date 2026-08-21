@@ -122,6 +122,20 @@ let freeLimits: PlanInfo['limits'] = null; // 最近一次 loadPlan 的免費額
 // PM-171/172：非台灣 → 綠界收不了款，付費按鈕改 coming soon。
 // PM-172：改用 IP 國家碼（來自 getUserPlan 的 request.cf.country），取代語言判斷——
 // 台灣人選英文仍可付費、香港人選中文仍是 coming soon。
+/**
+ * PM-411：**國際付款還沒做，就不要對使用者說「即將開放」。**
+ *
+ * 這裡用一個開關而不是把 UI 刪掉／蓋 `display: none`，理由有三：
+ *   ① 卡片明講「等真正實作時再打開」——留著開關，開啟就是改這一行
+ *   ② `classList.remove('hidden')` 的呼叫點有三處，若改用 CSS 蓋掉，
+ *      就會變成「程式說要顯示、樣式說不顯示」兩個真相，日後很難查
+ *   ③ PM-171/172 的國家判斷邏輯（IP 國家碼）本身是對的，不該一起拆掉
+ *
+ * 關掉之後非台灣使用者看到的是：第一層沒有升級區塊（不是空白，那個區塊整塊不出現）；
+ * 額度用完的 overlay 仍有標題、說明、「免費額度每月自動重置」與關閉鈕，不會變成死路。
+ */
+const SHOW_INTL_COMING_SOON = false;
+
 const intlNotice = $('intlNotice');
 const overlayIntlNotice = $('overlayIntlNotice');
 let currentCountry = 'UNKNOWN'; // IP 國家碼（loadPlan 從 plan.country 更新）
@@ -869,7 +883,7 @@ function showUpgradeOverlay(type: 'recording' | 'rewind' | 'mcp') {
   const taiwan = isTaiwanUser();
   overlayDayPassBtn.classList.toggle('hidden', !taiwan);
   overlayMonthlyBtn.classList.toggle('hidden', !taiwan);
-  overlayIntlNotice.classList.toggle('hidden', taiwan);
+  overlayIntlNotice.classList.toggle('hidden', taiwan || !SHOW_INTL_COMING_SOON); // PM-411
   upgradeOverlay.classList.remove('hidden');
 }
 
@@ -880,7 +894,7 @@ function showJsonPaidOverlay() {
   const taiwan = isTaiwanUser();
   overlayDayPassBtn.classList.toggle('hidden', !taiwan);
   overlayMonthlyBtn.classList.toggle('hidden', !taiwan);
-  overlayIntlNotice.classList.toggle('hidden', taiwan);
+  overlayIntlNotice.classList.toggle('hidden', taiwan || !SHOW_INTL_COMING_SOON); // PM-411
   upgradeOverlay.classList.remove('hidden');
 }
 
@@ -1207,7 +1221,7 @@ function renderPlanFallback() {
   ticketWallet.classList.remove('hidden'); // 至少讓「輸入活動代碼」可用
   renderTicketWallet();
   if (isTaiwanUser()) upgradeHint.classList.remove('hidden');
-  else intlNotice.classList.remove('hidden');
+  else if (SHOW_INTL_COMING_SOON) intlNotice.classList.remove('hidden'); // PM-411
 }
 
 /** PM-277：唯一的方案渲染路徑——初次載入與語言切換都走這裡，不會有分歧。 */
@@ -1292,8 +1306,8 @@ function renderPlanUI(plan: PlanInfo) {
       // PM-171：台灣 → 顯示付費按鈕；非台灣 → 綠界收不了款，改顯示 coming soon 藍框
       if (isTaiwanUser()) {
         upgradeHint.classList.remove('hidden');
-      } else {
-        intlNotice.classList.remove('hidden');
+      } else if (SHOW_INTL_COMING_SOON) {
+        intlNotice.classList.remove('hidden'); // PM-411
       }
     }
 }
