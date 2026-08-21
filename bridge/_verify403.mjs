@@ -136,6 +136,39 @@ check('408-3 按鈕沒有寫死寬度（文字變長不會被截斷）',
   !/\.scout-act\s*\{[^}]*width\s*:/.test(html) && !/\.scout-back\s*\{[^}]*width\s*:/.test(html)
   && !/\.pin-mode-btn\s*\{[^}]*width\s*:/.test(html));
 
+console.log('\n=== ④c PM-409：排版（寬度 + 不斷行）===');
+// ⚠ 這裡驗的是**CSS 規則存在**，不是實際渲染寬度——popup 沒有辦法在 CI 裡量。
+//   實際視覺仍需人眼確認一次（已寫進 DONE-409）。
+check('409-1 popup 加寬到 360px', /body \{[\s\S]{0,240}width: 360px;/.test(html), '仍是舊寬度');
+for (const sel of ['.scout-title', '.scout-block-title', '.pin-title']) {
+  check(`409-1 ${sel} 不斷行`, new RegExp(`${sel.replace('.', '\\.')}[^{]*\\{[^}]*white-space: nowrap|white-space: nowrap[\\s\\S]{0,400}`).test(html)
+    && /white-space: nowrap;/.test(html.slice(html.indexOf('.scout-title'), html.indexOf('.scout-title') + 900)));
+}
+check('409-1 三個標題都在同一條 nowrap 規則裡（不會漏掉其中一個）', (() => {
+  const i = html.indexOf('PM-409：第二層的標題與按鈕一律不斷行');
+  const rule = html.slice(i, html.indexOf('}', i));
+  return ['.scout-title', '.scout-block-title', '.pin-title', '.scout-back', '.scout-act', '.pin-mode-btn']
+    .every((sel) => rule.includes(sel));
+})(), '有標題或按鈕沒被納入 nowrap');
+check('409-2 🔴 按鈕不讓步（flex-shrink: 0）—— 否則會被壓成兩行或截斷', (() => {
+  const i = html.indexOf('按鈕不讓步');
+  const rule = html.slice(i, html.indexOf('}', i));
+  return ['.scout-back', '.scout-act', '.pin-mode-btn', '.scout-enter-right'].every((sel) => rule.includes(sel));
+})());
+check('409   🔴 可縮的那一側有 min-width: 0（flex 的預設 min-width:auto 才是折行的真正原因）',
+  /min-width: 0;[\s\S]{0,80}overflow: hidden;[\s\S]{0,80}text-overflow: ellipsis;/.test(html));
+check('409   標題擠不下時用 ellipsis 而不是折行（優先保住按鈕完整）',
+  /text-overflow: ellipsis;/.test(html.slice(html.indexOf('PM-409'), html.indexOf('PM-403／404：兩層架構'))));
+check('409-4/5 三個 head 都是 flex row 且左右對齊',
+  /\.scout-head \{[\s\S]{0,200}justify-content: space-between/.test(html)
+  && /\.scout-block-head \{[^}]*justify-content: space-between/.test(html)
+  && /\.pin-head \{[^}]*justify-content: space-between/.test(html));
+check('409-3 🔴 第一層不受寬度影響（欄位用 1fr，沒有寫死像素寬）',
+  /\.action-grid \{[^}]*grid-template-columns: repeat\(3, 1fr\)/.test(html)
+  && !/\.action-grid \{[^}]*width: \d+px/.test(html));
+check('409-3 第一層既有元素一個都沒少',
+  ['startBtn', 'rewindBtn', 'screenshotBtn', 'myReportsBtn', 'scoutEnterBtn', 'promoCode'].every((id) => html.includes(`id="${id}"`)));
+
 console.log('\n=== ⑤ PM-406：guide 的 MCP30 章節（線上實測）===');
 const BASE = 'https://bugezy-api.bugezy-api.workers.dev';
 for (const [lang, url] of [['繁中', `${BASE}/guide`], ['English', `${BASE}/guide?lang=en`]]) {
