@@ -98,6 +98,29 @@
         font-size: 14px;
       }
 
+      /* ── PM-416：整頁反黑（§9.3）──
+         錄製中與偵察模式（PM-418）都是「進去做事再回來」的次級空間，
+         用黑底 + 黃紋跟第一層的黃底明確區隔。popup.ts 在切 view 時掛 body.dark。
+         深底上的次要文字只准用 --on-dark / --on-dark-2（§2.4）。 */
+      body.dark {
+        background: var(--ink);
+        background-image: var(--hive-d);
+        color: var(--y-pale);
+      }
+      body.dark .user-bar { border-bottom-color: var(--line-dark); }
+      body.dark #userName { color: var(--y-pale); }
+      body.dark .btn-sm { border-color: var(--line-dark-2); color: var(--on-dark); }
+      body.dark .btn-sm:hover { border-color: var(--y); color: var(--y); }
+      body.dark .brand { border-bottom-color: var(--line-dark); }
+      body.dark .brand-name { color: var(--y); }
+      body.dark .brand-tag { color: var(--on-dark); }
+      /* §5 黑底上的六角是三層：外黃 → 內黑 → 斜紋核心 */
+      body.dark .brand-icon { background: var(--y); }
+      body.dark .brand-icon::after {
+        background: repeating-linear-gradient(162deg, var(--ink) 0 3px, transparent 3px 6px);
+      }
+      body.dark .popup-version { color: var(--on-dark); }
+
       /* ── PM-415：品牌列（設計稿畫面 18）──
          六角標記（§5 黃底版：外黑內斜紋）+ 字標 + 麥克風開關 + 右側標語。 */
       .brand {
@@ -409,41 +432,101 @@
       .toggle-row input[type='checkbox'] { accent-color: var(--accent); width: 18px; height: 18px; }
       .toggle-row + .toggle-row { margin-top: 8px; }
 
-      /* 錄製中：大計時器 + 脈動圓點 */
-      .recording-timer {
-        text-align: center; font-size: 36px; font-weight: 700;
-        font-family: ui-monospace, monospace; color: var(--danger); padding: 16px 0;
+      /* ── PM-416：錄製中（設計稿畫面 03）── */
+      #recordingView { display: flex; flex-direction: column; gap: 0; }
+      /* REC 膠囊：脈衝六角 + 等寬 REC（§3.3 機器狀態一律等寬字） */
+      .rec-pill {
+        align-self: flex-end; display: flex; align-items: center; gap: 6px;
+        padding: 4px 9px; border: 1px solid var(--y); border-radius: var(--r-pill);
       }
       .rec-dot {
-        display: inline-block; width: 12px; height: 12px;
-        background: var(--danger); border-radius: 50%;
-        margin-right: 10px; vertical-align: middle; animation: pulse 1s infinite;
+        width: 7px; height: 8px; background: var(--y); clip-path: var(--hex);
+        animation: pulse 1s infinite;
       }
-      @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+      .rec-pill span { font: 700 10px/1 var(--font-mono); color: var(--y); letter-spacing: 0.1em; }
+      .recording-timer {
+        display: flex; flex-direction: column; align-items: center; gap: 6px;
+        padding: 26px 0 20px;
+      }
+      #elapsed { font: 700 46px/1 var(--font-mono); color: var(--y); letter-spacing: 0.02em; }
+      .rec-hint { font: 600 11px/1 var(--font-ui); color: var(--on-dark); margin: 0; text-align: center; }
+      /* 12 柱音量波形。§8 各柱相位差 0.09s —— 純 CSS 動畫，不接麥克風音量。 */
+      .rec-wave { display: flex; align-items: flex-end; gap: 3px; height: 34px; padding: 0 2px; }
+      .rec-wave i {
+        display: block; flex: 1; border-radius: 2px;
+        animation: bar 1.15s ease-in-out infinite;
+      }
+      @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.86); } }
+      @keyframes bar { 0%, 100% { height: 20%; } 50% { height: 100%; } }
+      #stopBtn {
+        margin: 18px 0 0; padding: 14px;
+        display: flex; align-items: center; justify-content: center; gap: 9px;
+        border: 2px solid var(--y); border-radius: var(--r-12);
+        background: var(--y); color: var(--ink); font: 700 14px/1 var(--font-ui);
+      }
+      #stopBtn:hover { background: var(--y-deep); border-color: var(--y-deep); }
+      /* §6 停止 → 小方形 */
+      .ico-stop { width: 12px; height: 12px; border-radius: 2px; background: var(--ink); flex-shrink: 0; }
 
-      /* 完成摘要卡 */
-      .done-title { color: var(--success); font-weight: 700; font-size: 15px; margin: 0 0 10px; }
+      /* ── PM-416：錄製完成（設計稿畫面 04）── */
+      #doneView { display: flex; flex-direction: column; gap: 12px; }
+      .done-head { display: flex; align-items: baseline; gap: 8px; }
+      .done-title { color: var(--ink); font: 700 16px/1.2 var(--font-ui); margin: 0; }
+      /* 時長與語音段數從摘要列升到標題旁（設計稿畫面 04 的作法），
+         摘要卡就只留三個「機器數出來的」數字。資料一個都沒少，只是換位置。 */
+      .done-meta { font: 600 11px/1 var(--font-mono); color: var(--brown-d); white-space: nowrap; }
+      /* §7.2 資料卡：米白 + 2px 黑框 */
       .summary-card {
-        background: var(--panel); border: 1px solid var(--line);
-        border-radius: 12px; padding: 14px; margin: 10px 0;
+        background: var(--cream); border: 2px solid var(--ink);
+        border-radius: var(--r-14); padding: 0; margin: 0; overflow: hidden;
       }
-      .summary-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
-      .summary-row .label { color: var(--muted); }
-      .summary-row .value { font-weight: 600; }
-
-      .meta { color: var(--muted); font-size: 11px; word-break: break-all; margin: 8px 0; }
-
-      /* 分享連結卡 */
+      .summary-row {
+        display: flex; justify-content: space-between; padding: 9px 12px;
+        font: 600 12px/1 var(--font-ui);
+        border-bottom: 1px solid rgba(20, 17, 11, 0.14);
+      }
+      .summary-row .label { color: var(--brown-d); }
+      .summary-row .value { font: 700 12px/1 var(--font-mono); color: var(--ink); }
+      /* Network 錯誤是唯一「有數字就是壞消息」的一列 */
+      .summary-row.err .value { color: var(--err); }
+      /* URL 列：機器產出 → 等寬字，並收在卡片最底（§7.2） */
+      .summary-card .meta {
+        margin: 0; padding: 9px 12px; border-bottom: none;
+        background: rgba(20, 17, 11, 0.05);
+        font: 400 10px/1.4 var(--font-mono); color: var(--brown-d); word-break: break-all;
+      }
+      .meta { color: var(--on-y-2); font: 600 11px/1.5 var(--font-ui); word-break: break-all; margin: 0; }
+      /* 分享連結卡：§2.3 分享連結屬系統訊息 → 咖啡底 */
       .share-card {
-        background: var(--panel); border: 1px solid var(--accent);
-        border-radius: 12px; padding: 12px; margin: 10px 0;
-        align-items: center; gap: 8px;
+        display: flex; align-items: center; gap: 8px;
+        background: var(--brown); border: none;
+        border-radius: var(--r-12); padding: 11px 12px; margin: 8px 0 0;
       }
-      .share-card a { font-size: 12px; word-break: break-all; color: #a78bfa; flex: 1; }
+      .share-card a { flex: 1; min-width: 0; font: 600 11px/1.3 var(--font-mono); color: var(--y-pale); word-break: break-all; text-decoration: none; }
       .link-btn {
-        width: auto; margin: 0; flex-shrink: 0;
-        background: var(--accent); border-radius: 6px; padding: 4px 10px; font-size: 12px;
+        width: auto; margin: 0; flex-shrink: 0; border: none;
+        background: var(--y); color: var(--ink); border-radius: var(--r-8);
+        padding: 6px 11px; font: 700 11px/1 var(--font-ui);
       }
+      .link-btn:hover { background: var(--y-deep); }
+      /* 匯出是主按鈕（黑底黃字 + 硬投影），複製／清除是次要按鈕並排 */
+      .done-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      #exportBtn {
+        margin: 0; padding: 14px; border: 2px solid var(--ink); border-radius: var(--r-12);
+        background: var(--ink); color: var(--y); font: 700 14px/1 var(--font-ui);
+        box-shadow: var(--sh-3);
+      }
+      #exportBtn:hover { transform: translate(1px, 1px); box-shadow: var(--sh-2); }
+      #exportBtn.done { background: var(--brown); border-color: var(--brown); color: var(--y-pale); }
+      #copyBtn, #clearBtn {
+        margin: 0; padding: 11px; border-radius: var(--r-12);
+        background: transparent; font: 700 12px/1 var(--font-ui);
+      }
+      #copyBtn { border: 2px solid var(--ink); color: var(--ink); }
+      #copyBtn:hover { background: rgba(20, 17, 11, 0.08); }
+      #copyBtn.copied { background: var(--ink); color: var(--y); }
+      #clearBtn { border: 2px solid rgba(20, 17, 11, 0.35); color: var(--brown-d); }
+      #clearBtn:hover { border-color: var(--ink); color: var(--ink); }
 
       /* ── PM-414：登入頁（設計稿畫面 01）──
          版面：大黃蜂 92px → 字標 26px → 副標 → Google 鈕 → 虛線分隔 + mono 頁尾。
@@ -1141,19 +1224,48 @@
     </section>
 
     <section id="recordingView" class="hidden">
-      <div class="recording-timer"><span class="rec-dot"></span><span id="elapsed">00:00</span></div>
-      <button id="stopBtn" data-i18n="stop-recording">⏹ 停止錄製</button>
+      <div class="rec-pill"><span class="rec-dot"></span><span>REC</span></div>
+      <div class="recording-timer">
+        <span id="elapsed">00:00</span>
+        <p id="recHint" class="rec-hint"></p>
+      </div>
+      <!-- §8 bar：12 柱、各柱相位差 0.09s。純 CSS 動畫（不接真實音量），
+           高度與配色照設計稿畫面 03 逐柱給值。 -->
+      <div class="rec-wave" aria-hidden="true">
+        <i style="height:30%;background:var(--brown);animation-delay:0s"></i>
+        <i style="height:60%;background:var(--y-deep);animation-delay:-.09s"></i>
+        <i style="height:95%;background:var(--y);animation-delay:-.18s"></i>
+        <i style="height:50%;background:var(--y-deep);animation-delay:-.27s"></i>
+        <i style="height:75%;background:var(--y);animation-delay:-.36s"></i>
+        <i style="height:35%;background:var(--brown);animation-delay:-.45s"></i>
+        <i style="height:65%;background:var(--y-deep);animation-delay:-.54s"></i>
+        <i style="height:100%;background:var(--y);animation-delay:-.63s"></i>
+        <i style="height:45%;background:var(--y-deep);animation-delay:-.72s"></i>
+        <i style="height:25%;background:var(--brown);animation-delay:-.81s"></i>
+        <i style="height:70%;background:var(--y);animation-delay:-.9s"></i>
+        <i style="height:40%;background:var(--y-deep);animation-delay:-.99s"></i>
+      </div>
+      <button id="stopBtn">
+        <span class="ico-stop"></span>
+        <span data-i18n="stop-recording">停止錄製</span>
+      </button>
     </section>
 
     <!-- 狀態三：錄製完成 -->
     <section id="doneView" class="hidden">
-      <div class="done-title" data-i18n="done-title">✅ 錄製完成！</div>
+      <!-- 設計稿畫面 04：時長與語音段數移到標題旁，摘要卡只留三個機器數出來的數字。
+           五筆資料一筆都沒少，只是換位置；id 全部沿用，popup.ts 不用改。 -->
+      <div class="done-head">
+        <span class="done-title" data-i18n="done-title">錄製完成！</span>
+        <span class="done-meta">
+          <span id="durationVal">0 秒</span> ·
+          <span id="voiceCount">0</span> <span data-i18n="sum-voice">語音片段</span>
+        </span>
+      </div>
       <div class="summary-card">
         <div class="summary-row"><span class="label" data-i18n="sum-dom">DOM 事件</span><span class="value" id="domCount">0</span></div>
         <div class="summary-row"><span class="label" data-i18n="sum-console">Console</span><span class="value" id="consoleCount">0</span></div>
-        <div class="summary-row"><span class="label" data-i18n="sum-network">Network 錯誤</span><span class="value" id="networkCount">0</span></div>
-        <div class="summary-row"><span class="label" data-i18n="sum-voice">語音片段</span><span class="value" id="voiceCount">0</span></div>
-        <div class="summary-row"><span class="label" data-i18n="sum-time">時間</span><span class="value" id="durationVal">0 秒</span></div>
+        <div class="summary-row err"><span class="label" data-i18n="sum-network">Network 錯誤</span><span class="value" id="networkCount">0</span></div>
         <div class="meta" id="pageUrl"></div>
       </div>
 
@@ -1162,13 +1274,15 @@
         <div id="uploadStatus" class="meta"></div>
         <div id="shareUrlRow" class="share-card" style="display:none;">
           <a id="shareLink" href="#" target="_blank"></a>
-          <button id="copyLinkBtn" class="link-btn" data-i18n="copy-link">📋 複製連結</button>
+          <button id="copyLinkBtn" class="link-btn" data-i18n="copy-link">複製連結</button>
         </div>
       </div>
 
-      <button id="copyBtn" data-i18n="copy-json">📋 複製 JSON</button>
-      <button id="exportBtn" data-i18n="export-json">💾 匯出 JSON（給 AI 讀）</button>
-      <button id="clearBtn" data-i18n="clear-restart">🗑️ 清除，重新錄製</button>
+      <button id="exportBtn" data-i18n="export-json">匯出 JSON（給 AI 讀）</button>
+      <div class="done-actions">
+        <button id="copyBtn" data-i18n="copy-json">複製 JSON</button>
+        <button id="clearBtn" data-i18n="clear-restart">清除，重新錄製</button>
+      </div>
     </section>
     </div>
     <!-- /mainView -->

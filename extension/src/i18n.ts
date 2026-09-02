@@ -241,6 +241,13 @@ const dict: Record<string, { zh: string; en: string; ja: string; ko: string; vi:
   'copy-btn': { zh: '複製', en: 'Copy', ja: 'コピー', ko: '복사', vi: 'Sao chép' },
   // PM-415：輪盤的「已複製」原本是硬寫在 popup.html 的中文 + 綠勾 emoji，
   //   換 emoji 時順手補進字典，英文模式才不會只有這一顆還是中文。
+  // PM-416：這四句原本硬寫在 popup.ts 裡（中文 + emoji），英文模式下也只會出現中文。
+  //   換掉錄製／完成兩個畫面時一起收進字典。
+  'upload-uploading': { zh: '正在上傳到雲端…', en: 'Uploading to cloud…', ja: 'クラウドにアップロード中…', ko: '클라우드에 업로드 중…', vi: 'Đang tải lên đám mây…' },
+  'upload-ok': { zh: '已上傳', en: 'Uploaded', ja: 'アップロード完了', ko: '업로드 완료', vi: 'Đã tải lên' },
+  'upload-fail': { zh: '上傳失敗（可手動匯出 JSON）', en: 'Upload failed (export JSON manually)', ja: 'アップロード失敗（JSON を手動でエクスポートできます）', ko: '업로드 실패 (JSON을 수동으로 내보낼 수 있습니다)', vi: 'Tải lên thất bại (có thể xuất JSON thủ công)' },
+  'rec-listening': { zh: '正在聽你說話', en: 'Listening', ja: '音声を聞いています', ko: '음성을 듣고 있습니다', vi: 'Đang nghe bạn nói' },
+  'rec-no-voice': { zh: '錄製中 · 沒有錄語音', en: 'Recording · voice off', ja: '録画中 · 音声なし', ko: '녹화 중 · 음성 없음', vi: 'Đang ghi · không ghi giọng nói' },
   'copied': { zh: '已複製', en: 'Copied', ja: 'コピーしました', ko: '복사됨', vi: 'Đã sao chép' },
   'edit-btn': { zh: '編輯', en: 'Edit', ja: '編集', ko: '편집', vi: 'Chỉnh sửa' },
   'save-btn': { zh: '儲存', en: 'Save', ja: '保存', ko: '저장', vi: 'Lưu' },

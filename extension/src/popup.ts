@@ -361,6 +361,24 @@ function show(view: 'idle' | 'recording' | 'done') {
   idleView.classList.toggle('hidden', view !== 'idle');
   recordingView.classList.toggle('hidden', view !== 'recording');
   doneView.classList.toggle('hidden', view !== 'done');
+  // PM-416：錄製中整頁反黑（§9.3）。偵察模式（PM-418）也會掛同一個 class，
+  //   所以這裡只在「不是偵察模式」時才由 view 決定，避免兩邊互相把對方關掉。
+  if (!document.body.classList.contains('scout-open')) {
+    document.body.classList.toggle('dark', view === 'recording');
+  }
+  if (view === 'recording') renderRecHint();
+}
+
+/** 錄製中的那一行小字：有開麥克風才說「正在聽你說話 · 語言」。 */
+function renderRecHint() {
+  const el = document.getElementById('recHint');
+  if (!el) return;
+  if (!micToggle.checked) {
+    el.textContent = t('rec-no-voice', currentUILang);
+    return;
+  }
+  const lang = langSelect.options[langSelect.selectedIndex]?.text ?? '';
+  el.textContent = lang ? `${t('rec-listening', currentUILang)} · ${lang}` : t('rec-listening', currentUILang);
 }
 
 function stopTick() {
@@ -386,11 +404,11 @@ function renderUpload(summary: RecordingSummary | null) {
   }
   switch (summary.uploadStatus) {
     case 'uploading':
-      uploadStatusEl.textContent = '⏳ 正在上傳到雲端...';
+      uploadStatusEl.textContent = t('upload-uploading', currentUILang);
       shareUrlRow.style.display = 'none';
       break;
     case 'success':
-      uploadStatusEl.textContent = '✅ 已上傳';
+      uploadStatusEl.textContent = t('upload-ok', currentUILang);
       if (summary.shareUrl) {
         shareUrlRow.style.display = 'flex';
         shareLink.href = summary.shareUrl;
@@ -398,7 +416,7 @@ function renderUpload(summary: RecordingSummary | null) {
       }
       break;
     case 'error':
-      uploadStatusEl.textContent = '❌ 上傳失敗（可手動匯出 JSON）';
+      uploadStatusEl.textContent = t('upload-fail', currentUILang);
       shareUrlRow.style.display = 'none';
       break;
     default:
