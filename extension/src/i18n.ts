@@ -62,6 +62,12 @@ const dict: Record<string, { zh: string; en: string; ja: string; ko: string; vi:
   'pin-mode': { zh: '釘選模式', en: 'Pin Mode', ja: 'ピンモード', ko: '핀 모드', vi: 'Chế độ ghim' },
   'scout-mode': { zh: '偵察模式', en: 'Scout Mode', ja: '偵察モード', ko: '정찰 모드', vi: 'Chế độ trinh sát' },
   back: { zh: '返回', en: 'Back', ja: '戻る', ko: '뒤로', vi: 'Quay lại' },
+  // PM-418：這兩顆按鈕原本是硬寫在 popup.html 的中文（帶 emoji），英文模式下也只有中文。
+  // PM-418：analyze-visible 原本直接塞 ✅ / ❌，換成文字。
+  yes: { zh: '有', en: 'yes', ja: 'あり', ko: '있음', vi: 'có' },
+  no: { zh: '無', en: 'no', ja: 'なし', ko: '없음', vi: 'không' },
+  'pin-patrol-all': { zh: '巡檢全部', en: 'Patrol all', ja: '一括巡回', ko: '전체 순찰', vi: 'Tuần tra tất cả' },
+  'pin-clear-all': { zh: '清除全部', en: 'Clear all', ja: 'すべて削除', ko: '전체 삭제', vi: 'Xóa tất cả' },
   'ai-monitor': { zh: 'AI 監測', en: 'AI Monitor', ja: 'AI モニター', ko: 'AI 모니터', vi: 'Giám sát AI' },
   'scan-all': { zh: '一鍵全掃', en: 'Scan all', ja: '一括スキャン', ko: '전체 스캔', vi: 'Quét tất cả' },
   'memory-matrix': { zh: '記憶矩陣', en: 'Memory Matrix', ja: 'メモリマトリクス', ko: '메모리 매트릭스', vi: 'Ma trận ký ức' },

@@ -299,6 +299,14 @@
         overflow: hidden;
       }
 
+      /* ── PM-418：第二層偵察模式（設計稿畫面 20）──
+         §9.3 第二層整頁反黑。深底上的次要文字只准 --on-dark / --on-dark-2（§2.4）。
+         body.dark 由 showScout 掛（跟錄製中共用，見 PM-416）。 */
+      body.dark .scout-head { border-bottom-color: var(--line-dark); }
+      body.dark .scout-title { color: var(--y); }
+      body.dark .scout-block { border-top-color: var(--line-dark); }
+      body.dark .scout-block-title, body.dark .pin-title { color: var(--y-pale); }
+
       /* PM-403／404：兩層架構 */
       /* PM-415：偵察模式入口 —— 米白卡（§7.3 實線=已有內容）+ 六角 + badge + 箭頭 */
       .scout-enter {
@@ -325,6 +333,7 @@
       .ico-hex { width: 10px; height: 11px; flex-shrink: 0; background: var(--ink); clip-path: var(--hex); }
       /* 切頁動畫：第二層由右滑入。用 animation 而非 transition —— 元素是從
          display:none 變出來的，transition 不會有起始狀態可以過渡。 */
+      #scoutView { display: flex; flex-direction: column; gap: 0; }
       #scoutView.slide-in { animation: scoutIn .18s ease; }
       @keyframes scoutIn { from { transform: translateX(14px); opacity: 0; } to { transform: none; opacity: 1; } }
       /* PM-409：返回鍵靠左、標題靠右，一行排開 */
@@ -333,64 +342,114 @@
         padding-bottom: 8px; border-bottom: 1px solid var(--line);
       }
       .scout-back {
-        padding: 5px 12px; border-radius: 8px; border: 1px solid var(--line);
-        background: rgba(255,255,255,.06); color: var(--fg); font-size: 12px; cursor: pointer;
+        display: flex; align-items: center; gap: 7px;
+        width: auto; margin: 0; padding: 6px 12px;
+        border: 1px solid var(--line-dark-2); border-radius: var(--r-8);
+        background: transparent; color: var(--y-pale);
+        font: 700 12px/1 var(--font-ui); cursor: pointer;
       }
-      .scout-back:hover { filter: brightness(1.2); }
-      .scout-title { font-size: 14px; font-weight: 700; }
-      .scout-block { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+      .scout-back:hover { filter: none; border-color: var(--y); color: var(--y); }
+      /* §6 返回箭頭（跟前進箭頭同一個多邊形左右翻面）。用 currentColor 才會跟著 hover 變黃。 */
+      .ico-arrow-l {
+        width: 12px; height: 9px; flex-shrink: 0; background: currentColor;
+        clip-path: polygon(100% 38%, 38% 38%, 38% 0, 0 50%, 38% 100%, 38% 62%, 100% 62%);
+      }
+      .scout-title { display: flex; align-items: center; gap: 8px; font: 700 14px/1 var(--font-ui); }
+      .scout-title .ico-hex, .scout-block-title .ico-hex { width: 9px; height: 10px; background: var(--y); }
+      .scout-block { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-dark); }
       /* 第一個區塊緊接在 scout-head 的分隔線下方，再畫一條會變雙線 */
       #scoutView > .scout-block:first-of-type { border-top: none; padding-top: 4px; }
       .scout-block-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-      .scout-block-title { font-size: 13px; font-weight: 700; }
+      .scout-block-title { display: flex; align-items: center; gap: 8px; font: 700 13px/1 var(--font-ui); }
       .scout-act {
-        padding: 4px 11px; border-radius: 7px; border: 1px solid var(--line);
-        background: rgba(255,255,255,.06); color: var(--fg); font-size: 11px; cursor: pointer;
+        width: auto; margin: 0; padding: 6px 12px;
+        border: 1px solid var(--line-dark-2); border-radius: var(--r-8);
+        background: transparent; color: var(--y-pale);
+        font: 700 11.5px/1 var(--font-ui); cursor: pointer;
       }
-      .scout-act:disabled { opacity: .4; cursor: not-allowed; }
+      .scout-act:hover { border-color: var(--y); color: var(--y); }
+      .scout-act:disabled { opacity: .4; cursor: not-allowed; border-color: var(--line-dark-2); color: var(--y-pale); }
+      /* §7.2 深底卡 */
       .scout-body {
-        margin-top: 8px; font-size: 12px; line-height: 1.6; opacity: .9;
+        margin-top: 9px; padding: 10px 11px;
+        border: 1px solid var(--line-dark); border-radius: var(--r-9); background: var(--ink-2);
+        font: 400 12px/1.7 var(--font-ui); color: var(--on-dark-2); opacity: 1;
         white-space: pre-wrap; word-break: break-word;
       }
-      .scout-note { font-size: 11px; opacity: .6; margin-top: 6px; }
+      .scout-note { font: 600 11px/1.5 var(--font-ui); color: var(--on-dark); margin-top: 6px; }
 
-      /* PM-383~386：釘選模式與圖釘清單 */
-      .pin-section { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+      /* PM-383~386 手動釘選；PM-418 換設計稿畫面 20 的深底卡 */
+      .pin-section { margin-top: 0; padding-top: 0; border-top: none; }
       .pin-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-      .pin-title { font-size: 13px; font-weight: 700; }
+      .pin-title { font: 700 13px/1 var(--font-ui); }
+      /* 標題吃掉剩餘空間，按鈕才會被推到最右邊。
+         這一列現在有三個子元素（六角 + 標題 + 按鈕），只靠 space-between 會把三個平均散開、
+         六角跟標題被拆散；auto margin 的優先度高於 justify-content，所以兩個一起下才對。 */
+      .pin-head .pin-title { margin-right: auto; }
+      /* 釘選模式：關=描邊、開=黃底實心。§7.4 的精神：狀態靠形狀/填色，不只靠顏色。 */
       .pin-mode-btn {
-        padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line);
-        background: rgba(255,255,255,.06); color: var(--fg);
-        font-size: 12px; font-weight: 600; cursor: pointer; transition: all .15s ease;
+        width: auto; margin: 0; padding: 7px 13px;
+        border: 2px solid var(--line-dark-2); border-radius: var(--r-8);
+        background: transparent; color: var(--y-pale);
+        font: 700 12px/1 var(--font-ui); cursor: pointer;
       }
-      .pin-mode-btn:hover { filter: brightness(1.15); }
-      /* 啟動中 → BugEzy 藍，狀態一眼可辨 */
-      .pin-mode-btn.on { background: #00bfff; border-color: #00bfff; color: #04222e; }
-      .pin-list { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
-      .pin-empty { font-size: 12px; opacity: .6; padding: 8px 0; }
+      .pin-mode-btn:hover { filter: none; border-color: var(--y); color: var(--y); }
+      .pin-mode-btn.on { background: var(--y); border-color: var(--y); color: var(--ink); }
+      .pin-mode-btn.on:hover { background: var(--y-deep); border-color: var(--y-deep); color: var(--ink); }
+      .pin-list { margin-top: 9px; display: flex; flex-direction: column; gap: 6px; }
+      .pin-empty { font: 600 12px/1.6 var(--font-ui); color: var(--on-dark); padding: 8px 0; }
       .pin-item {
-        padding: 8px; border-radius: 8px; background: rgba(255,255,255,.04);
-        border: 1px solid var(--line);
+        padding: 9px 11px; border-radius: var(--r-9); background: var(--ink-2);
+        border: 1px solid var(--line-dark);
+        display: flex; flex-direction: column; gap: 5px;
       }
-      .pin-item.resolved { opacity: .55; }
-      .pin-sel { font: 11px/1.4 ui-monospace, monospace; word-break: break-all; }
-      .pin-desc { font-size: 12px; margin-top: 2px; opacity: .85; }
-      .pin-acts { display: flex; gap: 6px; margin-top: 6px; }
+      /* §7.7 左側 3px 色條。嚴重度來自 content script 給的判定（popup 不重算），
+         PM-418 只是把原本印在文字前面的圓點 emoji 換成色條 —— 判定來源沒有變。
+         文字本身仍完整（stale 會標「（stale）」），不靠顏色傳達內容。 */
+      .pin-item.sev-err { border-left: 3px solid var(--err); }
+      .pin-item.sev-warn { border-left: 3px solid var(--y-deep); }
+      .pin-item.sev-ok { border-left: 3px solid var(--y-pale); }
+      .pin-item.sev-none { border-left: 3px solid var(--line-dark-2); }
+      .pin-item.resolved { opacity: .58; }
+      .pin-sel { font: 500 11px/1.45 var(--font-mono); color: var(--on-dark-2); word-break: break-all; }
+      .pin-desc { font: 600 12px/1.5 var(--font-ui); color: var(--y-pale); margin-top: 0; opacity: 1; }
+      .pin-acts { display: flex; gap: 6px; margin-top: 2px; }
       .pin-act {
-        padding: 3px 10px; border-radius: 6px; border: 1px solid var(--line);
-        background: transparent; color: var(--fg); font-size: 11px; cursor: pointer;
+        width: auto; margin: 0; padding: 4px 11px;
+        border: 1px solid var(--line-dark-2); border-radius: var(--r-7);
+        background: transparent; color: var(--y-pale);
+        font: 600 11px/1 var(--font-ui); cursor: pointer;
       }
-      .pin-act:disabled { opacity: .35; cursor: not-allowed; }
+      .pin-act:hover { border-color: var(--y); color: var(--y); }
+      .pin-act:disabled { opacity: .35; cursor: not-allowed; border-color: var(--line-dark-2); color: var(--y-pale); }
       .pin-bulk { display: flex; gap: 8px; margin-top: 10px; }
       .pin-bulk-btn {
-        flex: 1; padding: 6px; border-radius: 8px; border: 1px solid var(--line);
-        background: rgba(255,255,255,.06); color: var(--fg); font-size: 12px; cursor: pointer;
+        flex: 1; width: auto; margin: 0; padding: 8px;
+        border: 1px solid var(--line-dark-2); border-radius: var(--r-9);
+        background: transparent; color: var(--y-pale);
+        font: 700 12px/1 var(--font-ui); cursor: pointer; white-space: nowrap;
       }
-      .pin-bulk-btn.danger { color: #ff6b6b; }
+      .pin-bulk-btn:hover { border-color: var(--y); color: var(--y); }
+      .pin-bulk-btn.danger { border-color: #7A3A2A; color: var(--err-fg); }
+      .pin-bulk-btn.danger:hover { border-color: var(--err-fg); color: var(--err-fg); }
       .pin-result {
-        margin-top: 8px; padding: 8px; border-radius: 8px; font-size: 11px;
-        background: rgba(0,191,255,.08); border: 1px solid rgba(0,191,255,.25);
+        margin-top: 9px; padding: 10px 11px; border-radius: var(--r-9);
+        background: var(--ink-2); border: 1px solid var(--line-dark);
+        font: 400 11px/1.6 var(--font-ui); color: var(--on-dark-2);
         white-space: pre-wrap; word-break: break-word; max-height: 140px; overflow: auto;
+      }
+      /* PM-405 的結構化巡檢／分析結果（原本用 inline style，PM-418 收成 class） */
+      .pin-res-title { font: 700 12px/1 var(--font-ui); color: var(--y-pale); margin-bottom: 7px; }
+      .pin-res-row { margin: 6px 0; padding-left: 8px; border-left: 3px solid var(--line-dark-2); }
+      .pin-res-row.sev-err { border-left-color: var(--err); }
+      .pin-res-row.sev-warn { border-left-color: var(--y-deep); }
+      .pin-res-row.sev-ok { border-left-color: var(--y-pale); }
+      .pin-res-sel { font: 500 11px/1.45 var(--font-mono); color: var(--on-dark-2); word-break: break-all; }
+      .pin-res-sum { font: 600 11px/1.55 var(--font-ui); color: var(--y-pale); }
+      .pin-res-detail { font: 400 10px/1.5 var(--font-ui); color: var(--on-dark); margin-top: 2px; }
+      .pin-res-foot {
+        margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--line-dark);
+        font: 600 11px/1.5 var(--font-ui); color: var(--on-dark);
       }
       /* PM-75b：!important 確保 .hidden 永遠勝過 .upgrade-hint/.manage-sub 等同特異度但後定義的 display:flex
          （否則 paid/cancelled 用戶加了 hidden 仍被 flex 蓋過、升級提示不會消失）。 */
@@ -1267,8 +1326,10 @@
     <!-- PM-404：第二層「偵察模式」——圖釘 + AI 監測 + 記憶矩陣 -->
     <section id="scoutView" class="hidden">
       <div class="scout-head">
-        <button id="scoutBackBtn" class="scout-back">&larr;&nbsp;<span data-i18n="back">返回</span></button>
-        <span class="scout-title">📌 <span data-i18n="scout-mode">偵察模式</span></span>
+        <button id="scoutBackBtn" class="scout-back">
+          <span class="ico-arrow-l"></span><span data-i18n="back">返回</span>
+        </button>
+        <span class="scout-title"><span class="ico-hex"></span><span data-i18n="scout-mode">偵察模式</span></span>
       </div>
 
       <!-- PM-383~386：手動釘選（PM-403 起位於第二層）
@@ -1276,20 +1337,24 @@
            這樣三個區塊的標題列與分隔線才會一致（原本圖釘這一段沒有分隔線）。 -->
       <section id="pinSection" class="pin-section scout-block">
         <div class="pin-head scout-block-head">
-          <span id="pinCount" class="pin-title scout-block-title">📌 <span data-i18n="pin-section-title">圖釘</span></span>
-          <button id="pinModeBtn" class="pin-mode-btn scout-act">📌 <span data-i18n="pin-mode">釘選模式</span></button>
+          <!-- popup.ts 會覆寫 #pinCount 的 textContent（要塞數量），所以六角放在它外面。
+               包一層 .scout-block-title 讓三個 section 的標題結構完全一致（PM-410 的規則）。 -->
+          <span class="pin-title scout-block-title">
+            <span class="ico-hex"></span><span id="pinCount" data-i18n="pin-section-title">圖釘</span>
+          </span>
+          <button id="pinModeBtn" class="pin-mode-btn scout-act" data-i18n="pin-mode">釘選模式</button>
         </div>
         <div id="pinList" class="pin-list"></div>
         <div id="pinBulk" class="pin-bulk hidden">
-          <button id="pinPatrolBtn" class="pin-bulk-btn">🔄 巡檢全部</button>
-          <button id="pinClearBtn" class="pin-bulk-btn danger">🗑️ 清除全部</button>
+          <button id="pinPatrolBtn" class="pin-bulk-btn" data-i18n="pin-patrol-all">巡檢全部</button>
+          <button id="pinClearBtn" class="pin-bulk-btn danger" data-i18n="pin-clear-all">清除全部</button>
         </div>
         <div id="pinResult" class="pin-result hidden"></div>
       </section>
 
       <div class="scout-block">
         <div class="scout-block-head">
-          <span class="scout-block-title">🤖 <span data-i18n="ai-monitor">AI 監測</span></span>
+          <span class="scout-block-title"><span class="ico-hex"></span><span data-i18n="ai-monitor">AI 監測</span></span>
           <button id="scanAllBtn" class="scout-act" data-i18n="scan-all">一鍵全掃</button>
         </div>
         <div id="scanResult" class="scout-body">尚未掃描，點「一鍵全掃」開始</div>
@@ -1297,7 +1362,7 @@
 
       <div class="scout-block">
         <div class="scout-block-head">
-          <span class="scout-block-title">🧠 <span data-i18n="memory-matrix">記憶矩陣</span></span>
+          <span class="scout-block-title"><span class="ico-hex"></span><span data-i18n="memory-matrix">記憶矩陣</span></span>
           <button id="memRefreshBtn" class="scout-act" data-i18n="refresh">重新整理</button>
         </div>
         <div id="memResult" class="scout-body">讀取中…</div>

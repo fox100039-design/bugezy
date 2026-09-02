@@ -1757,8 +1757,21 @@ function pinResultShow(text: string): void {
  * **顏色來自 summary 開頭的 emoji**（🔴/🟡/🟢/⚪），那是 content script 已經算好的判定——
  * popup 不重新解讀 JSON 去猜嚴重度。兩邊各算一次判定遲早會分岔（PM-350 的
  * score/summary 不同步已經吃過這個虧）。
+ *
+ * PM-418：協定沒變，變的只是呈現 —— emoji 不再印在文字裡，改由 sevClass() 對照成
+ * CSS class，色碼統一收在 popup.html 的 token（§7.7 左側 3px 色條）。
  */
-const SEV_COLOR: Record<string, string> = { '🔴': '#ff6b6b', '🟡': '#ffd600', '🟢': '#4ade80', '⚪': '#9e9e9e', '✅': '#a5d6a7' };
+/**
+ * PM-418：判定訊號**還是** content script 開頭那顆圓點 emoji（協定沒變，popup 仍然不重算），
+ * 但畫面上不再印出 emoji —— 改成 §7.7 的左側 3px 色條，色碼由 CSS class 決定。
+ * 這裡只負責 emoji → class 的對照，顏色一律留在 popup.html 的 token 裡。
+ */
+function sevClass(emoji: string): string {
+  if (emoji === '🔴') return 'sev-err';
+  if (emoji === '🟡') return 'sev-warn';
+  if (emoji === '🟢' || emoji === '✅') return 'sev-ok';
+  return 'sev-none';
+}
 
 function pinResultRender(title: string, rows: Array<{ summary: string; selector: string; detail?: string }>, footer?: string): void {
   const box = document.getElementById('pinResult');
@@ -1767,27 +1780,27 @@ function pinResultRender(title: string, rows: Array<{ summary: string; selector:
   box.classList.remove('hidden');
 
   const h = document.createElement('div');
-  h.style.fontWeight = '700';
-  h.style.marginBottom = '6px';
+  h.className = 'pin-res-title';
   h.textContent = title;
   box.appendChild(h);
 
   for (const r of rows) {
     const emoji = [...r.summary][0] ?? '';
     const item = document.createElement('div');
-    item.style.cssText = `margin:6px 0;padding-left:8px;border-left:3px solid ${SEV_COLOR[emoji] ?? 'rgba(255,255,255,.2)'};`;
+    item.className = `pin-res-row ${sevClass(emoji)}`;
     const sel = document.createElement('div');
-    sel.style.cssText = 'font-family:ui-monospace,monospace;font-size:11px;word-break:break-all;';
-    sel.textContent = `${emoji} ${r.selector}`;
+    sel.className = 'pin-res-sel';
+    // PM-418：emoji 不進畫面，嚴重度由左側色條表示
+    sel.textContent = r.selector;
     item.appendChild(sel);
     const sum = document.createElement('div');
-    sum.style.cssText = 'font-size:11px;opacity:.85;';
-    // 去掉開頭的 emoji（已經畫在 selector 那行了），避免重複
+    sum.className = 'pin-res-sum';
+    // 去掉開頭的判定 emoji（它現在是色條，不是文字）
     sum.textContent = r.summary.replace(/^[🔴🟡🟢⚪✅]\s*/u, '');
     item.appendChild(sum);
     if (r.detail) {
       const d = document.createElement('div');
-      d.style.cssText = 'font-size:10px;opacity:.6;margin-top:2px;';
+      d.className = 'pin-res-detail';
       d.textContent = r.detail;
       item.appendChild(d);
     }
@@ -1796,7 +1809,7 @@ function pinResultRender(title: string, rows: Array<{ summary: string; selector:
 
   if (footer) {
     const f = document.createElement('div');
-    f.style.cssText = 'margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.12);font-size:11px;opacity:.75;';
+    f.className = 'pin-res-foot';
     f.textContent = footer;
     box.appendChild(f);
   }
@@ -1806,7 +1819,7 @@ function renderPinModeBtn(on: boolean): void {
   const btn = document.getElementById('pinModeBtn');
   if (!btn) return;
   btn.classList.toggle('on', on);
-  btn.textContent = on ? t('pin-mode-btn-on', currentUILang) : `📌 ${t('pin-mode', currentUILang)}`;
+  btn.textContent = on ? t('pin-mode-btn-on', currentUILang) : t('pin-mode', currentUILang);
 }
 
 async function refreshPinList(): Promise<void> {
@@ -1822,7 +1835,7 @@ async function refreshPinList(): Promise<void> {
 
   if (!data) {
     // 分頁沒有 content script（chrome://、應用程式商店、PDF）——講清楚而不是顯示成「沒有圖釘」
-    count.textContent = `📌 ${t('pin-section-title', currentUILang)}`;
+    count.textContent = t('pin-section-title', currentUILang);
     const p = document.createElement('div');
     p.className = 'pin-empty';
     p.textContent = t('pin-unsupported', currentUILang);
@@ -1846,11 +1859,12 @@ async function refreshPinList(): Promise<void> {
 
   for (const pin of data.pins) {
     const item = document.createElement('div');
-    item.className = pin.resolved ? 'pin-item resolved' : 'pin-item';
+    // PM-418：狀態由左側 3px 色條表示，emoji 不進畫面（判定來源仍是 content script 的 pin.emoji）
+    item.className = `pin-item ${sevClass(pin.emoji)}${pin.resolved ? ' resolved' : ''}`;
 
     const sel = document.createElement('div');
     sel.className = 'pin-sel';
-    sel.textContent = `${pin.emoji} ${pin.selector}${pin.status === 'stale' ? '（stale）' : ''}`;
+    sel.textContent = `${pin.selector}${pin.status === 'stale' ? '（stale）' : ''}`;
     item.appendChild(sel);
 
     if (pin.description) {
@@ -1877,7 +1891,7 @@ async function refreshPinList(): Promise<void> {
         });
         // PM-393：顯示人話而不是 JSON。summary 已經由 content script 組成
         //   「🔴 點擊觸發 TypeError: …」這種形式，直接用即可。
-        if (r && typeof r.error === 'string') pinResultShow(`⚠ ${r.error}`);
+        if (r && typeof r.error === 'string') pinResultShow(r.error);
         else renderAnalyzeResult(pin.selector, r);
         await refreshPinList();
       })();
@@ -1967,6 +1981,10 @@ function showScout(on: boolean): void {
   if (!idle || !scout) return;
   idle.classList.toggle('hidden', on);
   scout.classList.toggle('hidden', !on);
+  // PM-418：第二層整頁反黑（§9.3）。scout-open 是給 show() 看的旗標——
+  //   沒有它的話，錄製狀態一更新就會呼叫 show('idle') 把偵察模式的黑底關掉。
+  document.body.classList.toggle('scout-open', on);
+  document.body.classList.toggle('dark', on);
   if (on) {
     scout.classList.remove('slide-in');
     void scout.offsetWidth; // 重新觸發動畫（不 reflow 的話同一個 class 不會再播一次）
@@ -2092,7 +2110,7 @@ async function refreshMemoryStats(): Promise<void> {
 /** PM-405：巡檢結果 —— 每個圖釘一列，底部給「問題 N ｜ 正常 M」。 */
 function renderPatrolResult(r: Record<string, unknown> | null): void {
   if (!r) return pinResultShow(t('patrol-failed', currentUILang));
-  if (typeof r.error === 'string') return pinResultShow(`⚠ ${r.error}`);
+  if (typeof r.error === 'string') return pinResultShow(r.error);
   const results = (r.results ?? []) as Array<Record<string, unknown>>;
   if (results.length === 0) return pinResultShow(String(r.note ?? t('patrol-no-pins', currentUILang)));
 
@@ -2125,7 +2143,10 @@ function renderAnalyzeResult(selector: string, r: Record<string, unknown> | null
   }
   if (probe.restored === false) bits.push(t('analyze-not-restored', currentUILang));
   if (typeof probe.note === 'string' && probe.note) bits.push(probe.note);
-  bits.push(t('analyze-visible', currentUILang, { v: vis.visible ? '✅' : '❌', i: vis.has_size ? '✅' : '❌' }));
+  // PM-418：原本塞 ✅ / ❌ 兩顆 emoji 進格式字串。改用「有／無」的文字 key，
+  //   §7.7「不靠顏色傳達內容」同理也不該靠 emoji。
+  const yn = (b: unknown) => t(b ? 'yes' : 'no', currentUILang);
+  bits.push(t('analyze-visible', currentUILang, { v: yn(vis.visible), i: yn(vis.has_size) }));
   if (typeof box.width === 'number') {
     bits.push(t('analyze-size', currentUILang, { w: Math.round(Number(box.width)), h: Math.round(Number(box.height)) }));
   }

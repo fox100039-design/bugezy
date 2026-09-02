@@ -72,7 +72,13 @@ check('404   🔴 popup 明說這條通道是唯讀的、清除要走 AI',
 console.log('\n=== ④ PM-405：巡檢／分析結果人類可讀 ===');
 check('405-1 巡檢有專屬渲染函式', /function renderPatrolResult/.test(pts));
 check('405-2 單一分析有專屬渲染函式', /function renderAnalyzeResult/.test(pts));
-check('405-3/4 依嚴重度上色（紅／黃／綠）', /SEV_COLOR/.test(pts) && /#ff6b6b/.test(ptsRaw) && /#4ade80/.test(ptsRaw));
+// PM-418：色碼從 popup.ts 的 SEV_COLOR 對照表搬到 popup.html 的 token（§7.7 左側 3px 色條）。
+//   驗的東西不變 —— 「有依嚴重度分級的視覺」+「分級來自 content script 的 emoji」——
+//   只是實作從 inline style 換成 CSS class。
+check('405-3/4 依嚴重度上色（err／warn／ok 三級）',
+  /function sevClass/.test(pts)
+  && ['sev-err', 'sev-warn', 'sev-ok'].every((c) => pts.includes(`'${c}'`))
+  && ['.pin-res-row.sev-err', '.pin-res-row.sev-warn', '.pin-res-row.sev-ok'].every((c) => html.includes(c)));
 check('405   🔴 顏色取自 content script 已算好的 emoji，popup 不重新判定嚴重度',
   /顏色來自 summary 開頭的 emoji/.test(ptsRaw));
 check('405-5 分析顯示探測類型與耗時', /'analyze-probe'/.test(pts) && /duration_ms/.test(pts));
@@ -132,9 +138,11 @@ check('408   語言切換時第二層會重繪（否則會停在切換前的語�
   /applyTranslations[\s\S]{0,600}refreshPinList\(\)[\s\S]{0,200}refreshMemoryStats\(\)/.test(ptsRaw),
   'applyTranslations 沒有重繪第二層');
 
+// PM-418：三顆按鈕現在都要寫 `width: auto`——大黃蜂系統的全域 `button { width: 100% }`
+//   會把它們撐滿整列。`auto` 正是這條斷言想要的（不寫死尺寸），所以只擋固定值。
 check('408-3 按鈕沒有寫死寬度（文字變長不會被截斷）',
-  !/\.scout-act\s*\{[^}]*width\s*:/.test(html) && !/\.scout-back\s*\{[^}]*width\s*:/.test(html)
-  && !/\.pin-mode-btn\s*\{[^}]*width\s*:/.test(html));
+  !/\.scout-act\s*\{[^}]*width\s*:\s*\d/.test(html) && !/\.scout-back\s*\{[^}]*width\s*:\s*\d/.test(html)
+  && !/\.pin-mode-btn\s*\{[^}]*width\s*:\s*\d/.test(html));
 
 console.log('\n=== ④c PM-409：排版（寬度 + 不斷行）===');
 // ⚠ 這裡驗的是**CSS 規則存在**，不是實際渲染寬度——popup 沒有辦法在 CI 裡量。
@@ -182,9 +190,14 @@ const scoutHtml = html.slice(html.indexOf('id="scoutView"'), html.indexOf('<sect
 for (const [label, key] of [['圖釘', 'pin-section-title'], ['AI 監測', 'ai-monitor'], ['記憶矩陣', 'memory-matrix']]) {
   check(`410-1 ${label} section 有標題元素`, scoutHtml.includes(`data-i18n="${key}"`), `找不到 data-i18n="${key}"`);
 }
-check('410-1 三個標題都帶 emoji（與第一層風格一致）',
-  (scoutHtml.match(/scout-block-title">(📌|🤖|🧠)/g) ?? []).length === 3,
-  String((scoutHtml.match(/scout-block-title">(📌|🤖|🧠)/g) ?? []).length));
+// 🔴 PM-418：這條斷言整個翻面。大黃蜂視覺系統**全站禁用 emoji**（DESIGN_SPEC §1），
+//   三個標題的 📌 🤖 🧠 換成 §6 的幾何小六角 `.ico-hex`。驗的意圖沒變 ——
+//   「三個 section 的標題都有同一種標記，風格一致」—— 只是標記從 emoji 換成幾何圖形。
+check('410-1 三個標題都帶同一種幾何標記（六角，不是 emoji）',
+  (scoutHtml.match(/scout-block-title[^>]*>\s*<span class="ico-hex">/g) ?? []).length === 3,
+  String((scoutHtml.match(/scout-block-title[^>]*>\s*<span class="ico-hex">/g) ?? []).length));
+check('418   🔴 第二層一個 emoji 都不剩（§1 全站禁用）',
+  !/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(scoutHtml.replace(/<!--[\s\S]*?-->/g, '')));
 check('410-2 🔴 三個 section 的標題列用同一組 class（結構一致，不是三種寫法）',
   (scoutHtml.match(/class="[^"]*scout-block-head[^"]*"/g) ?? []).length === 3,
   String((scoutHtml.match(/class="[^"]*scout-block-head[^"]*"/g) ?? []).length));

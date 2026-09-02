@@ -280,7 +280,12 @@ const i18n = readFileSync('../extension/src/i18n.ts', 'utf8'); // PM-408：文�
 // PM-410：按鈕文字拆成「emoji + data-i18n span」，literal 不再連續 → 改驗結構 + 字典值
 check('383-1 popup 有 📌 釘選模式按鈕',
   /id="pinModeBtn"/.test(html) && /data-i18n="pin-mode"/.test(html) && /釘選模式/.test(i18n));
-check('383-2 有「啟動中」的視覺樣式（BugEzy 藍 #00bfff）', /\.pin-mode-btn\.on\s*{[^}]*#00bfff/.test(html), '找不到 .pin-mode-btn.on 的藍色樣式');
+// 🔴 PM-418：BugEzy 藍 #00bfff 與大黃蜂品牌無關，已整套換掉。啟動中改成「黃底實心」，
+//   關閉是描邊 —— 差別在填色不只在色相，灰階截圖也分得出來（§7.4 的精神）。
+check('383-2 有「啟動中」的視覺樣式（黃底實心，與描邊的關閉態分得開）',
+  /\.pin-mode-btn\.on\s*{[^}]*background: var\(--y\)/.test(html)
+  && /\.pin-mode-btn\s*{[^}]*background: transparent/.test(html),
+  '找不到 .pin-mode-btn.on 的黃底樣式');
 check('383-2 按鈕文字會切換為「釘選中... 點擊結束」（PM-408 起走 i18n）',
   /'pin-mode-btn-on'/.test(pts) && /釘選中\.\.\. 點擊結束/.test(i18n));
 check('383-4 用 chrome.storage.session 記住狀態', /chrome\.storage\.session/.test(pts));
