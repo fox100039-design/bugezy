@@ -271,5 +271,102 @@ check('406   既有內容沒有被覆蓋掉（六種錄製模式、MCP 設定、
 check('406-5 有 viewport meta（手機版排版的前提）', /name="viewport"/.test(zh));
 check('406   登入後自動補 token 的腳本仍在（PM-280）', /bugezy_session_token/.test(zh));
 
+console.log('\n=== ⑤ PM-413~421：大黃蜂視覺系統（群組 A · popup）===');
+
+// 這一整段是 Day 49 的「規格護欄」——把 DESIGN_SPEC.md 裡最容易被改回去、
+// 而且改回去不會有人立刻發現的幾條，釘成可執行的斷言。
+const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2190}-\u{21FF}\u{2300}-\u{23FF}\u{25A0}-\u{27BF}\u{2B00}-\u{2BFF}\u{2600}-\u{26FF}]/u;
+const KEEP = new Set(['→', '←', '·', '—', '–', '…']); // 排版用字元，不算 emoji
+const stripHtmlComments = (t) => t.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+const onlyEmoji = (t) => [...t].filter((c) => EMOJI.test(c) && !KEEP.has(c));
+
+check('413-1 :root 有 DESIGN_SPEC §2.1 的全部十四個色票',
+  ['--y:', '--y-deep:', '--y-pale:', '--cream:', '--ink:', '--ink-2:', '--ink-3:',
+   '--brown:', '--brown-d:', '--line-dark:', '--line-dark-2:', '--err:', '--err-fg:', '--info:']
+    .every((v) => html.includes(v)));
+check('413   §2.4 深底次要文字只給兩個色階（--on-dark / --on-dark-2）',
+  /--on-dark: #A08B62/.test(html) && /--on-dark-2: #C9A15A/.test(html));
+check('413   §3 字體三角色 + §7 圓角 + §7.1 硬投影 + §4 蜂巢紋都有 token',
+  ['--font-brand:', '--font-ui:', '--font-mono:', '--r-11:', '--r-pill:', '--sh-3:', '--hive-y:', '--hive-d:', '--hex:']
+    .every((v) => html.includes(v)));
+check('413   🔴 §4 蜂巢紋 data URI 內沒有未編碼的 `;`（會提早結束 CSS 宣告，整條失效）', (() => {
+  for (const m of html.matchAll(/--hive-[yd]: url\("([^"]*)"\)/g)) if (m[1].includes(';')) return false;
+  return true;
+})());
+
+check('414-1 登入頁有大黃蜂影片 + 靜態備援（webm 解不開時不會開天窗）',
+  /<bee-video /.test(html) && /id="beeFallback"/.test(html) && /assets\/hornet-real\.png/.test(html));
+check('414   🔴 bee-video.js 走 cpSync 而不是 esbuild entryPoints（classic script 才會 customElements.define）', (() => {
+  const b = readFileSync('../extension/build.mjs', 'utf8');
+  return /cpSync\(resolve\(root, 'src\/bee-video\.js'\)/.test(b) && !/'bee-video': resolve/.test(b);
+})());
+check('414   §8 land + float 兩段動畫都在', /@keyframes land/.test(html) && /@keyframes float/.test(html));
+check('414   🔴 登入鈕只換 label span（textContent 會把 Google logo 一起洗掉）',
+  /id="googleLoginLabel"/.test(html) && /googleLoginLabel\.textContent = text/.test(pts));
+check('414   刻意不外連 Google Fonts（擴充頁面連外字型 = 每開一次 popup 就送一次請求）',
+  !/fonts\.googleapis\.com/.test(html));
+
+check('415-3 🔴 popup 的 markup 一個 emoji 都不剩（DESIGN_SPEC §1 全站禁用）',
+  onlyEmoji(stripHtmlComments(html.slice(html.indexOf('<body>')))).length === 0,
+  onlyEmoji(stripHtmlComments(html.slice(html.indexOf('<body>')))).join(' '));
+check('415-3 🔴 popup 用得到的 i18n 字典值也一個 emoji 都不剩（換 markup 沒用，翻譯會蓋回來）', (() => {
+  const bad = [];
+  for (const m of i18n.matchAll(/^ {2}'?([A-Za-z0-9_.-]+)'?: *\{/gm)) {
+    const k = m.group ?? m[1];
+    let d = 1, i = m.index + m[0].length;
+    while (d && i < i18n.length) { if (i18n[i] === '{') d++; else if (i18n[i] === '}') d--; i++; }
+    const reachable = pts.includes(`'${k}'`) || html.includes(`"${k}"`);
+    if (reachable && onlyEmoji(i18n.slice(m.index + m[0].length, i - 1)).length) bad.push(k);
+  }
+  return bad.length === 0 ? true : bad.join(',');
+})() === true);
+check('415   幾何圖示是 markup 的兄弟節點，不在 [data-i18n] 元素裡（否則翻譯會把圖示洗掉）',
+  /<span class="ico-rec"><\/span>/.test(html) && /class="ico-arrow"/.test(html) && /class="ico-list"/.test(html));
+check('415   §7.7 不靠顏色傳達內容：zone 三個數字補了文字標籤',
+  /正常 \{ok\}／注意 \{warn\}／異常 \{err\}/.test(i18n));
+
+check('416-1 §9.3 整頁反黑是共用的 body.dark（錄製中 + 偵察模式）',
+  /body\.dark \{/.test(html) && /classList\.toggle\('dark'/.test(pts));
+check('416   🔴 偵察模式有 scout-open 護欄（否則 show(\'idle\') 會把第二層的黑底關掉）',
+  /scout-open/.test(html.concat(pts)) && /!document\.body\.classList\.contains\('scout-open'\)/.test(pts));
+check('416-2 計時器用 JetBrains Mono 且是 46px（§3.3 機器產出一律等寬字）',
+  /#elapsed \{ font: 700 46px\/1 var\(--font-mono\)/.test(html));
+check('416   §8 bar：12 柱波形', (html.match(/class="rec-wave"[\s\S]*?<\/div>/)?.[0].match(/<i /g) ?? []).length === 12);
+check('416-3 完成頁是米白摘要卡（§7.2 資料卡 = cream + 2px 黑框）',
+  /\.summary-card \{[\s\S]{0,160}background: var\(--cream\); border: 2px solid var\(--ink\)/.test(html));
+
+check('417   語言下拉沒有用 data URI 畫三角（§4 的 `;` 陷阱），改 ::after border',
+  /\.lang-select-wrap::after/.test(html) && !/\.lang-select[^{]*\{[^}]*data:image/.test(html));
+check('417   🔴 複製 MCP 的回饋卡用 flex（inline display:block 會讓 ::before 的六角失去寬高）',
+  /copyMcpFeedback\.style\.display = 'flex'/.test(pts));
+
+check('418-2 §7.7 圖釘與巡檢結果用左側 3px 色條，判定仍來自 content script 的 emoji',
+  /function sevClass/.test(pts) && /\.pin-item\.sev-err \{ border-left: 3px solid var\(--err\)/.test(html));
+
+check('419   §7.5 倒數用黑底、額度用黃底（同一個 popup 用底色分辨緊急程度）',
+  /\.day-pass-status \{[\s\S]{0,200}background: var\(--ink\)/.test(html)
+  && /\.upgrade-overlay-card \{[\s\S]{0,120}background: var\(--y\)/.test(html));
+check('419   §7.3 實線=已填、虛線=待填（兌換碼空欄位是虛框，一打字變實心）',
+  /\.promo-input input \{[\s\S]{0,220}border: 2px dashed/.test(html)
+  && /:not\(:placeholder-shown\)[^}]*border-style: solid/.test(html));
+check('419   用量條沒有新增 API，資料就是既有的 freeLimits',
+  /function renderOverlayUsage/.test(pts) && /freeLimits\?\.recording/.test(pts));
+
+check('420   JSON 警語是咖啡卡（§2.3 系統訊息），跟黃色的額度卡分開',
+  /\.warn-card \{[\s\S]{0,160}background: var\(--brown\)/.test(html) && /class="upgrade-overlay-card warn-card"/.test(html));
+check('420   §6 警示三角用 clip-path，且沒有搭配 box-shadow／border（§5：會被裁掉）', (() => {
+  const m = html.match(/\.warn-tri \{[^}]*\}/);
+  return !!m && /clip-path/.test(m[0]) && !/box-shadow|border:/.test(m[0]);
+})());
+
+check('421-1 擴充圖示四個尺寸都在（128 / 48 / 32 / 16）', (() => {
+  const mf = JSON.parse(readFileSync('../extension/manifest.json', 'utf8'));
+  return ['16', '32', '48', '128'].every((k) => mf.icons[k])
+    && ['16', '32', '48'].every((k) => mf.action.default_icon[k]);
+})());
+check('421   🔴 popup.ts 不用 innerHTML（Trusted Types 相容；更新通知原本是唯一一處）',
+  !/innerHTML/.test(pts));
+check('421   §3.1 字標寫成 BugEzy，不是 BUGEZY', !/BUGEZY/.test(stripHtmlComments(html)));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

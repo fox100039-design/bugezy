@@ -261,6 +261,14 @@ const dict: Record<string, { zh: string; en: string; ja: string; ko: string; vi:
   'upload-fail': { zh: '上傳失敗（可手動匯出 JSON）', en: 'Upload failed (export JSON manually)', ja: 'アップロード失敗（JSON を手動でエクスポートできます）', ko: '업로드 실패 (JSON을 수동으로 내보낼 수 있습니다)', vi: 'Tải lên thất bại (có thể xuất JSON thủ công)' },
   'rec-listening': { zh: '正在聽你說話', en: 'Listening', ja: '音声を聞いています', ko: '음성을 듣고 있습니다', vi: 'Đang nghe bạn nói' },
   'rec-no-voice': { zh: '錄製中 · 沒有錄語音', en: 'Recording · voice off', ja: '録画中 · 音声なし', ko: '녹화 중 · 음성 없음', vi: 'Đang ghi · không ghi giọng nói' },
+  // PM-421 收尾：popup 裡最後幾句硬寫在 .ts 的中文（大多還帶 emoji）。
+  //   它們在英文／日韓越模式下都只會顯示中文，屬於既有的 i18n 破口，換視覺時一併補完。
+  'rewind-capturing': { zh: '擷取中…', en: 'Capturing…', ja: '取得中…', ko: '가져오는 중…', vi: 'Đang lấy…' },
+  'copy-link-done': { zh: '已複製', en: 'Copied', ja: 'コピーしました', ko: '복사됨', vi: 'Đã sao chép' },
+  'export-done': { zh: '已匯出到 Downloads/bugezy-debug', en: 'Saved to Downloads/bugezy-debug', ja: 'Downloads/bugezy-debug に保存しました', ko: 'Downloads/bugezy-debug에 저장됨', vi: 'Đã lưu vào Downloads/bugezy-debug' },
+  'update-notice-title': { zh: 'BugEzy 更新到 v{v}', en: 'BugEzy updated to v{v}', ja: 'BugEzy を v{v} に更新しました', ko: 'BugEzy가 v{v}로 업데이트되었습니다', vi: 'BugEzy đã cập nhật lên v{v}' },
+  'update-notice-body': { zh: '感謝使用 BugEzy！此版本改善了穩定度和使用體驗。', en: 'Thanks for using BugEzy! This release improves stability and usability.', ja: 'BugEzy をご利用いただきありがとうございます。今回の更新で安定性と使い勝手を改善しました。', ko: 'BugEzy를 이용해 주셔서 감사합니다. 이번 업데이트로 안정성과 사용성이 개선되었습니다.', vi: 'Cảm ơn bạn đã dùng BugEzy! Bản này cải thiện độ ổn định và trải nghiệm.' },
+  'update-notice-dismiss': { zh: '知道了', en: 'Got it', ja: 'わかりました', ko: '확인', vi: 'Đã hiểu' },
   'copied': { zh: '已複製', en: 'Copied', ja: 'コピーしました', ko: '복사됨', vi: 'Đã sao chép' },
   'edit-btn': { zh: '編輯', en: 'Edit', ja: '編集', ko: '편집', vi: 'Chỉnh sửa' },
   'save-btn': { zh: '儲存', en: 'Save', ja: '保存', ko: '저장', vi: 'Lưu' },

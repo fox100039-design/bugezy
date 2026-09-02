@@ -323,7 +323,7 @@ const rewindBtn = $<HTMLButtonElement>('rewindBtn');
 rewindBtn.addEventListener('click', async () => {
   const label = rewindBtn.querySelector<HTMLElement>('.action-label');
   rewindBtn.disabled = true;
-  if (label) label.textContent = '⏪ 擷取中...';
+  if (label) label.textContent = t('rewind-capturing', currentUILang);
   try {
     // PM-170：回溯達上限 → background 回 { limitReached }，彈升級引導 overlay，不進入回溯
     const res = await send<{ ok?: boolean; limitReached?: string }>('REWIND_30S');
@@ -650,7 +650,7 @@ copyBtn.addEventListener('click', async () => {
   const { payload } = await send<{ payload: RecordingPayload | null }>('GET_LAST_PAYLOAD');
   if (!payload) return;
   await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-  copyBtn.textContent = currentUILang === 'en' ? '✅ Copied' : '✅ 已複製';
+  copyBtn.textContent = t('copied', currentUILang);
   copyBtn.classList.add('copied');
   setTimeout(() => {
     updateJsonLockUI(); // 還原（付費 → 📋 複製 JSON）
@@ -663,9 +663,9 @@ copyLinkBtn.addEventListener('click', () => {
   const url = shareLink.textContent?.trim();
   if (!url) return;
   navigator.clipboard.writeText(url);
-  copyLinkBtn.textContent = '✅ 已複製';
+  copyLinkBtn.textContent = t('copy-link-done', currentUILang);
   setTimeout(() => {
-    copyLinkBtn.textContent = '📋 複製連結';
+    copyLinkBtn.textContent = t('copy-link', currentUILang);
   }, 1500);
 });
 
@@ -688,8 +688,7 @@ exportBtn.addEventListener('click', async () => {
       filename: `bugezy-debug/payload-${ts}.json`, // 相對 Downloads 根；子資料夾自動建立
       saveAs: false,
     });
-    exportBtn.textContent =
-      currentUILang === 'en' ? '✅ Saved to Downloads/bugezy-debug' : '✅ 已匯出到 Downloads/bugezy-debug';
+    exportBtn.textContent = t('export-done', currentUILang);
     exportBtn.classList.add('done');
     setTimeout(() => {
       updateJsonLockUI(); // 還原（付費 → 💾 匯出 JSON）
@@ -1558,15 +1557,27 @@ logoutBtn.addEventListener('click', async () => {
 const LAST_VERSION_KEY = 'bugezy:lastVersion';
 
 function showUpdateNotice(version: string) {
+  // PM-421：原本用 innerHTML 塞一段模板字串。改成 createElement + textContent ——
+  //   README 的既有規則就是「Trusted Types 相容寫法，不用 innerHTML」，
+  //   而且三句文案原本硬寫中文（英文／日韓越模式也只會看到中文），一併收進字典。
   const notice = document.createElement('div');
   notice.className = 'update-notice';
-  notice.innerHTML = `
-    <div class="update-title">🎉 BugEzy 更新到 v${version}</div>
-    <div class="update-body">感謝使用 BugEzy！此版本改善了穩定度和使用體驗。</div>
-    <button class="update-dismiss" id="dismissUpdate">知道了</button>
-  `;
+
+  const title = document.createElement('div');
+  title.className = 'update-title';
+  title.textContent = t('update-notice-title', currentUILang, { v: version });
+
+  const body = document.createElement('div');
+  body.className = 'update-body';
+  body.textContent = t('update-notice-body', currentUILang);
+
+  const dismiss = document.createElement('button');
+  dismiss.className = 'update-dismiss';
+  dismiss.textContent = t('update-notice-dismiss', currentUILang);
+  dismiss.addEventListener('click', () => notice.remove());
+
+  notice.append(title, body, dismiss);
   document.body.prepend(notice);
-  document.getElementById('dismissUpdate')?.addEventListener('click', () => notice.remove());
 }
 
 /** 版本號從 manifest 讀；與上次記錄不同就顯示更新提示，然後寫回目前版本。 */
