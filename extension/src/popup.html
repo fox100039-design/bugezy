@@ -5,8 +5,68 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>BugEzy</title>
     <style>
+      /* ─────────────────────────────────────────────────────────────
+         PM-413：大黃蜂視覺系統 design token（DESIGN_SPEC.md §2 色彩 / §3 字體）
+         這一段是「唯一依據」，改配色請先改這裡，不要在個別 class 硬寫色碼。
+         舊的深藍紫變數暫時保留 —— PM-414~420 逐畫面換掉後才會清乾淨。
+         ───────────────────────────────────────────────────────────── */
       :root {
-        color-scheme: dark;
+        color-scheme: light;
+
+        /* §2.1 調色盤 */
+        --y: #F7BE00;          /* Hornet Yellow  主面板底、主要 CTA、強調 */
+        --y-deep: #DFA800;     /* Hornet Deep    黃色按鈕 hover、warn 色條 */
+        --y-pale: #FFE9AE;     /* Hornet Pale    深底上的正文 */
+        --cream: #FFF4D6;      /* Comb Cream     資料卡、輸入框、已填欄位 */
+        --ink: #14110B;        /* Hive Black     header、主按鈕、深色頁底 */
+        --ink-2: #211C13;      /* Hive Black 2   深色卡片、深底上的次級面 */
+        --ink-3: #0E0C08;      /* Hive Black 3   畫布區、輸入框深底 */
+        --brown: #7A4E1D;      /* Wax Brown      §2.3 只給「系統主動告知」用 */
+        --brown-d: #4A2F12;    /* Wax Brown Deep 硬投影、深咖啡 */
+        --line-dark: #3A3122;  /* 深底分隔線 */
+        --line-dark-2: #55492F;/* 深底次級邊框 */
+        --err: #8A2A0F;        /* Brick     error / 5xx / 額度用盡 */
+        --err-fg: #E08B72;     /* Brick Light 深底上的 error 文字 */
+        --info: #1E6FD9;       /* HTTP method 等技術標記 */
+
+        /* §2.4 深底上的次要文字**只有這兩個色階**。
+           #8A7550 / #8A5A24 / #55492F / #6B5A3D 是給黃底與米白底的褐色，
+           放到黑底上幾乎沒有亮度差 —— 這個錯誤已經犯過三次，不要再用。 */
+        --on-dark: #A08B62;    /* ≈5.0:1 一般說明文字 */
+        --on-dark-2: #C9A15A;  /* ≈6.0:1 標籤、可點元素 */
+        /* §3.2 黃底／米白底上的次要文字（字重一律 ≥600） */
+        --on-y: #3A2409;       /* 黃底說明文字 */
+        --on-y-2: #5E3A14;     /* 米白卡上的次要標籤 */
+
+        /* §3 字體：三種角色分工 —— 品牌字 / 介面內文 / 數字與代碼。
+           ⚠ 刻意**不**外連 Google Fonts：擴充頁面連外字型等於每次開 popup 都
+             向第三方發一次請求（隱私政策要交代，CWS 也審過兩次），而且離線時
+             會先閃一次無樣式。日後要完全對版，把 woff2 打包進 dist 再加
+             @font-face 即可，這三個變數不用動。 */
+        --font-brand: Archivo, 'Noto Sans TC', 'Microsoft JhengHei', system-ui, sans-serif;
+        --font-ui: 'Noto Sans TC', system-ui, -apple-system, 'Segoe UI', 'Microsoft JhengHei', sans-serif;
+        --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+        /* §7 圓角 */
+        --r-7: 7px;  --r-8: 8px;  --r-9: 9px;  --r-10: 10px;
+        --r-11: 11px; --r-12: 12px; --r-14: 14px; --r-16: 16px;
+        --r-pill: 999px;
+
+        /* §7.1 硬投影是這套系統的簽名 —— 不用模糊陰影、不用漸層 */
+        --sh-2: 2px 2px 0 var(--brown-d);
+        --sh-3: 3px 3px 0 var(--brown-d);
+        --sh-4: 4px 4px 0 var(--brown-d);
+        --sh-5: 5px 5px 0 var(--brown-d);
+
+        /* §4 蜂巢六角紋，不透明度 10%。
+           ⚠ data URI 內不可出現未編碼的 `;` —— 會提早結束 CSS 宣告，整條失效。 */
+        --hive-y: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='49' viewBox='0 0 28 49'%3E%3Cg fill='none' stroke='rgba(20,17,11,0.10)' stroke-width='1'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15z'/%3E%3Cpath d='M13.99 -15.25l13 7.5v15l-13 7.5L1 7.75v-15z'/%3E%3Cpath d='M13.99 33.25l13 7.5v15l-13 7.5L1 55.75v-15z'/%3E%3C/g%3E%3C/svg%3E");
+        --hive-d: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='49' viewBox='0 0 28 49'%3E%3Cg fill='none' stroke='rgba(247,190,0,0.13)' stroke-width='1'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15z'/%3E%3Cpath d='M13.99 -15.25l13 7.5v15l-13 7.5L1 7.75v-15z'/%3E%3Cpath d='M13.99 33.25l13 7.5v15l-13 7.5L1 55.75v-15z'/%3E%3C/g%3E%3C/svg%3E");
+
+        /* §5 六角 clip-path（外六角包內六角；⚠ clip-path 會裁掉 box-shadow 與 border） */
+        --hex: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+
+        /* ── 舊的深藍紫（PM-414~420 逐畫面淘汰中，暫留以免中途畫面全裸） ── */
         --bg: #0f0f1a;
         --panel: #1a1a2e;
         --line: #2a2a3e;
@@ -19,10 +79,14 @@
       }
       * { box-sizing: border-box; }
       body {
-        /* PM-409：320 → 360。內距 16 兩側 = 內容寬度從 288 變 328。
-           中文標籤（「偵察模式」「AI 監測」「記憶矩陣」）在 288px 下與右側按鈕並排時
-           會被擠到換行。Chrome popup 上限 800px，360 仍在舒適範圍。 */
-        width: 360px;
+        /* PM-413：360 → 320（DESIGN_SPEC §9）。內距 16 兩側 = 內容寬 288px。
+           PM-409 當初加寬到 360 是因為中文標籤會被擠到換行；320 要站得住腳靠三件事，
+           缺一不可（§9.1，PM-415／418 落實）：
+             ① 標題 flex:0 0 auto + 按鈕 flex-shrink:0，兩者都 nowrap，容器負責裁切
+             ② 三入口的說明文字手動斷成兩行，不靠自動折行
+             ③ 次要說明降級為括號小字
+           所以在 PM-415／418 改完之前，第二層標題會擠 —— 那是預期中的中間狀態。 */
+        width: 320px;
         margin: 0;
         padding: 16px;
         font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;

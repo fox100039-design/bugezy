@@ -139,7 +139,11 @@ check('408-3 按鈕沒有寫死寬度（文字變長不會被截斷）',
 console.log('\n=== ④c PM-409：排版（寬度 + 不斷行）===');
 // ⚠ 這裡驗的是**CSS 規則存在**，不是實際渲染寬度——popup 沒有辦法在 CI 裡量。
 //   實際視覺仍需人眼確認一次（已寫進 DONE-409）。
-check('409-1 popup 加寬到 360px', /body \{[\s\S]{0,240}width: 360px;/.test(html), '仍是舊寬度');
+// 🔴 PM-413 把寬度改回 320px（DESIGN_SPEC §9）——PM-409 當初加寬到 360 是為了讓中文標籤
+//    不斷行，大黃蜂視覺系統改用「標題/按鈕全 nowrap + 說明文字手動斷行 + 次要說明降級為
+//    括號小字」三招在 320 站住，所以寬度這條斷言跟著翻面。**下面的 nowrap 與 flex-shrink
+//    斷言一個都沒有放寬** —— 它們才是 320 能成立的真正前提。
+check('413-1 popup 寬度改回 320px', /body \{[\s\S]{0,700}width: 320px;/.test(html), '仍是 360px');
 for (const sel of ['.scout-title', '.scout-block-title', '.pin-title']) {
   check(`409-1 ${sel} 不斷行`, new RegExp(`${sel.replace('.', '\\.')}[^{]*\\{[^}]*white-space: nowrap|white-space: nowrap[\\s\\S]{0,400}`).test(html)
     && /white-space: nowrap;/.test(html.slice(html.indexOf('.scout-title'), html.indexOf('.scout-title') + 900)));
