@@ -7,7 +7,34 @@
 > ⚠ `_verify_phase1` 這批是 **57 / 0**（瀏覽器段 SKIP，port 19850 被本 session 的 MCP server 占用）。
 > 若瀏覽器段跑得到，總數會是 **984 / 0**。
 
-把 popup 從深藍紫（`#7c3aed` / `#0f0f1a`）整套換成以**長腳大黃蜂**為品牌動物的黃／黑／咖啡視覺系統，並移除全站 emoji 改用幾何圖示。依據是 `BugEzy 大黃蜂色調項目概覽/design_handoff_hornet_visual_system/DESIGN_SPEC.md`（規範）與同目錄的設計稿（規範的展示）。**兩者衝突時以 DESIGN_SPEC 為準**，這是交付包 README 自己訂的規則。
+把 popup 從深藍紫（`#7c3aed` / `#0f0f1a`）整套換成以**長腳大黃蜂**為品牌動物的黃／黑／咖啡視覺系統，並把 popup 這一層的 emoji 全部換成幾何圖示（**是 popup，不是全站** —— 群組 B～E 還沒動，見下方技術亮點）。依據是 `BugEzy 大黃蜂色調項目概覽/design_handoff_hornet_visual_system/DESIGN_SPEC.md`（規範）與同目錄的設計稿（規範的展示）。**兩者衝突時以 DESIGN_SPEC 為準**，這是交付包 README 自己訂的規則。
+
+### 九張卡一覽
+
+| 卡 | 內容 |
+|---|---|
+| PM-413 | Design token 落地（`:root` CSS 變數 + 寬度改回 320px） |
+| PM-414 | 登入頁（大黃蜂影片 + `bee-video.js` web component） |
+| PM-415 | 主畫面第一層（十三個區塊全改，含偵察模式入口） |
+| PM-416 | 錄製中 + 錄製完成（整頁反黑 + 黃紋 + 米白摘要卡） |
+| PM-417 | 進階設定展開（MCP 設定複製 + 輪盤編輯模式） |
+| PM-418 | 偵察模式第二層（反黑 + 圖釘 + AI 監測 + 記憶矩陣） |
+| PM-419 | 票券 + 付費 + 日票 + 額度 + 取消（五個畫面） |
+| PM-420 | Overlay（麥克風提示 + JSON 免責警語） |
+| PM-421 | 端到端 841/0 + 擴充圖示四尺寸 + emoji 清除 + 29 條護欄 |
+
+### 技術亮點
+
+- **popup 零 emoji**：markup 0、popup 可觸及的 i18n 字典值 0，兩邊都掃過並釘進回歸。
+  ⚠ 是 **popup 零**，不是全站零 —— `content.ts`（19 種）、`inject.ts`（14）、`annotate`（10+14）、
+  `edit-report`（15+12）、`server/src/index.ts`（87）都還沒清，那是群組 B～E 的範圍。
+- **`popup.ts` 零 `innerHTML`**（Trusted Types 相容，僅註解提及）。同樣是單檔而非全檔：
+  `content.ts` 5 處、`inject.ts` 3 處、`edit-report.ts` 1 處、`server/src/index.ts` 3 處仍在。
+- **29 條規格護欄**（`_verify403` 新增的 `⑤ PM-413~421` 段；該套總數 93 → **122**）。
+  每一條都反向驗證過會紅，不是寫來湊數的。
+- **`bee-video.js` web component**：透明背景 VP9 影片 + 去綠邊 + 自動追蹤置中，
+  靜態蜂圖疊在底下當備援（webm 解不開或 component 沒跑時不會開天窗）。
+- **擴充圖示六角斜紋 128/48/32/16**：8 倍超取樣 + LANCZOS，16px 依 §5 去斜紋只留純六角。
 
 ### Design token 落地（PM-413）
 
