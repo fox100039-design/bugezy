@@ -1029,24 +1029,48 @@
       }
       .prompt-cancel-btn:hover { border-color: var(--y); color: var(--y); }
       .prompt-copied { color: var(--y); font: 700 11px/1 var(--font-ui); flex-shrink: 0; }
-      /* PM-107：mic OFF 按錄製提示層 */
+      /* ── PM-420：麥克風關閉提示 overlay（設計稿畫面 21）── */
       .mic-prompt {
-        position: fixed; inset: 0; background: rgba(0,0,0,0.6);
-        display: flex; align-items: center; justify-content: center; z-index: 9999;
+        position: fixed; inset: 0; background: rgba(14, 12, 8, 0.86);
+        display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 20px;
       }
       .mic-prompt-card {
-        background: #1a1a2e; border: 1px solid #7c3aed; border-radius: 16px;
-        padding: 24px; text-align: center; max-width: 280px;
+        width: 264px; box-sizing: border-box;
+        background: var(--y); border: 2px solid var(--ink); border-radius: var(--r-16);
+        padding: 20px 18px; text-align: center; box-shadow: var(--sh-4);
+        display: flex; flex-direction: column; align-items: center; gap: 14px;
       }
-      .mic-prompt-icon { font-size: 36px; margin-bottom: 8px; }
-      .mic-prompt-title { color: #fff; font-size: 16px; font-weight: 600; margin-bottom: 4px; }
-      .mic-prompt-desc { color: #9aa3b2; font-size: 13px; margin-bottom: 16px; }
+      /* §6.1 麥克風四層造型，裝在 48px 的黑六角裡（放大版的品牌標記語彙） */
+      .mic-prompt-icon {
+        width: 48px; height: 55px; margin: 0; flex-shrink: 0;
+        background: var(--ink); clip-path: var(--hex);
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+      }
+      .mic-prompt-icon i { display: block; font-style: normal; }
+      .mic-prompt-icon .m1 {
+        width: 13px; height: 19px; border-radius: 7px;
+        background: repeating-linear-gradient(var(--y) 0 2px, var(--ink) 2px 4px);
+        box-shadow: 0 0 0 2px var(--y) inset;
+      }
+      .mic-prompt-icon .m2 {
+        width: 17px; height: 7px; box-sizing: border-box;
+        border: 2px solid var(--y); border-top: none; border-radius: 0 0 10px 10px;
+      }
+      .mic-prompt-icon .m3 { width: 12px; height: 2px; border-radius: 2px; background: var(--y); }
+      .mic-prompt-text { display: flex; flex-direction: column; gap: 6px; }
+      .mic-prompt-title { color: var(--ink); font: 700 15px/1.3 var(--font-ui); margin: 0; }
+      .mic-prompt-desc { color: var(--on-y); font: 600 12.5px/1.5 var(--font-ui); margin: 0; }
+      .mic-prompt-actions { display: flex; flex-direction: column; gap: 7px; width: 100%; }
       .mic-prompt-btn {
-        display: block; width: 100%; padding: 10px; border-radius: 10px; border: none;
-        font-size: 14px; cursor: pointer; margin-bottom: 8px;
+        display: block; width: 100%; margin: 0; padding: 11px;
+        border-radius: var(--r-11); font: 700 13px/1 var(--font-ui); cursor: pointer;
       }
-      .mic-prompt-btn.primary { background: #7c3aed; color: #fff; font-weight: 600; }
-      .mic-prompt-btn.secondary { background: transparent; color: #888; border: 1px solid #444; }
+      .mic-prompt-btn.primary { border: 2px solid var(--ink); background: var(--ink); color: var(--y); }
+      .mic-prompt-btn.primary:hover { background: var(--ink-2); }
+      .mic-prompt-btn.secondary {
+        border: 2px solid rgba(20, 17, 11, 0.4); background: transparent; color: var(--on-y);
+      }
+      .mic-prompt-btn.secondary:hover { border-color: var(--ink); color: var(--ink); }
       /* PM-126：新版通知亮燈 */
       /* PM-126 新版亮燈；§2.3 系統主動告知 → 咖啡底，不用漸層與模糊光暈 */
       .update-badge {
@@ -1123,7 +1147,37 @@
         background: var(--y); clip-path: var(--hex);
       }
       /* PM-189：JSON 免責警語 overlay */
-      .json-warn-body { text-align: left; line-height: 1.75; margin: 0; }
+      /* ── PM-420：JSON 免責警語 overlay（設計稿畫面 22）──
+         §2.3 系統主動告知 → 咖啡卡。它跟額度 overlay 共用 .upgrade-overlay 遮罩，
+         但卡片是另一種（黃卡 = 要你做決定；咖啡卡 = 系統在跟你說話），所以另開一個修飾 class。 */
+      .warn-card {
+        width: 270px; max-width: 270px; box-sizing: border-box;
+        background: var(--brown); background-image: none;
+        border: 2px solid var(--y); border-radius: var(--r-16);
+        padding: 20px 18px; box-shadow: none;
+        display: flex; flex-direction: column; gap: 14px; text-align: left;
+      }
+      .warn-head { display: flex; align-items: center; gap: 10px; }
+      /* §6 警示 → 三角。§8 pulse 1.6s。 */
+      .warn-tri {
+        width: 22px; height: 20px; flex-shrink: 0; background: var(--y);
+        clip-path: polygon(50% 0, 100% 100%, 0 100%);
+        animation: pulse 1.6s ease-in-out infinite;
+      }
+      .warn-card .upgrade-overlay-title { color: var(--y-pale); font: 700 14px/1.35 var(--font-ui); }
+      .json-warn-body { text-align: left; margin: 0; color: #F0D9A8; font: 600 12px/1.75 var(--font-ui); }
+      .warn-card .monthly-btn {
+        width: 100%; margin: 0; padding: 11px; border: none; border-radius: var(--r-11);
+        background: var(--y); color: var(--ink); font: 700 13px/1 var(--font-ui);
+      }
+      .warn-card .monthly-btn:hover { background: var(--y-deep); }
+      .json-cancel-btn {
+        width: 100%; margin: 0; padding: 11px;
+        border: 1px solid rgba(255, 233, 174, 0.45); border-radius: var(--r-11);
+        background: transparent; color: #F0D9A8; font: 700 13px/1 var(--font-ui); cursor: pointer;
+      }
+      .json-cancel-btn:hover { border-color: var(--y-pale); color: var(--y-pale); }
+      .warn-actions { display: flex; flex-direction: column; gap: 7px; }
       /* PM-171 非台灣付費 coming soon；§2.3 系統主動告知 → 咖啡底 */
       .intl-notice {
         background: var(--brown); border: none; border-radius: var(--r-11);
@@ -1586,11 +1640,16 @@
     <!-- PM-107：mic OFF 按錄製提示（鍵盤模式除外）-->
     <div id="micPrompt" class="mic-prompt" style="display:none;">
       <div class="mic-prompt-card">
-        <p class="mic-prompt-icon">🎙️</p>
-        <p class="mic-prompt-title" data-i18n="mic-prompt-title">麥克風目前關閉</p>
-        <p class="mic-prompt-desc" data-i18n="mic-prompt-desc">要用語音描述 Bug 嗎？</p>
-        <button id="micPromptOn" class="mic-prompt-btn primary" data-i18n="mic-prompt-on">開啟並錄製</button>
-        <button id="micPromptSkip" class="mic-prompt-btn secondary" data-i18n="mic-prompt-skip">直接錄製（不錄語音）</button>
+        <!-- §6.1 麥克風四層堆疊（膠囊頭 + U 形吊架 + 底座），裝在 48px 黑六角裡 -->
+        <div class="mic-prompt-icon"><i class="m1"></i><i class="m2"></i><i class="m3"></i></div>
+        <div class="mic-prompt-text">
+          <p class="mic-prompt-title" data-i18n="mic-prompt-title">麥克風目前關閉</p>
+          <p class="mic-prompt-desc" data-i18n="mic-prompt-desc">要用語音描述 Bug 嗎？</p>
+        </div>
+        <div class="mic-prompt-actions">
+          <button id="micPromptOn" class="mic-prompt-btn primary" data-i18n="mic-prompt-on">開啟並錄製</button>
+          <button id="micPromptSkip" class="mic-prompt-btn secondary" data-i18n="mic-prompt-skip">直接錄製（不錄語音）</button>
+        </div>
       </div>
     </div>
 
@@ -1620,12 +1679,16 @@
 
     <!-- PM-189：JSON 複製/匯出付費會員專用——每次操作前顯示敏感資料免責警語 -->
     <div id="jsonWarnOverlay" class="upgrade-overlay hidden">
-      <div class="upgrade-overlay-card">
-        <p class="upgrade-overlay-icon">⚠️</p>
-        <p class="upgrade-overlay-title" data-i18n="json-warning-title">⚠️ JSON 資料包含完整除錯紀錄</p>
+      <div class="upgrade-overlay-card warn-card">
+        <div class="warn-head">
+          <span class="warn-tri"></span>
+          <p class="upgrade-overlay-title" data-i18n="json-warning-title">JSON 資料包含完整除錯紀錄</p>
+        </div>
         <p class="upgrade-overlay-desc json-warn-body" data-i18n="json-warning-body">此資料可能包含敏感資訊（API 金鑰、Token、錯誤訊息等），請勿將 JSON 資料分享給不信任的對象。因資料外洩造成的損失，BugEzy 不承擔責任。</p>
-        <button id="jsonWarnConfirm" class="monthly-btn" data-i18n="json-confirm">我了解，繼續</button>
-        <button id="jsonWarnCancel" class="json-cancel-btn" data-i18n="json-cancel">取消</button>
+        <div class="warn-actions">
+          <button id="jsonWarnConfirm" class="monthly-btn" data-i18n="json-confirm">我了解，繼續</button>
+          <button id="jsonWarnCancel" class="json-cancel-btn" data-i18n="json-cancel">取消</button>
+        </div>
       </div>
     </div>
 
