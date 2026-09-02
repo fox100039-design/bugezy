@@ -1371,17 +1371,20 @@ const copyMcpFeedback = $('copyMcpFeedback');
 copyMcpBtn.addEventListener('click', async () => {
   const store = await chrome.storage.local.get(SESSION_TOKEN_KEY);
   const token = (store[SESSION_TOKEN_KEY] as string) || '';
-  const showFeedback = (msg: string, color: string) => {
+  // PM-417：回饋改成兩張卡（成功=米白確認卡、需登入=咖啡色系統訊息），
+  //   顏色由 class 決定而不是 inline style —— inline 的 display:block 會讓
+  //   ::before 的六角失去寬高（block 容器裡的 ::before 預設是 inline），所以這裡固定用 flex。
+  const showFeedback = (msg: string, warn = false) => {
     copyMcpFeedback.textContent = msg;
-    copyMcpFeedback.style.color = color;
-    copyMcpFeedback.style.display = 'block';
+    copyMcpFeedback.classList.toggle('warn', warn);
+    copyMcpFeedback.style.display = 'flex';
     setTimeout(() => {
       copyMcpFeedback.style.display = 'none';
     }, 4000);
   };
   if (!token) {
     // 未登入 → 不複製空 token 的設定，改提示先登入
-    showFeedback(t('copy-mcp-login', currentUILang), '#f59e0b');
+    showFeedback(t('copy-mcp-login', currentUILang), true);
     return;
   }
   const config = JSON.stringify(
@@ -1390,7 +1393,7 @@ copyMcpBtn.addEventListener('click', async () => {
     2,
   );
   await navigator.clipboard.writeText(config);
-  showFeedback(t('copy-mcp-done', currentUILang), '#22c55e');
+  showFeedback(t('copy-mcp-done', currentUILang));
 });
 
 // PM-170：升級引導 overlay 的按鈕（日票 / 月費 / 關閉）

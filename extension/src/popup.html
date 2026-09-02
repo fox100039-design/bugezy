@@ -418,19 +418,37 @@
         transition: transform 0.2s;
       }
       .settings-chevron.open { transform: rotate(180deg); }
-      .settings-body { padding: 4px 0; }
+      .settings-body { padding: 0; }
       /* accordion 內的 mode-toggle 不需再畫上分隔線（accordion 已有 border-top） */
-      .settings-body .mode-toggle { margin-top: 0; padding-top: 0; border-top: none; }
-      /* PM-137：語音語言下拉 */
-      .lang-select { background: #2a2a3e; color: #e6edf3; border: 1px solid #444; border-radius: 6px; padding: 4px 8px; font-size: 12px; cursor: pointer; }
-      /* PM-140：日韓越暫鎖（金流未開通）→ 灰色不可選 */
-      .lang-select option:disabled { color: #555; }
+      .settings-body .mode-toggle { margin: 0; padding-top: 0; border-top: none; display: flex; flex-direction: column; gap: 2px; }
+      /* ── PM-417：五列設定（設計稿畫面 19）── */
       .toggle-row {
-        display: flex; justify-content: space-between; align-items: center;
-        font-size: 13px; color: var(--muted); cursor: pointer;
+        display: flex; justify-content: space-between; align-items: center; gap: 10px;
+        padding: 9px 0; cursor: pointer;
+        font: 600 12.5px/1.4 var(--font-ui); color: var(--ink);
       }
-      .toggle-row input[type='checkbox'] { accent-color: var(--accent); width: 18px; height: 18px; }
-      .toggle-row + .toggle-row { margin-top: 8px; }
+      /* 每列之間一條淡線（第一列不畫，否則會跟 accordion 的粗線疊成雙線） */
+      .toggle-row + .toggle-row { margin-top: 0; border-top: 1px solid rgba(20, 17, 11, 0.2); }
+      .toggle-row input[type='checkbox'] { accent-color: var(--ink); width: 18px; height: 18px; flex-shrink: 0; }
+      /* PM-137 語音語言下拉：做成米白資料卡（§7.3 實線=已填），三角由 wrapper 的 ::after 畫，
+         不用 data URI 背景圖 —— §4 提醒過 data URI 內的 `;` 會提早結束宣告。 */
+      .lang-select-wrap {
+        position: relative; display: flex; align-items: center; flex-shrink: 0;
+        border: 2px solid var(--ink); border-radius: var(--r-9); background: var(--cream);
+      }
+      .lang-select-wrap::after {
+        content: ''; position: absolute; right: 10px; pointer-events: none;
+        width: 0; height: 0;
+        border-top: 5px solid var(--ink);
+        border-left: 4px solid transparent; border-right: 4px solid transparent;
+      }
+      .lang-select {
+        appearance: none; -webkit-appearance: none;
+        background: transparent; color: var(--ink); border: none; outline: none;
+        padding: 6px 26px 6px 11px; font: 700 12px/1 var(--font-ui); cursor: pointer;
+      }
+      /* PM-140：日韓越暫鎖（金流未開通）→ 淡化不可選 */
+      .lang-select option:disabled { color: #9b8a6a; }
 
       /* ── PM-416：錄製中（設計稿畫面 03）── */
       #recordingView { display: flex; flex-direction: column; gap: 0; }
@@ -816,6 +834,11 @@
         font: 700 11px/1 var(--font-ui); cursor: pointer;
       }
       .prompt-nav:hover { background: #2A2317; }
+      /* §6 播放三角：左右導覽鍵原本是 ◀ ▶ 兩個字元 */
+      .prompt-nav { display: flex; align-items: center; justify-content: center; }
+      .ico-nav-l, .ico-nav-r { width: 7px; height: 10px; background: var(--y); }
+      .ico-nav-l { clip-path: polygon(100% 0, 0 50%, 100% 100%); }
+      .ico-nav-r { clip-path: polygon(0 0, 100% 50%, 0 100%); }
       /* PM-115：預覽 wrap（顏色點 + 文字），複製鈕移到右側 */
       .prompt-preview-wrap {
         flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px;
@@ -840,16 +863,35 @@
         padding: 8px 15px; font: 700 12.5px/1 var(--font-ui); cursor: pointer;
       }
       .prompt-edit-btn:hover { border-color: var(--y); color: var(--y); }
-      /* PM-115：編輯模式顏色選擇列 */
-      .prompt-color-picker { display: flex; gap: 8px; margin-bottom: 8px; }
-      .color-option { width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: border-color 0.2s; }
-      .color-option:hover { border-color: #fff; }
-      .color-option.selected { border-color: #fff; }
-      .prompt-editor { margin-top: 8px; }
-      .prompt-textarea { width: 100%; background: #0d1117; color: #e6edf3; border: 1px solid #7c3aed; border-radius: 8px; padding: 8px; font-size: 12px; font-family: inherit; resize: vertical; box-sizing: border-box; }
-      .prompt-editor-actions { display: flex; gap: 8px; margin-top: 6px; }
-      .prompt-save-btn { background: #238636; color: #fff; border: none; border-radius: 6px; padding: 4px 12px; font-size: 12px; cursor: pointer; }
-      .prompt-cancel-btn { background: transparent; color: #888; border: 1px solid #444; border-radius: 6px; padding: 4px 12px; font-size: 12px; cursor: pointer; }
+      /* PM-115 編輯模式顏色選擇列（PM-417 換設計稿畫面 19 的四色 + 米白選中環）。
+         選中用 box-shadow 外環 —— 圓點沒有 clip-path，所以 box-shadow 不會被裁掉。 */
+      .prompt-color-picker { display: flex; gap: 8px; margin-bottom: 0; }
+      .color-option {
+        width: 19px; height: 19px; border-radius: 50%; cursor: pointer;
+        border: none; box-shadow: none; transition: box-shadow 0.2s;
+      }
+      .color-option:hover { box-shadow: 0 0 0 2px rgba(255, 233, 174, 0.5); }
+      .color-option.selected { box-shadow: 0 0 0 2px var(--y-pale); }
+      .prompt-editor { margin-top: 9px; display: flex; flex-direction: column; gap: 9px; }
+      .prompt-textarea {
+        width: 100%; box-sizing: border-box; resize: vertical;
+        background: var(--ink-3); color: var(--y-pale);
+        border: 2px solid var(--y); border-radius: var(--r-8);
+        padding: 9px 10px; font: 400 11.5px/1.7 var(--font-ui); min-height: 62px;
+      }
+      .prompt-textarea:focus { outline: none; border-color: var(--y-deep); }
+      .prompt-editor-actions { display: flex; gap: 7px; margin-top: 0; }
+      .prompt-save-btn {
+        width: auto; margin: 0; padding: 7px 14px; border: none; border-radius: var(--r-8);
+        background: var(--y); color: var(--ink); font: 700 12px/1 var(--font-ui); cursor: pointer;
+      }
+      .prompt-save-btn:hover { background: var(--y-deep); }
+      .prompt-cancel-btn {
+        width: auto; margin: 0; padding: 7px 14px; border-radius: var(--r-8);
+        background: transparent; color: var(--on-dark-2);
+        border: 1px solid var(--line-dark-2); font: 700 12px/1 var(--font-ui); cursor: pointer;
+      }
+      .prompt-cancel-btn:hover { border-color: var(--y); color: var(--y); }
       .prompt-copied { color: var(--y); font: 700 11px/1 var(--font-ui); flex-shrink: 0; }
       /* PM-107：mic OFF 按錄製提示層 */
       .mic-prompt {
@@ -912,12 +954,43 @@
         display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 0 2px;
       }
       .ico-list i { display: block; height: 1.5px; background: var(--ink); }
-      /* PM-191：複製 MCP 設定按鈕 */
-      .copy-mcp-btn { display: block; width: 100%; background: transparent; color: #c4b5fd; border: 1px solid #7c3aed; border-radius: 8px; padding: 8px; font-size: 13px; cursor: pointer; margin: 8px 0 4px; font-weight: 600; }
-      .copy-mcp-btn:hover { background: rgba(124,58,237,0.1); }
-      .copy-mcp-feedback { margin: 2px 0 6px; font-size: 12px; color: #22c55e; text-align: center; }
-      /* PM-197：MCP 設定使用時機備註 */
-      .mcp-hint { color: #666; font-size: 11px; margin: 4px 0 0; text-align: center; }
+      /* PM-191 複製 MCP 設定：主按鈕（黑底黃字 + 硬投影）+ 黃框方框圖示 */
+      .copy-mcp-btn {
+        display: flex; align-items: center; justify-content: center; gap: 9px;
+        width: 100%; margin: 12px 0 0; padding: 12px;
+        border: 2px solid var(--ink); border-radius: var(--r-11);
+        background: var(--ink); color: var(--y);
+        font: 700 13px/1 var(--font-ui); cursor: pointer; box-shadow: var(--sh-2);
+      }
+      .copy-mcp-btn:hover { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--brown-d); }
+      .copy-mcp-btn .ico-copy { border-color: var(--y); }
+      /* PM-197 使用時機備註：§2.3 系統主動告知 → 咖啡底 + 六角項目符號 */
+      .mcp-hint {
+        display: flex; align-items: flex-start; gap: 8px;
+        margin: 7px 0 0; padding: 9px 11px; border-radius: var(--r-9);
+        background: var(--brown); color: var(--y-pale);
+        font: 600 11px/1.6 var(--font-ui); text-align: left;
+      }
+      .mcp-hint::before {
+        content: ''; width: 8px; height: 9px; flex-shrink: 0; margin-top: 3px;
+        background: var(--y); clip-path: var(--hex);
+      }
+      /* 已複製回饋：米白確認卡（§7.3 實線=已完成的事） */
+      .copy-mcp-feedback {
+        display: flex; align-items: center; justify-content: center; gap: 8px;
+        margin: 9px 0 0; padding: 9px 11px;
+        background: var(--cream); border: 2px solid var(--ink); border-radius: var(--r-9);
+        font: 700 12px/1 var(--font-ui); color: var(--ink); text-align: center;
+      }
+      .copy-mcp-feedback::before {
+        content: ''; width: 9px; height: 10px; flex-shrink: 0;
+        background: var(--ink); clip-path: var(--hex);
+      }
+      /* 需要先登入 → 這是系統在跟你說話，換咖啡底（§2.3） */
+      .copy-mcp-feedback.warn {
+        background: var(--brown); border-color: var(--brown); color: var(--y-pale);
+      }
+      .copy-mcp-feedback.warn::before { background: var(--y); }
       .intl-title { color: #3b82f6; font-size: 14px; font-weight: 700; margin: 0 0 4px; }
       .intl-desc { color: #9aa3b2; font-size: 12px; margin: 0 0 8px; }
       .intl-free { color: #22c55e; font-size: 11px; margin: 0; }
@@ -1106,36 +1179,42 @@
         <div class="settings-body" id="settings-body" style="display:none;">
       <div class="mode-toggle">
         <label class="toggle-row">
-          <span data-i18n="lang-label">🌐 語音語言</span>
-          <select id="langSelect" class="lang-select">
-            <option value="zh">🇹🇼 繁體中文</option>
-            <option value="zh-CN">🇨🇳 简体中文</option>
-            <option value="yue">🇭🇰 粵語</option>
-            <option value="en">🇬🇧 English</option>
-            <option value="ja">🇯🇵 日本語</option>
-            <option value="ko">🇰🇷 한국어</option>
-            <option value="vi">🇻🇳 Tiếng Việt</option>
-          </select>
+          <span data-i18n="lang-label">語音語言</span>
+          <!-- 三角由 .lang-select-wrap::after 畫，select 自己 appearance:none -->
+          <span class="lang-select-wrap">
+            <select id="langSelect" class="lang-select">
+              <option value="zh">繁體中文</option>
+              <option value="zh-CN">简体中文</option>
+              <option value="yue">粵語</option>
+              <option value="en">English</option>
+              <option value="ja">日本語</option>
+              <option value="ko">한국어</option>
+              <option value="vi">Tiếng Việt</option>
+            </select>
+          </span>
         </label>
         <label class="toggle-row">
-          <span data-i18n="monitor-toggle">🔍 即時監控（AI 可查 error）</span>
+          <span data-i18n="monitor-toggle">即時監控（AI 可查 error）</span>
           <input type="checkbox" id="monitorMode" />
         </label>
         <label class="toggle-row">
-          <span data-i18n="keyboard-toggle">🔇 鍵盤模式（關閉語音）</span>
+          <span data-i18n="keyboard-toggle">鍵盤模式（關閉語音）</span>
           <input type="checkbox" id="keyboardMode" />
         </label>
         <label class="toggle-row">
-          <span data-i18n="hq-toggle">📸 高畫質 AI 分析（高 Token）</span>
+          <span data-i18n="hq-toggle">高畫質 AI 分析（高 Token）</span>
           <input type="checkbox" id="allowScreenshots" />
         </label>
         <label class="toggle-row">
-          <span data-i18n="effect-toggle">✨ 工具列特效</span>
+          <span data-i18n="effect-toggle">工具列特效</span>
           <input type="checkbox" id="toolbarEffect" />
         </label>
       </div>
       <!-- PM-191：一鍵複製完整 MCP 設定（含 session token）貼給 Claude/Cursor -->
-      <button id="copyMcpBtn" class="copy-mcp-btn" data-i18n="copy-mcp">📋 複製 MCP 設定</button>
+      <button id="copyMcpBtn" class="copy-mcp-btn">
+        <span class="ico-copy"></span>
+        <span data-i18n="copy-mcp">複製 MCP 設定</span>
+      </button>
       <p class="mcp-hint" data-i18n="mcp-config-hint">當 AI 無法讀取你的報告時，按此複製，貼給你的 AI 重新設定</p>
       <p id="copyMcpFeedback" class="copy-mcp-feedback" style="display:none;"></p>
         </div>
@@ -1149,12 +1228,12 @@
         </div>
         <div class="prompt-body" id="prompt-body" style="display:block;">
           <div class="prompt-preview-row">
-            <button id="prompt-prev" class="prompt-nav">◀</button>
+            <button id="prompt-prev" class="prompt-nav" aria-label="prev"><span class="ico-nav-l"></span></button>
             <div class="prompt-preview-wrap">
               <span class="prompt-color-dot" id="prompt-color-dot"></span>
               <span class="prompt-preview" id="prompt-preview">請讀取我最新的 BugEzy 報告...</span>
             </div>
-            <button id="prompt-next" class="prompt-nav">▶</button>
+            <button id="prompt-next" class="prompt-nav" aria-label="next"><span class="ico-nav-r"></span></button>
           </div>
           <div class="prompt-actions">
             <button id="prompt-copy" class="prompt-copy-btn" title="複製">
@@ -1166,14 +1245,16 @@
           </div>
           <div id="prompt-editor" class="prompt-editor" style="display:none;">
             <div class="prompt-color-picker" id="prompt-color-picker">
-              <span class="color-option" data-color="#ef4444" style="background:#ef4444;"></span>
-              <span class="color-option" data-color="#3b82f6" style="background:#3b82f6;"></span>
-              <span class="color-option" data-color="#22c55e" style="background:#22c55e;"></span>
-              <span class="color-option" data-color="#f59e0b" style="background:#f59e0b;"></span>
+              <!-- PM-417：換成設計稿畫面 19 的四色。舊提示詞存的是舊色碼，仍會照原色顯示，
+                   只有之後新選的才會是這四色 —— 不動既有資料。 -->
+              <span class="color-option" data-color="#D92B2B" style="background:#D92B2B;"></span>
+              <span class="color-option" data-color="#1E6FD9" style="background:#1E6FD9;"></span>
+              <span class="color-option" data-color="#1E9E5A" style="background:#1E9E5A;"></span>
+              <span class="color-option" data-color="#F7BE00" style="background:#F7BE00;"></span>
             </div>
             <textarea id="prompt-textarea" class="prompt-textarea" rows="5"></textarea>
             <div class="prompt-editor-actions">
-              <button id="prompt-save" class="prompt-save-btn" data-i18n="save-btn">💾 儲存</button>
+              <button id="prompt-save" class="prompt-save-btn" data-i18n="save-btn">儲存</button>
               <button id="prompt-cancel" class="prompt-cancel-btn" data-i18n="cancel-btn">取消</button>
             </div>
           </div>
