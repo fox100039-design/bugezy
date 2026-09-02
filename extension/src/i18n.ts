@@ -193,6 +193,13 @@ const dict: Record<string, { zh: string; en: string; ja: string; ko: string; vi:
     ko: '데이 패스 만료 후 월정액으로 업그레이드할 수 있습니다',
     vi: 'Sau khi vé ngày hết hạn có thể nâng cấp hàng tháng',
   },
+  // PM-419：付費版四格權益（設計稿畫面 10）。純靜態文案，沒有連動任何邏輯。
+  'perk-unlimited': { zh: '無限次', en: 'Unlimited', ja: '無制限', ko: '무제한', vi: 'Không giới hạn' },
+  'perk-unlimited-sub': { zh: '錄製 · 回溯 · 截圖', en: 'Record · Rewind · Screenshot', ja: '録画 · 巻き戻し · スクショ', ko: '녹화 · 되감기 · 스크린샷', vi: 'Ghi · Tua lại · Chụp' },
+  'perk-retention': { zh: '90 天', en: '90 days', ja: '90 日', ko: '90일', vi: '90 ngày' },
+  'perk-retention-sub': { zh: '報告保留', en: 'Report retention', ja: 'レポート保持', ko: '리포트 보관', vi: 'Lưu báo cáo' },
+  'perk-whisper-sub': { zh: '精準轉錄', en: 'Precise transcription', ja: '高精度文字起こし', ko: '고정밀 변환', vi: 'Chuyển đổi chính xác' },
+  'perk-cli-sub': { zh: '終端機工具', en: 'Terminal tool', ja: 'ターミナルツール', ko: '터미널 도구', vi: 'Công cụ dòng lệnh' },
   'paid-badge': { zh: '付費版會員', en: 'Premium Member', ja: '有料会員', ko: '유료 회원', vi: 'Thành viên trả phí' },
   // PM-267：🎫 票券錢包（活動代碼兌換 / 啟用 / 到期提醒）
   // PM-273：票券錢包折疊標題列

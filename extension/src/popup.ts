@@ -891,6 +891,40 @@ function renderFreeUsage(limits: NonNullable<PlanInfo['limits']>) {
 }
 
 /** PM-170：本月額度用完 → 彈升級引導 overlay（day-pass / monthly + 每月重置提示）。 */
+/**
+ * PM-419：畫設計稿畫面 12 的用量滿格條。資料就是 renderFreeUsage 用的那份 freeLimits，
+ * 沒有新增任何 API —— 只是把「剩幾次」換一種看得見的呈現。
+ * JSON 付費牆共用這張卡但沒有用量概念，那條路徑會整塊隱藏（見 showJsonPaidOverlay）。
+ */
+function renderOverlayUsage(): void {
+  const box = document.getElementById('overlayUsage');
+  if (!box) return;
+  while (box.firstChild) box.removeChild(box.firstChild);
+  const rows: Array<[string, { used: number; max: number } | undefined]> = [
+    [t('mode-record', currentUILang), freeLimits?.recording],
+    [t('mode-rewind', currentUILang), freeLimits?.rewind],
+  ];
+  let shown = 0;
+  for (const [label, lim] of rows) {
+    if (!lim || !lim.max) continue;
+    const row = document.createElement('div');
+    row.className = 'usage-bar';
+    const b = document.createElement('b');
+    b.textContent = label;
+    const track = document.createElement('i');
+    const fill = document.createElement('em');
+    // 用完就是滿格；還沒用完也照比例畫——overlay 不是只有「用完」一個進入點
+    fill.style.width = `${Math.min(100, Math.round((lim.used / lim.max) * 100))}%`;
+    track.appendChild(fill);
+    const num = document.createElement('span');
+    num.textContent = `${lim.used}/${lim.max}`;
+    row.append(b, track, num);
+    box.appendChild(row);
+    shown++;
+  }
+  box.classList.toggle('hidden', shown === 0);
+}
+
 function showUpgradeOverlay(type: 'recording' | 'rewind' | 'mcp') {
   const lim = freeLimits?.[type];
   const max = lim?.max ?? 0;
@@ -899,6 +933,7 @@ function showUpgradeOverlay(type: 'recording' | 'rewind' | 'mcp') {
   upgradeOverlayTitle.textContent = t('usage-exhausted', currentUILang); // PM-189：title 與 json 共用，明確設回
   // 用完 → used 已達上限，顯示 max/max
   upgradeOverlayDesc.textContent = t(descKey, currentUILang, { used: max, max });
+  renderOverlayUsage();
   // PM-171：非台灣 → 隱藏日票/月費鈕（綠界收不了款），改顯示 coming soon
   const taiwan = isTaiwanUser();
   overlayDayPassBtn.classList.toggle('hidden', !taiwan);
@@ -911,6 +946,7 @@ function showUpgradeOverlay(type: 'recording' | 'rewind' | 'mcp') {
 function showJsonPaidOverlay() {
   upgradeOverlayTitle.textContent = t('json-paid-only', currentUILang);
   upgradeOverlayDesc.textContent = '';
+  document.getElementById('overlayUsage')?.classList.add('hidden'); // 付費牆沒有用量概念
   const taiwan = isTaiwanUser();
   overlayDayPassBtn.classList.toggle('hidden', !taiwan);
   overlayMonthlyBtn.classList.toggle('hidden', !taiwan);
@@ -1001,6 +1037,8 @@ function renderTicketWallet() {
   if (active) {
     activeTicketInfo.textContent = '';
     const line1 = document.createElement('div');
+    // PM-419：脈衝六角由 .active-ticket-row::before 畫（§7.4「票券生效中」的形狀分級）
+    line1.className = 'active-ticket-row';
     line1.textContent = `${t('promo_active', currentUILang)}（${active.code}）`;
     const line2 = document.createElement('span');
     line2.className = 'ticket-sub';
@@ -1043,7 +1081,8 @@ function renderTicketWallet() {
       const row = document.createElement('div');
       row.className = 'saved-ticket-row';
       const label = document.createElement('span');
-      label.textContent = `🎫 ${s.code} — ${fmtDuration(s.duration_days)}`;
+      // PM-419：票券圖示改由 .saved-ticket-row 的版面呈現，文字不再帶 emoji
+    label.textContent = `${s.code} — ${fmtDuration(s.duration_days)}`;
       row.appendChild(label);
       if (isEcpayPaid) {
         // PM-275：ECPay 訂閱中啟用票券只會白燒天數（月費照扣），不給啟用入口
@@ -1071,7 +1110,7 @@ function renderTicketWallet() {
   const hasAny = !!active || saved.length > 0;
   ticketToggle.classList.toggle('hidden', !hasAny);
   ticketSummary.textContent = active
-    ? `🟢 ${active.code} ${t('promo_days_left', currentUILang, { n: active.days_left })}`
+    ? `${active.code} ${t('promo_days_left', currentUILang, { n: active.days_left })}`
     : '';
   ticketBadge.textContent = saved.length
     ? t('promo_stock', currentUILang, { n: saved.length })
@@ -1416,7 +1455,11 @@ function updateCountdown(ms: number) {
   const h = Math.floor(clamped / 3600000);
   const m = Math.floor((clamped % 3600000) / 60000);
   const s = Math.floor((clamped % 60000) / 1000);
-  dayPassCountdown.textContent = t('day-pass-remaining', currentUILang, { h, m, s });
+  // PM-419：設計稿畫面 11 的倒數是純數字 HH:MM:SS（38px 等寬字，§3.3 機器產出）。
+  //   原本用 'day-pass-remaining'（「剩餘 18h 42m 07s」）—— 那串在 38px 下塞不進 288px 內容寬，
+  //   而且把語言混進了大數字。「這是什麼」交給上面的 DAY PASS 膠囊與下面的說明列講。
+  const pad = (n: number) => String(n).padStart(2, '0');
+  dayPassCountdown.textContent = `${pad(h)}:${pad(m)}:${pad(s)}`;
 }
 function showDayPassActive(remainMs: number) {
   upgradeHint.classList.add('hidden'); // 鎖月費：日票中不顯示升級鈕
