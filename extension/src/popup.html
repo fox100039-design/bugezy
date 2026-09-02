@@ -98,55 +98,108 @@
         font-size: 14px;
       }
 
-      /* 品牌 Header */
+      /* ── PM-415：品牌列（設計稿畫面 18）──
+         六角標記（§5 黃底版：外黑內斜紋）+ 字標 + 麥克風開關 + 右側標語。 */
       .brand {
-        display: flex; align-items: center; gap: 8px;
-        padding-bottom: 12px; margin-bottom: 12px;
-        border-bottom: 1px solid var(--line);
+        display: flex; align-items: center; gap: 9px;
+        padding-bottom: 10px; margin-bottom: 10px;
+        border-bottom: 2px solid var(--ink);
       }
-      .brand-icon { font-size: 24px; }
-      .brand-name { font-size: 18px; font-weight: 700; color: var(--accent); }
-      .brand-tag { font-size: 11px; color: var(--muted); margin-left: auto; }
+      /* §5 ≤48px 用幾何六角。⚠ clip-path 會裁掉 box-shadow 與 border，
+         外環一律用「外六角包內六角」的嵌套，不要用 box-shadow 0 0 0 2px。 */
+      .brand-icon {
+        width: 26px; height: 30px; flex-shrink: 0;
+        background: var(--ink); clip-path: var(--hex);
+        display: flex; align-items: center; justify-content: center;
+      }
+      .brand-icon::after {
+        content: ''; width: 17px; height: 20px; clip-path: var(--hex);
+        background: repeating-linear-gradient(162deg, var(--y) 0 3px, var(--ink) 3px 6px);
+      }
+      .brand-name { font: 800 17px/1 var(--font-brand); letter-spacing: 0.02em; color: var(--ink); }
+      .brand-tag { margin-left: auto; font: 600 11px/1 var(--font-ui); color: var(--on-y); white-space: nowrap; }
 
-      /* PM-86：麥克風 toggle（小型滑動開關，跟標題同行） */
-      .mic-toggle { display: flex; align-items: center; gap: 6px; margin-left: 8px; }
-      .mic-icon { font-size: 14px; transition: opacity 0.15s; }
-      .mic-switch { position: relative; display: inline-block; width: 32px; height: 18px; }
+      /* PM-86 麥克風 toggle；PM-415 換成 §6.1 的四層麥克風造型 + 黑膠囊開關。
+         popup.ts 只改 .mic-icon 的 opacity，所以圖示做成容器、四個 span 一起淡出。 */
+      .mic-toggle { display: flex; align-items: center; gap: 7px; margin-left: 4px; }
+      .mic-icon {
+        display: flex; flex-direction: column; align-items: center; gap: 1px;
+        flex-shrink: 0; transition: opacity 0.15s;
+      }
+      /* 網格膠囊頭（收音孔）+ U 形吊架 + 立柱 + 底座 —— 不要只用一個膠囊 */
+      .mic-icon i { display: block; font-style: normal; }
+      .mic-icon .m1 {
+        width: 10px; height: 14px; border-radius: 5px;
+        background: repeating-linear-gradient(var(--ink) 0 1.5px, var(--y) 1.5px 3px);
+        box-shadow: 0 0 0 1.5px var(--ink) inset;
+      }
+      .mic-icon .m2 {
+        width: 14px; height: 5px; box-sizing: border-box;
+        border: 2px solid var(--ink); border-top: none; border-radius: 0 0 8px 8px;
+      }
+      .mic-icon .m3 { width: 2px; height: 2px; background: var(--ink); }
+      .mic-icon .m4 { width: 10px; height: 2px; border-radius: 2px; background: var(--ink); }
+      .mic-switch { position: relative; display: inline-block; width: 34px; height: 19px; flex-shrink: 0; }
       .mic-switch input { opacity: 0; width: 0; height: 0; }
       .mic-slider {
-        position: absolute; inset: 0; cursor: pointer; background: #4a4a5e;
-        border-radius: 18px; transition: background 0.15s;
+        position: absolute; inset: 0; cursor: pointer;
+        background: rgba(20, 17, 11, 0.28); border: 2px solid var(--ink);
+        border-radius: var(--r-pill); box-sizing: border-box; transition: background 0.15s;
       }
       .mic-slider::before {
-        content: ''; position: absolute; height: 14px; width: 14px; left: 2px; top: 2px;
-        background: #fff; border-radius: 50%; transition: transform 0.15s;
+        content: ''; position: absolute; height: 11px; width: 11px; left: 2px; top: 2px;
+        background: var(--ink); border-radius: 50%; transition: transform 0.15s, background 0.15s;
       }
-      .mic-switch input:checked + .mic-slider { background: var(--success); }
-      .mic-switch input:checked + .mic-slider::before { transform: translateX(14px); }
+      .mic-switch input:checked + .mic-slider { background: var(--ink); }
+      .mic-switch input:checked + .mic-slider::before { transform: translateX(15px); background: var(--y); }
 
-      /* PM-91：付費版語音模式切換（即時字幕 / 精準轉錄） */
-      .mic-mode { display: flex; align-items: center; gap: 6px; margin: 4px 0 8px; padding: 4px 0; }
-      .mic-mode-label { color: #9aa3b2; font-size: 11px; }
-      .mic-mode-btn { width: auto; margin: 0; background: #2a2a3e; color: #999; border: 1px solid #333; border-radius: 12px; padding: 2px 10px; font-size: 11px; cursor: pointer; font-weight: 500; }
-      .mic-mode-btn.active { background: #7c3aed; color: #fff; border-color: #7c3aed; }
-      /* PM-193：精準轉錄授權提示小字 */
-      .mic-perm-hint { color: #d29922; font-size: 11px; margin: 0 0 6px; line-height: 1.4; text-align: center; }
+      /* PM-91 語音模式切換；PM-415 換成描邊膠囊，選中的填黑。 */
+      .mic-mode { display: flex; align-items: center; gap: 7px; margin: 0 0 2px; padding: 0; }
+      .mic-mode-label { font: 600 11.5px/1 var(--font-ui); color: var(--on-y); flex-shrink: 0; }
+      .mic-mode-btn {
+        width: auto; margin: 0; flex-shrink: 0; white-space: nowrap;
+        padding: 4px 11px; border: 2px solid rgba(20, 17, 11, 0.4); border-radius: var(--r-pill);
+        background: transparent; color: var(--on-y);
+        font: 600 11.5px/1 var(--font-ui); cursor: pointer;
+      }
+      .mic-mode-btn:hover { filter: none; border-color: var(--ink); color: var(--ink); }
+      .mic-mode-btn.active { background: var(--ink); color: var(--y); border-color: var(--ink); font-weight: 700; }
+      /* PM-193 授權提示。§2.3 咖啡色 = 系統主動告知，不是使用者要填的東西。 */
+      .mic-perm-hint {
+        display: flex; align-items: flex-start; gap: 8px;
+        margin: 0; padding: 8px 11px; border-radius: var(--r-9);
+        background: var(--brown); color: var(--y-pale);
+        font: 600 11px/1.55 var(--font-ui); text-align: left;
+      }
+      /* §6 所有項目符號一律小六角（8x9） */
+      .mic-perm-hint::before, .sys-note::before {
+        content: ''; width: 8px; height: 9px; flex-shrink: 0; margin-top: 3px;
+        background: var(--y); clip-path: var(--hex);
+      }
+      /* PM-106：錄製中設定鎖定提示（沿用同一個咖啡底系統訊息語彙） */
+      .sys-note {
+        display: flex; align-items: flex-start; gap: 8px;
+        margin: 6px 0 0; padding: 8px 11px; border-radius: var(--r-9);
+        background: var(--brown); color: var(--y-pale);
+        font: 600 11px/1.55 var(--font-ui);
+      }
 
-      /* 通用按鈕 */
+      /* 通用按鈕：只留形狀與互動，顏色一律由各自的 class 指定（§7.1）。
+         這裡刻意不再給 color:#fff —— 大黃蜂系統沒有「預設白字按鈕」這種東西。 */
       button {
         width: 100%;
-        padding: 10px;
-        border: none;
-        border-radius: 8px;
-        font-size: 14px;
-        font-weight: 600;
-        color: #fff;
+        padding: 12px;
+        border: 2px solid var(--ink);
+        border-radius: var(--r-11);
+        font: 700 13px/1 var(--font-ui);
+        background: var(--ink);
+        color: var(--y);
         cursor: pointer;
         margin-bottom: 8px;
-        transition: all 0.15s;
+        transition: transform 0.12s, box-shadow 0.12s, background 0.15s, border-color 0.15s, color 0.15s;
       }
-      button:hover { filter: brightness(1.1); }
-      button:disabled { opacity: 0.5; cursor: default; filter: none; }
+      button:hover { filter: none; }
+      button:disabled { opacity: 0.45; cursor: default; filter: none; transform: none; }
       #stopBtn { background: var(--danger); }
       #copyBtn { background: #2563eb; }
       #copyBtn.copied { background: var(--success); }
@@ -154,18 +207,38 @@
       #exportBtn.done { background: var(--success); }
       #clearBtn { background: #4a4a5e; }
 
-      /* 兩大入口（漸層 + hover 上浮） */
-      .action-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 4px 0 8px; }
+      /* ── PM-415：三入口（設計稿畫面 18）──
+         錄製是主按鈕（黑底黃字 + 硬投影），回溯／截圖是次要按鈕（描邊）。
+         §7.1：硬投影是簽名，不要換成模糊陰影或漸層。 */
+      .action-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 2px 0 0; }
       .main-action {
-        display: flex; flex-direction: column; align-items: center; gap: 6px;
-        padding: 20px 12px; border: none; border-radius: 12px;
-        color: #fff; cursor: pointer; transition: all 0.2s ease; width: auto; margin: 0;
+        display: flex; flex-direction: column; align-items: center; gap: 7px;
+        width: auto; margin: 0; padding: 15px 8px;
+        border: 2px solid var(--ink); border-radius: var(--r-12);
+        background: transparent; color: var(--ink); cursor: pointer;
       }
-      .main-action:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3); filter: none; }
-      .main-action.record { background: linear-gradient(135deg, #7c3aed, #6d28d9); }
-      .main-action.rewind { background: linear-gradient(135deg, #f59e0b, #d97706); }
-      .main-action.screenshot { background: linear-gradient(135deg, #059669, #047857); }
-      .action-icon { font-size: 32px; }
+      .main-action:hover { background: rgba(20, 17, 11, 0.09); }
+      .main-action.record { background: var(--ink); color: var(--y); box-shadow: var(--sh-2); }
+      .main-action.record:hover { background: var(--ink); transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--brown-d); }
+      /* §6 幾何圖示取代 emoji：錄製=圓、回溯=兩個左向三角、截圖=圓角框+中心圓點 */
+      .action-icon { display: flex; align-items: center; justify-content: center; height: 22px; }
+      .ico-rec { width: 22px; height: 22px; border-radius: 50%; background: var(--y); }
+      .ico-rewind { display: flex; gap: 2px; }
+      .ico-rewind i {
+        display: block; width: 9px; height: 20px; background: var(--ink);
+        clip-path: polygon(100% 0, 0 50%, 100% 100%);
+      }
+      .ico-shot {
+        width: 24px; height: 19px; box-sizing: border-box;
+        border: 2.5px solid var(--ink); border-radius: 4px;
+        display: flex; align-items: center; justify-content: center;
+      }
+      .ico-shot i { display: block; width: 8px; height: 8px; border-radius: 50%; background: var(--ink); }
+      .action-label { font: 700 13.5px/1 var(--font-ui); white-space: nowrap; }
+      /* §9 320px 的代價：三入口說明降級為小字並手動斷兩行。
+         字重仍守住 §3.2 的 ≥600 下限，只有字級讓步 —— 這是設計稿在 320px 下的定案值。 */
+      .action-desc { font: 600 10px/1.35 var(--font-ui); color: var(--on-y-2); text-align: center; opacity: 1; }
+      .main-action.record .action-desc { color: var(--on-dark-2); }
 
       /* PM-409：第二層的標題與按鈕一律不斷行。
          🔴 只加寬度不夠 —— flex item 預設 `min-width: auto`，空間不足時會**先把文字折行**
@@ -204,18 +277,29 @@
       }
 
       /* PM-403／404：兩層架構 */
+      /* PM-415：偵察模式入口 —— 米白卡（§7.3 實線=已有內容）+ 六角 + badge + 箭頭 */
       .scout-enter {
-        width: 100%; margin-top: 10px; padding: 12px 14px; border-radius: 10px;
-        border: 1px solid var(--line); background: rgba(255,255,255,.05); color: var(--fg);
-        font-size: 14px; cursor: pointer; display: flex; align-items: center;
-        justify-content: space-between; transition: all .15s ease;
+        width: 100%; margin: 0; padding: 12px 14px;
+        border: 2px solid var(--ink); border-radius: var(--r-11);
+        background: var(--cream); color: var(--ink);
+        font: 700 13.5px/1 var(--font-ui); cursor: pointer;
+        display: flex; align-items: center; gap: 10px; text-align: left;
       }
-      .scout-enter:hover { background: rgba(0,191,255,.12); border-color: #00bfff; }
-      .scout-enter-right { display: flex; align-items: center; gap: 8px; opacity: .7; }
+      .scout-enter:hover { background: #fff; }
+      .scout-enter > span:first-child { flex: 0 0 auto; white-space: nowrap; }
+      .scout-enter-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
       .scout-badge {
-        padding: 1px 7px; border-radius: 999px; background: #00bfff; color: #04222e;
-        font-size: 11px; font-weight: 700;
+        padding: 2px 8px; border-radius: var(--r-pill);
+        background: var(--ink); color: var(--y);
+        font: 700 11px/1.4 var(--font-mono);
       }
+      /* §6 箭頭 → 多邊形 */
+      .ico-arrow {
+        width: 16px; height: 11px; flex-shrink: 0; background: var(--ink);
+        clip-path: polygon(0 38%, 62% 38%, 62% 0, 100% 50%, 62% 100%, 62% 62%, 0 62%);
+      }
+      /* §6 圖釘與所有項目符號 → 小六角 */
+      .ico-hex { width: 10px; height: 11px; flex-shrink: 0; background: var(--ink); clip-path: var(--hex); }
       /* 切頁動畫：第二層由右滑入。用 animation 而非 transition —— 元素是從
          display:none 變出來的，transition 不會有起始狀態可以過渡。 */
       #scoutView.slide-in { animation: scoutIn .18s ease; }
@@ -285,20 +369,31 @@
         background: rgba(0,191,255,.08); border: 1px solid rgba(0,191,255,.25);
         white-space: pre-wrap; word-break: break-word; max-height: 140px; overflow: auto;
       }
-      .action-label { font-size: 15px; font-weight: 700; }
-      .action-desc { font-size: 11px; opacity: 0.8; }
-
       /* PM-75b：!important 確保 .hidden 永遠勝過 .upgrade-hint/.manage-sub 等同特異度但後定義的 display:flex
          （否則 paid/cancelled 用戶加了 hidden 仍被 flex 蓋過、升級提示不會消失）。 */
       .hidden { display: none !important; }
 
       /* 鍵盤模式 toggle（PM-49） */
       .mode-toggle { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
-      /* PM-122：進階設定 accordion */
-      .settings-accordion { margin-top: 8px; border-top: 1px solid var(--line); }
-      .settings-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 4px 6px; cursor: pointer; color: #9aa3b2; font-size: 13px; user-select: none; }
-      .settings-header:hover { color: #e6edf3; }
-      .settings-chevron { font-size: 12px; transition: transform 0.2s; }
+      /* PM-122 進階設定 accordion；PM-415 改 CSS 三角（原本是箭頭字元） */
+      .settings-accordion { margin: 0; border-top: none; }
+      .settings-header {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 11px 2px 9px; border-top: 2px solid var(--ink);
+        cursor: pointer; color: var(--ink); font: 700 13px/1 var(--font-ui); user-select: none;
+      }
+      .settings-header > div { display: flex; align-items: center; gap: 8px; }
+      /* §6 設定 → 空心圓環（幾何原型，不用齒輪） */
+      .ico-ring {
+        width: 13px; height: 13px; box-sizing: border-box; flex-shrink: 0;
+        border: 2.5px solid var(--ink); border-radius: 50%;
+      }
+      .settings-chevron {
+        width: 0; height: 0; flex-shrink: 0;
+        border-top: 6px solid var(--ink);
+        border-left: 5px solid transparent; border-right: 5px solid transparent;
+        transition: transform 0.2s;
+      }
       .settings-chevron.open { transform: rotate(180deg); }
       .settings-body { padding: 4px 0; }
       /* accordion 內的 mode-toggle 不需再畫上分隔線（accordion 已有 border-top） */
@@ -410,20 +505,37 @@
       /* 使用者列（PM-61；PM-415 再改視覺） */
       .user-bar {
         display: flex; align-items: center; gap: 8px;
-        padding-bottom: 10px; margin-bottom: 6px; border-bottom: 1px solid var(--line);
+        padding-bottom: 10px; margin-bottom: 10px;
+        border-bottom: 1.5px dashed rgba(20, 17, 11, 0.35);
       }
-      .avatar { border-radius: 50%; flex-shrink: 0; }
-      #userName { font-size: 13px; color: var(--fg); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .btn-sm { width: auto; margin: 0; padding: 4px 10px; font-size: 12px; background: #4a4a5e; }
+      /* 沒有頭貼時 img 是空的，用咖啡色圓底補位（設計稿的 24px 圓） */
+      .avatar {
+        width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
+        background: var(--brown); object-fit: cover;
+      }
+      #userName {
+        flex: 1; min-width: 0; font: 600 13px/1 var(--font-ui); color: var(--ink);
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      .btn-sm {
+        width: auto; margin: 0; flex-shrink: 0; padding: 5px 11px;
+        border: 2px solid rgba(20, 17, 11, 0.4); border-radius: var(--r-8);
+        background: transparent; color: var(--on-y);
+        font: 700 12px/1 var(--font-ui); white-space: nowrap;
+      }
+      .btn-sm:hover { border-color: var(--ink); color: var(--ink); }
 
-      /* PM-63：用量上限升級提示 */
+      /* PM-63 用量上限升級提示；§2.3 用量／額度提醒歸類為系統訊息 → 咖啡底 */
       .upgrade-hint {
-        display: flex; align-items: center; justify-content: space-between; gap: 8px;
-        margin: 8px 0; padding: 10px 12px; border-radius: 8px;
-        background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.4);
-        color: #fcd34d; font-size: 12px;
+        display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+        margin: 0; padding: 11px 12px; border-radius: var(--r-11);
+        background: var(--brown); border: none; color: var(--y-pale);
+        font: 700 12px/1 var(--font-ui);
       }
-      .btn-upgrade { width: auto; margin: 0; padding: 5px 14px; font-size: 12px; background: #f59e0b; }
+      .btn-upgrade {
+        width: auto; margin: 0; padding: 6px 13px; border: none; border-radius: var(--r-8);
+        background: var(--y); color: var(--ink); font: 700 12px/1 var(--font-ui); flex-shrink: 0;
+      }
 
       /* PM-75c：付費 / 已取消 兩種狀態徽章（三態互斥：free→upgradeHint、paid→paidBadge、cancelled→cancelledBadge） */
       .paid-badge {
@@ -442,37 +554,58 @@
       /* PM-267：🎫 票券錢包（深色卡片，與付費徽章同一視覺語彙）*/
       .ticket-wallet { margin-bottom: 8px; }
       /* PM-276：安裝碼列 */
+      /* PM-276 安裝碼；PM-415 改米白資料卡（§7.3 實線=已有內容） */
       .install-code {
-        display: flex; align-items: center; gap: 6px; margin-bottom: 8px;
-        background: #16162a; border: 1px solid #2a2a3e; border-radius: 8px; padding: 6px 10px;
+        display: flex; align-items: center; gap: 8px; margin: 0;
+        background: var(--cream); border: 2px solid var(--ink); border-radius: var(--r-10);
+        padding: 8px 11px;
       }
-      .install-code-label { font-size: 11px; color: #8b8fa3; flex-shrink: 0; }
-      /* 等寬字：安裝碼會被口頭唸/手打，等寬比較好逐字對照 */
+      .install-code-label { font: 600 11px/1 var(--font-ui); color: var(--on-y-2); flex-shrink: 0; }
+      /* 等寬字：安裝碼會被口頭唸/手打，等寬比較好逐字對照（§3.3 機器產出） */
       .install-code-value {
-        flex: 1; min-width: 0; font-family: ui-monospace, monospace; font-size: 13px;
-        font-weight: 700; color: #a78bfa; letter-spacing: 0.5px;
+        flex: 1; min-width: 0; font: 700 13px/1 var(--font-mono);
+        color: var(--ink); letter-spacing: 0.06em;
       }
       .install-code-btn {
-        width: auto; margin: 0; flex-shrink: 0; padding: 3px 10px; font-size: 11px;
-        background: #2a2a3e; border-radius: 6px;
+        width: auto; margin: 0; flex-shrink: 0; padding: 4px 10px;
+        border: 2px solid rgba(20, 17, 11, 0.4); border-radius: var(--r-7);
+        background: transparent; color: var(--on-y);
+        font: 700 10.5px/1 var(--font-ui); white-space: nowrap;
       }
-      .install-code-btn.copied { background: #16a34a; }
+      .install-code-btn:hover { border-color: var(--ink); color: var(--ink); }
+      .install-code-btn.copied { background: var(--ink); border-color: var(--ink); color: var(--y); }
 
-      /* PM-273：票券錢包折疊標題列 */
+      /* PM-273 票券錢包折疊列；PM-415 改 CSS 三角（原本是兩個箭頭字元） */
       .ticket-toggle {
-        display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;
-        font-size: 12px; color: #a78bfa; padding: 4px 0 6px;
+        display: flex; align-items: center; gap: 7px; cursor: pointer; user-select: none;
+        font: 700 12px/1 var(--font-ui); color: var(--ink); padding: 0;
       }
-      .ticket-toggle:hover { color: #c4b5fd; }
-      .ticket-arrow { font-size: 10px; width: 10px; flex-shrink: 0; }
+      .ticket-arrow {
+        width: 0; height: 0; flex-shrink: 0;
+        border-left: 6px solid var(--ink);
+        border-top: 4.5px solid transparent; border-bottom: 4.5px solid transparent;
+        transition: transform 0.2s;
+      }
+      .ticket-arrow.open { transform: rotate(90deg); }
+      .ticket-label { flex-shrink: 0; white-space: nowrap; }
       /* 摘要可能較長（🟢 CODE 剩 N 天），讓它吃掉剩餘空間並在過長時省略，避免把 badge 擠掉 */
       .ticket-summary {
         flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-        font-size: 11px; color: #3fb950;
+        font: 600 11px/1 var(--font-ui); color: var(--on-y-2);
       }
       .ticket-badge {
-        flex-shrink: 0; background: #2a2a3e; border-radius: 999px;
-        padding: 1px 8px; font-size: 11px; color: #ccc;
+        flex-shrink: 0; background: rgba(20, 17, 11, 0.18); border-radius: var(--r-pill);
+        padding: 2px 9px; font: 700 11px/1.4 var(--font-mono); color: var(--on-y);
+      }
+      /* §6 票券 → 圓角方框 + 中央虛線 */
+      .ico-ticket {
+        position: relative; width: 16px; height: 11px; box-sizing: border-box; flex-shrink: 0;
+        border: 2px solid var(--ink); border-radius: 3px;
+      }
+      .ico-ticket::after {
+        content: ''; position: absolute; left: 50%; top: -2px; bottom: -2px;
+        width: 2px; margin-left: -1px;
+        background: repeating-linear-gradient(var(--ink) 0 2px, transparent 2px 4px);
       }
       .promo-input { display: flex; gap: 6px; }
       .promo-input input {
@@ -563,33 +696,67 @@
         width: auto;
         margin: 0;
       }
-      /* PM-111：日票升級雙按鈕 + 日票中倒數狀態 */
-      .upgrade-section { display: flex; gap: 8px; margin-top: 8px; }
-      .day-pass-btn { flex: 1; background: #f59e0b; color: #000; border: none; border-radius: 8px; padding: 8px 4px; font-size: 12px; font-weight: 600; cursor: pointer; }
-      .monthly-btn { flex: 1; background: #7c3aed; color: #fff; border: none; border-radius: 8px; padding: 8px 4px; font-size: 12px; font-weight: 600; cursor: pointer; }
+      /* PM-111 日票／月費雙鈕（咖啡卡內）：日票米白、月費黃 —— 黃色代表「這裡要你做決定」 */
+      .upgrade-section { display: flex; gap: 7px; margin: 0; }
+      .day-pass-btn {
+        flex: 1; margin: 0; padding: 9px 4px; border: none; border-radius: var(--r-9);
+        background: var(--cream); color: var(--ink);
+        font: 700 11.5px/1.3 var(--font-ui); cursor: pointer;
+      }
+      .day-pass-btn:hover { background: #fff; }
+      .monthly-btn {
+        flex: 1; margin: 0; padding: 9px 4px; border: none; border-radius: var(--r-9);
+        background: var(--y); color: var(--ink);
+        font: 700 11.5px/1.3 var(--font-ui); cursor: pointer;
+      }
+      .monthly-btn:hover { background: var(--y-deep); }
       .day-pass-status { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 8px 0 0; }
       .day-pass-badge { background: #f59e0b; color: #000; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 8px; }
       .countdown { color: #f59e0b; font-size: 12px; font-family: monospace; }
       .day-pass-hint { color: #9aa3b2; font-size: 11px; text-align: center; margin: 4px 0 0; }
-      /* PM-114：AI 慣用語輪盤 */
-      .prompt-carousel { margin-top: 12px; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 10px; }
+      /* PM-114 AI 慣用語輪盤；PM-415 改黑卡（§7.2 深底卡）。
+         深底上的次要文字只准用 --on-dark / --on-dark-2（§2.4）。 */
+      .prompt-carousel {
+        margin: 0; padding: 11px 12px; background: var(--ink);
+        border: none; border-radius: var(--r-11);
+      }
       /* PM-120/121：標題列（title + 索引）+ body 三行式（永遠展開，無釘選/收合） */
       .prompt-title-row { display: flex; align-items: center; gap: 8px; }
-      .prompt-title { flex: 1; min-width: 0; color: #e6edf3; font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .prompt-index { color: #7c3aed; font-size: 11px; flex-shrink: 0; }
-      .prompt-body { margin-top: 8px; }
-      .prompt-preview-row { display: flex; align-items: center; gap: 4px; }
-      .prompt-nav { background: #2a2a3e; color: #fff; border: 1px solid #444; border-radius: 6px; width: 28px; height: 28px; cursor: pointer; font-size: 12px; flex-shrink: 0; }
-      .prompt-nav:hover { background: #3a3a5e; }
+      .prompt-title { flex: 1; min-width: 0; color: var(--y); font: 700 12.5px/1 var(--font-ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .prompt-index { color: var(--on-dark-2); font: 700 11px/1 var(--font-mono); flex-shrink: 0; }
+      .prompt-body { margin-top: 9px; }
+      .prompt-preview-row { display: flex; align-items: center; gap: 5px; }
+      .prompt-nav {
+        width: 26px; height: 28px; margin: 0; flex-shrink: 0; padding: 0;
+        background: var(--ink-2); color: var(--y);
+        border: 1px solid var(--line-dark); border-radius: var(--r-7);
+        font: 700 11px/1 var(--font-ui); cursor: pointer;
+      }
+      .prompt-nav:hover { background: #2A2317; }
       /* PM-115：預覽 wrap（顏色點 + 文字），複製鈕移到右側 */
-      .prompt-preview-wrap { flex: 1; display: flex; align-items: center; gap: 6px; background: #0d1117; padding: 8px 10px; border-radius: 6px; border: 1px solid #21262d; overflow: hidden; }
-      .prompt-color-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-      .prompt-preview { flex: 1; color: #e6edf3; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .prompt-preview-wrap {
+        flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px;
+        background: var(--ink-3); padding: 8px 10px;
+        border-radius: var(--r-7); border: 1px solid var(--line-dark); overflow: hidden;
+      }
+      .prompt-color-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+      .prompt-preview { flex: 1; min-width: 0; color: var(--y-pale); font: 600 11.5px/1 var(--font-ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       /* PM-120：複製鈕移到 actions 行、加大帶文字（SVG + 「複製」） */
-      .prompt-copy-btn { display: flex; align-items: center; gap: 6px; background: #7c3aed; color: #fff; border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; }
-      .prompt-copy-btn:hover { background: #6d28d9; }
-      .prompt-actions { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
-      .prompt-edit-btn { background: #2a2a3e; color: #ccc; border: 1px solid #444; border-radius: 8px; padding: 8px 16px; font-size: 13px; cursor: pointer; }
+      .prompt-copy-btn {
+        display: flex; align-items: center; gap: 7px; width: auto; margin: 0;
+        background: var(--y); color: var(--ink); border: none; border-radius: var(--r-9);
+        padding: 8px 15px; font: 700 12.5px/1 var(--font-ui); cursor: pointer;
+      }
+      .prompt-copy-btn:hover { background: var(--y-deep); }
+      /* §6 複製 → 空心圓角方框 */
+      .ico-copy { width: 11px; height: 12px; box-sizing: border-box; flex-shrink: 0; border: 2px solid currentColor; border-radius: 2px; }
+      .prompt-actions { display: flex; align-items: center; gap: 7px; margin-top: 9px; }
+      .prompt-edit-btn {
+        width: auto; margin: 0; background: transparent; color: var(--on-dark-2);
+        border: 1px solid var(--line-dark-2); border-radius: var(--r-9);
+        padding: 8px 15px; font: 700 12.5px/1 var(--font-ui); cursor: pointer;
+      }
+      .prompt-edit-btn:hover { border-color: var(--y); color: var(--y); }
       /* PM-115：編輯模式顏色選擇列 */
       .prompt-color-picker { display: flex; gap: 8px; margin-bottom: 8px; }
       .color-option { width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: border-color 0.2s; }
@@ -600,7 +767,7 @@
       .prompt-editor-actions { display: flex; gap: 8px; margin-top: 6px; }
       .prompt-save-btn { background: #238636; color: #fff; border: none; border-radius: 6px; padding: 4px 12px; font-size: 12px; cursor: pointer; }
       .prompt-cancel-btn { background: transparent; color: #888; border: 1px solid #444; border-radius: 6px; padding: 4px 12px; font-size: 12px; cursor: pointer; }
-      .prompt-copied { color: #3fb950; font-size: 11px; flex-shrink: 0; }
+      .prompt-copied { color: var(--y); font: 700 11px/1 var(--font-ui); flex-shrink: 0; }
       /* PM-107：mic OFF 按錄製提示層 */
       .mic-prompt {
         position: fixed; inset: 0; background: rgba(0,0,0,0.6);
@@ -620,12 +787,17 @@
       .mic-prompt-btn.primary { background: #7c3aed; color: #fff; font-weight: 600; }
       .mic-prompt-btn.secondary { background: transparent; color: #888; border: 1px solid #444; }
       /* PM-126：新版通知亮燈 */
-      .update-badge { background: linear-gradient(135deg, #7c3aed, #3b82f6); color: #fff; font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 8px; text-align: center; cursor: pointer; margin-bottom: 8px; animation: update-glow 2s ease-in-out infinite; }
-      @keyframes update-glow { 0%, 100% { box-shadow: 0 0 8px rgba(124,58,237,0.3); } 50% { box-shadow: 0 0 16px rgba(124,58,237,0.6); } }
-      /* PM-127：popup 底部目前版號 */
-      .popup-version { text-align: center; color: #555; font-size: 10px; padding: 4px 0; margin-top: 8px; }
-      /* PM-170：剩餘次數少於等於 2 → 紅色警告 */
-      .action-desc.low { color: #ef4444; font-weight: 700; opacity: 1; }
+      /* PM-126 新版亮燈；§2.3 系統主動告知 → 咖啡底，不用漸層與模糊光暈 */
+      .update-badge {
+        background: var(--brown); color: var(--y-pale);
+        font: 700 12px/1 var(--font-ui); padding: 9px 12px; border-radius: var(--r-9);
+        text-align: center; cursor: pointer; margin-bottom: 10px;
+      }
+      .update-badge:hover { background: var(--brown-d); }
+      /* PM-127：popup 底部目前版號（§3.3 版號屬機器產出 → 等寬字） */
+      .popup-version { text-align: center; color: var(--on-y-2); font: 600 10px/1 var(--font-mono); padding: 4px 0; margin-top: 8px; }
+      /* PM-170：剩餘次數 ≤2 → 磚紅警告 */
+      .action-desc.low { color: var(--err); font-weight: 700; opacity: 1; }
       /* PM-170：用完升級引導 overlay */
       .upgrade-overlay { position: fixed; inset: 0; z-index: 1000; background: rgba(10,10,20,0.82); display: flex; align-items: center; justify-content: center; padding: 20px; }
       .upgrade-overlay.hidden { display: none; }
@@ -642,9 +814,21 @@
       /* PM-171：非台灣付費 coming soon 藍色提示框 */
       .intl-notice { background: rgba(59,130,246,0.1); border: 1px solid #3b82f6; border-radius: 10px; padding: 12px; text-align: center; margin-top: 10px; }
       .intl-notice.hidden { display: none; }
-      /* PM-184：我的報告入口按鈕 */
-      .my-reports-btn { display: block; width: 100%; background: transparent; color: #c4b5fd; border: 1px solid #7c3aed; border-radius: 8px; padding: 8px; font-size: 13px; cursor: pointer; margin: 8px 0; font-weight: 600; }
-      .my-reports-btn:hover { background: rgba(124,58,237,0.1); }
+      /* PM-184 我的報告；PM-415 改次要按鈕（描邊，hover 提到 100%） */
+      .my-reports-btn {
+        display: flex; align-items: center; gap: 10px; width: 100%; margin: 0;
+        padding: 11px 14px; border: 2px solid rgba(20, 17, 11, 0.45); border-radius: var(--r-11);
+        background: transparent; color: var(--ink);
+        font: 700 13.5px/1 var(--font-ui); cursor: pointer; text-align: left;
+      }
+      .my-reports-btn:hover { border-color: var(--ink); background: rgba(20, 17, 11, 0.06); }
+      /* §6 文字／清單 → 圓角框 + 兩條橫槓 */
+      .ico-list {
+        width: 13px; height: 15px; box-sizing: border-box; flex-shrink: 0;
+        border: 2px solid var(--ink); border-radius: 2px;
+        display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 0 2px;
+      }
+      .ico-list i { display: block; height: 1.5px; background: var(--ink); }
       /* PM-191：複製 MCP 設定按鈕 */
       .copy-mcp-btn { display: block; width: 100%; background: transparent; color: #c4b5fd; border: 1px solid #7c3aed; border-radius: 8px; padding: 8px; font-size: 13px; cursor: pointer; margin: 8px 0 4px; font-weight: 600; }
       .copy-mcp-btn:hover { background: rgba(124,58,237,0.1); }
@@ -687,10 +871,14 @@
         <button id="logoutBtn" class="btn-sm" data-i18n="logout">登出</button>
       </div>
       <div class="brand">
-        <span class="brand-icon">🐛</span>
+        <span class="brand-icon"></span>
         <span class="brand-name">BugEzy</span>
         <div class="mic-toggle" title="麥克風語音輸入（一次授權，所有網站通用）">
-          <span class="mic-icon" id="micIcon">🎙️</span>
+          <!-- §6.1 麥克風四層堆疊：收音孔膠囊頭 + U 形吊架 + 立柱 + 底座。
+               popup.ts 靠改整個 .mic-icon 的 opacity 表示開關，四層會一起淡出。 -->
+          <span class="mic-icon" id="micIcon">
+            <i class="m1"></i><i class="m2"></i><i class="m3"></i><i class="m4"></i>
+          </span>
           <label class="mic-switch">
             <input type="checkbox" id="micToggle" />
             <span class="mic-slider"></span>
@@ -704,25 +892,26 @@
         <button class="mic-mode-btn" data-mode="whisper" data-i18n="mode-whisper">精準轉錄</button>
       </div>
       <!-- PM-193：精準轉錄需選「永久允許」麥克風的小提示（跟 micMode 一起顯示） -->
-      <p class="mic-perm-hint" id="micPermHint" data-i18n="mic-perm-hint" style="display:none;">💡 精準轉錄需選「永久允許」此網站使用麥克風</p>
-      <!-- PM-106：錄製中設定鎖定提示 -->
-      <div id="settingsHint" data-i18n="settings-locked" style="display:none;font-size:11px;color:#f59e0b;text-align:center;margin:2px 0 0;">🔒 錄製中，設定已鎖定</div>
+      <p class="mic-perm-hint" id="micPermHint" data-i18n="mic-perm-hint" style="display:none;">精準轉錄需選「永久允許」此網站使用麥克風</p>
+      <!-- PM-106：錄製中設定鎖定提示（§2.3 咖啡底 = 系統在跟你說話） -->
+      <div id="settingsHint" class="sys-note" data-i18n="settings-locked" style="display:none;">錄製中，設定已鎖定</div>
 
     <!-- 狀態一：閒置（兩個獨立入口） -->
     <section id="idleView" class="hidden">
+      <!-- §6 幾何圖示取代 emoji：錄製=圓形、回溯=兩個左向三角、截圖=圓角框+中心圓點 -->
       <div class="action-grid">
         <button id="startBtn" class="main-action record">
-          <span class="action-icon">🎬</span>
+          <span class="action-icon"><span class="ico-rec"></span></span>
           <span class="action-label" data-i18n="mode-record">錄製</span>
           <span class="action-desc" data-i18n="mode-record-desc">DOM + 語音 + Console</span>
         </button>
         <button id="rewindBtn" class="main-action rewind">
-          <span class="action-icon">⏪</span>
+          <span class="action-icon"><span class="ico-rewind"><i></i><i></i></span></span>
           <span class="action-label" data-i18n="mode-rewind">回溯 30s</span>
           <span class="action-desc" data-i18n="mode-rewind-desc">抓剛才的 Bug</span>
         </button>
         <button id="screenshotBtn" class="main-action screenshot">
-          <span class="action-icon">📸</span>
+          <span class="action-icon"><span class="ico-shot"><i></i></span></span>
           <span class="action-label" data-i18n="mode-screenshot">截圖標注</span>
           <span class="action-desc" data-i18n="mode-screenshot-desc">快速擷取 + 畫重點</span>
         </button>
@@ -731,16 +920,20 @@
 
       <!-- PM-403：圖釘與進階功能搬到第二層（偵察模式）。第一層只留入口。 -->
       <button id="scoutEnterBtn" class="scout-enter">
-        <span>📌 <b data-i18n="scout-mode">偵察模式</b></span>
-        <span class="scout-enter-right"><span id="scoutPinBadge" class="scout-badge hidden"></span> &rarr;</span>
+        <span><span class="ico-hex"></span></span>
+        <span data-i18n="scout-mode">偵察模式</span>
+        <span class="scout-enter-right"><span id="scoutPinBadge" class="scout-badge hidden"></span><span class="ico-arrow"></span></span>
       </button>
       <!-- PM-184：我的報告列表入口（帶 session token 開網頁）-->
-      <button id="myReportsBtn" class="my-reports-btn" data-i18n="my-reports">📋 我的報告</button>
+      <button id="myReportsBtn" class="my-reports-btn">
+        <span class="ico-list"><i></i><i></i></span>
+        <span data-i18n="my-reports">我的報告</span>
+      </button>
       <div id="upgradeHint" class="upgrade-hint hidden">
         <span data-i18n="upgrade-unlock">升級解鎖無限次</span>
         <div class="upgrade-section">
-          <button id="dayPassBtn" class="day-pass-btn" data-i18n="day-pass-btn">⚡ 日票 NT$20（24hr）</button>
-          <button id="upgradeBtn" class="monthly-btn" data-i18n="monthly-btn">✨ 月費 NT$80/月</button>
+          <button id="dayPassBtn" class="day-pass-btn" data-i18n="day-pass-btn">日票 NT$20（24hr）</button>
+          <button id="upgradeBtn" class="monthly-btn" data-i18n="monthly-btn">月費 NT$80/月</button>
         </div>
       </div>
       <!-- PM-171：非台灣（語言≠繁中）→ 綠界收不了款，顯示 coming soon 藍色提示（取代付費按鈕） -->
@@ -766,7 +959,7 @@
       <!-- PM-276：安裝碼（綁帳號、永不變，推廣活動驗證身份用）。獨立於票券錢包之外，
            不受 PM-273 折疊影響，登入後隨時可見。 -->
       <div id="installCodeRow" class="install-code hidden">
-        <span class="install-code-label" data-i18n="install_code_label">📋 我的安裝碼</span>
+        <span class="install-code-label" data-i18n="install_code_label">我的安裝碼</span>
         <span id="installCodeValue" class="install-code-value"></span>
         <button id="installCodeCopy" class="install-code-btn" data-i18n="install_code_copy">複製</button>
       </div>
@@ -774,8 +967,10 @@
         <!-- PM-273：折疊標題列（點擊展開/收合票券內容；輸入代碼欄位刻意留在外面，隨時可見）
              收合時在同一行顯示「使用中票券」摘要 + 庫存數 badge，展開時交由下方完整區塊呈現。 -->
         <div id="ticketToggle" class="ticket-toggle hidden">
-          <span id="ticketArrow" class="ticket-arrow">▶</span>
-          <span data-i18n="promo_wallet_title">🎫 票券錢包</span>
+          <!-- PM-415：箭頭改 CSS 三角（.open 轉 90 度），popup.ts 從換字元改成切 class -->
+          <span id="ticketArrow" class="ticket-arrow"></span>
+          <span class="ico-ticket"></span>
+          <span class="ticket-label" data-i18n="promo_wallet_title">票券錢包</span>
           <span id="ticketSummary" class="ticket-summary hidden"></span>
           <span id="ticketBadge" class="ticket-badge hidden"></span>
         </div>
@@ -819,8 +1014,11 @@
       <!-- PM-122：進階設定 accordion（四個 toggle 折疊收納，預設收合，狀態存 storage） -->
       <div class="settings-accordion">
         <div class="settings-header" id="settings-header">
-          <span data-i18n="advanced-settings">⚙️ 進階設定</span>
-          <span class="settings-chevron" id="settings-chevron">▼</span>
+          <div>
+            <span class="ico-ring"></span>
+            <span data-i18n="advanced-settings">進階設定</span>
+          </div>
+          <span class="settings-chevron" id="settings-chevron"></span>
         </div>
         <div class="settings-body" id="settings-body" style="display:none;">
       <div class="mode-toggle">
@@ -877,14 +1075,11 @@
           </div>
           <div class="prompt-actions">
             <button id="prompt-copy" class="prompt-copy-btn" title="複製">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-              </svg>
+              <span class="ico-copy"></span>
               <span data-i18n="copy-btn">複製</span>
             </button>
-            <span id="prompt-copied" class="prompt-copied" style="display:none;">✅ 已複製</span>
-            <button id="prompt-edit" class="prompt-edit-btn" data-i18n="edit-btn">✏️ 編輯</button>
+            <span id="prompt-copied" class="prompt-copied" data-i18n="copied" style="display:none;">已複製</span>
+            <button id="prompt-edit" class="prompt-edit-btn" data-i18n="edit-btn">編輯</button>
           </div>
           <div id="prompt-editor" class="prompt-editor" style="display:none;">
             <div class="prompt-color-picker" id="prompt-color-picker">

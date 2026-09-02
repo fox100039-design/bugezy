@@ -40,7 +40,7 @@ const dict: Record<string, { zh: string; en: string; ja: string; ko: string; vi:
   'voice-mode': { zh: '語音模式', en: 'Voice Mode', ja: '音声モード', ko: '음성 모드', vi: 'Chế độ giọng nói' },
   'mode-realtime': { zh: '即時字幕', en: 'Live Caption', ja: 'リアルタイム字幕', ko: '실시간 자막', vi: 'Phụ đề trực tiếp' },
   'mode-whisper': { zh: '精準轉錄', en: 'Precise', ja: '高精度文字起こし', ko: '고정밀 변환', vi: 'Chuyển đổi chính xác' },
-  'settings-locked': { zh: '🔒 錄製中，設定已鎖定', en: '🔒 Recording, settings locked', ja: '🔒 録画中、設定はロックされています', ko: '🔒 녹화 중, 설정이 잠겼습니다', vi: '🔒 Đang ghi hình, cài đặt đã khóa' },
+  'settings-locked': { zh: '錄製中，設定已鎖定', en: 'Recording, settings locked', ja: '録画中、設定はロックされています', ko: '녹화 중, 설정이 잠겼습니다', vi: 'Đang ghi hình, cài đặt đã khóa' },
 
   // ── 三大模式卡片 ──
   'mode-record': { zh: '錄製', en: 'Record', ja: '録画', ko: '녹화', vi: 'Ghi hình' },
@@ -51,7 +51,7 @@ const dict: Record<string, { zh: string; en: string; ja: string; ko: string; vi:
   'mode-screenshot-desc': { zh: '快速擷取 + 畫重點', en: 'Capture + Annotate', ja: 'キャプチャ + 注釈', ko: '캡처 + 주석', vi: 'Chụp + Chú thích' },
 
   // ── 用量（動態）──
-  unlimited: { zh: '✨ 無限次', en: '✨ Unlimited', ja: '✨ 無制限', ko: '✨ 무제한', vi: '✨ Không giới hạn' },
+  unlimited: { zh: '無限次', en: 'Unlimited', ja: '無制限', ko: '무제한', vi: 'Không giới hạn' },
   remaining: { zh: '剩 {n} 次', en: '{n} left', ja: '残り {n} 回', ko: '{n}회 남음', vi: 'Còn {n} lần' },
   'used-up': { zh: '已用完（升級解鎖）', en: 'Used up (upgrade)', ja: '使い切りました（アップグレードで解除）', ko: '모두 사용함 (업그레이드로 해제)', vi: 'Đã dùng hết (nâng cấp để mở khóa)' },
 
@@ -75,10 +75,12 @@ const dict: Record<string, { zh: string; en: string; ja: string; ko: string; vi:
   'scout-unsupported': { zh: '這個分頁不支援掃描（chrome:// 或商店頁面）。', en: 'This tab cannot be scanned (chrome:// or Web Store page).', ja: 'このタブはスキャンできません（chrome:// またはストアページ）。', ko: '이 탭은 스캔할 수 없습니다(chrome:// 또는 스토어 페이지).', vi: 'Không thể quét tab này (chrome:// hoặc trang Web Store).' },
   'scout-scan-failed': { zh: '掃描失敗', en: 'Scan failed', ja: 'スキャン失敗', ko: '스캔 실패', vi: 'Quét thất bại' },
   'scout-zone': { zh: 'Zone：', en: 'Zones: ', ja: 'Zone：', ko: 'Zone: ', vi: 'Zone: ' },
-  'scout-zone-fmt': { zh: '{n} 區（🟢{ok} 🟡{warn} 🔴{err}）', en: '{n} zones (🟢{ok} 🟡{warn} 🔴{err})', ja: '{n} 領域（🟢{ok} 🟡{warn} 🔴{err}）', ko: '{n}개 영역(🟢{ok} 🟡{warn} 🔴{err})', vi: '{n} vùng (🟢{ok} 🟡{warn} 🔴{err})' },
+  // PM-415：原本用綠/黃/紅圓點區分三個數字。§7.7「不靠顏色傳達內容」，
+  //   圓點拿掉後三個數字會變成無法分辨的一串，所以補上文字標籤。
+  'scout-zone-fmt': { zh: '{n} 區（正常 {ok}／注意 {warn}／異常 {err}）', en: '{n} zones (OK {ok} / WARN {warn} / ERR {err})', ja: '{n} 領域（正常 {ok}／注意 {warn}／異常 {err}）', ko: '{n}개 영역(정상 {ok} / 주의 {warn} / 오류 {err})', vi: '{n} vùng (OK {ok} / Chú ý {warn} / Lỗi {err})' },
   'scout-zone-none': { zh: '這一頁沒有可辨識的語意區域', en: 'No recognisable semantic zones on this page', ja: 'このページには識別可能な意味領域がありません', ko: '이 페이지에는 인식 가능한 시맨틱 영역이 없습니다', vi: 'Không có vùng ngữ nghĩa nhận diện được trên trang này' },
   'scout-error': { zh: 'Error：', en: 'Errors: ', ja: 'Error：', ko: 'Error: ', vi: 'Error: ' },
-  'scout-error-fmt': { zh: '🔴 {critical} critical ／ 🟡 {minor} minor', en: '🔴 {critical} critical / 🟡 {minor} minor', ja: '🔴 {critical} critical ／ 🟡 {minor} minor', ko: '🔴 {critical} critical / 🟡 {minor} minor', vi: '🔴 {critical} critical / 🟡 {minor} minor' },
+  'scout-error-fmt': { zh: '{critical} critical ／ {minor} minor', en: '{critical} critical / {minor} minor', ja: '{critical} critical ／ {minor} minor', ko: '{critical} critical / {minor} minor', vi: '{critical} critical / {minor} minor' },
   'scout-error-none': { zh: '沒有錯誤', en: 'No errors', ja: 'エラーなし', ko: '오류 없음', vi: 'Không có lỗi' },
   'scout-score': { zh: 'Score：', en: 'Score: ', ja: 'Score：', ko: 'Score: ', vi: 'Score: ' },
   'scout-window-note': { zh: '錯誤只涵蓋最近約 30 秒；zone 為 0 時所有錯誤都會落在 Unassigned。', en: 'Errors cover only the last ~30s. With 0 zones, every error lands in Unassigned.', ja: 'エラーは直近約 30 秒のみ。zone が 0 の場合すべて Unassigned になります。', ko: '오류는 최근 약 30초만 포함합니다. zone이 0이면 모두 Unassigned로 분류됩니다.', vi: 'Lỗi chỉ tính ~30 giây gần nhất. Nếu có 0 zone, mọi lỗi rơi vào Unassigned.' },
@@ -96,29 +98,29 @@ const dict: Record<string, { zh: string; en: string; ja: string; ko: string; vi:
   'mem-l6': { zh: '資安合規', en: 'Security rules', ja: 'セキュリティ規約', ko: '보안 규칙', vi: 'Quy tắc bảo mật' },
   'mem-l7': { zh: '效能基準', en: 'Performance baselines', ja: '性能基準', ko: '성능 기준', vi: 'Chuẩn hiệu năng' },
   'mem-l8': { zh: '團隊協作', en: 'Team notes', ja: 'チーム連携', ko: '팀 협업', vi: 'Ghi chú nhóm' },
-  'patrol-title': { zh: '📋 巡檢結果（{n} 個圖釘）', en: '📋 Patrol result ({n} pins)', ja: '📋 巡回結果（{n} 個のピン）', ko: '📋 순찰 결과({n}개 핀)', vi: '📋 Kết quả tuần tra ({n} ghim)' },
+  'patrol-title': { zh: '巡檢結果（{n} 個圖釘）', en: 'Patrol result ({n} pins)', ja: '巡回結果（{n} 個のピン）', ko: '순찰 결과({n}개 핀)', vi: 'Kết quả tuần tra ({n} ghim)' },
   'patrol-footer': { zh: '問題：{bad} ｜ 正常：{ok}', en: 'Issues: {bad} | OK: {ok}', ja: '問題：{bad} ｜ 正常：{ok}', ko: '문제: {bad} | 정상: {ok}', vi: 'Vấn đề: {bad} | Bình thường: {ok}' },
   'patrol-changed': { zh: '狀態變化：{from} → {to}', en: 'Status changed: {from} → {to}', ja: '状態変化：{from} → {to}', ko: '상태 변화: {from} → {to}', vi: 'Trạng thái đổi: {from} → {to}' },
-  'patrol-running': { zh: '🔄 巡檢中…（每個圖釘都會做一次動態探測，可能需要幾秒）', en: '🔄 Patrolling… (each pin gets a live probe, this can take a few seconds)', ja: '🔄 巡回中…（各ピンで動的プローブを実行、数秒かかります）', ko: '🔄 순찰 중…(각 핀마다 동적 프로브를 실행하므로 몇 초 걸립니다)', vi: '🔄 Đang tuần tra… (mỗi ghim được thăm dò động, có thể mất vài giây)' },
+  'patrol-running': { zh: '巡檢中…（每個圖釘都會做一次動態探測，可能需要幾秒）', en: 'Patrolling… (each pin gets a live probe, this can take a few seconds)', ja: '巡回中…（各ピンで動的プローブを実行、数秒かかります）', ko: '순찰 중…(각 핀마다 동적 프로브를 실행하므로 몇 초 걸립니다)', vi: 'Đang tuần tra… (mỗi ghim được thăm dò động, có thể mất vài giây)' },
   'patrol-failed': { zh: '巡檢失敗（分頁可能不支援）', en: 'Patrol failed (tab may not be supported)', ja: '巡回失敗（このタブは非対応の可能性）', ko: '순찰 실패(지원되지 않는 탭일 수 있음)', vi: 'Tuần tra thất bại (tab có thể không được hỗ trợ)' },
   'patrol-no-pins': { zh: '這個分頁沒有圖釘。', en: 'No pins on this tab.', ja: 'このタブにピンはありません。', ko: '이 탭에는 핀이 없습니다.', vi: 'Tab này không có ghim.' },
-  'analyze-title': { zh: '🔍 分析結果', en: '🔍 Analysis', ja: '🔍 分析結果', ko: '🔍 분석 결과', vi: '🔍 Kết quả phân tích' },
+  'analyze-title': { zh: '分析結果', en: 'Analysis', ja: '分析結果', ko: '분석 결과', vi: 'Kết quả phân tích' },
   'analyze-failed': { zh: '分析失敗（分頁可能不支援）', en: 'Analysis failed (tab may not be supported)', ja: '分析失敗（このタブは非対応の可能性）', ko: '분석 실패(지원되지 않는 탭일 수 있음)', vi: 'Phân tích thất bại (tab có thể không được hỗ trợ)' },
   'analyze-probe': { zh: '探測：{type}', en: 'Probe: {type}', ja: 'プローブ：{type}', ko: '프로브: {type}', vi: 'Thăm dò: {type}' },
-  'analyze-not-restored': { zh: '⚠ 未能還原原值', en: '⚠ Original value not restored', ja: '⚠ 元の値に戻せませんでした', ko: '⚠ 원래 값을 복원하지 못했습니다', vi: '⚠ Chưa khôi phục giá trị gốc' },
+  'analyze-not-restored': { zh: '未能還原原值', en: 'Original value not restored', ja: '元の値に戻せませんでした', ko: '원래 값을 복원하지 못했습니다', vi: 'Chưa khôi phục giá trị gốc' },
   'analyze-visible': { zh: '可見：{v}　可互動：{i}', en: 'Visible: {v}  Interactive: {i}', ja: '可視：{v}　操作可：{i}', ko: '보임: {v}  상호작용: {i}', vi: 'Hiển thị: {v}  Tương tác: {i}' },
   'analyze-size': { zh: '尺寸：{w}×{h}', en: 'Size: {w}×{h}', ja: 'サイズ：{w}×{h}', ko: '크기: {w}×{h}', vi: 'Kích thước: {w}×{h}' },
   'pin-mode-on-hint': { zh: '已進入釘選模式：回到頁面點擊要標記的元素，按 ESC 或再按一次按鈕結束。', en: 'Pin mode on: go back to the page and click the element you want to flag. Press ESC or the button again to stop.', ja: 'ピンモード開始：ページに戻り、印を付けたい要素をクリックしてください。ESC かボタン再押下で終了します。', ko: '핀 모드 시작: 페이지로 돌아가 표시할 요소를 클릭하세요. ESC 또는 버튼을 다시 눌러 종료합니다.', vi: 'Đã bật chế độ ghim: quay lại trang và nhấp vào phần tử cần đánh dấu. Nhấn ESC hoặc nút lần nữa để dừng.' },
   'pin-unsupported': { zh: '這個分頁不支援釘選（chrome:// 或商店頁面），請切換到一般網頁。', en: 'Pinning is not supported on this tab (chrome:// or Web Store). Switch to a normal page.', ja: 'このタブではピンを使えません（chrome:// またはストアページ）。通常のページに切り替えてください。', ko: '이 탭에서는 핀을 사용할 수 없습니다(chrome:// 또는 스토어 페이지). 일반 페이지로 이동하세요.', vi: 'Không thể ghim trên tab này (chrome:// hoặc Web Store). Hãy chuyển sang trang thường.' },
   'pin-empty': { zh: '尚無圖釘，啟動釘選模式開始偵察', en: 'No pins yet — turn on Pin Mode to start scouting', ja: 'ピンはまだありません。ピンモードを開始してください', ko: '아직 핀이 없습니다. 핀 모드를 켜서 정찰을 시작하세요', vi: 'Chưa có ghim — bật Chế độ ghim để bắt đầu' },
-  'pin-count': { zh: '📌 圖釘（{n}）', en: '📌 Pins ({n})', ja: '📌 ピン（{n}）', ko: '📌 핀({n})', vi: '📌 Ghim ({n})' },
-  'pin-mode-btn-on': { zh: '📌 釘選中... 點擊結束', en: '📌 Pinning… click to stop', ja: '📌 ピン中… クリックで終了', ko: '📌 핀 중… 클릭하여 종료', vi: '📌 Đang ghim… nhấn để dừng' },
+  'pin-count': { zh: '圖釘（{n}）', en: 'Pins ({n})', ja: 'ピン（{n}）', ko: '핀({n})', vi: 'Ghim ({n})' },
+  'pin-mode-btn-on': { zh: '釘選中... 點擊結束', en: 'Pinning… click to stop', ja: 'ピン中… クリックで終了', ko: '핀 중… 클릭하여 종료', vi: 'Đang ghim… nhấn để dừng' },
   'pin-analyze': { zh: '分析', en: 'Analyze', ja: '分析', ko: '분석', vi: 'Phân tích' },
   'pin-remove': { zh: '移除', en: 'Remove', ja: '削除', ko: '제거', vi: 'Xoá' },
   'pin-clear-confirm': { zh: '確定要清除這個分頁的所有圖釘嗎？此操作無法復原。', en: 'Clear all pins on this tab? This cannot be undone.', ja: 'このタブのピンをすべて消しますか？元に戻せません。', ko: '이 탭의 모든 핀을 지울까요? 되돌릴 수 없습니다.', vi: 'Xoá tất cả ghim trên tab này? Không thể hoàn tác.' },
   // ── 日票 / 月費 ──
   'upgrade-unlock': { zh: '升級解鎖無限次', en: 'Upgrade for unlimited', ja: 'アップグレードで無制限', ko: '업그레이드하여 무제한', vi: 'Nâng cấp để không giới hạn' },
-  'my-reports': { zh: '📋 我的報告', en: '📋 My Reports', ja: '📋 マイレポート', ko: '📋 내 리포트', vi: '📋 Báo cáo của tôi' }, // PM-184
+  'my-reports': { zh: '我的報告', en: 'My Reports', ja: 'マイレポート', ko: '내 리포트', vi: 'Báo cáo của tôi' }, // PM-184
   // PM-185：截圖敏感偵測 + 馬賽克
   'sf-password': { zh: '密碼欄位', en: 'password fields', ja: 'パスワード欄', ko: '비밀번호 필드', vi: 'trường mật khẩu' },
   'sf-token': { zh: 'Token 欄位', en: 'token fields', ja: 'Token 欄', ko: 'Token 필드', vi: 'trường Token' },
@@ -150,18 +152,18 @@ const dict: Record<string, { zh: string; en: string; ja: string; ko: string; vi:
   // PM-186：自動遮罩
   'auto-masked': { zh: '🔒 已自動遮罩 {n} 個敏感欄位', en: '🔒 Auto-masked {n} sensitive field(s)', ja: '🔒 {n} 個の機密欄を自動でマスクしました', ko: '🔒 민감 필드 {n}개를 자동으로 마스킹했습니다', vi: '🔒 Đã tự động che {n} trường nhạy cảm' },
   'undo-mask': { zh: '撤銷遮罩', en: 'Undo mask', ja: 'マスクを取り消す', ko: '마스킹 취소', vi: 'Hoàn tác che' },
-  'day-pass-btn': { zh: '⚡ 日票 NT$20（24hr）', en: '⚡ Day Pass NT$20 (24hr)', ja: '⚡ デイパス NT$20（24時間）', ko: '⚡ 데이 패스 NT$20 (24시간)', vi: '⚡ Vé ngày NT$20 (24 giờ)' },
-  'monthly-btn': { zh: '✨ 月費 NT$80/月', en: '✨ Monthly NT$80/mo', ja: '✨ 月額 NT$80/月', ko: '✨ 월정액 NT$80/월', vi: '✨ Hàng tháng NT$80/tháng' },
+  'day-pass-btn': { zh: '日票 NT$20（24hr）', en: 'Day Pass NT$20 (24hr)', ja: 'デイパス NT$20（24時間）', ko: '데이 패스 NT$20 (24시간)', vi: 'Vé ngày NT$20 (24 giờ)' },
+  'monthly-btn': { zh: '月費 NT$80/月', en: 'Monthly NT$80/mo', ja: '月額 NT$80/月', ko: '월정액 NT$80/월', vi: 'Hàng tháng NT$80/tháng' },
   // PM-170：用完升級引導 overlay
   'usage-exhausted': { zh: '本月額度已用完', en: 'Monthly quota exhausted', ja: '今月の利用枠を使い切りました', ko: '이번 달 사용량을 모두 소진했습니다', vi: 'Đã hết hạn mức tháng này' },
   'usage-desc-record': { zh: '錄製 {used}/{max} 次已使用', en: 'Recording {used}/{max} used', ja: '録画 {used}/{max} 回 使用済み', ko: '녹화 {used}/{max}회 사용', vi: 'Ghi hình {used}/{max} lần đã dùng' },
   'usage-desc-rewind': { zh: '回溯 {used}/{max} 次已使用', en: 'Rewind {used}/{max} used', ja: '巻き戻し {used}/{max} 回 使用済み', ko: '되감기 {used}/{max}회 사용', vi: 'Tua lại {used}/{max} lần đã dùng' },
   'usage-desc-mcp': { zh: 'MCP AI 讀取 {used}/{max} 次已使用', en: 'MCP AI reads {used}/{max} used', ja: 'MCP AI 読み取り {used}/{max} 回 使用済み', ko: 'MCP AI 읽기 {used}/{max}회 사용', vi: 'MCP AI đọc {used}/{max} lần đã dùng' },
-  'usage-reset-hint': { zh: '💡 免費額度每月自動重置', en: '💡 Free quota resets monthly', ja: '💡 無料枠は毎月自動リセット', ko: '💡 무료 사용량은 매월 자동 초기화', vi: '💡 Hạn mức miễn phí tự động đặt lại mỗi tháng' },
-  'day-pass-btn-full': { zh: '⚡ 日票 NT$20（24hr 無限）', en: '⚡ Day Pass NT$20 (24hr unlimited)', ja: '⚡ デイパス NT$20（24時間 無制限）', ko: '⚡ 데이 패스 NT$20 (24시간 무제한)', vi: '⚡ Vé ngày NT$20 (24 giờ không giới hạn)' },
-  'monthly-btn-full': { zh: '✨ 月費 NT$80/月（最划算）', en: '✨ Monthly NT$80/mo (best value)', ja: '✨ 月額 NT$80/月（最もお得）', ko: '✨ 월정액 NT$80/월 (가장 저렴)', vi: '✨ Hàng tháng NT$80/tháng (đáng giá nhất)' },
+  'usage-reset-hint': { zh: '免費額度每月自動重置', en: 'Free quota resets monthly', ja: '無料枠は毎月自動リセット', ko: '무료 사용량은 매월 자동 초기화', vi: 'Hạn mức miễn phí tự động đặt lại mỗi tháng' },
+  'day-pass-btn-full': { zh: '日票 NT$20（24hr 無限）', en: 'Day Pass NT$20 (24hr unlimited)', ja: 'デイパス NT$20（24時間 無制限）', ko: '데이 패스 NT$20 (24시간 무제한)', vi: 'Vé ngày NT$20 (24 giờ không giới hạn)' },
+  'monthly-btn-full': { zh: '月費 NT$80/月（最划算）', en: 'Monthly NT$80/mo (best value)', ja: '月額 NT$80/月（最もお得）', ko: '월정액 NT$80/월 (가장 저렴)', vi: 'Hàng tháng NT$80/tháng (đáng giá nhất)' },
   // PM-171：非台灣付費 coming soon
-  'intl-coming-soon': { zh: '🌏 國際付款即將開放', en: '🌏 International Payments Coming Soon!', ja: '🌏 海外決済まもなく対応', ko: '🌏 해외 결제 곧 지원', vi: '🌏 Thanh toán quốc tế sắp có' },
+  'intl-coming-soon': { zh: '國際付款即將開放', en: 'International Payments Coming Soon!', ja: '海外決済まもなく対応', ko: '해외 결제 곧 지원', vi: 'Thanh toán quốc tế sắp có' },
   'intl-desc': {
     zh: '我們正在開通國際信用卡付款，敬請期待！',
     en: "We're working on enabling international credit card payments. Stay tuned!",
@@ -170,13 +172,13 @@ const dict: Record<string, { zh: string; en: string; ja: string; ko: string; vi:
     vi: 'Chúng tôi đang mở thanh toán thẻ tín dụng quốc tế. Hãy chờ nhé!',
   },
   'intl-free-hint': {
-    zh: '💡 免費版現在就能用 — 每月 10 次錄製 + 20 次 MCP AI 讀取',
-    en: '💡 Free plan available now — 10 recordings + 20 MCP AI reads per month',
-    ja: '💡 無料版は今すぐ利用可能 — 毎月 10 回の録画 + 20 回の MCP AI 読み取り',
-    ko: '💡 무료 버전은 지금 바로 사용 가능 — 매월 녹화 10회 + MCP AI 읽기 20회',
-    vi: '💡 Bản miễn phí dùng ngay — 10 lần ghi hình + 20 lần MCP AI đọc mỗi tháng',
+    zh: '免費版現在就能用 — 每月 10 次錄製 + 20 次 MCP AI 讀取',
+    en: 'Free plan available now — 10 recordings + 20 MCP AI reads per month',
+    ja: '無料版は今すぐ利用可能 — 毎月 10 回の録画 + 20 回の MCP AI 読み取り',
+    ko: '무료 버전은 지금 바로 사용 가능 — 매월 녹화 10회 + MCP AI 읽기 20회',
+    vi: 'Bản miễn phí dùng ngay — 10 lần ghi hình + 20 lần MCP AI đọc mỗi tháng',
   },
-  'day-pass-badge': { zh: '⚡ 日票', en: '⚡ Day Pass', ja: '⚡ デイパス', ko: '⚡ 데이 패스', vi: '⚡ Vé ngày' },
+  'day-pass-badge': { zh: '日票', en: 'Day Pass', ja: 'デイパス', ko: '데이 패스', vi: 'Vé ngày' },
   'day-pass-remaining': { zh: '剩餘 {h}h {m}m {s}s', en: '{h}h {m}m {s}s left', ja: '残り {h}時間 {m}分 {s}秒', ko: '{h}시간 {m}분 {s}초 남음', vi: 'Còn {h} giờ {m} phút {s} giây' },
   'day-pass-expire-hint': {
     zh: '日票到期後可升級月費',
@@ -185,40 +187,40 @@ const dict: Record<string, { zh: string; en: string; ja: string; ko: string; vi:
     ko: '데이 패스 만료 후 월정액으로 업그레이드할 수 있습니다',
     vi: 'Sau khi vé ngày hết hạn có thể nâng cấp hàng tháng',
   },
-  'paid-badge': { zh: '✨ 付費版會員', en: '✨ Premium Member', ja: '✨ 有料会員', ko: '✨ 유료 회원', vi: '✨ Thành viên trả phí' },
+  'paid-badge': { zh: '付費版會員', en: 'Premium Member', ja: '有料会員', ko: '유료 회원', vi: 'Thành viên trả phí' },
   // PM-267：🎫 票券錢包（活動代碼兌換 / 啟用 / 到期提醒）
   // PM-273：票券錢包折疊標題列
-  promo_wallet_title: { zh: '🎫 票券錢包', en: '🎫 Ticket wallet', ja: '🎫 チケットウォレット', ko: '🎫 티켓 지갑', vi: '🎫 Ví vé' },
+  promo_wallet_title: { zh: '票券錢包', en: 'Ticket wallet', ja: 'チケットウォレット', ko: '티켓 지갑', vi: 'Ví vé' },
   promo_stock: { zh: '庫存 {n}', en: '{n} saved', ja: '在庫 {n}', ko: '보관 {n}', vi: 'Lưu {n}' },
   // PM-276：安裝碼
-  install_code_label: { zh: '📋 我的安裝碼', en: '📋 My Install Code', ja: '📋 インストールコード', ko: '📋 설치 코드', vi: '📋 Mã cài đặt' },
+  install_code_label: { zh: '我的安裝碼', en: 'My Install Code', ja: 'インストールコード', ko: '설치 코드', vi: 'Mã cài đặt' },
   install_code_copy: { zh: '複製', en: 'Copy', ja: 'コピー', ko: '복사', vi: 'Sao chép' },
-  install_code_copied: { zh: '✅ 已複製', en: '✅ Copied', ja: '✅ コピー済み', ko: '✅ 복사됨', vi: '✅ Đã sao chép' },
+  install_code_copied: { zh: '已複製', en: 'Copied', ja: 'コピー済み', ko: '복사됨', vi: 'Đã sao chép' },
   promo_placeholder: { zh: '輸入活動代碼', en: 'Enter promo code', ja: 'プロモコードを入力', ko: '프로모션 코드 입력', vi: 'Nhập mã khuyến mãi' },
   promo_redeem: { zh: '兌換', en: 'Redeem', ja: '引き換え', ko: '교환', vi: 'Đổi' },
-  promo_success: { zh: '🎁 兌換成功！', en: '🎁 Redeemed!', ja: '🎁 引き換え完了！', ko: '🎁 교환 완료!', vi: '🎁 Đổi thành công!' },
-  promo_activate_now: { zh: '🚀 立即啟用', en: '🚀 Activate now', ja: '🚀 今すぐ有効化', ko: '🚀 지금 활성화', vi: '🚀 Kích hoạt ngay' },
-  promo_save: { zh: '💾 儲存備用', en: '💾 Save for later', ja: '💾 保存しておく', ko: '💾 나중에 사용', vi: '💾 Lưu dùng sau' },
-  promo_saved_done: { zh: '💾 已存入票券錢包，隨時可啟用', en: '💾 Saved to your wallet — activate anytime', ja: '💾 チケットに保存しました。いつでも有効化できます', ko: '💾 지갑에 저장됨 — 언제든 활성화 가능', vi: '💾 Đã lưu vào ví — kích hoạt bất cứ lúc nào' },
-  promo_active: { zh: '🟢 免費體驗中', en: '🟢 Free trial active', ja: '🟢 無料体験中', ko: '🟢 무료 체험 중', vi: '🟢 Đang dùng thử miễn phí' },
+  promo_success: { zh: '兌換成功！', en: 'Redeemed!', ja: '引き換え完了！', ko: '교환 완료!', vi: 'Đổi thành công!' },
+  promo_activate_now: { zh: '立即啟用', en: 'Activate now', ja: '今すぐ有効化', ko: '지금 활성화', vi: 'Kích hoạt ngay' },
+  promo_save: { zh: '儲存備用', en: 'Save for later', ja: '保存しておく', ko: '나중에 사용', vi: 'Lưu dùng sau' },
+  promo_saved_done: { zh: '已存入票券錢包，隨時可啟用', en: 'Saved to your wallet — activate anytime', ja: 'チケットに保存しました。いつでも有効化できます', ko: '지갑에 저장됨 — 언제든 활성화 가능', vi: 'Đã lưu vào ví — kích hoạt bất cứ lúc nào' },
+  promo_active: { zh: '免費體驗中', en: 'Free trial active', ja: '無料体験中', ko: '무료 체험 중', vi: 'Đang dùng thử miễn phí' },
   promo_expires: { zh: '到期日', en: 'Expires', ja: '有効期限', ko: '만료일', vi: 'Hết hạn' },
   promo_days_left: { zh: '剩 {n} 天', en: '{n} days left', ja: '残り {n} 日', ko: '{n}일 남음', vi: 'Còn {n} ngày' },
-  promo_expiring_soon: { zh: '⚠ 免費體驗將於 {n} 天後結束', en: '⚠ Free trial ends in {n} day(s)', ja: '⚠ 無料体験はあと {n} 日で終了します', ko: '⚠ 무료 체험이 {n}일 후 종료됩니다', vi: '⚠ Bản dùng thử kết thúc sau {n} ngày' },
-  promo_saved_tickets: { zh: '💾 庫存票券', en: '💾 Saved tickets', ja: '💾 保存済みチケット', ko: '💾 보관 중인 티켓', vi: '💾 Vé đã lưu' },
+  promo_expiring_soon: { zh: '免費體驗將於 {n} 天後結束', en: 'Free trial ends in {n} day(s)', ja: '無料体験はあと {n} 日で終了します', ko: '무료 체험이 {n}일 후 종료됩니다', vi: 'Bản dùng thử kết thúc sau {n} ngày' },
+  promo_saved_tickets: { zh: '庫存票券', en: 'Saved tickets', ja: '保存済みチケット', ko: '보관 중인 티켓', vi: 'Vé đã lưu' },
   promo_activate: { zh: '啟用', en: 'Activate', ja: '有効化', ko: '활성화', vi: 'Kích hoạt' },
   promo_months: { zh: '{n} 個月', en: '{n} month(s)', ja: '{n} か月', ko: '{n}개월', vi: '{n} tháng' },
   promo_days: { zh: '{n} 天', en: '{n} days', ja: '{n} 日', ko: '{n}일', vi: '{n} ngày' },
   // PM-278：到期提醒第二行。舊的 promo_monthly_after/promo_use_saved/promo_saved_count 已移除——
   //   前兩者寫「以月費 NT$80 計算」「避免扣月費」，會讓人以為到期自動扣款，但實際上只是回到 free。
-  promo_expiring_saved: { zh: '💾 你有 {n} 張庫存票券可啟用，延長免費使用', en: '💾 You have {n} saved ticket(s) to extend your free access', ja: '💾 保存済みチケットが {n} 枚あります。有効化すると無料期間を延長できます', ko: '💾 보관 중인 티켓 {n}장을 활성화하면 무료 기간을 연장할 수 있습니다', vi: '💾 Bạn có {n} vé đã lưu để gia hạn thời gian dùng miễn phí' },
+  promo_expiring_saved: { zh: '你有 {n} 張庫存票券可啟用，延長免費使用', en: 'You have {n} saved ticket(s) to extend your free access', ja: '保存済みチケットが {n} 枚あります。有効化すると無料期間を延長できます', ko: '보관 중인 티켓 {n}장을 활성화하면 무료 기간을 연장할 수 있습니다', vi: 'Bạn có {n} vé đã lưu để gia hạn thời gian dùng miễn phí' },
   promo_expiring_upgrade: { zh: '如需保持完整功能，可升級為訂閱會員', en: 'Upgrade to a subscription to keep full features', ja: 'すべての機能を使い続けるにはサブスクへのアップグレードをご検討ください', ko: '모든 기능을 계속 사용하려면 구독으로 업그레이드하세요', vi: 'Nâng cấp lên gói đăng ký để giữ đầy đủ tính năng' },
   // PM-274：啟用二次確認（不可逆）
-  promo_confirm_title: { zh: '⚠ 確認啟用？', en: '⚠ Confirm activation?', ja: '⚠ 有効化しますか？', ko: '⚠ 활성화할까요?', vi: '⚠ Xác nhận kích hoạt?' },
+  promo_confirm_title: { zh: '確認啟用？', en: 'Confirm activation?', ja: '有効化しますか？', ko: '활성화할까요?', vi: 'Xác nhận kích hoạt?' },
   promo_confirm_desc: { zh: '啟用後立即開始倒數，無法取消', en: 'The countdown starts immediately and cannot be undone', ja: '有効化すると即座にカウントダウンが始まり、取り消せません', ko: '활성화하면 즉시 카운트다운이 시작되며 취소할 수 없습니다', vi: 'Bộ đếm bắt đầu ngay lập tức và không thể hoàn tác' },
-  promo_confirm_btn: { zh: '✅ 確認啟用', en: '✅ Confirm', ja: '✅ 有効化する', ko: '✅ 활성화', vi: '✅ Xác nhận' },
+  promo_confirm_btn: { zh: '確認啟用', en: 'Confirm', ja: '有効化する', ko: '활성화', vi: 'Xác nhận' },
   promo_cancel_btn: { zh: '取消', en: 'Cancel', ja: 'キャンセル', ko: '취소', vi: 'Hủy' },
   // PM-275：ECPay 訂閱中不給啟用（啟用只會白燒免費天數）
-  promo_already_member: { zh: '✨ 已是會員', en: '✨ Member', ja: '✨ 会員です', ko: '✨ 회원', vi: '✨ Đã là thành viên' },
+  promo_already_member: { zh: '已是會員', en: 'Member', ja: '会員です', ko: '회원', vi: 'Đã là thành viên' },
   promo_backup_note: { zh: '備用額度', en: 'Backup credits', ja: '予備クレジット', ko: '예비 크레딧', vi: 'Tín dụng dự phòng' },
   promo_need_login: { zh: '請先登入再兌換代碼', en: 'Please sign in to redeem a code', ja: 'コードを引き換えるにはログインしてください', ko: '코드를 교환하려면 로그인하세요', vi: 'Vui lòng đăng nhập để đổi mã' },
   promo_failed: { zh: '兌換失敗，請稍後再試', en: 'Redeem failed, please try again', ja: '引き換えに失敗しました。後でお試しください', ko: '교환 실패, 잠시 후 다시 시도하세요', vi: 'Đổi mã thất bại, vui lòng thử lại' },
@@ -227,36 +229,39 @@ const dict: Record<string, { zh: string; en: string; ja: string; ko: string; vi:
   resub: { zh: '重新訂閱', en: 'Resubscribe', ja: '再購読', ko: '재구독', vi: 'Đăng ký lại' },
 
   // ── 進階設定 ──
-  'lang-label': { zh: '🌐 語音語言', en: '🌐 Voice Language', ja: '🌐 音声言語', ko: '🌐 음성 언어', vi: '🌐 Ngôn ngữ giọng nói' },
-  'advanced-settings': { zh: '⚙️ 進階設定', en: '⚙️ Advanced Settings', ja: '⚙️ 詳細設定', ko: '⚙️ 고급 설정', vi: '⚙️ Cài đặt nâng cao' },
-  'monitor-toggle': { zh: '🔍 即時監控（AI 可查 error）', en: '🔍 Live Monitor (AI reads errors)', ja: '🔍 リアルタイム監視（AI が error を確認可能）', ko: '🔍 실시간 모니터링 (AI가 error 확인 가능)', vi: '🔍 Giám sát trực tiếp (AI đọc được error)' },
-  'keyboard-toggle': { zh: '🔇 鍵盤模式（關閉語音）', en: '🔇 Keyboard Mode (no voice)', ja: '🔇 キーボードモード（音声オフ）', ko: '🔇 키보드 모드 (음성 끄기)', vi: '🔇 Chế độ bàn phím (tắt giọng nói)' },
-  'hq-toggle': { zh: '📸 高畫質 AI 分析（高 Token）', en: '📸 HQ AI Analysis (high Token)', ja: '📸 高画質 AI 分析（高 Token）', ko: '📸 고화질 AI 분석 (높은 Token)', vi: '📸 Phân tích AI chất lượng cao (Token cao)' },
-  'effect-toggle': { zh: '✨ 工具列特效', en: '✨ Toolbar Effects', ja: '✨ ツールバー エフェクト', ko: '✨ 툴바 효과', vi: '✨ Hiệu ứng thanh công cụ' },
+  'lang-label': { zh: '語音語言', en: 'Voice Language', ja: '音声言語', ko: '음성 언어', vi: 'Ngôn ngữ giọng nói' },
+  'advanced-settings': { zh: '進階設定', en: 'Advanced Settings', ja: '詳細設定', ko: '고급 설정', vi: 'Cài đặt nâng cao' },
+  'monitor-toggle': { zh: '即時監控（AI 可查 error）', en: 'Live Monitor (AI reads errors)', ja: 'リアルタイム監視（AI が error を確認可能）', ko: '실시간 모니터링 (AI가 error 확인 가능)', vi: 'Giám sát trực tiếp (AI đọc được error)' },
+  'keyboard-toggle': { zh: '鍵盤模式（關閉語音）', en: 'Keyboard Mode (no voice)', ja: 'キーボードモード（音声オフ）', ko: '키보드 모드 (음성 끄기)', vi: 'Chế độ bàn phím (tắt giọng nói)' },
+  'hq-toggle': { zh: '高畫質 AI 分析（高 Token）', en: 'HQ AI Analysis (high Token)', ja: '高画質 AI 分析（高 Token）', ko: '고화질 AI 분석 (높은 Token)', vi: 'Phân tích AI chất lượng cao (Token cao)' },
+  'effect-toggle': { zh: '工具列特效', en: 'Toolbar Effects', ja: 'ツールバー エフェクト', ko: '툴바 효과', vi: 'Hiệu ứng thanh công cụ' },
 
   // ── AI 輪盤 ──
   'carousel-title': { zh: '一鍵複製指令貼給 AI', en: 'Copy prompt to AI', ja: 'AI へのコマンドをコピー', ko: 'AI에 명령어 복사', vi: 'Sao chép lệnh cho AI' },
   'copy-btn': { zh: '複製', en: 'Copy', ja: 'コピー', ko: '복사', vi: 'Sao chép' },
-  'edit-btn': { zh: '✏️ 編輯', en: '✏️ Edit', ja: '✏️ 編集', ko: '✏️ 편집', vi: '✏️ Chỉnh sửa' },
-  'save-btn': { zh: '💾 儲存', en: '💾 Save', ja: '💾 保存', ko: '💾 저장', vi: '💾 Lưu' },
+  // PM-415：輪盤的「已複製」原本是硬寫在 popup.html 的中文 + 綠勾 emoji，
+  //   換 emoji 時順手補進字典，英文模式才不會只有這一顆還是中文。
+  'copied': { zh: '已複製', en: 'Copied', ja: 'コピーしました', ko: '복사됨', vi: 'Đã sao chép' },
+  'edit-btn': { zh: '編輯', en: 'Edit', ja: '編集', ko: '편집', vi: 'Chỉnh sửa' },
+  'save-btn': { zh: '儲存', en: 'Save', ja: '保存', ko: '저장', vi: 'Lưu' },
   'cancel-btn': { zh: '取消', en: 'Cancel', ja: 'キャンセル', ko: '취소', vi: 'Hủy' },
 
   // ── 錄製中 / 完成 ──
-  'stop-recording': { zh: '⏹ 停止錄製', en: '⏹ Stop Recording', ja: '⏹ 録画停止', ko: '⏹ 녹화 중지', vi: '⏹ Dừng ghi hình' },
-  'done-title': { zh: '✅ 錄製完成！', en: '✅ Recording Done!', ja: '✅ 録画完了！', ko: '✅ 녹화 완료!', vi: '✅ Ghi hình xong!' },
+  'stop-recording': { zh: '停止錄製', en: 'Stop Recording', ja: '録画停止', ko: '녹화 중지', vi: 'Dừng ghi hình' },
+  'done-title': { zh: '錄製完成！', en: 'Recording Done!', ja: '録画完了！', ko: '녹화 완료!', vi: 'Ghi hình xong!' },
   'sum-dom': { zh: 'DOM 事件', en: 'DOM Events', ja: 'DOM イベント', ko: 'DOM 이벤트', vi: 'Sự kiện DOM' },
   'sum-console': { zh: 'Console', en: 'Console', ja: 'Console', ko: 'Console', vi: 'Console' },
   'sum-network': { zh: 'Network 錯誤', en: 'Network Errors', ja: 'Network エラー', ko: 'Network 오류', vi: 'Lỗi Network' },
   'sum-voice': { zh: '語音片段', en: 'Voice Clips', ja: '音声クリップ', ko: '음성 클립', vi: 'Đoạn giọng nói' },
   'sum-time': { zh: '時間', en: 'Duration', ja: '時間', ko: '시간', vi: 'Thời gian' },
   'duration-sec': { zh: '{n} 秒', en: '{n}s', ja: '{n} 秒', ko: '{n}초', vi: '{n} giây' },
-  'copy-json': { zh: '📋 複製 JSON', en: '📋 Copy JSON', ja: '📋 JSON をコピー', ko: '📋 JSON 복사', vi: '📋 Sao chép JSON' },
-  'export-json': { zh: '💾 匯出 JSON（給 AI 讀）', en: '💾 Export JSON (for AI)', ja: '💾 JSON をエクスポート（AI 用）', ko: '💾 JSON 내보내기 (AI용)', vi: '💾 Xuất JSON (cho AI đọc)' },
-  'clear-restart': { zh: '🗑️ 清除，重新錄製', en: '🗑️ Clear & Restart', ja: '🗑️ クリアして録り直し', ko: '🗑️ 지우고 다시 녹화', vi: '🗑️ Xóa, ghi lại' },
-  'copy-link': { zh: '📋 複製連結', en: '📋 Copy Link', ja: '📋 リンクをコピー', ko: '📋 링크 복사', vi: '📋 Sao chép liên kết' },
+  'copy-json': { zh: '複製 JSON', en: 'Copy JSON', ja: 'JSON をコピー', ko: 'JSON 복사', vi: 'Sao chép JSON' },
+  'export-json': { zh: '匯出 JSON（給 AI 讀）', en: 'Export JSON (for AI)', ja: 'JSON をエクスポート（AI 用）', ko: 'JSON 내보내기 (AI용)', vi: 'Xuất JSON (cho AI đọc)' },
+  'clear-restart': { zh: '清除，重新錄製', en: 'Clear & Restart', ja: 'クリアして録り直し', ko: '지우고 다시 녹화', vi: 'Xóa, ghi lại' },
+  'copy-link': { zh: '複製連結', en: 'Copy Link', ja: 'リンクをコピー', ko: '링크 복사', vi: 'Sao chép liên kết' },
   // PM-189：JSON 複製/匯出改付費功能 + 敏感資料免責警語
   'json-paid-only': { zh: '此為會員進階功能，請升級後使用', en: 'This is a member feature. Please upgrade to use.', ja: 'これは会員向け機能です。アップグレードしてご利用ください。', ko: '회원 전용 기능입니다. 업그레이드 후 사용하세요.', vi: 'Đây là tính năng thành viên. Vui lòng nâng cấp để dùng.' },
-  'json-warning-title': { zh: '⚠️ JSON 資料包含完整除錯紀錄', en: '⚠️ JSON data contains full debug records', ja: '⚠️ JSON データには完全なデバッグ記録が含まれます', ko: '⚠️ JSON 데이터에는 전체 디버그 기록이 포함됩니다', vi: '⚠️ Dữ liệu JSON chứa toàn bộ bản ghi gỡ lỗi' },
+  'json-warning-title': { zh: 'JSON 資料包含完整除錯紀錄', en: 'JSON data contains full debug records', ja: 'JSON データには完全なデバッグ記録が含まれます', ko: 'JSON 데이터에는 전체 디버그 기록이 포함됩니다', vi: 'Dữ liệu JSON chứa toàn bộ bản ghi gỡ lỗi' },
   'json-warning-body': {
     zh: '此資料可能包含敏感資訊（API 金鑰、Token、錯誤訊息等），請勿將 JSON 資料分享給不信任的對象。因資料外洩造成的損失，BugEzy 不承擔責任。',
     en: 'This data may contain sensitive information (API keys, tokens, error messages, etc.). Do not share JSON data with untrusted parties. BugEzy is not responsible for any loss caused by data leakage.',
@@ -266,11 +271,11 @@ const dict: Record<string, { zh: string; en: string; ja: string; ko: string; vi:
   },
   'json-confirm': { zh: '我了解，繼續', en: 'I understand, continue', ja: '理解しました、続行', ko: '이해했습니다, 계속', vi: 'Tôi hiểu, tiếp tục' },
   'json-cancel': { zh: '取消', en: 'Cancel', ja: 'キャンセル', ko: '취소', vi: 'Hủy' },
-  'json-copy-locked': { zh: '🔒 複製 JSON（會員）', en: '🔒 Copy JSON (member)', ja: '🔒 JSON をコピー（会員）', ko: '🔒 JSON 복사 (회원)', vi: '🔒 Sao chép JSON (thành viên)' },
-  'json-export-locked': { zh: '🔒 匯出 JSON（會員）', en: '🔒 Export JSON (member)', ja: '🔒 JSON をエクスポート（会員）', ko: '🔒 JSON 내보내기 (회원)', vi: '🔒 Xuất JSON (thành viên)' },
+  'json-copy-locked': { zh: '複製 JSON（會員）', en: 'Copy JSON (member)', ja: 'JSON をコピー（会員）', ko: 'JSON 복사 (회원)', vi: 'Sao chép JSON (thành viên)' },
+  'json-export-locked': { zh: '匯出 JSON（會員）', en: 'Export JSON (member)', ja: 'JSON をエクスポート（会員）', ko: 'JSON 내보내기 (회원)', vi: 'Xuất JSON (thành viên)' },
   // PM-191：一鍵複製 MCP 設定
-  'copy-mcp': { zh: '📋 複製 MCP 設定', en: '📋 Copy MCP Config', ja: '📋 MCP 設定をコピー', ko: '📋 MCP 설정 복사', vi: '📋 Sao chép cấu hình MCP' },
-  'copy-mcp-done': { zh: '✅ 已複製！貼到 Claude/Cursor 設定即可', en: '✅ Copied! Paste into your Claude/Cursor settings', ja: '✅ コピーしました！Claude/Cursor の設定に貼り付けてください', ko: '✅ 복사되었습니다! Claude/Cursor 설정에 붙여넣으세요', vi: '✅ Đã sao chép! Dán vào cài đặt Claude/Cursor của bạn' },
+  'copy-mcp': { zh: '複製 MCP 設定', en: 'Copy MCP Config', ja: 'MCP 設定をコピー', ko: 'MCP 설정 복사', vi: 'Sao chép cấu hình MCP' },
+  'copy-mcp-done': { zh: '已複製！貼到 Claude/Cursor 設定即可', en: 'Copied! Paste into your Claude/Cursor settings', ja: 'コピーしました！Claude/Cursor の設定に貼り付けてください', ko: '복사되었습니다! Claude/Cursor 설정에 붙여넣으세요', vi: 'Đã sao chép! Dán vào cài đặt Claude/Cursor của bạn' },
   'copy-mcp-login': { zh: '請先登入 BugEzy 再複製 MCP 設定', en: 'Please sign in to BugEzy before copying the MCP config', ja: 'MCP 設定をコピーする前に BugEzy にログインしてください', ko: 'MCP 설정을 복사하기 전에 BugEzy에 로그인하세요', vi: 'Vui lòng đăng nhập BugEzy trước khi sao chép cấu hình MCP' },
   'mcp-config-hint': { zh: '當 AI 無法讀取你的報告時，按此複製，貼給你的 AI 重新設定', en: 'If AI cannot read your reports, copy this and paste to your AI to reconfigure', ja: 'AI がレポートを読み取れない場合、これをコピーして AI に貼り付け、再設定してください', ko: 'AI가 리포트를 읽지 못할 때 이것을 복사하여 AI에 붙여넣고 다시 설정하세요', vi: 'Khi AI không đọc được báo cáo của bạn, sao chép cái này và dán cho AI để cấu hình lại' },
   // PM-193：精準轉錄麥克風授權引導
@@ -282,11 +287,11 @@ const dict: Record<string, { zh: string; en: string; ja: string; ko: string; vi:
     vi: '⚠️ Quyền micro cho chuyển đổi chính xác không đủ, đã chuyển sang chế độ phụ đề trực tiếp. Lần sau hãy chọn "Luôn cho phép trang này".',
   },
   'mic-perm-hint': {
-    zh: '💡 精準轉錄需選「永久允許」此網站使用麥克風',
-    en: '💡 Whisper requires "Always allow" microphone permission',
-    ja: '💡 高精度文字起こしには、このサイトのマイクを「常に許可」する必要があります',
-    ko: '💡 고정밀 변환에는 이 사이트의 마이크를 "항상 허용"해야 합니다',
-    vi: '💡 Chuyển đổi chính xác cần chọn "Luôn cho phép" micro cho trang này',
+    zh: '精準轉錄需選「永久允許」此網站使用麥克風',
+    en: 'Whisper requires "Always allow" microphone permission',
+    ja: '高精度文字起こしには、このサイトのマイクを「常に許可」する必要があります',
+    ko: '고정밀 변환에는 이 사이트의 마이크를 "항상 허용"해야 합니다',
+    vi: 'Chuyển đổi chính xác cần chọn "Luôn cho phép" micro cho trang này',
   },
 
   // ── mic OFF 提示 ──
@@ -297,11 +302,11 @@ const dict: Record<string, { zh: string; en: string; ja: string; ko: string; vi:
 
   // ── 版本（動態）──
   'update-available': {
-    zh: '🆕 目前 v{cur} → 新版 v{new} 可用',
-    en: '🆕 v{cur} → v{new} available',
-    ja: '🆕 現在 v{cur} → 新版 v{new} が利用可能',
-    ko: '🆕 현재 v{cur} → 새 버전 v{new} 사용 가능',
-    vi: '🆕 Hiện tại v{cur} → có bản mới v{new}',
+    zh: '目前 v{cur} → 新版 v{new} 可用',
+    en: 'v{cur} → v{new} available',
+    ja: '現在 v{cur} → 新版 v{new} が利用可能',
+    ko: '현재 v{cur} → 새 버전 v{new} 사용 가능',
+    vi: 'Hiện tại v{cur} → có bản mới v{new}',
   },
 
   // ── PM-139：截圖工具列（content.ts）──

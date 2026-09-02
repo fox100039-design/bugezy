@@ -189,7 +189,9 @@ toolbarEffect.addEventListener('change', () => {
 const langSelect = $<HTMLSelectElement>('langSelect');
 let currentUILang: UILang = 'zh';
 
-/** PM-138：依 currentUILang 把所有 [data-i18n] 元素的文字換掉（保留 emoji，字典值已含）。 */
+/** PM-138：依 currentUILang 把所有 [data-i18n] 元素的文字換掉。
+ *  PM-415：字典值已經沒有 emoji 了（大黃蜂視覺系統全站禁用），圖示一律由 markup 的幾何 span 提供，
+ *  所以這裡覆蓋 textContent 不會把圖示洗掉 —— 圖示是兄弟節點，不在 [data-i18n] 元素裡面。 */
 function applyTranslations() {
   document.querySelectorAll<HTMLElement>('[data-i18n]').forEach((el) => {
     const key = el.getAttribute('data-i18n');
@@ -208,7 +210,7 @@ function applyTranslations() {
   updateJsonLockUI(); // PM-189：靜態翻譯會把 copy/export 還原為預設文字，依付費狀態覆寫鎖頭
 }
 
-/** PM-189：依付費狀態設定「複製/匯出 JSON」按鈕文字（免費 → 🔒 會員鎖頭）。 */
+/** PM-189：依付費狀態設定「複製/匯出 JSON」按鈕文字（免費版標註「會員」）。 */
 function updateJsonLockUI() {
   copyBtn.textContent = t(isPaidMember ? 'copy-json' : 'json-copy-locked', currentUILang);
   exportBtn.textContent = t(isPaidMember ? 'export-json' : 'json-export-locked', currentUILang);
@@ -957,7 +959,9 @@ let ticketOpen = localStorage.getItem(TICKET_OPEN_KEY) === '1'; // 預設收合
 
 /** 依 ticketOpen 更新箭頭、內容顯示，以及「收合才顯示」的摘要/庫存 badge。 */
 function updateTicketFold() {
-  ticketArrow.textContent = ticketOpen ? '▼' : '▶';
+  // PM-415：箭頭改成 CSS 三角（.ticket-arrow / .open 轉 90 度）。
+  //   原本用 ▼ / ▶ 兩個字元，那是 emoji-free 規則要清掉的東西之一。
+  ticketArrow.classList.toggle('open', ticketOpen);
   ticketBody.style.display = ticketOpen ? 'block' : 'none';
   // 展開後下方已有完整的「使用中票券」與「庫存票券（N）」，標題列不再重複顯示
   ticketSummary.classList.toggle('hidden', ticketOpen || !ticketSummary.textContent);
