@@ -20,6 +20,16 @@ export function getUILang(speechLang: string): UILang {
 const dict: Record<string, { zh: string; en: string; ja: string; ko: string; vi: string }> = {
   // ── 登入 ──
   'login-hint': { zh: '登入後開始使用', en: 'Sign in to get started', ja: 'ログインして始めましょう', ko: '로그인하고 시작하세요', vi: 'Đăng nhập để bắt đầu' },
+  // PM-414：登入頁副標（設計稿畫面 01）。取代原本的 'login-hint'「登入後開始使用」——
+  //   那句只是指示動作，這句講的是產品在做什麼。'login-hint' 的字典項保留不刪，
+  //   免得其他地方（或回歸腳本）還在引用。
+  'login-tagline': {
+    zh: '用說話回報 Bug，讓 AI 修好它',
+    en: 'Report bugs by voice — let AI fix them',
+    ja: '話すだけで Bug を報告、AI が修正します',
+    ko: '말로 Bug를 보고하면 AI가 고쳐 줍니다',
+    vi: 'Báo Bug bằng giọng nói, để AI sửa',
+  },
   'login-google': { zh: '用 Google 登入', en: 'Sign in with Google', ja: 'Google でログイン', ko: 'Google로 로그인', vi: 'Đăng nhập bằng Google' },
   'login-loading': { zh: '登入中...', en: 'Signing in...', ja: 'ログイン中...', ko: '로그인 중...', vi: 'Đang đăng nhập...' },
   'login-failed': { zh: '登入失敗，重試', en: 'Login failed, retry', ja: 'ログイン失敗、再試行', ko: '로그인 실패, 다시 시도', vi: 'Đăng nhập thất bại, thử lại' },

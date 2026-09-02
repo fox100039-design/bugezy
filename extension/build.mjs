@@ -66,6 +66,11 @@ function copyStatic() {
   cpSync(resolve(root, 'src/checkout.html'), resolve(outdir, 'checkout.html')); // PM-129：月費結帳跳板（POST /checkout）
   // PM-76：擴充圖示（manifest icons + action.default_icon 引用）
   cpSync(resolve(root, 'icons'), resolve(outdir, 'icons'), { recursive: true });
+  // PM-414：大黃蜂視覺資源。bee-video.js 是 classic script（自己 customElements.define），
+  //   **不能**走 esbuild entryPoints —— 那會把它打成 ESM 模組，popup.html 用 <script src> 載入就不會執行。
+  //   assets/ 放 bee.webm 與 hornet-real.png（影片載不起來時的靜態備援）。
+  cpSync(resolve(root, 'src/bee-video.js'), resolve(outdir, 'bee-video.js'));
+  cpSync(resolve(root, 'src/assets'), resolve(outdir, 'assets'), { recursive: true });
 }
 
 /** esbuild 插件：每次 build 結束後同步靜態檔（watch 模式也會觸發） */

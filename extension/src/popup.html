@@ -89,9 +89,12 @@
         width: 320px;
         margin: 0;
         padding: 16px;
-        font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
-        background: var(--bg);
-        color: var(--fg);
+        font-family: var(--font-ui);
+        /* §2.2 黃 60 / 黑 30 / 咖啡 10 —— 黃色是 popup 的預設面底。
+           錄製中（PM-416）與偵察模式（PM-418）是刻意反黑的次級空間，靠 body.dark 覆蓋。 */
+        background: var(--y);
+        background-image: var(--hive-y);
+        color: var(--ink);
         font-size: 14px;
       }
 
@@ -347,13 +350,64 @@
         background: var(--accent); border-radius: 6px; padding: 4px 10px; font-size: 12px;
       }
 
-      /* PM-61：Google 登入 / 使用者列 */
-      .login-hint { color: var(--muted); font-size: 13px; text-align: center; margin: 10px 0 16px; }
-      .btn-google {
-        display: flex; align-items: center; justify-content: center; gap: 8px;
-        background: #fff; color: #3c4043; font-weight: 600;
+      /* ── PM-414：登入頁（設計稿畫面 01）──
+         版面：大黃蜂 92px → 字標 26px → 副標 → Google 鈕 → 虛線分隔 + mono 頁尾。
+         §3.2 黃底上的字一律 ≥11.5px 且字重 ≥600（蜂巢紋會吃掉細筆畫），
+         所以副標與頁尾都比設計稿的 500/11px 再上調一級，色票改用 --on-y #3A2409。 */
+      #loginView { padding: 4px 2px 8px; }
+      .login-hero {
+        display: flex; flex-direction: column; align-items: center; gap: 14px;
+        padding: 18px 0 22px;
       }
-      .btn-google:hover { filter: brightness(0.96); }
+      /* 92px 舞台。bee-video 會自己塞一個 canvas 進來（inline style 只寫 display/width/height），
+         所以 position 由這裡的樣式表決定，不會被覆蓋。 */
+      .bee-stage {
+        position: relative; width: 92px; height: 92px; flex-shrink: 0;
+        filter: drop-shadow(0 6px 10px rgba(74, 47, 18, 0.3)) saturate(1.35) contrast(1.12) brightness(1.06);
+        /* §8 land（飛入降落 1.15s）→ 接 float（持續浮動 3.6s） */
+        animation: land 1.15s cubic-bezier(0.22, 0.9, 0.24, 1) both,
+                   float 3.6s ease-in-out 1.15s infinite;
+      }
+      .bee-stage > bee-video { position: absolute; inset: 0; }
+      /* 靜態備援：影片沒載成功（webm 解不開／bee-video.js 沒跑）就一直留著。
+         bee-video 畫出第一幀時會發 bee-ready，popup.ts 收到才把它藏起來。 */
+      .bee-fallback { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+      .bee-fallback.hidden { display: none !important; }
+      .login-wordmark { font: 800 26px/1 var(--font-brand); letter-spacing: 0.02em; color: var(--ink); }
+      .login-hint {
+        font: 600 12px/1.4 var(--font-ui); letter-spacing: 0.06em;
+        color: var(--on-y); text-align: center; margin: 0;
+      }
+      /* §7.1 硬投影是這套系統的簽名 —— 不要換成模糊陰影 */
+      .btn-google {
+        display: flex; align-items: center; justify-content: center; gap: 10px;
+        width: 100%; padding: 13px; margin: 0;
+        border: 2px solid var(--ink); border-radius: var(--r-12);
+        background: #fff; color: var(--ink);
+        font: 700 14px/1 var(--font-ui);
+        box-shadow: 3px 3px 0 var(--ink);
+        transition: transform 0.12s, box-shadow 0.12s;
+      }
+      .btn-google:hover { filter: none; transform: translate(1px, 1px); box-shadow: 2px 2px 0 var(--ink); }
+      .btn-google:disabled { opacity: 0.55; transform: none; box-shadow: 3px 3px 0 var(--ink); }
+      .login-foot {
+        display: flex; justify-content: space-between;
+        margin-top: 16px; padding-top: 14px;
+        border-top: 1.5px dashed rgba(20, 17, 11, 0.35);
+        font: 600 11.5px/1 var(--font-mono); letter-spacing: 0.04em; color: var(--on-y);
+      }
+      /* §8 動態 */
+      @keyframes land {
+        0%   { transform: translate(96px, -104px) rotate(24deg) scale(0.62); opacity: 0; }
+        45%  { transform: translate(10px, -14px) rotate(7deg) scale(1.04); opacity: 1; }
+        70%  { transform: translate(-5px, 6px) rotate(-4deg) scale(0.99); }
+        100% { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 1; }
+      }
+      @keyframes float {
+        0%, 100% { transform: translateY(0) rotate(0deg); }
+        50%      { transform: translateY(-7px) rotate(-1.6deg); }
+      }
+      /* 使用者列（PM-61；PM-415 再改視覺） */
       .user-bar {
         display: flex; align-items: center; gap: 8px;
         padding-bottom: 10px; margin-bottom: 6px; border-bottom: 1px solid var(--line);
@@ -607,15 +661,22 @@
     <div id="update-badge" class="update-badge" style="display:none;"></div>
     <!-- 未登入：Google 登入（PM-61）-->
     <section id="loginView" class="hidden">
-      <div class="brand" style="justify-content:center;">
-        <span class="brand-icon">🐛</span>
-        <span class="brand-name">BugEzy</span>
+      <div class="login-hero">
+        <div class="bee-stage">
+          <bee-video src="assets/bee.webm" size="92" zoom="470" track></bee-video>
+          <img id="beeFallback" class="bee-fallback" src="assets/hornet-real.png" alt="" />
+        </div>
+        <div class="login-wordmark">BugEzy</div>
+        <p class="login-hint" data-i18n="login-tagline">用說話回報 Bug，讓 AI 修好它</p>
       </div>
-      <p class="login-hint" data-i18n="login-hint">登入後開始使用</p>
       <button id="googleLoginBtn" class="btn-google">
         <img src="https://developers.google.com/identity/images/g-logo.png" width="18" alt="" />
-        <span data-i18n="login-google">用 Google 登入</span>
+        <span id="googleLoginLabel" data-i18n="login-google">用 Google 登入</span>
       </button>
+      <div class="login-foot">
+        <span>MCP · 13 TOOLS</span>
+        <span>bugezy.dev</span>
+      </div>
     </section>
 
     <!-- 已登入：使用者列 + 現有功能 -->
@@ -960,6 +1021,9 @@
       </div>
     </div>
 
+    <!-- PM-414：<bee-video> web component。classic script，不是 module —— 它自己呼叫
+         customElements.define，defer 之前註冊完，登入頁一顯示就能畫。 -->
+    <script src="bee-video.js"></script>
     <script type="module" src="popup.js"></script>
   </body>
 </html>

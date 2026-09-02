@@ -1443,9 +1443,19 @@ cancelSubBtn.addEventListener('click', async () => {
   }
 });
 
+// PM-414：只換 label 的文字，**不要**動整顆按鈕的 textContent ——
+//   新版登入鈕裡有 Google logo 的 <img>，textContent 會把它一起洗掉，
+//   按一次登入失敗之後 logo 就再也回不來了。
+const googleLoginLabel = document.getElementById('googleLoginLabel');
+const setLoginLabel = (key: string) => {
+  const text = t(key, currentUILang);
+  if (googleLoginLabel) googleLoginLabel.textContent = text;
+  else googleLoginBtn.textContent = text;
+};
+
 googleLoginBtn.addEventListener('click', async () => {
   googleLoginBtn.disabled = true;
-  googleLoginBtn.textContent = t('login-loading', currentUILang);
+  setLoginLabel('login-loading');
   try {
     // PM-133：送 Google token 給 server 驗證 + 推導 user_id（extension 不再自決 user_id）
     const session = await doLogin(true);
@@ -1454,8 +1464,14 @@ googleLoginBtn.addEventListener('click', async () => {
   } catch (err) {
     console.error('[BugEzy popup] login', err);
     googleLoginBtn.disabled = false;
-    googleLoginBtn.textContent = t('login-failed', currentUILang);
+    setLoginLabel('login-failed');
   }
+});
+
+// PM-414：大黃蜂影片畫出第一幀才把靜態備援藏起來。
+//   反過來做（預設藏、載好再顯示）會在 webm 解不開時留一塊空白 —— 這樣至少永遠有隻蜂。
+document.querySelector('.bee-stage')?.addEventListener('bee-ready', () => {
+  document.getElementById('beeFallback')?.classList.add('hidden');
 });
 
 logoutBtn.addEventListener('click', async () => {
