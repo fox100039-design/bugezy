@@ -68,7 +68,9 @@ function copyStatic() {
   cpSync(resolve(root, 'icons'), resolve(outdir, 'icons'), { recursive: true });
   // PM-414：大黃蜂視覺資源。bee-video.js 是 classic script（自己 customElements.define），
   //   **不能**走 esbuild entryPoints —— 那會把它打成 ESM 模組，popup.html 用 <script src> 載入就不會執行。
-  //   assets/ 放 bee.webm 與 hornet-real.png（影片載不起來時的靜態備援）。
+  //   assets/ 放 bee.webm（登入頁的大黃蜂影片）。
+  //   ⚠ PM-424 移除靜態備援後 hornet-real.png 在擴充功能裡已無引用，但仍留在 assets/：
+  //     群組 E（官網 hero，≥96px）還要用同一張圖。要不要從擴充包排除由 FOX 決定（71KB）。
   cpSync(resolve(root, 'src/bee-video.js'), resolve(outdir, 'bee-video.js'));
   cpSync(resolve(root, 'src/assets'), resolve(outdir, 'assets'), { recursive: true });
 }

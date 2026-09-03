@@ -1535,11 +1535,6 @@ googleLoginBtn.addEventListener('click', async () => {
   }
 });
 
-// PM-414：大黃蜂影片畫出第一幀才把靜態備援藏起來。
-//   反過來做（預設藏、載好再顯示）會在 webm 解不開時留一塊空白 —— 這樣至少永遠有隻蜂。
-document.querySelector('.bee-stage')?.addEventListener('bee-ready', () => {
-  document.getElementById('beeFallback')?.classList.add('hidden');
-});
 
 logoutBtn.addEventListener('click', async () => {
   // PM-146：先呼叫 server 撤銷 session（從 sessions 表刪 token，舊 token 立即失效）

@@ -294,8 +294,11 @@ check('413   🔴 §4 蜂巢紋 data URI 內沒有未編碼的 `;`（會提早�
   return true;
 })());
 
-check('414-1 登入頁有大黃蜂影片 + 靜態備援（webm 解不開時不會開天窗）',
-  /<bee-video /.test(html) && /id="beeFallback"/.test(html) && /assets\/hornet-real\.png/.test(html));
+// 🔴 PM-424 把這條翻面了。PM-421 當時要求「影片 + 靜態備援」，但交付包 README §Assets
+//   指定登入頁用 bee.webm，hornet-real.png 是 ≥96px 大尺寸場景（官網 hero）用的；
+//   而且那個備援從來沒有正確消失過（見下方 424 的說明）。現在只驗影片本身接對了。
+check('414-1 登入頁的蜂是 <bee-video>，且接到 assets/bee.webm、92px、開追蹤',
+  /<bee-video src="assets\/bee\.webm" size="92" zoom="\d+" track><\/bee-video>/.test(html));
 check('414   🔴 bee-video.js 走 cpSync 而不是 esbuild entryPoints（classic script 才會 customElements.define）', (() => {
   const b = readFileSync('../extension/build.mjs', 'utf8');
   return /cpSync\(resolve\(root, 'src\/bee-video\.js'\)/.test(b) && !/'bee-video': resolve/.test(b);
@@ -366,6 +369,18 @@ check('421-1 擴充圖示四個尺寸都在（128 / 48 / 32 / 16）', (() => {
 })());
 check('421   🔴 popup.ts 不用 innerHTML（Trusted Types 相容；更新通知原本是唯一一處）',
   !/innerHTML/.test(pts));
+// 🔴 PM-424：登入頁回歸設計原意——只有 <bee-video>，沒有靜態圖疊在上面。
+//   PM-414 加的那張備援其實從來沒有正確消失過：bee-video.js 在 <bee-video> 上發的
+//   `new CustomEvent('bee-ready')` 預設 bubbles:false，listener 卻掛在父層 .bee-stage，
+//   事件永遠傳不到 → 備援圖一直壓在 canvas 上。這條斷言擋的就是「再加一次」。
+check('424   🔴 登入頁沒有靜態備援圖疊在動態蜂上面',
+  !/beeFallback/.test(html) && !/bee-fallback/.test(html) && !/beeFallback/.test(pts)
+  && !/<img[^>]*hornet-real\.png/.test(html));
+check('424   §8 land → float 的銜接沒有被動到（float 的 delay 要等於 land 的長度）', (() => {
+  const m = html.match(/animation: land ([\d.]+)s[^;]*?,\s*float [\d.]+s [^;]*?([\d.]+)s infinite/s);
+  return !!m && m[1] === m[2];
+})(), 'land 時長與 float delay 不一致，中間會斷一拍');
+
 const DEAD_TOKENS = ['--bg', '--panel', '--line', '--fg', '--muted', '--accent', '--accent-hover', '--success', '--danger'];
 // 只查 var(...) 的**引用**與 :root 的**定義**——--line-dark / --on-dark 這種前綴相同的新 token 不能誤殺
 const deadTokenHits = [...new Set([

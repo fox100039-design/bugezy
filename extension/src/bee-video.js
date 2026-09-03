@@ -93,7 +93,9 @@ class BeeVideo extends HTMLElement {
             if (g > lim) {
               const spill = g - lim;
               d[i + 1] = lim;
-              d[i] = Math.min(255, r + spill * 0.18);
+              // PM-424：0.18 → 0.28。去綠之後把更多能量回補到紅通道，
+              //   蜂身的黃才會偏暖而不是被去成灰。
+              d[i] = Math.min(255, r + spill * 0.28);
               d[i + 2] = Math.min(255, b + spill * 0.10);
               if (spill > 18) d[i + 3] = Math.max(0, a - (spill - 18) * 4.2);
             }

@@ -615,16 +615,22 @@
          所以 position 由這裡的樣式表決定，不會被覆蓋。 */
       .bee-stage {
         position: relative; width: 92px; height: 92px; flex-shrink: 0;
-        filter: drop-shadow(0 6px 10px rgba(74, 47, 18, 0.3)) saturate(1.35) contrast(1.12) brightness(1.06);
+        /* PM-424：黃更飽和、黑紋更沉、分界更銳利。brightness 跟著上調是為了補回
+           contrast 拉高之後被壓掉的亮部，不然整隻蜂會偏暗。 */
+        filter: drop-shadow(0 6px 10px rgba(74, 47, 18, 0.3)) saturate(1.55) contrast(1.25) brightness(1.10);
         /* §8 land（飛入降落 1.15s）→ 接 float（持續浮動 3.6s） */
         animation: land 1.15s cubic-bezier(0.22, 0.9, 0.24, 1) both,
                    float 3.6s ease-in-out 1.15s infinite;
       }
       .bee-stage > bee-video { position: absolute; inset: 0; }
-      /* 靜態備援：影片沒載成功（webm 解不開／bee-video.js 沒跑）就一直留著。
-         bee-video 畫出第一幀時會發 bee-ready，popup.ts 收到才把它藏起來。 */
-      .bee-fallback { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
-      .bee-fallback.hidden { display: none !important; }
+      /* PM-424：這裡原本疊了一張 hornet-real.png 當靜態備援。移除的理由有兩層——
+         ① 交付包 README §Assets 指定登入頁用 bee.webm，hornet-real.png 是 ≥96px 的大尺寸場景（官網 hero）用的；
+         ② 🔴 那個備援根本沒有在該消失的時候消失：bee-video.js 是在 <bee-video> 上發
+            `new CustomEvent('bee-ready')`，而 CustomEvent 預設 **bubbles: false**，
+            PM-414 卻把 listener 掛在父層的 .bee-stage —— 事件永遠傳不到，
+            備援圖就一直壓在 canvas 上面（兩者都是 position:absolute，img 在 DOM 後面所以畫在上層）。
+         ⚠ 代價：webm 在使用者機器上解不開時，蜂的位置會是空白。這是設計原意下的取捨。
+         真要補備援的話，listener 必須掛在 <bee-video> 元素本身，或讓那顆事件 bubbles: true。 */
       .login-wordmark { font: 800 26px/1 var(--font-brand); letter-spacing: 0.02em; color: var(--ink); }
       .login-hint {
         font: 600 12px/1.4 var(--font-ui); letter-spacing: 0.06em;
@@ -1233,7 +1239,6 @@
       <div class="login-hero">
         <div class="bee-stage">
           <bee-video src="assets/bee.webm" size="92" zoom="470" track></bee-video>
-          <img id="beeFallback" class="bee-fallback" src="assets/hornet-real.png" alt="" />
         </div>
         <div class="login-wordmark">BugEzy</div>
         <p class="login-hint" data-i18n="login-tagline">用說話回報 Bug，讓 AI 修好它</p>
