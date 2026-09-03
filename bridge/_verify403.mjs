@@ -392,5 +392,56 @@ check('423   🔴 舊的深藍紫 token 一個都不剩（改回去 = 整套配�
 
 check('421   §3.1 字標寫成 BugEzy，不是 BUGEZY', !/BUGEZY/.test(stripHtmlComments(html)));
 
+console.log('\n=== ⑥ PM-425：群組 B · 付款中繼頁（畫面 07）===');
+
+// 兩頁共用同一版型，所以逐項對兩份檔案各驗一次——只驗其中一頁的話，
+// 另一頁被改壞不會有人知道（它們本來就是複製出來的）。
+const CHECKOUT_PAGES = [
+  ['checkout.html', readFileSync('../extension/src/checkout.html', 'utf8'), '正在建立訂閱訂單', 'NT$80'],
+  ['day-pass-checkout.html', readFileSync('../extension/src/day-pass-checkout.html', 'utf8'), '正在建立日票訂單', 'NT$20'],
+];
+
+for (const [name, page, title, price] of CHECKOUT_PAGES) {
+  check(`425 ${name} 反黑 + 蜂巢紋`,
+    /background: var\(--ink\)/.test(page) && /rgba\(247,190,0,0\.14\)/.test(page));
+  check(`425 ${name} 🔴 蜂巢紋 data URI 內沒有未編碼的 ';'`,
+    !(page.match(/background-image: url\("([^"]*)"\)/)?.[1] ?? '').includes(';'));
+  // 🔴 只數 .checkout-hexes 內部的 <i>。原本數整頁會被進度條與價格膠囊的 <i> 灌水，
+  //    把三個六角砍成一個也驗得過（反向測試時抓到的）。
+  const hexes = page.match(/class="checkout-hexes"[^>]*>([\s\S]*?)<\/div>/)?.[1] ?? '';
+  check(`425 ${name} 三個脈衝六角 + 掃描進度條`,
+    (hexes.match(/<i><\/i>/g) ?? []).length === 3
+    && /@keyframes pulse/.test(page) && /@keyframes sweep/.test(page)
+    && /class="checkout-bar"/.test(page),
+    `六角 ${(hexes.match(/<i><\/i>/g) ?? []).length} 個`);
+  // 🔴 只看 <h1> 與價格膠囊的實際文字，不要全文比對——CSS 註解裡就有「正在建立訂閱訂單」
+  //    這幾個字，全文比對的話兩頁的標題互換也驗得過（反向測試時抓到的）。
+  const h1 = page.match(/<h1 class="checkout-title">([^<]*)<\/h1>/)?.[1] ?? '';
+  const note = page.match(/class="checkout-note"[^>]*>([\s\S]*?)<\/div>/)?.[1] ?? '';
+  check(`425 ${name} 標題與價格對得上（兩頁不能複製後忘了換）`,
+    h1 === title && note.includes(price), `h1="${h1}"`);
+  check(`425 ${name} 🔴 沒有舊紫色系色碼`,
+    !/#0f0f1a|#1a1a2e|#7c3aed|#6d28d9|#e0e0e0|#2a2a3e/i.test(page));
+  check(`425 ${name} 🔴 零 emoji（§1 全站禁用）`,
+    onlyEmoji(stripHtmlComments(page)).length === 0,
+    onlyEmoji(stripHtmlComments(page)).join(' '));
+  // 去註解再查——這兩頁的註解裡就寫著「設計稿用的 #8A7550 被 §2.4 點名禁止」，
+  // 不去掉的話會抓到說明文字本身。
+  check(`425 ${name} §2.4 深底次要文字沒有用被點名禁止的 #8A7550`,
+    !/#8A7550/i.test(stripHtmlComments(page)));
+  check(`425 ${name} #status 還在（.ts 唯一會寫入的元素）`, /id="status"/.test(page));
+}
+
+// setStatus 的每個呼叫點都是失敗路徑，所以它掛 body.failed 收掉「進行中」的元素。
+// 這條擋的是「有人把 CSS 的 .failed 規則刪掉、或把 classList 那行拿掉」其中一邊。
+for (const ts of ['checkout', 'day-pass-checkout']) {
+  const src = readFileSync(`../extension/src/${ts}.ts`, 'utf8');
+  const html = readFileSync(`../extension/src/${ts}.html`, 'utf8');
+  check(`425 ${ts} 失敗時會收掉「正在建立…」與進度條（否則畫面會自相矛盾）`,
+    /classList\.add\('failed'\)/.test(src)
+    && /body\.failed \.checkout-bar/.test(html)
+    && /body\.failed \.checkout-warn \{ display: block/.test(html));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -9,7 +9,20 @@ import { parseEcpayForm, submitEcpayForm } from './ecpay-form';
 import { getAuthHeaders } from './auth';
 
 const statusEl = document.getElementById('status');
+/**
+ * 寫入畫面上的說明列。
+ *
+ * PM-425：這支函式的**每一個呼叫點都是失敗路徑**（未登入／建單失敗／回應異常／網路錯誤）——
+ * 成功時是直接 submit 綠界表單離開這一頁，不會走到這裡。所以「setStatus 被呼叫過」
+ * 等同「這次沒成功」，順手在 body 掛一個 `failed` 讓 CSS 收掉「還在進行中」的那些元素
+ * （三個脈衝六角、掃描進度條、"正在建立…" 標題），改秀警示三角。
+ *
+ * 沒有這一行的話，畫面會一邊跑進度條說「正在建立訂單」、一邊在下面寫「網路錯誤」，
+ * 比改版前（整頁只有一句錯誤訊息）更難懂。
+ * ⚠ 這只是換一個 class，沒有動到任何控制流程、事件綁定或 ECPay 跳轉邏輯。
+ */
 function setStatus(msg: string): void {
+  document.body.classList.add('failed');
   if (statusEl) statusEl.textContent = msg;
 }
 

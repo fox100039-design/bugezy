@@ -5,16 +5,144 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>前往綠界付款…</title>
   <style>
+    /* ─────────────────────────────────────────────────────────────
+       PM-425：日票付款中繼頁（設計稿畫面 07）· 480×360 反黑
+       與月費版 checkout.html 共用同一版型，只換標題與價格。
+       兩檔各自帶一份 style 是沿用這個專案的既有寫法（每頁一個 <style>），
+       沒有為了兩頁去引入共用 CSS 檔。
+       ⚠ 刻意不外連 Google Fonts（跟 popup 同一個判斷）——擴充頁面連外字型
+         等於每次開啟都向第三方送一次請求，隱私政策要交代。
+       ───────────────────────────────────────────────────────────── */
+    :root {
+      --y: #F7BE00;
+      --ink: #14110B;
+      --brown: #7A4E1D;
+      --line-dark: #3A3122;
+      /* §2.4 深底上的次要文字只有這兩階。設計稿用的 #8A7550 只有 3.8:1，
+         §2.4 點名禁止（那個錯誤犯過三次），所以這裡改用 --on-dark。 */
+      --on-dark: #A08B62;
+      --font-brand: Archivo, 'Noto Sans TC', 'Microsoft JhengHei', system-ui, sans-serif;
+      --font-ui: 'Noto Sans TC', system-ui, -apple-system, 'Segoe UI', 'Microsoft JhengHei', sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --hex: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+    }
+    * { box-sizing: border-box; }
+    /* §4 蜂巢紋。⚠ data URI 內不可出現未編碼的 `;` —— 會提早結束 CSS 宣告，整條失效。 */
     body {
-      background: #0f0f1a; color: #e0e0e0;
-      font-family: system-ui, "Microsoft JhengHei", sans-serif;
-      display: flex; justify-content: center; align-items: center;
-      min-height: 100vh; margin: 0; text-align: center; padding: 20px;
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--ink);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='49' viewBox='0 0 28 49'%3E%3Cg fill='none' stroke='rgba(247,190,0,0.14)' stroke-width='1'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15z'/%3E%3Cpath d='M13.99 -15.25l13 7.5v15l-13 7.5L1 7.75v-15z'/%3E%3Cpath d='M13.99 33.25l13 7.5v15l-13 7.5L1 55.75v-15z'/%3E%3C/g%3E%3C/svg%3E");
+      font-family: var(--font-ui);
+    }
+    /* 設計稿的 480×360 是內容框；這頁是以分頁開啟的，所以底色鋪滿整個視窗，
+       內容維持 480×360 置中 —— 底色一致，看不出邊界。 */
+    .checkout-card {
+      width: 480px;
+      max-width: 100%;
+      min-height: 360px;
+      padding: 36px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      text-align: center;
+    }
+
+    /* 三個脈衝六角（§8 pulse，各差 0.22s） */
+    .checkout-hexes { display: flex; gap: 9px; }
+    .checkout-hexes i {
+      display: block; width: 20px; height: 23px;
+      background: var(--y); clip-path: var(--hex);
+      animation: pulse 1.3s ease-in-out infinite;
+    }
+    .checkout-hexes i:nth-child(2) { animation-delay: -0.22s; }
+    .checkout-hexes i:nth-child(3) { animation-delay: -0.44s; }
+
+    /* §6 警示三角。只在失敗時出現，取代上面那排「還在進行中」的六角。
+       ⚠ clip-path 會裁掉 box-shadow 與 border，所以這裡兩者都不加。 */
+    .checkout-warn {
+      display: none; width: 26px; height: 24px;
+      background: var(--y);
+      clip-path: polygon(50% 0, 100% 100%, 0 100%);
+    }
+
+    .checkout-head { display: flex; flex-direction: column; align-items: center; gap: 9px; }
+    .checkout-title {
+      margin: 0;
+      font: 800 19px/1.3 var(--font-brand);
+      letter-spacing: 0.02em;
+      color: var(--y);
+    }
+    .checkout-desc {
+      margin: 0;
+      font: 400 13px/1.6 var(--font-ui);
+      color: var(--on-dark);
+      max-width: 280px;
+      text-wrap: pretty;
+    }
+
+    /* §8 sweep：滑塊從左側掃出畫面右側 */
+    .checkout-bar {
+      position: relative; width: 220px; height: 5px;
+      border-radius: 3px; background: var(--line-dark); overflow: hidden;
+    }
+    .checkout-bar i {
+      position: absolute; inset: 0; width: 32%;
+      border-radius: 3px; background: var(--y);
+      animation: sweep 1.5s ease-in-out infinite;
+    }
+
+    .checkout-note {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 15px;
+      border: 1px solid var(--line-dark); border-radius: 999px;
+      font: 500 11px/1 var(--font-mono);
+      color: var(--on-dark);
+      letter-spacing: 0.06em;
+    }
+    .checkout-note i { display: block; width: 7px; height: 8px; background: var(--brown); clip-path: var(--hex); }
+
+    /* 🔴 失敗狀態。day-pass-checkout.ts 的 setStatus() 四個呼叫點**全部**是失敗路徑
+       （未登入／建單失敗／回應異常／網路錯誤），成功路徑是直接 submit 表單離開這頁，
+       所以「setStatus 被呼叫」等同「這次沒成功」。
+       沒有這個狀態的話，畫面會一邊說「正在建立日票訂單」、進度條一邊跑，
+       一邊在下面顯示「網路錯誤，請稍後再試。」—— 那比改版前更糟（改版前只會顯示錯誤那一句）。 */
+    body.failed .checkout-hexes,
+    body.failed .checkout-bar,
+    body.failed .checkout-title { display: none; }
+    body.failed .checkout-warn { display: block; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.35; transform: scale(0.86); }
+    }
+    @keyframes sweep {
+      from { transform: translateX(-100%); }
+      to { transform: translateX(320%); }
+    }
+    /* 使用者把系統動畫關掉時，不要留一條假裝在跑的進度條 */
+    @media (prefers-reduced-motion: reduce) {
+      .checkout-hexes i, .checkout-bar i { animation: none; }
     }
   </style>
 </head>
 <body>
-  <div id="status">🔒 正在建立日票訂單，請稍候…</div>
+  <main class="checkout-card">
+    <div class="checkout-hexes" aria-hidden="true"><i></i><i></i><i></i></div>
+    <div class="checkout-warn" aria-hidden="true"></div>
+    <div class="checkout-head">
+      <h1 class="checkout-title">正在建立日票訂單</h1>
+      <!-- #status 是 day-pass-checkout.ts 唯一會寫入的元素（只在失敗時寫），id 不可改 -->
+      <p id="status" class="checkout-desc">馬上把你帶到綠界完成付款，這個視窗會自動關閉，請不要重新整理。</p>
+    </div>
+    <div class="checkout-bar" aria-hidden="true"><i></i></div>
+    <div class="checkout-note"><i></i><span>NT$20 / 24 小時 · ECPAY 加密連線</span></div>
+  </main>
   <script type="module" src="day-pass-checkout.js"></script>
 </body>
 </html>
