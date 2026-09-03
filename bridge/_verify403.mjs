@@ -569,5 +569,74 @@ check('427   🔴 annotate 一個 emoji 都不剩（markup + .ts + 它用得到�
 check('427   §9.2 三步流程標記 STEP 2 / 3',
   /class="step-mark"[^>]*>STEP 2 \/ 3</.test(anHtml));
 
+console.log('\n=== ⑨ PM-428：群組 B · 報告編輯頁（畫面 06）===');
+
+const erHtml = readFileSync('../extension/src/edit-report.html', 'utf8');
+const erTs = strip(readFileSync('../extension/src/edit-report.ts', 'utf8'));
+const erBody = stripHtmlComments(erHtml);
+
+check('428   黃底 + 蜂巢紋 + 黑 header + STEP 3 / 3',
+  /body \{[\s\S]{0,300}background: var\(--y\)/.test(erHtml)
+  && /\.brand \{[\s\S]{0,120}background: var\(--ink\)/.test(erHtml)
+  && /class="step-mark"[^>]*>STEP 3 \/ 3</.test(erHtml));
+check('428   🔴 蜂巢紋 data URI 內沒有未編碼的 ";"',
+  [...erHtml.matchAll(/background-image: url\("([^"]*)"\)/g)].every((m) => !m[1].includes(';')));
+check('428   §5.B header 用嵌套六角（clip-path 會裁掉 border，不能用外框做外環）',
+  /\.brand-icon \{[\s\S]{0,160}clip-path: var\(--hex\)/.test(erHtml)
+  && /\.brand-icon::after \{[\s\S]{0,160}repeating-linear-gradient/.test(erHtml));
+check('428   3×2 摘要格：米白格 + 2px 黑格線 + 等寬大數字',
+  /\.summary-grid \{[\s\S]{0,200}grid-template-columns: repeat\(3, 1fr\)[\s\S]{0,120}background: var\(--ink\)/.test(erHtml)
+  && /\.summary-grid \.sum-cell \{[\s\S]{0,120}background: var\(--cream\)/.test(erHtml)
+  && /\.summary-grid b \{[\s\S]{0,80}font: 700 20px\/1\.1 var\(--font-mono\)/.test(erHtml));
+check('428   摘要格是「值在上、標籤在下」，Network 那格標 .err',
+  /d\.className = 'sum-cell'/.test(erTs) && /classList\.add\('err'\)/.test(erTs)
+  && /d\.append\(b, label\)/.test(erTs));
+
+check('428   🔴 播放鈕改切 .playing（textContent 會洗掉幾何三角）',
+  !/playBtn\.textContent/.test(erTs)
+  && /playBtn\.classList\.add\('playing'\)/.test(erTs)
+  && /#markerPlayBtn\.playing \.ic-play \{ display: none/.test(erHtml));
+check('428   🔴 語音鈕改切 .rec（同上）',
+  !/voiceBtn\.textContent/.test(erTs)
+  && /voiceBtn\.classList\.add\('rec'\)/.test(erTs)
+  && /\.voice-btn\.rec \.ic-mic \{ display: none/.test(erHtml));
+check('428   🔴 標記刪除鈕的交叉線由 CSS 畫（§6），.ts 只清空 textContent',
+  /\.marker-delete::before, \.marker-delete::after/.test(erHtml)
+  && /rotate\(45deg\)/.test(erHtml) && /delBtn\.textContent = ''/.test(erTs));
+check('428   🔴 乾淨／原始模式標籤走字典（原本硬寫中文 + emoji）',
+  /T\('er-clean'\) : T\('er-raw'\)/.test(erTs) && /'er-raw'/.test(i18n));
+check('428   🔴 複製連結鈕的色碼從 .ts 搬到 CSS，狀態改切 .copied',
+  /copyBtn\.className = 'copy-link-btn'/.test(erTs)
+  && /copyBtn\.classList\.add\('copied'\)/.test(erTs)
+  && /\.copy-link-btn\.copied \{/.test(erHtml)
+  && !/copyBtn\.style\.cssText/.test(erTs));
+
+check('428   §2.3 Token 面板是咖啡底 + 黃底節省膠囊',
+  /\.token-panel \{[\s\S]{0,120}background: var\(--brown\)/.test(erHtml)
+  && /\.token-save \{[\s\S]{0,140}background: var\(--y\)/.test(erHtml));
+check('428   §7.3 空的補充說明是虛線待填狀態',
+  /#descInput:placeholder-shown \{[^}]*border-style: dashed/.test(erHtml));
+check('428   底部按鈕 1 : 2（捨棄描邊、上傳黑底黃字 + 硬投影）',
+  /\.discard \{ flex: 1;/.test(erHtml)
+  && /\.upload \{ flex: 2;[\s\S]{0,140}box-shadow: 3px 3px 0 var\(--brown-d\)/.test(erHtml));
+check('428   🔴 乾淨模式 checkbox 的 accent 不能是黑色（控制列本身就是 #14110B，會看不見）',
+  /\.toggle-label input\[type='checkbox'\] \{ accent-color: var\(--y\)/.test(erHtml));
+
+check('428   🔴 舊 token 與舊紫色系全清',
+  !/--bg:|--panel:|--accent:|--muted:|--success:|--danger:/.test(erBody)
+  && !/#7c3aed|#6d28d9|#1a1a2e|#0f0f1a|#a78bfa|#10b981|rgba\(124, 58, 237/i.test(erBody)
+  && !/#7c3aed|#6d28d9|#10b981/i.test(erTs));
+check('428   🔴 edit-report 一個 emoji 都不剩（markup + .ts + 它用得到的字典值）', (() => {
+  const bad = [...onlyEmoji(erBody), ...onlyEmoji(erTs)];
+  for (const m of i18n.matchAll(/^ {2}'?([A-Za-z0-9_.-]+)'?: *\{/gm)) {
+    const k = m[1];
+    if (!erTs.includes(`'${k}'`) && !erHtml.includes(`"${k}"`)) continue;
+    let d = 1, i = m.index + m[0].length;
+    while (d && i < i18n.length) { if (i18n[i] === '{') d++; else if (i18n[i] === '}') d--; i++; }
+    bad.push(...onlyEmoji(i18n.slice(m.index, i)));
+  }
+  return [...new Set(bad)].join(' ');
+})() === '');
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -102,12 +102,20 @@ async function init() {
         [T('er-row-duration'), `${Math.round(dur / 1000)} ${T('er-sec')}`],
         [T('er-row-page'), payload.pageInfo.title || payload.pageInfo.url],
       ];
+  // PM-428：改成「數字在上、標籤在下」的米白格（設計稿畫面 06）。
+  //   值與標籤各自是獨立節點，CSS 才有辦法給不同字級；也不再需要中英不同的冒號。
   summaryEl.replaceChildren(
-    ...rows.map(([k, v]) => {
+    ...rows.map(([k, v], idx) => {
       const d = document.createElement('div');
+      d.className = 'sum-cell';
+      if (k === 'Network') d.classList.add('err'); // 唯一「有數字就是壞消息」的一格
+      if (idx === rows.length - 1) d.classList.add('wide'); // 最後一格是頁面標題／網址，值很長
       const b = document.createElement('b');
       b.textContent = `${v}`;
-      d.append(`${k}${uiLang === 'en' ? ': ' : '：'}`, b);
+      const label = document.createElement('span');
+      label.className = 'sum-label';
+      label.textContent = k;
+      d.append(b, label);
       return d;
     }),
   );
@@ -164,11 +172,13 @@ function renderTokenEstimate(payload: RecordingPayload) {
 
   const voiceTextStr = payload.voiceTranscript.map((s) => s.text).join('');
   const estimates = [
-    { label: T('er-tok-voice'), text: voiceTextStr, icon: '🎤' },
-    { label: 'Console logs', text: JSON.stringify(payload.consoleLogs), icon: '🖥' },
-    { label: 'Network errors', text: JSON.stringify(payload.networkErrors), icon: '🌐' },
-    { label: T('er-tok-desc'), text: descInput.value || '', icon: '📝' },
-    { label: T('er-tok-markers'), text: JSON.stringify(markers), icon: '📌' },
+    // PM-428：拿掉 icon 欄位（原本每列前面掛一顆 emoji）。§1 全站禁用 emoji，
+    //   而這幾列本來就有文字標籤，圖示沒有帶額外資訊。
+    { label: T('er-tok-voice'), text: voiceTextStr },
+    { label: 'Console logs', text: JSON.stringify(payload.consoleLogs) },
+    { label: 'Network errors', text: JSON.stringify(payload.networkErrors) },
+    { label: T('er-tok-desc'), text: descInput.value || '' },
+    { label: T('er-tok-markers'), text: JSON.stringify(markers) },
   ];
 
   let totalTokens = 0;
@@ -177,14 +187,14 @@ function renderTokenEstimate(payload: RecordingPayload) {
     const tokens = Math.ceil(est.text.length / 3.5);
     if (tokens > 0) {
       totalTokens += tokens;
-      html += `<div class="token-row"><span class="label">${est.icon} ${est.label}</span><span>~${tokens.toLocaleString()} tokens</span></div>`;
+      html += `<div class="token-row"><span class="label">${est.label}</span><span>~${tokens.toLocaleString()} tokens</span></div>`;
     }
   }
 
   // rrweb 摘要（get_rrweb_summary 只回筆數，很小）
   const rrwebSummaryTokens = 30;
   totalTokens += rrwebSummaryTokens;
-  html += `<div class="token-row"><span class="label">📹 ${T('er-tok-dom')}</span><span>~${rrwebSummaryTokens} tokens</span></div>`;
+  html += `<div class="token-row"><span class="label">${T('er-tok-dom')}</span><span>~${rrwebSummaryTokens} tokens</span></div>`;
 
   // 總計 + 對比 Claude in Chrome
   const bugezyUSD = ((totalTokens * 8) / 1_000_000).toFixed(4);
@@ -364,13 +374,13 @@ function initMiniPlayer(events: unknown[]) {
     if (playing) {
       replayer.pause();
       playing = false;
-      if (playBtn) playBtn.textContent = '▶';
+      if (playBtn) playBtn.classList.remove('playing');
     } else {
       const current = replayer.getCurrentTime();
       if (current >= duration - 100) replayer.play(0);
       else replayer.resume(current);
       playing = true;
-      if (playBtn) playBtn.textContent = '⏸';
+      if (playBtn) playBtn.classList.add('playing');
       trackProgress();
     }
   });
@@ -407,7 +417,7 @@ function initMiniPlayer(events: unknown[]) {
       container.style.width = '100%';
     }
     const btn = $opt('zoomBtn');
-    if (btn) btn.textContent = zoomed ? '🔍 1x' : '🔍 2x';
+    if (btn) btn.textContent = zoomed ? '1x' : '2x';
 
     // 容器寬度變了 → 等版面重排後依新寬度重算 scale（overflow:hidden，不用拉 bar）
     requestAnimationFrame(() => {
@@ -432,7 +442,7 @@ function initMiniPlayer(events: unknown[]) {
       replayer.pause();
       playing = false;
       const playBtn = $opt('markerPlayBtn');
-      if (playBtn) playBtn.textContent = '▶';
+      if (playBtn) playBtn.classList.remove('playing');
     }
     addMarker(sec);
   });
@@ -504,7 +514,7 @@ function initCleanModeToggle(container: HTMLElement) {
   // 切換：更新標籤文字 + 套用
   checkbox.addEventListener('change', () => {
     const label = checkbox.nextElementSibling as HTMLElement | null;
-    if (label) label.textContent = checkbox.checked ? '🧹 乾淨模式' : '📋 原始模式';
+    if (label) label.textContent = checkbox.checked ? T('er-clean') : T('er-raw');
     applyCleanMode(checkbox.checked);
   });
 
@@ -516,7 +526,7 @@ function initCleanModeToggle(container: HTMLElement) {
 
 function addMarker(sec: number) {
   // PM-29：按 📌 立刻彈原生對話框問描述，使用者一定看得到
-  const note = window.prompt(`📌 ${formatSec(sec)} — 描述這個時間點的問題：`) ?? '';
+  const note = window.prompt(`${formatSec(sec)} — 描述這個時間點的問題：`) ?? '';
   markers.push({ time_sec: sec, note: note.trim() }); // 按取消 → 空描述，只留時間點
   renderMarkers();
 }
@@ -552,7 +562,8 @@ function renderMarkers() {
 
     const delBtn = document.createElement('button');
     delBtn.className = 'marker-delete';
-    delBtn.textContent = '✕';
+    delBtn.textContent = ''; // PM-428：交叉線由 .marker-delete 的 ::before/::after 畫（§6）
+    delBtn.title = '刪除這個標記';
     delBtn.addEventListener('click', () => {
       markers.splice(i, 1);
       renderMarkers();
@@ -586,7 +597,7 @@ function trackProgress() {
   } else {
     playing = false;
     const playBtn = $opt('markerPlayBtn');
-    if (playBtn) playBtn.textContent = '▶';
+    if (playBtn) playBtn.classList.remove('playing');
   }
 }
 
@@ -635,7 +646,7 @@ function stopVoice() {
     recognition = null;
   }
   voiceBtn.classList.remove('listening');
-  voiceBtn.textContent = '🎤';
+  voiceBtn.classList.remove('rec'); // PM-428：麥克風圖示是 span，不能用 textContent 換
   voiceStatus.textContent = '';
 }
 
@@ -737,7 +748,7 @@ function createEditRecognition(): SRInst | null {
         }
       }
     }
-    voiceStatus.textContent = interim ? `🔴 ${interim}` : T('er-listening');
+    voiceStatus.textContent = interim ? interim : T('er-listening');
   };
 
   rec.onend = () => {
@@ -804,7 +815,7 @@ voiceBtn.addEventListener('click', async () => {
     recognition.start();
     listening = true;
     voiceBtn.classList.add('listening');
-    voiceBtn.textContent = '⏹';
+    voiceBtn.classList.add('rec');
     voiceStatus.textContent = T('er-listening');
   }
 });
@@ -907,10 +918,10 @@ async function showUploadSuccess(shareUrl: string) {
     'position:absolute;width:1px;height:1px;padding:0;border:0;opacity:0;left:0;top:0;';
   const copyBtn = document.createElement('button');
   copyBtn.type = 'button';
-  copyBtn.textContent = '📋';
+  // PM-428：改用大黃蜂色系，並把狀態交給 class（原本 textContent 在 📋 / ✅ 之間切換）
+  copyBtn.className = 'copy-link-btn';
+  copyBtn.textContent = T('er-copy-link');
   copyBtn.title = T('er-copy-link');
-  copyBtn.style.cssText =
-    'margin-left:8px;background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:2px 8px;font-size:13px;cursor:pointer;vertical-align:middle;';
   copyBtn.addEventListener('click', () => {
     copyInput.select();
     copyInput.setSelectionRange(0, shareUrl.length);
@@ -919,9 +930,9 @@ async function showUploadSuccess(shareUrl: string) {
     } catch {
       /* 極少數環境不支援，靜默略過 */
     }
-    copyBtn.textContent = '✅';
+    copyBtn.classList.add('copied');
     setTimeout(() => {
-      copyBtn.textContent = '📋';
+      copyBtn.classList.remove('copied');
     }, 2000);
   });
   result.appendChild(copyInput);

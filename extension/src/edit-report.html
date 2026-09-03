@@ -2,184 +2,382 @@
 <html lang="zh-Hant">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>BugEzy — 報告編輯</title>
     <style>
+      /* ─────────────────────────────────────────────────────────────
+         PM-428：報告編輯頁（設計稿畫面 06）· 720px 單欄
+         §9 版面：黃底 + 黑 header + 米白資料卡 + 咖啡 Token 面板。
+         ⚠ 刻意不外連 Google Fonts（跟 popup / checkout / mic-permission / annotate 同一個判斷）。
+         ───────────────────────────────────────────────────────────── */
       :root {
-        --bg: #0f0f1a; --panel: #1a1a2e; --line: #2a2a3e; --fg: #f0f0f0;
-        --muted: #8b8fa3; --accent: #7c3aed; --success: #10b981; --danger: #ef4444;
+        --y: #F7BE00;
+        --y-deep: #DFA800;
+        --y-pale: #FFE9AE;
+        --cream: #FFF4D6;
+        --ink: #14110B;
+        --ink-2: #211C13;
+        --ink-3: #0E0C08;
+        --brown: #7A4E1D;
+        --brown-d: #4A2F12;
+        --line-dark: #3A3122;
+        --line-dark-2: #55492F;
+        --err: #8A2A0F;
+        /* §2.4 深底上的次要文字只有這兩階 */
+        --on-dark: #A08B62;
+        --on-dark-2: #C9A15A;
+        /* §3.2 黃底上的說明文字用 #3A2409（規範明講「不是 #4A2F12」） */
+        --on-y: #3A2409;
+        --on-y-2: #5E3A14;
+        --font-brand: Archivo, 'Noto Sans TC', 'Microsoft JhengHei', system-ui, sans-serif;
+        --font-ui: 'Noto Sans TC', system-ui, -apple-system, 'Segoe UI', 'Microsoft JhengHei', sans-serif;
+        --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        --hex: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
       }
       * { box-sizing: border-box; }
+      /* §4 蜂巢紋 10%。⚠ data URI 內不可出現未編碼的 `;` —— 會提早結束 CSS 宣告。 */
       body {
-        margin: 0; background: var(--bg); color: var(--fg);
-        font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+        margin: 0;
+        background: var(--y);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='49' viewBox='0 0 28 49'%3E%3Cg fill='none' stroke='rgba(20,17,11,0.10)' stroke-width='1'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15z'/%3E%3Cpath d='M13.99 -15.25l13 7.5v15l-13 7.5L1 7.75v-15z'/%3E%3Cpath d='M13.99 33.25l13 7.5v15l-13 7.5L1 55.75v-15z'/%3E%3C/g%3E%3C/svg%3E");
+        color: var(--ink);
+        font-family: var(--font-ui);
         font-size: 14px;
       }
-      .wrap { max-width: 720px; margin: 0 auto; padding: 24px 20px 48px; }
-      .brand { display: flex; align-items: center; gap: 8px; padding-bottom: 14px; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
-      .brand-icon { font-size: 24px; }
-      .brand-name { font-size: 18px; font-weight: 700; color: var(--accent); }
-      .brand-tag { font-size: 13px; color: var(--muted); }
-      h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 18px 0 8px; }
-      .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
-      .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 16px; }
-      .summary-grid div { font-size: 13px; }
-      .summary-grid b { color: var(--accent); }
-      textarea {
-        width: 100%; background: var(--bg); color: var(--fg); border: 1px solid var(--line);
-        border-radius: 8px; padding: 10px; font-size: 14px; font-family: inherit; resize: vertical;
-      }
-      textarea:focus { outline: none; border-color: var(--accent); }
-      textarea[readonly] { color: var(--muted); }
-      .desc-row { display: flex; gap: 8px; align-items: stretch; }
-      .voice-btn { background: #333; color: #fff; border: 1px solid #555; border-radius: 8px; padding: 8px 12px; font-size: 20px; cursor: pointer; }
-      .voice-btn.listening { background: var(--danger); border-color: var(--danger); animation: pulse 1s infinite; }
-      @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
-      .voice-status { color: var(--muted); font-size: 12px; margin-top: 4px; min-height: 16px; }
-      .actions { display: flex; gap: 12px; margin-top: 20px; }
-      button.action { flex: 1; padding: 12px; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; color: #fff; cursor: pointer; }
-      .discard { background: #4a4a5e; }
-      .upload { background: linear-gradient(135deg, #7c3aed, #6d28d9); }
-      button:disabled { opacity: 0.5; cursor: default; }
-      #result { margin-top: 16px; }
-      #result a { color: #a78bfa; word-break: break-all; }
-      .hidden { display: none; }
 
-      /* AI 精簡（PM-25） */
-      .transcript-header { display: flex; justify-content: space-between; align-items: center; margin: 18px 0 8px; }
-      .transcript-header h2 { margin: 0; }
-      .ai-actions { display: flex; gap: 8px; } /* PM-60：AI 校正 + AI 精簡 並列 */
-      .ai-btn {
-        background: linear-gradient(135deg, #7c3aed, #6d28d9); color: #fff; border: none;
-        border-radius: 8px; padding: 6px 14px; font-size: 13px; cursor: pointer;
-        font-weight: 600; transition: all 0.15s;
+      /* ── 黑 header（滿版黑底，內容維持 720px 單欄）── */
+      .brand {
+        background: var(--ink);
+        padding: 14px 22px;
+        margin: 0 0 22px;
+        border-bottom: none;
       }
-      .ai-btn:hover { filter: brightness(1.15); transform: translateY(-1px); }
-      .ai-btn:disabled { opacity: 0.5; cursor: default; transform: none; }
-      .ai-btn.done { background: linear-gradient(135deg, #059669, #047857); }
+      .brand-inner {
+        max-width: 720px; margin: 0 auto;
+        display: flex; align-items: center; gap: 10px;
+      }
+      /* §5.B 六角斜紋標記（黑底上是三層：外黃 → 內黑 → 斜紋核心）。
+         ⚠ clip-path 會裁掉 box-shadow 與 border，外環一律用嵌套六角。 */
+      .brand-icon {
+        width: 26px; height: 30px; flex-shrink: 0;
+        background: var(--y); clip-path: var(--hex);
+        display: flex; align-items: center; justify-content: center;
+      }
+      .brand-icon::after {
+        content: ''; width: 17px; height: 20px; clip-path: var(--hex);
+        background: repeating-linear-gradient(162deg, var(--ink) 0 3px, transparent 3px 6px);
+      }
+      .brand-name { font: 800 17px/1 var(--font-brand); letter-spacing: 0.02em; color: var(--y); }
+      .brand-tag { font: 500 12px/1 var(--font-ui); color: var(--on-dark); }
+      /* §9.2 三步流程標記：錄製 → 標注 → 編輯上傳 */
+      .step-mark { margin-left: auto; font: 700 10px/1 var(--font-mono); color: var(--y); letter-spacing: 0.08em; }
 
-      /* 時間軸標記（PM-28） */
+      .wrap { max-width: 720px; margin: 0 auto; padding: 0 20px 48px; }
+      h2 {
+        margin: 22px 0 9px;
+        font: 700 11px/1 var(--font-mono);
+        letter-spacing: 0.1em;
+        color: var(--brown-d);
+      }
+
+      /* ── 錄製摘要 3×2 grid（§7.2 米白資料卡，2px 黑格線）── */
+      .summary-grid {
+        display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px;
+        background: var(--ink); border: 2px solid var(--ink);
+        border-radius: 12px; overflow: hidden;
+      }
+      .summary-grid .sum-cell {
+        background: var(--cream); padding: 12px 14px;
+        display: flex; flex-direction: column; gap: 3px; min-width: 0;
+      }
+      .summary-grid b {
+        font: 700 20px/1.1 var(--font-mono); color: var(--ink);
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      /* Network 錯誤是唯一「有數字就是壞消息」的一格 */
+      .summary-grid .sum-cell.err b { color: var(--err); }
+      /* 最後一格是頁面標題／網址，值很長 → 不套大號等寬字 */
+      .summary-grid .sum-cell.wide b { font: 500 11.5px/1.4 var(--font-mono); white-space: normal; word-break: break-all; }
+      .summary-grid .sum-label { font: 700 11.5px/1 var(--font-ui); color: var(--on-y-2); }
+      /* 沒有報告時 .ts 會 summaryEl.textContent = …（整格結構被換成純文字） */
+      .summary-grid:not(:has(.sum-cell)) {
+        display: block; padding: 14px; background: var(--cream);
+        font: 700 13px/1.6 var(--font-ui); color: var(--ink);
+      }
+
+      /* ── 時間軸播放器 ── */
+      .marker-player {
+        border: 2px solid var(--ink); border-radius: 12px;
+        overflow: hidden; background: var(--ink-3);
+      }
       .mini-player-container {
-        width: 100%; max-width: 960px;
-        overflow: hidden; border-radius: 8px;
-        border: 1px solid var(--line); margin-bottom: 8px;
-        background: #000; /* 黑底讓縮放後邊緣不刺眼；高度改由 JS 依縮放動態設定 */
+        width: 100%; max-width: 960px; overflow: hidden;
+        border: none; border-radius: 0; margin: 0;
+        background: var(--ink-3);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='49' viewBox='0 0 28 49'%3E%3Cg fill='none' stroke='rgba(247,190,0,0.08)' stroke-width='1'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15z'/%3E%3Cpath d='M13.99 -15.25l13 7.5v15l-13 7.5L1 7.75v-15z'/%3E%3Cpath d='M13.99 33.25l13 7.5v15l-13 7.5L1 55.75v-15z'/%3E%3C/g%3E%3C/svg%3E");
       }
-      .mini-player-container iframe {
-        border: none; transform-origin: top left; /* 尺寸/縮放由 JS 計算後 inline 設定 */
+      .mini-player-container iframe { border: none; transform-origin: top left; }
+      .marker-controls {
+        display: flex; align-items: center; gap: 8px;
+        padding: 11px 13px; background: var(--ink);
       }
-      .marker-controls { display: flex; align-items: center; gap: 8px; padding: 8px 0; }
+      /* 播放鈕：黃底 + 黑三角（§6 播放三角）。
+         🔴 edit-report.ts 原本用 `playBtn.textContent = '▶' / '⏸'`——換成幾何圖示後
+            那會把圖示 span 洗掉，改成切 .playing，由 CSS 決定三角還是暫停雙槓。 */
+      #markerPlayBtn {
+        width: 30px; height: 30px; flex-shrink: 0; padding: 0;
+        display: flex; align-items: center; justify-content: center; gap: 3px;
+        background: var(--y); border: none; border-radius: 8px; cursor: pointer;
+      }
+      #markerPlayBtn:hover { background: var(--y-deep); }
+      #markerPlayBtn .ic-play { width: 10px; height: 12px; background: var(--ink); clip-path: polygon(0 0, 100% 50%, 0 100%); }
+      #markerPlayBtn .ic-pause { display: none; gap: 3px; }
+      #markerPlayBtn .ic-pause i { display: block; width: 3px; height: 12px; background: var(--ink); border-radius: 1px; }
+      #markerPlayBtn.playing .ic-play { display: none; }
+      #markerPlayBtn.playing .ic-pause { display: flex; }
+      /* 進度條：軌道深底、已播放黃色（accent-color 一次搞定填色與滑塊） */
+      #markerSeek { flex: 1; min-width: 0; accent-color: var(--y); height: 5px; }
+      .time-display { font: 500 11px/1 var(--font-mono); color: var(--on-dark-2); white-space: nowrap; }
       .btn-sm {
-        padding: 4px 12px; font-size: 13px; border-radius: 6px;
-        background: var(--panel); color: #fff;
-        border: 1px solid var(--line); cursor: pointer;
+        padding: 6px 11px; border-radius: 8px;
+        background: transparent; color: var(--y-pale);
+        border: 1px solid var(--line-dark-2); cursor: pointer;
+        font: 700 11px/1 var(--font-ui); white-space: nowrap;
       }
-      .btn-accent { background: var(--accent); border-color: var(--accent); font-weight: 600; }
-      /* 乾淨/原始 toggle（PM-46） */
+      .btn-sm:hover { border-color: var(--y); color: var(--y); }
+      /* 「標記此刻」是這一列唯一要你做決定的東西 → 黃底 */
+      .btn-accent {
+        display: flex; align-items: center; gap: 6px;
+        background: var(--y); border-color: var(--y); color: var(--ink); font-weight: 700;
+      }
+      .btn-accent:hover { background: var(--y-deep); border-color: var(--y-deep); color: var(--ink); }
+      .btn-accent .ic-hex { width: 8px; height: 9px; background: var(--ink); clip-path: var(--hex); flex-shrink: 0; }
       .toggle-label {
-        display: flex; align-items: center; gap: 4px;
-        font-size: 13px; color: #aaa; cursor: pointer; user-select: none;
-        white-space: nowrap;
+        display: flex; align-items: center; gap: 5px;
+        font: 600 11.5px/1 var(--font-ui); color: var(--on-dark-2);
+        cursor: pointer; user-select: none; white-space: nowrap;
       }
-      .toggle-label input[type='checkbox'] { accent-color: #7c3aed; }
+      /* 🔴 控制列是 #14110B，checkbox 的 accent 不能也用 #14110B（設計稿寫的），
+         那會變成黑底上的黑勾，完全看不見。用黃色。 */
+      .toggle-label input[type='checkbox'] { accent-color: var(--y); }
 
-      /* Token 估算面板（PM-55） */
-      .token-panel {
-        background: var(--panel); border: 1px solid rgba(124, 58, 237, 0.3);
-        border-radius: 12px; padding: 16px; margin-bottom: 16px;
-      }
-      .token-row {
-        display: flex; justify-content: space-between; padding: 4px 0;
-        font-size: 13px; color: #ccc;
-      }
-      .token-row.total {
-        border-top: 1px solid var(--line); margin-top: 8px; padding-top: 8px;
-        font-weight: 700; color: #fff;
-      }
-      .token-row .label { color: #a78bfa; }
-      .token-save {
-        margin-top: 12px; padding: 10px;
-        background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3);
-        border-radius: 8px; font-size: 13px; color: var(--success); text-align: center;
-      }
-      .time-display { font-family: monospace; color: var(--muted); font-size: 12px; white-space: nowrap; }
-      .marker-list { margin-top: 8px; }
+      /* ── 標記清單（§7.3 實線 = 已填）── */
+      .marker-list { margin-top: 9px; display: flex; flex-direction: column; gap: 6px; }
       .marker-item {
-        display: flex; align-items: flex-start; gap: 8px;
-        padding: 8px; margin: 4px 0;
-        background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+        display: flex; align-items: center; gap: 9px;
+        padding: 9px 11px; margin: 0;
+        background: var(--cream); border: 2px solid var(--ink); border-radius: 10px;
       }
       .marker-time {
-        background: var(--accent); color: #fff; padding: 2px 8px;
-        border-radius: 4px; font-size: 12px; font-family: monospace;
-        white-space: nowrap; cursor: pointer;
+        background: var(--ink); color: var(--y); padding: 3px 9px;
+        border-radius: 6px; font: 700 11px/1.4 var(--font-mono);
+        white-space: nowrap; cursor: pointer; border: none; flex-shrink: 0;
       }
-      .marker-time:hover { background: #6d28d9; }
+      .marker-time:hover { background: var(--ink-2); }
       .marker-note {
-        flex: 1; background: transparent; color: #eee;
-        border: 1px solid var(--line); border-radius: 4px;
-        padding: 4px 8px; font-size: 13px;
+        flex: 1; min-width: 0; background: transparent; color: var(--ink);
+        border: none; border-bottom: 1.5px solid rgba(20, 17, 11, 0.25);
+        padding: 4px 2px; font: 600 13px/1.4 var(--font-ui);
       }
-      .marker-note:focus { outline: none; border-color: var(--accent); }
-      .marker-delete { background: none; border: none; color: #888; cursor: pointer; font-size: 16px; }
-      .marker-delete:hover { color: var(--danger); }
+      .marker-note:focus { outline: none; border-bottom-color: var(--ink); }
+      .marker-note::placeholder { color: var(--on-y-2); }
+      /* §6 刪除 → 兩條 45°／-45° 交叉線（.ts 會把 textContent 清成空字串） */
+      .marker-delete {
+        position: relative; width: 20px; height: 20px; flex-shrink: 0;
+        background: none; border: none; cursor: pointer; padding: 0;
+      }
+      .marker-delete::before, .marker-delete::after {
+        content: ''; position: absolute; left: 2px; top: 9px;
+        width: 16px; height: 2px; border-radius: 2px; background: var(--on-y-2);
+        transition: background 0.15s;
+      }
+      .marker-delete::before { transform: rotate(45deg); }
+      .marker-delete::after { transform: rotate(-45deg); }
+      .marker-delete:hover::before, .marker-delete:hover::after { background: var(--err); }
+
+      /* ── 語音記錄 + AI 校正／精簡 ── */
+      .transcript-header { display: flex; justify-content: space-between; align-items: center; margin: 22px 0 9px; }
+      .transcript-header h2 { margin: 0; }
+      .ai-actions { display: flex; gap: 8px; }
+      /* AI 校正 = 次要按鈕；AI 精簡 = 主按鈕（黑底黃字） */
+      .ai-btn {
+        border: 2px solid rgba(20, 17, 11, 0.4); border-radius: 9px;
+        background: transparent; color: var(--brown-d);
+        padding: 6px 13px; font: 700 12px/1 var(--font-ui); cursor: pointer;
+        transition: border-color 0.15s, color 0.15s, background 0.15s;
+      }
+      .ai-btn:hover { border-color: var(--ink); color: var(--ink); }
+      #summarizeBtn { border-color: var(--ink); background: var(--ink); color: var(--y); }
+      #summarizeBtn:hover { background: var(--ink-2); color: var(--y); }
+      .ai-btn:disabled { opacity: 0.45; cursor: default; }
+      .ai-btn.done { background: var(--y); border-color: var(--y); color: var(--ink); }
+
+      /* ── 文字輸入（§7.3 實線 = 已填、虛線 = 待填）── */
+      textarea {
+        width: 100%; background: var(--cream); color: var(--ink);
+        border: 2px solid var(--ink); border-radius: 12px;
+        padding: 12px 14px; font: 400 14px/1.75 var(--font-ui); resize: vertical;
+      }
+      textarea:focus { outline: none; border-color: var(--brown-d); }
+      textarea::placeholder { color: var(--brown); }
+      /* 空的補充說明是「待填」→ 虛線半透明；打了字就變實心 */
+      #descInput:placeholder-shown { background: rgba(255, 244, 214, 0.55); border-style: dashed; border-color: rgba(20, 17, 11, 0.4); }
+      textarea[readonly] { color: var(--on-y-2); }
+
+      .desc-row { display: flex; gap: 9px; align-items: stretch; }
+      /* 語音鈕：§6.1 四層麥克風。
+         🔴 .ts 原本用 `voiceBtn.textContent = '🎤' / '⏹'`——改成切 .rec。 */
+      .voice-btn {
+        width: 50px; flex-shrink: 0; padding: 0;
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+        background: var(--ink); color: var(--y);
+        border: 2px solid var(--ink); border-radius: 12px; cursor: pointer;
+        transition: background 0.15s;
+      }
+      .voice-btn:hover { background: var(--ink-2); }
+      .voice-btn.listening { background: var(--brown); border-color: var(--brown); animation: pulse 1.2s ease-in-out infinite; }
+      .ic-mic { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+      .ic-mic .m1 {
+        width: 11px; height: 16px; border-radius: 6px;
+        background: repeating-linear-gradient(var(--y) 0 1.5px, var(--ink) 1.5px 3px);
+        box-shadow: 0 0 0 1.5px var(--y) inset;
+      }
+      .ic-mic .m2 { width: 15px; height: 6px; box-sizing: border-box; border: 2px solid var(--y); border-top: none; border-radius: 0 0 9px 9px; }
+      .ic-mic .m3 { width: 2px; height: 3px; background: var(--y); }
+      .ic-mic .m4 { width: 11px; height: 2px; border-radius: 2px; background: var(--y); }
+      .voice-btn .ic-stop { display: none; width: 13px; height: 13px; border-radius: 2px; background: var(--y); }
+      .voice-btn.rec .ic-mic { display: none; }
+      .voice-btn.rec .ic-stop { display: block; }
+      .voice-status { font: 600 12px/1.5 var(--font-ui); color: var(--on-y); margin-top: 6px; min-height: 16px; }
+
+      /* ── Token 估算（§2.3 咖啡 = 系統在跟你說話）── */
+      .token-panel {
+        background: var(--brown); border: none;
+        border-radius: 12px; padding: 15px 17px; margin: 22px 0 0;
+      }
+      .token-panel h2 { margin: 0 0 9px; color: var(--y-pale); }
+      .token-row {
+        display: flex; justify-content: space-between; gap: 12px; padding: 4px 0;
+        font: 600 12.5px/1.5 var(--font-ui); color: #F0D9A8;
+      }
+      .token-row span:last-child { font-family: var(--font-mono); color: var(--y-pale); white-space: nowrap; }
+      .token-row .label { color: #F0D9A8; }
+      .token-row.total {
+        border-top: 1px solid rgba(255, 233, 174, 0.28);
+        margin-top: 8px; padding-top: 9px;
+        font: 700 13px/1.5 var(--font-ui); color: var(--y-pale);
+      }
+      /* 省了多少 = 好消息，用黃底黑字膠囊把它從咖啡底上撈出來 */
+      .token-save {
+        margin-top: 12px; padding: 10px 12px;
+        background: var(--y); border: none; border-radius: 9px;
+        font: 700 12px/1.6 var(--font-ui); color: var(--ink); text-align: center;
+      }
+
+      /* ── 底部按鈕（捨棄 1 : 上傳 2）── */
+      .actions { display: flex; gap: 12px; margin-top: 22px; }
+      button.action { padding: 13px; border-radius: 12px; font: 700 14px/1 var(--font-ui); cursor: pointer; }
+      .discard { flex: 1; border: 2px solid rgba(20, 17, 11, 0.4); background: transparent; color: var(--brown-d); }
+      .discard:hover { border-color: var(--ink); color: var(--ink); }
+      .upload { flex: 2; border: 2px solid var(--ink); background: var(--ink); color: var(--y); box-shadow: 3px 3px 0 var(--brown-d); }
+      .upload:hover { transform: translate(1px, 1px); box-shadow: 2px 2px 0 var(--brown-d); }
+      button:disabled { opacity: 0.45; cursor: default; transform: none; }
+
+      /* 上傳結果（分享連結）：§2.3 分享連結屬系統訊息 → 咖啡卡 */
+      #result {
+        margin-top: 16px; padding: 12px 14px;
+        background: var(--brown); border-radius: 12px;
+        font: 600 12.5px/1.6 var(--font-ui); color: var(--y-pale);
+      }
+      #result a { color: var(--y-pale); word-break: break-all; font-family: var(--font-mono); }
+      /* 複製連結鈕（edit-report.ts 動態建立）。色碼從 .ts 的 cssText 搬到這裡，
+         狀態改用 .copied class —— 原本是在 emoji 之間切 textContent。 */
+      .copy-link-btn {
+        margin-left: 10px; vertical-align: middle;
+        background: var(--y); color: var(--ink); border: none;
+        border-radius: 8px; padding: 5px 12px;
+        font: 700 11.5px/1 var(--font-ui); cursor: pointer;
+      }
+      .copy-link-btn:hover { background: var(--y-deep); }
+      .copy-link-btn.copied { background: var(--ink); color: var(--y); }
+      .hidden { display: none; }
+
+      @keyframes pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.35; transform: scale(0.86); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .voice-btn.listening { animation: none; }
+      }
     </style>
   </head>
   <body>
-    <div class="wrap">
-      <div class="brand">
-        <span class="brand-icon">🐛</span>
+    <header class="brand">
+      <div class="brand-inner">
+        <span class="brand-icon"></span>
         <span class="brand-name">BugEzy</span>
         <span class="brand-tag" data-i18n="er-tag">報告編輯</span>
+        <span class="step-mark">STEP 3 / 3</span>
       </div>
-
-      <h2 data-i18n="er-summary-h">📊 錄製摘要</h2>
-      <div class="card summary-grid" id="summary"></div>
+    </header>
+    <div class="wrap">
+      <h2 data-i18n="er-summary-h">錄製摘要</h2>
+      <div class="summary-grid" id="summary"></div>
 
       <!-- 時間軸標記區（PM-28） -->
       <div id="markerSection">
-        <h2 data-i18n="er-marker-h">📌 時間軸標記</h2>
+        <h2 data-i18n="er-marker-h">時間軸標記</h2>
         <div class="marker-player">
           <div id="miniPlayer" class="mini-player-container"></div>
           <div class="marker-controls">
-            <button id="markerPlayBtn" class="btn btn-sm">▶</button>
-            <input type="range" id="markerSeek" min="0" max="100" value="0" style="flex:1;" />
+            <!-- 🔴 圖示不能放進 textContent：edit-report.ts 會換播放/暫停，改成切 .playing -->
+            <button id="markerPlayBtn" class="btn btn-sm" title="播放／暫停">
+              <span class="ic-play"></span>
+              <span class="ic-pause"><i></i><i></i></span>
+            </button>
+            <input type="range" id="markerSeek" min="0" max="100" value="0" />
             <span id="markerTime" class="time-display">0:00 / 0:00</span>
-            <button id="zoomBtn" class="btn btn-sm" title="放大/縮小">🔍 2x</button>
+            <button id="zoomBtn" class="btn btn-sm" title="放大/縮小">2x</button>
             <label id="cleanToggle" class="toggle-label" title="切換乾淨/原始畫面">
               <input type="checkbox" id="cleanMode" checked />
-              <span data-i18n="er-clean">🧹 乾淨模式</span>
+              <span data-i18n="er-clean">乾淨模式</span>
             </label>
-            <button id="addMarkerBtn" class="btn btn-sm btn-accent" data-i18n="er-mark">📌 標記此刻</button>
+            <button id="addMarkerBtn" class="btn btn-sm btn-accent">
+              <span class="ic-hex"></span><span data-i18n="er-mark">標記此刻</span>
+            </button>
           </div>
         </div>
         <div id="markerList" class="marker-list"></div>
       </div>
 
       <div class="transcript-header">
-        <h2 data-i18n="er-voice-h">🎤 語音記錄（自動辨識）</h2>
+        <h2 data-i18n="er-voice-h">語音記錄（自動辨識）</h2>
         <div class="ai-actions">
-          <button id="correctBtn" class="ai-btn" data-i18n="er-ai-correct">🔧 AI 校正</button>
-          <button id="summarizeBtn" class="ai-btn" data-i18n="er-ai-summarize">🤖 AI 精簡</button>
+          <button id="correctBtn" class="ai-btn" data-i18n="er-ai-correct">AI 校正</button>
+          <button id="summarizeBtn" class="ai-btn" data-i18n="er-ai-summarize">AI 精簡</button>
         </div>
       </div>
       <textarea id="voiceText" rows="3" placeholder="（這次錄製沒有語音）" data-i18n-ph="er-voice-ph"></textarea>
 
-      <h2 data-i18n="er-desc-h">💬 補充說明（選填）</h2>
+      <h2 data-i18n="er-desc-h">補充說明（選填）</h2>
       <div class="desc-row">
-        <textarea id="descInput" rows="3" placeholder="打字或按右邊麥克風語音補充..." data-i18n-ph="er-desc-ph"></textarea>
-        <button id="voiceBtn" class="voice-btn" title="語音輸入">🎤</button>
+        <textarea id="descInput" rows="3" placeholder="打字或按右邊麥克風語音補充…" data-i18n-ph="er-desc-ph"></textarea>
+        <button id="voiceBtn" class="voice-btn" title="語音輸入">
+          <span class="ic-mic"><span class="m1"></span><span class="m2"></span><span class="m3"></span><span class="m4"></span></span>
+          <span class="ic-stop"></span>
+        </button>
       </div>
       <div id="voiceStatus" class="voice-status"></div>
 
       <!-- Token 估算（PM-55） -->
       <div id="tokenEstimate" class="token-panel">
-        <h2 data-i18n="er-token-h">📊 Token 估算</h2>
+        <h2 data-i18n="er-token-h">Token 估算</h2>
         <div id="tokenBreakdown"></div>
       </div>
 
       <div class="actions">
-        <button id="discardBtn" class="action discard" data-i18n="er-discard">✗ 捨棄報告</button>
-        <button id="uploadBtn" class="action upload" data-i18n="er-upload">✅ 上傳報告</button>
+        <button id="discardBtn" class="action discard" data-i18n="er-discard">捨棄報告</button>
+        <button id="uploadBtn" class="action upload" data-i18n="er-upload">上傳報告</button>
       </div>
 
       <div id="result" class="hidden"></div>
