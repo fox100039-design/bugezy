@@ -366,6 +366,15 @@ check('421-1 擴充圖示四個尺寸都在（128 / 48 / 32 / 16）', (() => {
 })());
 check('421   🔴 popup.ts 不用 innerHTML（Trusted Types 相容；更新通知原本是唯一一處）',
   !/innerHTML/.test(pts));
+const DEAD_TOKENS = ['--bg', '--panel', '--line', '--fg', '--muted', '--accent', '--accent-hover', '--success', '--danger'];
+// 只查 var(...) 的**引用**與 :root 的**定義**——--line-dark / --on-dark 這種前綴相同的新 token 不能誤殺
+const deadTokenHits = [...new Set([
+  ...DEAD_TOKENS.filter((v) => new RegExp(`var\\(\\s*${v}\\s*[,)]`).test(html)),
+  ...DEAD_TOKENS.filter((v) => new RegExp(`^\\s*${v}:`, 'm').test(html)),
+])];
+check('423   🔴 舊的深藍紫 token 一個都不剩（改回去 = 整套配色被拉回舊系統）',
+  deadTokenHits.length === 0, deadTokenHits.join(', '));
+
 check('421   §3.1 字標寫成 BugEzy，不是 BUGEZY', !/BUGEZY/.test(stripHtmlComments(html)));
 
 console.log(`\n${pass} passed, ${fail} failed`);

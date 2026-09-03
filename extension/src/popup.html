@@ -8,7 +8,8 @@
       /* ─────────────────────────────────────────────────────────────
          PM-413：大黃蜂視覺系統 design token（DESIGN_SPEC.md §2 色彩 / §3 字體）
          這一段是「唯一依據」，改配色請先改這裡，不要在個別 class 硬寫色碼。
-         舊的深藍紫變數暫時保留 —— PM-414~420 逐畫面換掉後才會清乾淨。
+         PM-423：舊的深藍紫變數（--bg / --panel / --line / --fg / --muted / --accent /
+         --accent-hover / --success / --danger）已全數刪除，popup 只剩這一套色。
          ───────────────────────────────────────────────────────────── */
       :root {
         color-scheme: light;
@@ -65,17 +66,6 @@
 
         /* §5 六角 clip-path（外六角包內六角；⚠ clip-path 會裁掉 box-shadow 與 border） */
         --hex: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
-
-        /* ── 舊的深藍紫（PM-414~420 逐畫面淘汰中，暫留以免中途畫面全裸） ── */
-        --bg: #0f0f1a;
-        --panel: #1a1a2e;
-        --line: #2a2a3e;
-        --fg: #f0f0f0;
-        --muted: #8b8fa3;
-        --accent: #7c3aed;
-        --accent-hover: #6d28d9;
-        --success: #10b981;
-        --danger: #ef4444;
       }
       * { box-sizing: border-box; }
       body {
@@ -223,12 +213,10 @@
       }
       button:hover { filter: none; }
       button:disabled { opacity: 0.45; cursor: default; filter: none; transform: none; }
-      #stopBtn { background: var(--danger); }
-      #copyBtn { background: #2563eb; }
-      #copyBtn.copied { background: var(--success); }
-      #exportBtn { background: var(--accent); }
-      #exportBtn.done { background: var(--success); }
-      #clearBtn { background: #4a4a5e; }
+      /* PM-423：這裡原本有六行舊配色（#stopBtn / #copyBtn / #exportBtn / #clearBtn）。
+         它們在 PM-416 改寫錄製與完成兩個畫面時就已經被下方的規則整組蓋掉了
+         —— 同為 #id 特異度、後定義者勝，所以那六行一行都沒有渲染出來。
+         真正生效的定義在「PM-416：錄製中／錄製完成」那兩段，不要在這裡再寫一份。 */
 
       /* ── PM-415：三入口（設計稿畫面 18）──
          錄製是主按鈕（黑底黃字 + 硬投影），回溯／截圖是次要按鈕（描邊）。
@@ -339,7 +327,10 @@
       /* PM-409：返回鍵靠左、標題靠右，一行排開 */
       .scout-head {
         display: flex; align-items: center; justify-content: space-between; gap: 10px;
-        padding-bottom: 8px; border-bottom: 1px solid var(--line);
+        /* 第二層永遠是深底（showScout 會掛 body.dark），所以底線用 §2.1 的深底分隔線。
+           body.dark 那條同值規則留著當保險——真的有人在沒掛 dark 的情況下顯示第二層時，
+           這裡不會突然冒出一條深藍紫。 */
+        padding-bottom: 8px; border-bottom: 1px solid var(--line-dark);
       }
       .scout-back {
         display: flex; align-items: center; gap: 7px;
@@ -456,7 +447,10 @@
       .hidden { display: none !important; }
 
       /* 鍵盤模式 toggle（PM-49） */
-      .mode-toggle { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+      /* .mode-toggle 只出現在進階設定（黃底）裡，所以用 §3.2 黃底上的淡分隔線。
+         實際上下面的 `.settings-body .mode-toggle` 會把它拿掉（accordion 自己有粗線），
+         這條是給「萬一 .mode-toggle 被搬到 accordion 外面」時的合理預設值。 */
+      .mode-toggle { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(20, 17, 11, 0.2); }
       /* PM-122 進階設定 accordion；PM-415 改 CSS 三角（原本是箭頭字元） */
       .settings-accordion { margin: 0; border-top: none; }
       .settings-header {
@@ -594,7 +588,10 @@
         box-shadow: var(--sh-3);
       }
       #exportBtn:hover { transform: translate(1px, 1px); box-shadow: var(--sh-2); }
-      #exportBtn.done { background: var(--brown); border-color: var(--brown); color: var(--y-pale); }
+      /* PM-423：匯出成功 → 黃底黑字，視覺上「亮起來」。
+         原本用咖啡色（§2.3 系統訊息），但這裡不是系統在告知，是使用者按下去得到的回饋，
+         而且跟隔壁「已複製」的黑底黃字反過來，兩種回饋一眼分得出來。 */
+      #exportBtn.done { background: var(--y); border-color: var(--y); color: var(--ink); box-shadow: var(--sh-3); }
       #copyBtn, #clearBtn {
         margin: 0; padding: 11px; border-radius: var(--r-12);
         background: transparent; font: 700 12px/1 var(--font-ui);
