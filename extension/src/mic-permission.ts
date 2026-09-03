@@ -16,7 +16,15 @@ import { getUILang, t } from './i18n';
   const permDesc = document.getElementById('permDesc');
   if (permDesc) permDesc.innerHTML = T('mperm-desc'); // 含 <br />，靜態內容安全
 
+  // PM-426：底部操作指引（設計稿畫面 08）。只取內層的 span——
+  //   前面那顆六角是它的兄弟節點，覆寫整個 <p> 的話會把六角一起洗掉。
+  const permHint = document.getElementById('permHint');
+  if (permHint) permHint.textContent = T('mperm-hint');
+
   const status = document.getElementById('status');
+  // PM-426：狀態的顏色與標記形狀由外層膠囊的 class 決定，不再用 inline style 寫死色碼。
+  //   #status 本身只放文字（.textContent 會被覆寫，標記放在裡面會被洗掉）。
+  const statusBox = document.getElementById('permStatus');
   if (!status) return;
   status.textContent = T('mperm-requesting');
   try {
@@ -24,12 +32,12 @@ import { getUILang, t } from './i18n';
     // 授權成功，立刻停止音軌（這裡只為取得權限，不錄音）
     stream.getTracks().forEach((t) => t.stop());
     status.textContent = T('mperm-granted');
-    status.style.color = '#3fb950';
+    statusBox?.classList.add('granted');
     await chrome.runtime.sendMessage({ type: 'MIC_PERMISSION_GRANTED' });
     await chrome.storage.local.set({ [MIC_KEY]: true }); // PM-89：授權完直接把 mic toggle 設為 ON
     setTimeout(() => window.close(), 3000); // PM-90：停留加長至 3 秒，讓使用者看清楚
   } catch {
     status.textContent = T('mperm-denied');
-    status.style.color = '#f85149';
+    statusBox?.classList.add('denied');
   }
 })();

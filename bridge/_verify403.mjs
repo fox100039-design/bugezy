@@ -443,5 +443,54 @@ for (const ts of ['checkout', 'day-pass-checkout']) {
     && /body\.failed \.checkout-warn \{ display: block/.test(html));
 }
 
+console.log('\n=== ⑦ PM-426：群組 B · 麥克風授權頁（畫面 08）===');
+
+const permHtml = readFileSync('../extension/src/mic-permission.html', 'utf8');
+const permTs = strip(readFileSync('../extension/src/mic-permission.ts', 'utf8'));
+const permBody = stripHtmlComments(permHtml);
+
+check('426   黃底 + 蜂巢紋 10%',
+  /background: var\(--y\)/.test(permHtml) && /rgba\(20,17,11,0\.10\)/.test(permHtml));
+check('426   🔴 蜂巢紋 data URI 內沒有未編碼的 ";"',
+  !(permHtml.match(/background-image: url\("([^"]*)"\)/)?.[1] ?? '').includes(';'));
+check('426   §6.1 麥克風四層造型裝在 60px 黑六角裡', (() => {
+  const mic = permHtml.match(/class="perm-mic"[^>]*>([\s\S]*?)<\/div>/)?.[1] ?? '';
+  return /width: 60px; height: 69px/.test(permHtml)
+    && ['m1', 'm2', 'm3', 'm4'].every((c) => mic.includes(`class="${c}"`));
+})());
+check('426   狀態膠囊：三態靠形狀分級，不只靠顏色（§7.4）',
+  /\.perm-status\.granted \.perm-mark \{[^}]*animation: none/.test(permHtml)
+  && /\.perm-status\.denied \.perm-mark \{[\s\S]{0,120}clip-path: polygon\(50% 0, 100% 100%, 0 100%\)/.test(permHtml));
+check('426   🔴 狀態標記是 #status 的兄弟節點（放裡面會被 textContent 洗掉）', (() => {
+  const box = permHtml.match(/class="perm-status"[^>]*>([\s\S]*?)<\/div>/)?.[1] ?? '';
+  return /<span class="perm-mark"/.test(box) && /<span id="status">/.test(box)
+    && !/<span id="status">[\s\S]*perm-mark/.test(box);
+})());
+check('426   🔴 底部提示的六角也是兄弟節點，不會被覆寫吃掉',
+  /<i aria-hidden="true"><\/i><span id="permHint">/.test(permHtml));
+check('426   🔴 .ts 不再用 inline style 寫死狀態色（綠 #3fb950 / 紅 #f85149 已清）',
+  !/#3fb950|#f85149/i.test(permTs) && /classList\.add\('granted'\)/.test(permTs)
+  && /classList\.add\('denied'\)/.test(permTs));
+check('426   permH / permDesc / status 三個既有 id 都還在',
+  ['permH', 'permDesc', 'status'].every((id) => permHtml.includes(`id="${id}"`)));
+check('426   這頁沒有按鈕（自動觸發授權，卡片明講不要加）',
+  !/<button/.test(permBody));
+check('426   🔴 零 emoji（含字典裡 mperm-granted / mperm-denied 的勾與叉）', (() => {
+  const bad = onlyEmoji(permBody);
+  for (const k of ['mperm-granted', 'mperm-denied', 'mperm-requesting', 'mperm-hint', 'mperm-h', 'mperm-desc']) {
+    const m = i18n.match(new RegExp(`'${k}': *\\{`));
+    if (!m) continue;
+    let d = 1, i = m.index + m[0].length;
+    while (d && i < i18n.length) { if (i18n[i] === '{') d++; else if (i18n[i] === '}') d--; i++; }
+    bad.push(...onlyEmoji(i18n.slice(m.index, i)));
+  }
+  return bad.join(' ');
+})() === '');
+check('426   🔴 沒有舊紫色系色碼',
+  !/#1a1a2e|#9aa3b2|#0f0f1a|#7c3aed/i.test(permHtml));
+check('426   §3.2 黃底上的說明文字 ≥600 字重、用 #3A2409（不是 #4A2F12）',
+  /#permDesc \{[\s\S]{0,120}font: 600 13px/.test(permHtml)
+  && /--on-y: #3A2409/.test(permHtml) && !/#4A2F12/i.test(permBody));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

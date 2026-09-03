@@ -3,17 +3,152 @@
 <html lang="zh-Hant">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>BugEzy 麥克風授權</title>
+    <style>
+      /* ─────────────────────────────────────────────────────────────
+         PM-426：麥克風授權頁（設計稿畫面 08）· 480×360 黃底
+         ⚠ 這頁沒有按鈕 —— 開啟即自動觸發 getUserMedia，不要加。
+         ⚠ 刻意不外連 Google Fonts（跟 popup / checkout 同一個判斷）。
+         ───────────────────────────────────────────────────────────── */
+      :root {
+        --y: #F7BE00;
+        --cream: #FFF4D6;
+        --y-pale: #FFE9AE;
+        --ink: #14110B;
+        --brown: #7A4E1D;
+        --err: #8A2A0F;
+        /* §3.2 黃底上的說明文字用 #3A2409（規範明講「不是 #4A2F12」） */
+        --on-y: #3A2409;
+        --font-brand: Archivo, 'Noto Sans TC', 'Microsoft JhengHei', system-ui, sans-serif;
+        --font-ui: 'Noto Sans TC', system-ui, -apple-system, 'Segoe UI', 'Microsoft JhengHei', sans-serif;
+        --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        --hex: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+      }
+      * { box-sizing: border-box; }
+      /* §4 蜂巢紋 10%。⚠ data URI 內不可出現未編碼的 `;` —— 會提早結束 CSS 宣告。 */
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--y);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='49' viewBox='0 0 28 49'%3E%3Cg fill='none' stroke='rgba(20,17,11,0.10)' stroke-width='1'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15z'/%3E%3Cpath d='M13.99 -15.25l13 7.5v15l-13 7.5L1 7.75v-15z'/%3E%3Cpath d='M13.99 33.25l13 7.5v15l-13 7.5L1 55.75v-15z'/%3E%3C/g%3E%3C/svg%3E");
+        font-family: var(--font-ui);
+        color: var(--ink);
+      }
+      /* 設計稿的 480×360 是內容框；這頁以分頁開啟會撐滿視窗，
+         所以底色鋪滿、內容維持 480×360 置中，底色一致看不出邊界。 */
+      .perm-card {
+        width: 480px;
+        max-width: 100%;
+        min-height: 360px;
+        padding: 34px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        text-align: center;
+      }
+
+      /* §6.1 麥克風四層堆疊（收音孔膠囊頭 + U 形吊架 + 立柱 + 底座），
+         裝在 60px 的黑六角裡 —— 跟 popup 那顆 48px 的是同一套語彙，只是放大。 */
+      .perm-mic {
+        width: 60px; height: 69px; flex-shrink: 0;
+        background: var(--ink); clip-path: var(--hex);
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+      }
+      .perm-mic i { display: block; }
+      .perm-mic .m1 {
+        width: 16px; height: 24px; border-radius: 8px;
+        background: repeating-linear-gradient(var(--y) 0 2px, var(--ink) 2px 4px);
+        box-shadow: 0 0 0 2px var(--y) inset;
+      }
+      .perm-mic .m2 {
+        width: 20px; height: 9px;
+        border: 2.5px solid var(--y); border-top: none; border-radius: 0 0 11px 11px;
+      }
+      .perm-mic .m3 { width: 2.5px; height: 4px; background: var(--y); }
+      .perm-mic .m4 { width: 14px; height: 2.5px; border-radius: 2px; background: var(--y); }
+
+      .perm-head { display: flex; flex-direction: column; gap: 9px; max-width: 340px; }
+      #permH {
+        margin: 0;
+        font: 800 21px/1.3 var(--font-brand);
+        letter-spacing: 0.02em;
+        color: var(--ink);
+      }
+      /* §3.2 黃底上的文字一律 ≥11.5px 且字重 ≥600（蜂巢紋會吃掉細筆畫）。
+         設計稿這一行是 400/#4A2F12，兩項都踩到 §3.2 的下限，所以上調。 */
+      #permDesc {
+        margin: 0;
+        font: 600 13px/1.7 var(--font-ui);
+        color: var(--on-y);
+        text-wrap: pretty;
+      }
+
+      /* 狀態膠囊。三種狀態靠**形狀**分級（§7.4 的精神：灰階截圖也要分得出來）：
+         請求中 = 脈衝六角／已授權 = 靜止六角＋反黑／被拒 = 警示三角＋磚紅。 */
+      .perm-status {
+        display: flex; align-items: center; gap: 10px;
+        padding: 11px 18px;
+        background: var(--cream); border: 2px solid var(--ink); border-radius: 999px;
+        font: 700 13px/1 var(--font-ui); color: var(--ink);
+      }
+      /* 🔴 標記是 #status 的**兄弟節點**。mic-permission.ts 會覆寫 #status 的 textContent，
+         放在裡面的話每換一次狀態就會被洗掉（popup 的登入鈕踩過同一個坑）。 */
+      .perm-mark {
+        width: 9px; height: 10px; flex-shrink: 0;
+        background: var(--ink); clip-path: var(--hex);
+        animation: pulse 1.2s ease-in-out infinite;
+      }
+      .perm-status.granted { background: var(--ink); border-color: var(--ink); color: var(--y); }
+      .perm-status.granted .perm-mark { background: var(--y); animation: none; }
+      .perm-status.denied { background: var(--err); border-color: var(--err); color: var(--y-pale); }
+      .perm-status.denied .perm-mark {
+        background: var(--y); animation: none;
+        clip-path: polygon(50% 0, 100% 100%, 0 100%);
+      }
+
+      /* 底部提示：§3.3 這是操作指引不是機器產出，但設計稿指定等寬字，照做。 */
+      .perm-hint {
+        display: flex; align-items: center; gap: 7px;
+        margin: 0;
+        font: 700 11.5px/1 var(--font-mono);
+        color: var(--on-y);
+        letter-spacing: 0.04em;
+      }
+      .perm-hint i { display: block; width: 6px; height: 7px; background: var(--brown); clip-path: var(--hex); }
+      /* 授權有結果之後，這句「請在提示中選擇允許」就不再成立 */
+      .perm-status.granted ~ .perm-hint,
+      .perm-status.denied ~ .perm-hint { visibility: hidden; }
+
+      @keyframes pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.35; transform: scale(0.86); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .perm-mark { animation: none; }
+      }
+    </style>
   </head>
-  <body
-    style="background:#1a1a2e;color:#fff;font-family:system-ui,-apple-system,'Microsoft JhengHei',sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"
-  >
-    <div style="text-align:center;max-width:400px;">
-      <p style="font-size:48px;margin:0;">🎙️</p>
-      <h2 id="permH">BugEzy 需要麥克風權限</h2>
-      <p id="permDesc" style="color:#9aa3b2;">允許後即可用語音描述 Bug。<br />此授權只需一次，之後自動啟用。</p>
-      <p id="status" style="color:#3fb950;font-size:18px;">正在請求授權...</p>
-    </div>
+  <body>
+    <main class="perm-card">
+      <div class="perm-mic" aria-hidden="true"><i class="m1"></i><i class="m2"></i><i class="m3"></i><i class="m4"></i></div>
+      <div class="perm-head">
+        <h1 id="permH">BugEzy 需要麥克風權限</h1>
+        <p id="permDesc">允許後即可用語音描述 Bug。<br />此授權只需一次，之後自動啟用。</p>
+      </div>
+      <!-- #status 只放文字（.ts 會覆寫 textContent）；標記與狀態色由外層 #permStatus 負責 -->
+      <div class="perm-status" id="permStatus">
+        <span class="perm-mark" aria-hidden="true"></span>
+        <span id="status">正在請求授權…</span>
+      </div>
+      <!-- 文字要有自己的 id：.ts 覆寫 textContent 時才不會把前面的六角一起洗掉 -->
+      <p class="perm-hint"><i aria-hidden="true"></i><span id="permHint">請在瀏覽器上方的提示中選擇「允許」</span></p>
+    </main>
     <script type="module" src="mic-permission.js"></script>
   </body>
 </html>
