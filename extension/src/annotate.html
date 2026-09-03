@@ -2,132 +2,343 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>BugEzy — 截圖標注</title>
   <style>
+    /* ─────────────────────────────────────────────────────────────
+       PM-427：截圖標注頁（設計稿畫面 05）
+       §9.4 工作區反轉：黃色留給工具列與描述列（chrome），中央畫布用近黑
+       #0E0C08，讓使用者的截圖成為視覺焦點。比例仍是黃 60 / 黑 30 / 咖啡 10。
+       ⚠ 刻意不外連 Google Fonts（跟 popup / checkout / mic-permission 同一個判斷）。
+       ───────────────────────────────────────────────────────────── */
+    :root {
+      --y: #F7BE00;
+      --y-deep: #DFA800;
+      --y-pale: #FFE9AE;
+      --cream: #FFF4D6;
+      --ink: #14110B;
+      --ink-2: #211C13;
+      --ink-3: #0E0C08;
+      --brown: #7A4E1D;
+      --brown-d: #4A2F12;
+      --err: #8A2A0F;
+      /* §3.2 黃底上的說明文字用 #3A2409（規範明講「不是 #4A2F12」） */
+      --on-y: #3A2409;
+      --font-brand: Archivo, 'Noto Sans TC', 'Microsoft JhengHei', system-ui, sans-serif;
+      --font-ui: 'Noto Sans TC', system-ui, -apple-system, 'Segoe UI', 'Microsoft JhengHei', sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --hex: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+      /* §6 箭頭多邊形（下一步鈕與箭頭工具共用） */
+      --arrow: polygon(0 38%, 62% 38%, 62% 0, 100% 50%, 62% 100%, 62% 62%, 0 62%);
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #1a1a2e; display: flex; flex-direction: column; height: 100vh; overflow: hidden; font-family: system-ui, "Microsoft JhengHei", sans-serif; }
+    body {
+      background: var(--ink);
+      display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+      font-family: var(--font-ui);
+    }
 
-    /* 工具列（PM-104：橘光脈衝入場特效，由 popup「工具列特效」開關控制 → 加 .fx-on 才播）*/
+    /* ── 1) 敏感資料警示條（§2.3 咖啡 = 系統在跟你說話）──
+       🔴 annotate.ts 會 `tip.textContent = …` 再 appendChild 一顆「撤銷遮罩」鈕，
+          所以脈衝六角只能用 ::before（pseudo element 不會被 textContent 洗掉）。
+       🔴 而且 .ts 是 `tip.style.display = 'block'`——inline style 會蓋掉 flex，
+          所以 ::before 要 inline-block 才有寬高（PM-417 在 copy-mcp 回饋卡踩過）。 */
+    .sensitive-tip {
+      display: none;
+      background: var(--brown); color: var(--y-pale);
+      padding: 0 18px; height: 36px; line-height: 36px;
+      font: 700 12px/36px var(--font-ui); text-align: center;
+      flex-shrink: 0;
+    }
+    .sensitive-tip::before {
+      content: ''; display: inline-block; vertical-align: -1px;
+      width: 8px; height: 9px; margin-right: 10px;
+      background: var(--y); clip-path: var(--hex);
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+
+    /* ── 2) 黃色工具列 ──
+       PM-104：工具列特效（popup「工具列特效」開關 → 加 .fx-on 才播）。
+       PM-427 把橘光換成大黃蜂黃 —— 橘色 #ff8c00 與這套品牌無關。 */
     .toolbar {
-      display: flex; align-items: center; gap: 8px;
-      padding: 8px 16px; background: #16213e;
-      border: 2px solid #444;
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 18px; flex-shrink: 0;
+      background: var(--y);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='49' viewBox='0 0 28 49'%3E%3Cg fill='none' stroke='rgba(20,17,11,0.10)' stroke-width='1'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15z'/%3E%3Cpath d='M13.99 -15.25l13 7.5v15l-13 7.5L1 7.75v-15z'/%3E%3Cpath d='M13.99 33.25l13 7.5v15l-13 7.5L1 55.75v-15z'/%3E%3C/g%3E%3C/svg%3E");
+      border: none; border-bottom: 2px solid var(--ink);
     }
     .toolbar.fx-on {
-      border-color: #ff8c00;
-      box-shadow: 0 0 20px rgba(255, 140, 0, 0.8);
-      animation: toolbar-orange-pulse 0.7s ease-in-out 10; /* 0.7×10 ≈ 7 秒 */
+      animation: toolbar-hornet-pulse 0.7s ease-in-out 10; /* 0.7×10 ≈ 7 秒 */
     }
-    @keyframes toolbar-orange-pulse {
-      0%, 100% { box-shadow: 0 0 8px rgba(255, 140, 0, 0.3); border-color: #ff8c00; }
-      50% { box-shadow: 0 0 30px rgba(255, 140, 0, 1), 0 0 60px rgba(255, 140, 0, 0.5); border-color: #ffaa00; }
+    @keyframes toolbar-hornet-pulse {
+      0%, 100% { border-bottom-color: var(--ink); box-shadow: inset 0 -4px 0 rgba(20, 17, 11, 0.18); }
+      50% { border-bottom-color: var(--brown-d); box-shadow: inset 0 -4px 0 var(--brown-d); }
     }
-    /* 7 秒脈衝結束後：邊框退暗 + 常駐微光 */
+    /* 7 秒脈衝結束後回到常態（不留殘影） */
     .toolbar.glow-settled {
       animation: none;
-      border-color: #444;
-      box-shadow: 0 2px 8px rgba(255, 140, 0, 0.15);
-      transition: border-color 0.5s, box-shadow 0.5s;
+      border-bottom-color: var(--ink);
+      box-shadow: none;
+      transition: border-bottom-color 0.5s, box-shadow 0.5s;
     }
-    .toolbar button {
-      background: #333; color: #fff; border: 1px solid #555;
-      border-radius: 6px; padding: 6px 14px; cursor: pointer; font-size: 14px;
-    }
-    .toolbar button.active { background: #7c3aed; border-color: #7c3aed; }
-    .toolbar button.save { background: #059669; border-color: #059669; font-weight: 600; }
-    .toolbar button.cancel { background: #dc2626; border-color: #dc2626; }
-    .toolbar .separator { width: 1px; height: 24px; background: #555; }
-    .toolbar label { color: #aaa; font-size: 13px; }
-    .toolbar input[type="color"] { width: 32px; height: 28px; border: none; cursor: pointer; background: none; }
-    .toolbar select { background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; padding: 4px; }
 
-    /* 畫布區 */
+    /* 工具按鈕。§7.1：active = 黑底黃字 + 硬投影；非 active = 描邊。 */
+    .toolbar button {
+      display: flex; align-items: center; gap: 7px;
+      padding: 9px 14px;
+      border: 2px solid var(--ink); border-radius: 10px;
+      background: transparent; color: var(--ink);
+      font: 700 13px/1 var(--font-ui); cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s, transform 0.12s, box-shadow 0.12s;
+    }
+    .toolbar button:hover { background: rgba(20, 17, 11, 0.09); }
+    .toolbar button.active {
+      background: var(--ink); color: var(--y); box-shadow: 2px 2px 0 var(--brown-d);
+    }
+    .toolbar button.active:hover { background: var(--ink); }
+    /* 馬賽克是「遮蔽敏感資料」的系統功能 → §2.3 咖啡底 */
+    .toolbar button.mosaic-btn { background: var(--brown-d); color: var(--y-pale); border-color: var(--ink); }
+    .toolbar button.mosaic-btn:hover { background: var(--brown); }
+    .toolbar button.mosaic-btn.active { background: var(--brown); color: var(--y-pale); box-shadow: 2px 2px 0 var(--ink); }
+    /* 復原／清除／取消：次要按鈕 */
+    .toolbar button.ghost {
+      padding: 9px 13px; border-color: rgba(20, 17, 11, 0.4); color: var(--brown-d); font-size: 12px;
+    }
+    .toolbar button.ghost:hover { border-color: var(--ink); color: var(--ink); background: transparent; }
+    .toolbar button.cancel { padding: 10px 16px; border-color: rgba(20, 17, 11, 0.4); color: var(--brown-d); }
+    .toolbar button.cancel:hover { border-color: var(--ink); color: var(--ink); background: transparent; }
+    /* 下一步：主按鈕（黑底黃字 + 硬投影） */
+    .toolbar button.save {
+      padding: 10px 20px; background: var(--ink); color: var(--y); box-shadow: 3px 3px 0 var(--brown-d);
+    }
+    .toolbar button.save:hover { background: var(--ink); transform: translate(1px, 1px); box-shadow: 2px 2px 0 var(--brown-d); }
+
+    /* §6 幾何圖示取代 emoji。全部用 currentColor，才會跟著 active／hover 換色。 */
+    .ic { display: block; flex-shrink: 0; }
+    .ic-pen { width: 13px; height: 13px; background: currentColor; clip-path: polygon(0 100%, 18% 72%, 72% 18%, 100% 0, 82% 28%, 28% 82%); }
+    .ic-arrow { width: 13px; height: 12px; background: currentColor; clip-path: var(--arrow); }
+    .ic-rect { width: 13px; height: 11px; border: 2px solid currentColor; border-radius: 2px; }
+    .ic-text { font: 800 13px/1 var(--font-brand); }
+    .ic-mosaic { width: 13px; height: 13px; background: repeating-conic-gradient(currentColor 0 25%, transparent 0 50%) 0 0 / 6.5px 6.5px; }
+    .ic-next { width: 12px; height: 11px; background: currentColor; clip-path: var(--arrow); }
+
+    .toolbar .separator { width: 2px; height: 26px; background: rgba(20, 17, 11, 0.28); flex-shrink: 0; }
+    .toolbar label { font: 700 12.5px/1 var(--font-ui); color: var(--on-y); }
+    .tool-group { display: flex; align-items: center; gap: 8px; }
+    .tool-group.tools { gap: 6px; }
+
+    /* 顏色：4 個常用色票 + 一顆原生「自訂顏色」。
+       🔴 原生 <input type="color" id="colorPicker"> **不能移除** ——
+          annotate.ts 用 `$('colorPicker')`（找不到會 throw，整頁死掉）而且直接讀它的 .value。
+          所以它留在 DOM 裡當唯一真相，色票只是把值寫進去的快捷鍵。 */
+    .swatches { display: flex; align-items: center; gap: 4px; }
+    /* 🔴 選擇器一定要是 `.toolbar button.swatch` 而不是 `.swatch`：
+       這兩顆也是 <button>，而 `.toolbar button`（0,1,1）比 `.swatch`（0,1,0）優先，
+       色票會被套上工具鈕的 9px/14px 內距與黑邊框、背景還會被 transparent 蓋掉。 */
+    .toolbar button.swatch {
+      width: 22px; height: 22px; min-width: 22px; border-radius: 6px; cursor: pointer;
+      border: 2px solid rgba(20, 17, 11, 0.3); padding: 0; gap: 0;
+      display: block; flex-shrink: 0;
+    }
+    .toolbar button.swatch:hover { background: inherit; }
+    .toolbar button.swatch.on { border-color: var(--ink); box-shadow: 0 0 0 2px var(--y) inset; }
+    /* 自訂色：原生控制項本身就是那顆色票（去掉瀏覽器預設的內距與外框） */
+    .toolbar input[type="color"] {
+      width: 22px; height: 22px; border-radius: 6px; cursor: pointer;
+      border: 2px solid rgba(20, 17, 11, 0.3); background: none; padding: 0;
+      flex-shrink: 0;
+    }
+    .toolbar input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+    .toolbar input[type="color"]::-webkit-color-swatch { border: none; border-radius: 3px; }
+
+    /* 粗細：3 條橫條。原生 <select id="lineWidth"> 同樣不能移除（.ts 讀 .value），
+       所以把它收起來、由橫條寫值進去。收起來但保留在 a11y tree（不是 display:none）。 */
+    .widths {
+      display: flex; align-items: center; gap: 3px;
+      padding: 4px; border: 2px solid rgba(20, 17, 11, 0.3); border-radius: 8px;
+    }
+    /* 同上：粗細橫條也是 <button>，選擇器必須壓過 `.toolbar button` */
+    .toolbar button.width-opt {
+      width: 18px; min-width: 18px; background: var(--ink); border: none; border-radius: 2px;
+      cursor: pointer; opacity: 0.45; padding: 0; gap: 0; display: block; transition: opacity 0.15s;
+    }
+    .toolbar button.width-opt:hover { opacity: 0.75; background: var(--ink); }
+    .toolbar button.width-opt.on { opacity: 1; }
+    .toolbar button.width-opt[data-w="2"] { height: 2px; }
+    .toolbar button.width-opt[data-w="4"] { height: 4px; }
+    .toolbar button.width-opt[data-w="8"] { height: 7px; }
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+    }
+
+    /* ── 3) 畫布區（§9.4 近黑，讓截圖成為焦點）── */
     .canvas-wrapper {
       flex: 1; overflow: auto; display: flex; align-items: center; justify-content: center;
-      background: #111;
+      background: var(--ink-3);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='49' viewBox='0 0 28 49'%3E%3Cg fill='none' stroke='rgba(247,190,0,0.07)' stroke-width='1'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15z'/%3E%3Cpath d='M13.99 -15.25l13 7.5v15l-13 7.5L1 7.75v-15z'/%3E%3Cpath d='M13.99 33.25l13 7.5v15l-13 7.5L1 55.75v-15z'/%3E%3C/g%3E%3C/svg%3E");
     }
     .canvas-container { position: relative; display: inline-block; }
-    .canvas-container canvas { display: block; cursor: crosshair; }
+    .canvas-container canvas { display: block; cursor: crosshair; border: 2px solid var(--brown); border-radius: 4px; }
 
-    /* 文字說明區（PM-20） */
-    .description-area { padding: 8px 16px; background: #16213e; border-top: 1px solid #333; }
-    .description-area label { display: block; color: #9aa3b2; font-size: 13px; margin-bottom: 4px; }
-    .desc-row { display: flex; gap: 8px; align-items: stretch; }
-    .desc-row textarea {
-      flex: 1; background: #1a1a2e; color: #eee; border: 1px solid #444; border-radius: 6px;
-      padding: 8px; font-size: 14px; font-family: system-ui, sans-serif; resize: vertical;
-    }
-    .desc-row textarea:focus { outline: none; border-color: #7c3aed; }
-    .voice-btn {
-      background: #333; color: #fff; border: 1px solid #555; border-radius: 6px;
-      padding: 8px 12px; font-size: 20px; cursor: pointer; transition: all 0.15s;
-    }
-    .voice-btn.listening { background: #dc2626; border-color: #dc2626; animation: pulse 1s infinite; }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
-    /* PM-100：問題描述左邊的臨時「語音／鍵盤」快速切換鈕 */
-    .voice-toggle-btn {
-      background: #2a2a3e; border: 1px solid #555; border-radius: 8px;
-      padding: 8px; font-size: 20px; cursor: pointer; flex-shrink: 0;
-      transition: background 0.2s;
-    }
-    .voice-toggle-btn:hover { background: #3a3a5e; }
-    .voice-toggle-btn.mic-on { background: #1a3a1a; border-color: #3fb950; }
-    .voice-status { color: #9aa3b2; font-size: 12px; margin-top: 4px; min-height: 16px; }
-
-    /* AI 精簡（PM-25） */
-    .desc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-    .desc-header label { margin: 0; }
-    .ai-btn {
-      background: linear-gradient(135deg, #7c3aed, #6d28d9); color: #fff; border: none;
-      border-radius: 8px; padding: 5px 12px; font-size: 12px; cursor: pointer; font-weight: 600; transition: all 0.15s;
-    }
-    .ai-btn:hover { filter: brightness(1.15); transform: translateY(-1px); }
-    .ai-btn:disabled { opacity: 0.5; cursor: default; transform: none; }
-    .ai-btn.done { background: linear-gradient(135deg, #059669, #047857); }
-
-    /* 即時字幕（PM-21，浮在畫布底部，pointer-events:none 不擋畫圖） */
+    /* ── 4) 聆聽膠囊（浮在畫布底部）──
+       維持 position:fixed（不是設計稿的 absolute）：.canvas-wrapper 會捲動，
+       絕對定位的話大截圖捲動時膠囊會跟著跑掉。bottom 抬到描述列上方。 */
     #liveCaptions {
-      position: fixed; bottom: 180px; left: 50%; transform: translateX(-50%);
+      position: fixed; bottom: 150px; left: 50%; transform: translateX(-50%);
       z-index: 9999; pointer-events: none;
-      background: rgba(0, 0, 0, 0.75); color: #fff; padding: 8px 20px;
-      border-radius: 8px; font-size: 16px; max-width: 80%; text-align: center;
-      transition: opacity 0.3s; line-height: 1.5;
-      display: flex; align-items: center; justify-content: center; gap: 10px;
+      display: flex; align-items: center; justify-content: center; gap: 12px;
+      padding: 10px 20px; max-width: 80%; text-align: center;
+      background: rgba(20, 17, 11, 0.86);
+      border: 1.5px solid var(--brown); border-radius: 999px;
+      color: var(--y-pale); font: 500 14px/1.4 var(--font-ui);
+      transition: opacity 0.3s;
     }
     #liveCaptions.hidden { opacity: 0; }
-    /* PM-205：Whisper 錄音音量條（5 條，安靜矮紅、講話綠色跳動，與 popup/inject 一致） */
-    #volBars { display: flex; align-items: flex-end; gap: 2px; height: 20px; flex-shrink: 0; }
+    /* 5 柱波形（§8 bar）。柱色由內到外 brown → y-deep → y → y-deep → brown，
+       高度由 annotate.ts 依真實音量寫 inline style。 */
+    #volBars { display: flex; align-items: flex-end; gap: 3px; height: 20px; flex-shrink: 0; }
     #volBars.hidden { display: none; }
-    #volBars .vol-bar { width: 4px; height: 4px; background: #ef4444; border-radius: 2px; transition: height 0.12s ease; }
-    /* PM-185：馬賽克筆刷按鈕 + 敏感提示條 */
-    .toolbar button.mosaic-btn { background: #f59e0b; color: #000; border-color: #f59e0b; }
-    .toolbar button.mosaic-btn.active { background: #ef4444; border-color: #ef4444; color: #fff; box-shadow: 0 0 8px rgba(239,68,68,0.5); }
-    .sensitive-tip { display: none; background: rgba(245,158,11,0.15); color: #f59e0b; border-bottom: 1px solid rgba(245,158,11,0.5); padding: 8px 16px; font-size: 13px; text-align: center; font-weight: 600; }
+    #volBars .vol-bar { width: 4px; height: 4px; border-radius: 2px; transition: height 0.12s ease; background: var(--y); }
+    #volBars .vol-bar:nth-child(1), #volBars .vol-bar:nth-child(5) { background: var(--brown); }
+    #volBars .vol-bar:nth-child(2), #volBars .vol-bar:nth-child(4) { background: var(--y-deep); }
+
+    /* ── 5) 描述列（底部黃底）── */
+    .description-area {
+      flex-shrink: 0;
+      padding: 14px 18px 16px;
+      background: var(--y); border-top: 2px solid var(--ink);
+      display: flex; flex-direction: column; gap: 9px;
+    }
+    .desc-header { display: flex; align-items: center; gap: 10px; }
+    .description-area label { font: 700 12px/1 var(--font-ui); color: var(--ink); }
+    .desc-sub { font: 600 12px/1 var(--font-ui); color: var(--on-y); }
+    /* §9.2 三步流程標記：錄製 → 標注 → 編輯上傳 */
+    .step-mark { margin-left: auto; font: 700 11.5px/1 var(--font-mono); color: var(--on-y); }
+    .desc-row { display: flex; gap: 9px; align-items: stretch; }
+    .desc-row textarea {
+      flex: 1; min-height: 62px;
+      background: var(--cream); color: var(--ink);
+      border: 2px solid var(--ink); border-radius: 10px;
+      padding: 11px 13px; font: 400 14px/1.6 var(--font-ui); resize: vertical;
+    }
+    .desc-row textarea:focus { outline: none; border-color: var(--brown-d); }
+    .desc-row textarea::placeholder { color: var(--brown); }
+
+    /* 鍵盤／語音切換鈕（PM-100）。
+       🔴 圖示不能放進按鈕的 textContent —— annotate.ts 用 textContent 換圖示，
+          改成切 class、圖示由兩個 span 提供，.ts 只負責決定顯示哪一個。 */
+    .voice-toggle-btn {
+      width: 44px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      border: 2px solid var(--ink); border-radius: 10px; background: var(--cream);
+      cursor: pointer; padding: 0;
+    }
+    .voice-toggle-btn:hover { background: #fff; }
+    /* 目前語音模式 → 顯示鍵盤圖示（點我切鍵盤）；鍵盤模式 → 顯示麥克風圖示 */
+    .voice-toggle-btn .ic-mic-sm { display: none; }
+    .voice-toggle-btn.mic-on { background: var(--ink); }
+    .voice-toggle-btn.mic-on .ic-keyboard { display: none; }
+    .voice-toggle-btn.mic-on .ic-mic-sm { display: flex; }
+    /* §6 鍵盤 → 圓角方框 + 底部橫槓 */
+    .ic-keyboard {
+      width: 18px; height: 12px; box-sizing: border-box;
+      border: 2px solid var(--ink); border-radius: 3px;
+      display: flex; align-items: flex-end; justify-content: center; padding-bottom: 1.5px;
+    }
+    .ic-keyboard i { display: block; width: 9px; height: 2px; background: var(--ink); }
+
+    /* 語音輸入鈕：§6.1 四層麥克風（膠囊頭 + U 形吊架 + 立柱 + 底座） */
+    .voice-btn {
+      width: 52px; flex-shrink: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+      border: 2px solid var(--ink); border-radius: 10px; background: var(--ink);
+      cursor: pointer; padding: 0;
+      transition: background 0.15s;
+    }
+    .voice-btn:hover { background: var(--ink-2); }
+    .voice-btn.listening { background: var(--brown); border-color: var(--brown); animation: pulse 1.2s ease-in-out infinite; }
+    /* 錄音中把麥克風換成 §6 的停止方塊。
+       🔴 原本 annotate.ts 是 `voiceInputBtn.textContent = '⏹'` —— 那會把四層麥克風的
+          span 整組洗掉，換成幾何圖示之後不能再那樣做，改切 .rec。 */
+    .voice-btn .ic-stop { display: none; width: 14px; height: 14px; border-radius: 2px; background: var(--y); }
+    .voice-btn.rec .ic-mic { display: none; }
+    .voice-btn.rec .ic-stop { display: block; }
+    .ic-mic, .ic-mic-sm { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+    .ic-mic .m1, .ic-mic-sm .m1 {
+      width: 11px; height: 16px; border-radius: 6px;
+      background: repeating-linear-gradient(var(--y) 0 1.5px, var(--ink) 1.5px 3px);
+      box-shadow: 0 0 0 1.5px var(--y) inset;
+    }
+    .ic-mic .m2, .ic-mic-sm .m2 {
+      width: 15px; height: 6px; box-sizing: border-box;
+      border: 2px solid var(--y); border-top: none; border-radius: 0 0 9px 9px;
+    }
+    .ic-mic .m3, .ic-mic-sm .m3 { width: 2px; height: 3px; background: var(--y); }
+    .ic-mic .m4, .ic-mic-sm .m4 { width: 11px; height: 2px; border-radius: 2px; background: var(--y); }
+
+    .voice-status { font: 600 12px/1.4 var(--font-ui); color: var(--on-y); min-height: 16px; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.35; transform: scale(0.86); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .sensitive-tip::before, .voice-btn.listening, .toolbar.fx-on { animation: none; }
+    }
   </style>
 </head>
 <body>
   <div id="sensitiveTip" class="sensitive-tip"></div>
   <div class="toolbar">
-    <button id="penTool" class="active" title="畫筆" data-i18n="annotate-pen">✏️ 畫筆</button>
-    <button id="arrowTool" title="箭頭" data-i18n="annotate-arrow">➡️ 箭頭</button>
-    <button id="rectTool" title="框框" data-i18n="annotate-rect">⬜ 框框</button>
-    <button id="textTool" title="文字" data-i18n="annotate-text">📝 文字</button>
-    <button id="mosaicTool" class="mosaic-btn" title="馬賽克" data-i18n="annotate-mosaic">🔒 馬賽克</button>
+    <!-- 🔴 圖示是 [data-i18n] 元素的**兄弟節點**：applyAnnotateTranslations() 會覆寫
+         [data-i18n] 的 textContent，圖示放在按鈕裡但不在那個 span 裡才不會被洗掉。 -->
+    <div class="tool-group tools">
+      <button id="penTool" class="active" title="畫筆"><span class="ic ic-pen"></span><span data-i18n="annotate-pen">畫筆</span></button>
+      <button id="arrowTool" title="箭頭"><span class="ic ic-arrow"></span><span data-i18n="annotate-arrow">箭頭</span></button>
+      <button id="rectTool" title="框框"><span class="ic ic-rect"></span><span data-i18n="annotate-rect">框框</span></button>
+      <button id="textTool" title="文字"><span class="ic ic-text">T</span><span data-i18n="annotate-text">文字</span></button>
+      <button id="mosaicTool" class="mosaic-btn" title="馬賽克"><span class="ic ic-mosaic"></span><span data-i18n="annotate-mosaic">馬賽克</span></button>
+    </div>
     <div class="separator"></div>
-    <label data-i18n="annotate-color">顏色</label>
-    <input type="color" id="colorPicker" value="#ff0000">
-    <label data-i18n="annotate-thickness">粗細</label>
-    <select id="lineWidth">
-      <option value="2" data-i18n="annotate-thin">細</option>
-      <option value="4" selected data-i18n="annotate-mid">中</option>
-      <option value="8" data-i18n="annotate-thick">粗</option>
-    </select>
+    <div class="tool-group">
+      <label data-i18n="annotate-color">顏色</label>
+      <!-- 四個常用色票（設計稿畫面 05）+ 最右邊原生的自訂顏色。
+           色票只是把值寫進 #colorPicker 的快捷鍵，真正的來源仍是那個原生控制項。 -->
+      <div class="swatches" id="swatches">
+        <button type="button" class="swatch on" data-c="#D92B2B" style="background:#D92B2B" title="#D92B2B"></button>
+        <button type="button" class="swatch" data-c="#14110B" style="background:#14110B" title="#14110B"></button>
+        <button type="button" class="swatch" data-c="#1E6FD9" style="background:#1E6FD9" title="#1E6FD9"></button>
+        <button type="button" class="swatch" data-c="#FFF4D6" style="background:#FFF4D6" title="#FFF4D6"></button>
+        <input type="color" id="colorPicker" value="#D92B2B" title="自訂顏色">
+      </div>
+    </div>
+    <div class="tool-group">
+      <label for="lineWidth" data-i18n="annotate-thickness">粗細</label>
+      <div class="widths" id="widths">
+        <!-- title 由 annotate.ts 從 #lineWidth 對應的 <option> 文字同步過來（那些 option 有 data-i18n，
+             翻譯完直接抄，不用另外開 i18n key，也不會有兩份文案不同步的問題）。 -->
+        <button type="button" class="width-opt" data-w="2"></button>
+        <button type="button" class="width-opt on" data-w="4"></button>
+        <button type="button" class="width-opt" data-w="8"></button>
+      </div>
+      <!-- #lineWidth 不能移除：annotate.ts 用 $('lineWidth') 取它（找不到會 throw）並讀 .value。
+           視覺上由上面三條橫條代表，這個 select 收進 a11y-only 區域仍可鍵盤操作。 -->
+      <select id="lineWidth" class="sr-only">
+        <option value="2" data-i18n="annotate-thin">細</option>
+        <option value="4" selected data-i18n="annotate-mid">中</option>
+        <option value="8" data-i18n="annotate-thick">粗</option>
+      </select>
+    </div>
     <div class="separator"></div>
-    <button id="undoBtn" data-i18n="annotate-undo">↩️ 復原</button>
-    <button id="clearBtn" data-i18n="annotate-clear">🗑️ 清除全部</button>
+    <button id="undoBtn" class="ghost"><span data-i18n="annotate-undo">復原</span></button>
+    <button id="clearBtn" class="ghost"><span data-i18n="annotate-clear">清除全部</span></button>
     <div style="flex:1"></div>
-    <button id="cancelBtn" class="cancel" data-i18n="annotate-cancel">✗ 取消</button>
-    <button id="saveBtn" class="save" data-i18n="annotate-next">📤 下一步</button>
+    <button id="cancelBtn" class="cancel"><span data-i18n="annotate-cancel">取消</span></button>
+    <!-- 🔴 saveBtn 的文字要有獨立的 span：annotate.ts 上傳時會把它換成「處理中…」，
+         直接寫 saveBtn.textContent 會把右邊的箭頭圖示一起洗掉。 -->
+    <button id="saveBtn" class="save"><span id="saveBtnLabel" data-i18n="annotate-next">下一步</span><span class="ic ic-next"></span></button>
   </div>
   <div class="canvas-wrapper">
     <div class="canvas-container">
@@ -139,17 +350,25 @@
     <span id="volBars" class="hidden">
       <span class="vol-bar"></span><span class="vol-bar"></span><span class="vol-bar"></span><span class="vol-bar"></span><span class="vol-bar"></span>
     </span>
-    <span id="captionText" data-i18n="annotate-listening">🔴 聆聽中，邊畫邊說描述問題...</span>
+    <span id="captionText" data-i18n="annotate-listening">聆聽中，邊畫邊說描述問題…</span>
   </div>
   <!-- 文字說明區（PM-20） -->
   <div class="description-area">
     <div class="desc-header">
-      <label for="descInput" data-i18n="annotate-desc-label">💬 問題描述（選填）</label>
+      <label for="descInput" data-i18n="annotate-desc-label">問題描述</label>
+      <span class="desc-sub" data-i18n="annotate-desc-sub">選填 · 語音會自動填入</span>
+      <span class="step-mark">STEP 2 / 3</span>
     </div>
     <div class="desc-row">
-      <button id="voice-toggle" class="voice-toggle-btn" title="切換到鍵盤輸入">⌨️</button>
-      <textarea id="descInput" placeholder="描述你看到的問題，或按右邊麥克風語音輸入..." data-i18n-ph="annotate-desc-ph" rows="3"></textarea>
-      <button id="voiceInputBtn" class="voice-btn" title="語音輸入">🎤</button>
+      <button id="voice-toggle" class="voice-toggle-btn" title="切換到鍵盤輸入">
+        <span class="ic-keyboard"><i></i></span>
+        <span class="ic-mic-sm"><span class="m1"></span><span class="m2"></span><span class="m3"></span><span class="m4"></span></span>
+      </button>
+      <textarea id="descInput" placeholder="描述你看到的問題，或按右邊麥克風語音輸入…" data-i18n-ph="annotate-desc-ph" rows="3"></textarea>
+      <button id="voiceInputBtn" class="voice-btn" title="語音輸入">
+        <span class="ic-mic"><span class="m1"></span><span class="m2"></span><span class="m3"></span><span class="m4"></span></span>
+        <span class="ic-stop"></span>
+      </button>
     </div>
     <div id="voiceStatus" class="voice-status"></div>
   </div>

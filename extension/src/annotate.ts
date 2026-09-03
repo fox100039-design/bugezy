@@ -63,6 +63,47 @@ const textTool = $<HTMLButtonElement>('textTool');
 const mosaicTool = $<HTMLButtonElement>('mosaicTool'); // PM-185
 const colorPicker = $<HTMLInputElement>('colorPicker');
 const lineWidthSel = $<HTMLSelectElement>('lineWidth');
+
+// PM-427：工具列的 4 個色票與 3 條粗細橫條（設計稿畫面 05）。
+//   🔴 這裡只是把值寫進原生的 #colorPicker / #lineWidth —— 它們仍是唯一真相，
+//      畫布那邊照舊讀 colorPicker.value / lineWidthSel.value，繪圖邏輯一行都沒動。
+//      原生控制項也不能拿掉：上面的 $() 找不到元素會 throw，整頁會直接死。
+function wireToolbarPickers(): void {
+  const swatches = Array.from(document.querySelectorAll<HTMLButtonElement>('.swatch[data-c]'));
+  const syncSwatches = () => {
+    const cur = colorPicker.value.toLowerCase();
+    swatches.forEach((b) => b.classList.toggle('on', (b.dataset.c ?? '').toLowerCase() === cur));
+  };
+  swatches.forEach((b) => {
+    b.addEventListener('click', () => {
+      colorPicker.value = b.dataset.c ?? colorPicker.value;
+      syncSwatches();
+    });
+  });
+  // 用自訂顏色時，四個色票要一起取消選取（否則畫面會說謊）
+  colorPicker.addEventListener('input', syncSwatches);
+  syncSwatches();
+
+  const widths = Array.from(document.querySelectorAll<HTMLButtonElement>('.width-opt[data-w]'));
+  const syncWidths = () => {
+    widths.forEach((b) => {
+      b.classList.toggle('on', b.dataset.w === lineWidthSel.value);
+      // title 直接抄對應 <option> 的文字——那些 option 有 data-i18n，翻譯完就同步，
+      // 不用另開 key，也不會有兩份文案對不上的問題。
+      const opt = Array.from(lineWidthSel.options).find((o) => o.value === b.dataset.w);
+      if (opt) { b.title = opt.textContent ?? ''; b.setAttribute('aria-label', opt.textContent ?? ''); }
+    });
+  };
+  widths.forEach((b) => {
+    b.addEventListener('click', () => {
+      lineWidthSel.value = b.dataset.w ?? lineWidthSel.value;
+      syncWidths();
+    });
+  });
+  lineWidthSel.addEventListener('change', syncWidths);
+  syncWidths();
+}
+wireToolbarPickers();
 const undoBtn = $<HTMLButtonElement>('undoBtn');
 const clearBtn = $<HTMLButtonElement>('clearBtn');
 const cancelBtn = $<HTMLButtonElement>('cancelBtn');
@@ -337,15 +378,17 @@ const captionText = $('captionText');
 const liveCaptions = $('liveCaptions');
 
 // PM-100：問題描述左邊「語音／鍵盤」臨時快速切換鈕。
-// icon ⌨️ = 目前語音模式（點我切鍵盤）；icon 🎙️ = 目前鍵盤模式（點我切語音）。
+// 目前語音模式 → 顯示鍵盤圖示（點我切鍵盤）；鍵盤模式 → 顯示麥克風圖示（點我切語音）。
 // 只影響這次標注，下次截圖重新載入頁面就恢復預設語音。
+// PM-427：圖示改由 .mic-on 這個 class 決定顯示哪一個 span。
+//   原本是 `voiceToggle.textContent = '⌨️' / '🎙️'` —— 換成幾何圖示之後不能再這樣做，
+//   textContent 會把兩個圖示 span 一起洗掉（popup 的登入鈕、圖釘標題都踩過同一個坑）。
 const voiceToggle = $<HTMLButtonElement>('voice-toggle');
 let voiceOn = true;
 function setVoiceToggleUI(on: boolean): void {
   voiceOn = on;
-  voiceToggle.textContent = on ? '⌨️' : '🎙️';
   voiceToggle.title = on ? '切換到鍵盤輸入' : '切換到語音輸入';
-  voiceToggle.classList.toggle('mic-on', !on); // 鍵盤模式時亮綠框
+  voiceToggle.classList.toggle('mic-on', !on);
 }
 voiceToggle.addEventListener('click', () => {
   if (voiceOn) {
@@ -421,7 +464,7 @@ function createAnnotateRecognition(): SRInst | null {
           descInput.selectionStart = cursorPos;
           descInput.selectionEnd = cursorPos;
         }
-        captionText.textContent = `✅ ${text}`;
+        captionText.textContent = text;
         window.setTimeout(() => {
           if (listening) captionText.textContent = t('er-listening', annotateUILang); // PM-248 修7
         }, 1500);
@@ -460,7 +503,7 @@ function createAnnotateRecognition(): SRInst | null {
       // PM-248 修3：interim 字幕節流 150ms（防韓語組字風暴淹沒 DOM；final 不受限）。
       const now = Date.now();
       if (now - lastAnnotateInterimUpdate >= ANNOTATE_INTERIM_THROTTLE) {
-        captionText.textContent = `🔴 ${interim}`; // 正在講的 → 即時字幕
+        captionText.textContent = interim; // 正在講的 → 即時字幕（狀態由膠囊本身的波形表示）
         lastAnnotateInterimUpdate = now;
       }
       liveCaptions.classList.remove('hidden');
@@ -503,7 +546,7 @@ function createAnnotateRecognition(): SRInst | null {
     }
   };
   rec.onerror = (e: SRErr) => {
-    captionText.textContent = `語音錯誤：${e.error}`;
+    captionText.textContent = t('an-voice-error', annotateUILang, { e: String(e.error) });
     // PM-100：語音授權/服務失敗 → 自動退回鍵盤並更新切換鈕（不含 no-speech：
     // no-speech 只是靜默，onend 會自動重啟，若在此切鍵盤會讓每次停頓都殺掉麥克風）。
     if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
@@ -524,7 +567,7 @@ async function startWebSpeech() {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     stream.getTracks().forEach((t) => t.stop());
   } catch {
-    voiceStatus.textContent = '❌ 麥克風無法存取';
+    voiceStatus.textContent = t('an-mic-fail', annotateUILang);
     return;
   }
   autoRestartFails = 0;
@@ -533,7 +576,7 @@ async function startWebSpeech() {
   recognition.start();
   listening = true;
   voiceInputBtn.classList.add('listening');
-  voiceInputBtn.textContent = '⏹';
+  voiceInputBtn.classList.add('rec'); // PM-427：麥克風圖示換成停止方塊（不能用 textContent）
   voiceStatus.textContent = '';
   captionText.textContent = t('annotate-listening', annotateUILang); // PM-248 修7
   liveCaptions.classList.remove('hidden');
@@ -552,8 +595,8 @@ function stopWebSpeech() {
     recognition = null;
   }
   voiceInputBtn.classList.remove('listening');
-  voiceInputBtn.textContent = '🎤';
-  voiceStatus.textContent = '語音已停止';
+  voiceInputBtn.classList.remove('rec');
+  voiceStatus.textContent = t('an-voice-stopped', annotateUILang);
   liveCaptions.classList.add('hidden');
 }
 
@@ -579,7 +622,9 @@ function updateVolBars(level: number) {
     const threshold = (i + 1) / 5;
     const h = level >= threshold ? 4 + 16 * level + Math.random() * 4 : 4;
     b.style.height = `${Math.min(h, 20)}px`;
-    b.style.background = level > 0.3 ? '#3fb950' : '#ef4444'; // 講話綠、安靜紅
+    // PM-427：顏色改由 CSS 依柱子位置決定（brown → y-deep → y → y-deep → brown）。
+    //   原本 inline 寫死綠/紅是舊調色盤，而且 inline style 會蓋掉任何 CSS。
+    //   「有沒有聽到聲音」本來就由高度表達，不需要再用顏色講第二次（§7.7）。
   });
 }
 
@@ -620,7 +665,8 @@ function stopVolumeMeter() {
     bars.classList.add('hidden');
     bars.querySelectorAll<HTMLElement>('.vol-bar').forEach((b) => {
       b.style.height = '4px';
-      b.style.background = '#ef4444';
+      // PM-427：不要在這裡把顏色寫回紅色。柱子的顏色現在由 CSS 依位置決定
+      //   （brown → y-deep → y → y-deep → brown），inline style 會永久蓋掉它。
     });
   }
 }
@@ -635,7 +681,7 @@ async function startWhisper() {
   try {
     whisperStream = await navigator.mediaDevices.getUserMedia({ audio: true });
   } catch {
-    voiceStatus.textContent = '❌ 麥克風無法存取';
+    voiceStatus.textContent = t('an-mic-fail', annotateUILang);
     return;
   }
   whisperChunks = [];
@@ -646,7 +692,7 @@ async function startWhisper() {
   whisperRecorder.start();
   listening = true;
   voiceInputBtn.classList.add('listening');
-  voiceInputBtn.textContent = '⏹';
+  voiceInputBtn.classList.add('rec');
   voiceStatus.textContent = '';
   captionText.textContent = t('an-whisper-recording', annotateUILang); // PM-250
   liveCaptions.classList.remove('hidden');
@@ -657,7 +703,7 @@ async function stopWhisper() {
   if (!listening) return;
   listening = false;
   voiceInputBtn.classList.remove('listening');
-  voiceInputBtn.textContent = '🎤';
+  voiceInputBtn.classList.remove('rec');
   stopVolumeMeter(); // PM-205：停止音量條（停止錄音當下即隱藏）
   const rec = whisperRecorder;
   whisperRecorder = null;
@@ -684,7 +730,7 @@ async function stopWhisper() {
     return;
   }
   voiceStatus.textContent = t('an-whisper-transcribing', annotateUILang); // PM-250
-  captionText.textContent = '⏳ 轉錄中…';
+  captionText.textContent = t('an-transcribing', annotateUILang);
   try {
     const form = new FormData();
     form.append('audio', blob, 'annotate-voice.webm'); // server handleTranscribe 讀 'audio' 欄
@@ -698,11 +744,11 @@ async function stopWhisper() {
     const data = (await res.json()) as { text?: string; error?: string };
     if (res.ok && data.text) {
       descInput.value += (descInput.value ? ' ' : '') + data.text;
-      voiceStatus.textContent = '✅ 已轉錄';
+      voiceStatus.textContent = t('an-transcribed', annotateUILang);
     } else if (res.status === 403) {
       voiceStatus.textContent = t('an-whisper-paid-only', annotateUILang); // PM-250
     } else {
-      voiceStatus.textContent = '轉錄失敗，可改用鍵盤輸入';
+      voiceStatus.textContent = t('an-transcribe-fail', annotateUILang);
     }
   } catch {
     voiceStatus.textContent = '轉錄失敗，可改用鍵盤輸入';
@@ -744,14 +790,14 @@ chrome.storage.local.get([KEYBOARD_MODE_KEY, USER_PLAN_KEY, MIC_MODE_KEY, MIC_KE
   const micOn = r[MIC_KEY] === true;
 
   if (r[KEYBOARD_MODE_KEY] === true) {
-    voiceStatus.textContent = '🔇 鍵盤模式（語音已關閉）';
-    setVoiceToggleUI(false); // PM-100：頁面本就鍵盤模式 → 切換鈕同步顯示 🎙️
+    voiceStatus.textContent = t('an-keyboard-mode', annotateUILang);
+    setVoiceToggleUI(false); // PM-100：頁面本就鍵盤模式 → 切換鈕同步顯示麥克風圖示
   } else if (!micOn) {
-    // PM-210：麥克風關閉（截圖「直接錄製不錄語音」）→ 不自動錄語音；仍可手動按 🎤 開啟
-    voiceStatus.textContent = '🔇 語音已關閉（可按 🎤 開啟）';
+    // PM-210：麥克風關閉（截圖「直接錄製不錄語音」）→ 不自動錄語音；仍可手動按麥克風鍵開啟
+    voiceStatus.textContent = t('an-voice-off', annotateUILang);
     setVoiceToggleUI(false);
   } else if (useWhisper) {
-    // Whisper 模式不自動錄音（避免整段長錄音爆量/超 25MB）——引導使用者手動按 🎤
+    // Whisper 模式不自動錄音（避免整段長錄音爆量/超 25MB）——引導使用者手動按麥克風鍵
     voiceStatus.textContent = t('an-whisper-prompt', annotateUILang); // PM-250
   } else {
     window.setTimeout(() => void startListening(), 800);
@@ -797,7 +843,9 @@ saveBtn.addEventListener('click', async () => {
 
   // PM-204：截圖標注完不直接上傳——存進 STORAGE_KEY（與錄製報告同一入口）後導到編輯報告頁，
   // 讓使用者檢視截圖預覽 + 補語音/描述 + 看 Token 估算 + AI 校正後再確認上傳（流程與錄製一致）。
-  saveBtn.textContent = '⏳ 處理中...';
+  // PM-427：只換 label span 的文字——saveBtn.textContent 會把右邊的箭頭圖示一起洗掉
+  const saveLabel = document.getElementById('saveBtnLabel');
+  if (saveLabel) saveLabel.textContent = t('an-processing', annotateUILang);
   saveBtn.disabled = true;
   try {
     // 清掉上一場錄製的 STATE_KEY 摘要，避免編輯頁顯示到殘留的時長/計數
@@ -864,8 +912,9 @@ async function init() {
       tip.textContent = t('auto-masked', annotateUILang, { n: autoMasked }) + '  ';
       const undoBtn = document.createElement('button');
       undoBtn.textContent = t('undo-mask', annotateUILang);
+      // PM-427：白底黑字在咖啡色警示條上很突兀，換成同一套系統的黃底黑字小鈕。
       undoBtn.style.cssText =
-        'margin-left:8px;background:#fff;color:#000;border:none;border-radius:4px;padding:3px 12px;cursor:pointer;font-size:12px;font-weight:600;';
+        'margin-left:10px;background:#F7BE00;color:#14110B;border:none;border-radius:7px;padding:4px 12px;cursor:pointer;font:700 11px/1 inherit;';
       undoBtn.onclick = () => {
         if (baseImage) ctx!.putImageData(baseImage, 0, 0); // 還原未遮罩原圖
         tip.style.display = 'none';

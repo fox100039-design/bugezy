@@ -492,5 +492,82 @@ check('426   §3.2 黃底上的說明文字 ≥600 字重、用 #3A2409（不是
   /#permDesc \{[\s\S]{0,120}font: 600 13px/.test(permHtml)
   && /--on-y: #3A2409/.test(permHtml) && !/#4A2F12/i.test(permBody));
 
+console.log('\n=== ⑧ PM-427：群組 B · 截圖標注頁（畫面 05）===');
+
+const anHtml = readFileSync('../extension/src/annotate.html', 'utf8');
+const anTsRaw = readFileSync('../extension/src/annotate.ts', 'utf8');
+const anTs = strip(anTsRaw);
+const anBody = stripHtmlComments(anHtml);
+
+check('427   §9.4 工作區反轉：黃色工具列 + 近黑畫布 + 黃色描述列',
+  /\.toolbar \{[\s\S]{0,200}background: var\(--y\)/.test(anHtml)
+  && /\.canvas-wrapper \{[\s\S]{0,200}background: var\(--ink-3\)/.test(anHtml)
+  && /\.description-area \{[\s\S]{0,200}background: var\(--y\)/.test(anHtml));
+check('427   §2.3 敏感警示條是咖啡底（系統在跟你說話）',
+  /\.sensitive-tip \{[\s\S]{0,160}background: var\(--brown\)/.test(anHtml));
+check('427   🔴 警示條的六角用 ::before 且是 inline-block', (() => {
+  // .ts 會 tip.textContent = … 再 appendChild，六角放進 DOM 會被洗掉 → 只能用 pseudo；
+  // 而 .ts 又是 tip.style.display='block'（inline style 蓋掉 flex）→ ::before 必須 inline-block 才有寬高。
+  const r = anHtml.match(/\.sensitive-tip::before \{[^}]*\}/)?.[0] ?? '';
+  return /display: inline-block/.test(r) && /clip-path: var\(--hex\)/.test(r);
+})());
+check('427   🔴 蜂巢紋 data URI 內沒有未編碼的 ";"',
+  [...anHtml.matchAll(/background-image: url\("([^"]*)"\)/g)].every((m) => !m[1].includes(';')));
+
+check('427   §6 五個工具的圖示都是幾何（筆／箭頭／框／T／馬賽克）',
+  ['ic-pen', 'ic-arrow', 'ic-rect', 'ic-text', 'ic-mosaic'].every((c) => anHtml.includes(c)));
+check('427   🔴 工具圖示是 [data-i18n] 元素的兄弟節點（翻譯會覆寫 textContent）', (() => {
+  // 每顆工具鈕都要長成 <button …><span class="ic …"></span><span data-i18n=…>
+  const btns = [...anHtml.matchAll(/<button id="(pen|arrow|rect|text|mosaic)Tool"[^>]*>([\s\S]*?)<\/button>/g)];
+  return btns.length === 5 && btns.every(([, , inner]) =>
+    /<span class="ic [^"]*"[^>]*>[\s\S]*?<\/span>\s*<span data-i18n=/.test(inner));
+})());
+check('427   🔴 下一步鈕的文字有獨立 span（.ts 換「處理中」時不會洗掉箭頭）',
+  /id="saveBtnLabel"/.test(anHtml) && /getElementById\('saveBtnLabel'\)/.test(anTs)
+  && !/saveBtn\.textContent/.test(anTs));
+check('427   🔴 錄音鈕改切 .rec 而不是寫 textContent（否則四層麥克風圖示會被洗掉）',
+  /voiceInputBtn\.classList\.add\('rec'\)/.test(anTs)
+  && !/voiceInputBtn\.textContent/.test(anTs)
+  && /\.voice-btn\.rec \.ic-mic \{ display: none/.test(anHtml));
+check('427   🔴 鍵盤／語音切換鈕也改切 class（原本 textContent 塞 emoji）',
+  !/voiceToggle\.textContent/.test(anTs)
+  && /\.voice-toggle-btn\.mic-on \.ic-keyboard \{ display: none/.test(anHtml));
+
+check('427   🔴 原生 #colorPicker / #lineWidth 仍在 DOM（.ts 的 $() 找不到會 throw、且直接讀 .value）',
+  /id="colorPicker"/.test(anHtml) && /id="lineWidth"/.test(anHtml)
+  && /colorPicker\.value/.test(anTs) && /lineWidthSel\.value/.test(anTs));
+check('427   4 個色票 + 3 條粗細橫條，且只把值寫回原生控制項',
+  (anHtml.match(/class="swatch[^"]*" data-c=/g) ?? []).length === 4
+  && (anHtml.match(/class="width-opt[^"]*" data-w=/g) ?? []).length === 3
+  && /colorPicker\.value = b\.dataset\.c/.test(anTs)
+  && /lineWidthSel\.value = b\.dataset\.w/.test(anTs));
+
+// 🔴 色票與粗細橫條也是 <button>，會吃到 `.toolbar button`（特異度 0,1,1）的內距與邊框。
+//    選擇器必須寫成 `.toolbar button.swatch`（0,2,1）才壓得過去——寫成 `.swatch`（0,1,0）
+//    的話畫面上會變成帶內距的大方塊，而且背景被 transparent 蓋掉。
+check('427   🔴 色票／粗細橫條的選擇器壓得過 .toolbar button',
+  /\.toolbar button\.swatch \{/.test(anHtml) && /\.toolbar button\.width-opt \{/.test(anHtml));
+
+check('427   工具列特效改成大黃蜂色系（橘光 #ff8c00 已清）',
+  /@keyframes toolbar-hornet-pulse/.test(anBody) && !/#ff8c00/i.test(anBody));
+check('427   🔴 音量條顏色交給 CSS 依位置決定（.ts 不再 inline 寫死綠/紅）',
+  !/#3fb950|#ef4444/i.test(anTs)
+  && /#volBars \.vol-bar:nth-child\(1\)/.test(anHtml));
+check('427   🔴 沒有舊紫色系色碼',
+  !/#7c3aed|#6d28d9|#1a1a2e|#16213e|#059669|#dc2626|#9aa3b2/i.test(anBody));
+check('427   🔴 annotate 一個 emoji 都不剩（markup + .ts + 它用得到的字典值）', (() => {
+  const bad = [...onlyEmoji(anBody), ...onlyEmoji(anTs)];
+  for (const m of i18n.matchAll(/^ {2}'?([A-Za-z0-9_.-]+)'?: *\{/gm)) {
+    const k = m[1];
+    if (!anTs.includes(`'${k}'`) && !anHtml.includes(`"${k}"`)) continue;
+    let d = 1, i = m.index + m[0].length;
+    while (d && i < i18n.length) { if (i18n[i] === '{') d++; else if (i18n[i] === '}') d--; i++; }
+    bad.push(...onlyEmoji(i18n.slice(m.index, i)));
+  }
+  return [...new Set(bad)].join(' ');
+})() === '');
+check('427   §9.2 三步流程標記 STEP 2 / 3',
+  /class="step-mark"[^>]*>STEP 2 \/ 3</.test(anHtml));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
