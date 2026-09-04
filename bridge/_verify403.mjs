@@ -779,5 +779,73 @@ check('430   inject.ts 用得到的字典值零 emoji', (() => {
   return [...new Set(bad)].join(' ');
 })() === '');
 
+console.log('\n=== ⑫ PM-432：群組 D · 分享報告頁（畫面 14/15）===');
+
+const srvRaw = readFileSync('../server/src/index.ts', 'utf8');
+// 只看報告頁那一段（reportPageHtml + REPORT_PAGE_JS）——這個檔案 9000 行，官網部分還沒改。
+const rpStart = srvRaw.indexOf('function reportPageHtml');
+const rpEnd = srvRaw.indexOf('\n`;', srvRaw.indexOf('const REPORT_PAGE_JS'));
+const rpRaw = srvRaw.slice(rpStart, rpEnd);
+// strip() 會把 // 之後整行當註解砍掉，網址裡的 https:// 會一起消失 → 查外連要用 rpRaw。
+const rp = strip(rpRaw);
+
+check('432   黃底 + 蜂巢紋 + 黑 header',
+  /body \{\s+background:var\(--y\);\s+background-image:url\("data:image\/svg\+xml,/.test(rpRaw)
+  && /rgba\(20,17,11,0\.10\)/.test(rpRaw)
+  && /\.topbar \{[^}]*background:var\(--ink\)/.test(rp));
+check('432   🔴 蜂巢紋 data URI 內沒有未編碼的 ";"',
+ (() => {
+  const uris = [...rpRaw.matchAll(/background-image:url\("([^"]*)"\)/g)];
+  return uris.length > 0 && uris.every((m) => !m[1].includes(';'));
+})());
+check('432   §5.B header 是三層嵌套六角（clip-path 會裁掉 border，不能用外框做外環）',
+  /\.topbar-hex \{[^}]*clip-path:var\(--hex\)/.test(rp)
+  && /\.topbar-hex > i > i \{[^}]*repeating-linear-gradient/.test(rp));
+check('432   server 端頁面**可以**外連 Google Fonts（擴充功能不行是 CWS 隱私審查）',
+  /fonts\.googleapis\.com\/css2\?family=Archivo/.test(rpRaw));
+
+check('432   🔴 分享連結卡移到標題右側（節點不動，render 後搬進 #share-slot）',
+  /id="share-slot"/.test(rp)
+  && /shareSlot\.appendChild\(shareBox\)/.test(rp)
+  && /\.share-box \{[^}]*background:var\(--brown\)/.test(rp));
+check('432   §7.6 分頁徽章：Console 有錯磚紅、其餘低對比；有錯自動成預設分頁',
+  /\n\s*\.tab-badge\.error \{ background:var\(--err\)/.test(rp)
+  && /\.tab-btn\.active \.tab-badge\.error \{ background:var\(--err\)/.test(rp)
+  && /\.tab-badge \{[^}]*rgba\(20,17,11,\.16\)/.test(rp)
+  && /if \(consoleCount > 0\) defaultTab = 'console'/.test(rp));
+check('432   §6 Console log 圖示：error 圓形 + 橫槓、warn 三角（形狀在 CSS，不是字元）',
+  /\.log-item\.error \.log-icon \{[^}]*border-radius:50%[^}]*background:var\(--err\)/.test(rp)
+  && /\.log-item\.warn \.log-icon \{[^}]*clip-path:polygon\(50% 0,100% 100%,0 100%\)/.test(rp)
+  && /<span class="log-icon"><i><\/i><\/span>/.test(rp));
+check('432   §7.7 Network：5xx 磚紅、4xx 較淺的褐（米白底，不是深底）',
+  /\.net-status\.s5xx \{ color:var\(--err\)/.test(rp)
+  && /\.net-status\.s4xx \{ color:#8A5A24/.test(rp));
+check('432   §2.3 Token 面板是咖啡卡 + 黃底節省膠囊，標題色碼不再寫在 inline style',
+  /\.token-panel \{[^}]*background:var\(--brown\)/.test(rp)
+  && /\.token-save \{[^}]*background:var\(--y\)/.test(rp)
+  && /class="token-title"/.test(rp)
+  && !/color:#a78bfa/.test(rp));
+check('432   Info 分頁兩欄（左內容、右 398px 側欄）',
+  /\.info-col-side \{ width:398px/.test(rp) && /class="info-cols"/.test(rp));
+check('432   §7.7 網路狀態改文字（原本是 🟢 在線 / 🔴 離線）',
+  /fmtOnline = function \(x\) \{ return x && x\.online \? t\('在線'/.test(rp));
+
+check('432   🔴 報告頁沒有舊色碼', (() => {
+  const dead = ['#0f0f1a', '#1a1a2e', '#2a2a3e', '#7c3aed', '#a78bfa', '#238636', '#2ea043',
+    '#ef4444', '#f59e0b', '#3b82f6', '#c4b5fd', '#8b949e', '#c9d1d9', '#30363d', '#0d1117',
+    '#161b22', '#f0f6fc', '#21262d', '#6e7681', '#10b981', '#d29922'];
+  return dead.filter((c) => new RegExp(c, 'i').test(rp)).join(', ');
+})() === '');
+check('432   🔴 報告頁零 emoji', [...new Set(onlyEmoji(rp))].join(' ') === '');
+
+// /reports 我的報告列表（同一次改的，卡片說「只改 CSS 色碼」）
+const rsStart = srvRaw.indexOf('function reportsShell');
+const rs = strip(srvRaw.slice(rsStart, srvRaw.indexOf('async function reportsPage')));
+check('432   /reports 列表頁也換成黃底 + 米白資料卡，且零 emoji、零舊色碼',
+  /background:var\(--y\)/.test(rs)
+  && /\.reports-table td \{[^}]*background:var\(--cream\)/.test(rs)
+  && !/#0f0f1a|#1a1a2e|#7c3aed|#a78bfa|#c4b5fd|#8b8fa3|#da3633/i.test(rs)
+  && onlyEmoji(rs).length === 0);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

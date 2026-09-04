@@ -4243,39 +4243,63 @@ function reportsShell(lang: PageLang, bodyHtml: string, langSwitchHref: string):
 <meta name="robots" content="noindex, nofollow" />
 <title>${t('我的報告 · BugEzy', 'My Reports · BugEzy')}</title>
 ${ogMeta('/reports', 'My Bug Reports — BugEzy', 'View and manage your captured bug reports.')}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800&family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
+  /* PM-432：我的報告列表。卡片只要求換色碼，版面結構不動。 */
+  :root {
+    --y:#F7BE00; --y-deep:#DFA800; --y-pale:#FFE9AE; --cream:#FFF4D6;
+    --ink:#14110B; --brown:#7A4E1D; --brown-d:#4A2F12; --err:#8A2A0F;
+    --on-dark:#A08B62; --on-y:#3A2409; --on-y-2:#5E3A14;
+    --font-brand:Archivo,'Noto Sans TC','Microsoft JhengHei',system-ui,sans-serif;
+    --font-ui:'Noto Sans TC',system-ui,-apple-system,'Segoe UI','Microsoft JhengHei',sans-serif;
+    --font-mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --hex:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);
+  }
   * { box-sizing: border-box; }
-  body { margin:0; padding:0; background:#0f0f1a; color:#e8e8f0; font-family:system-ui,-apple-system,"Segoe UI","Microsoft JhengHei",sans-serif; line-height:1.6; font-size:15px; }
+  /* §4 蜂巢紋 10%。⚠ data URI 內不可出現未編碼的分號。 */
+  body {
+    margin:0; padding:0; background:var(--y);
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='49' viewBox='0 0 28 49'%3E%3Cg fill='none' stroke='rgba(20,17,11,0.10)' stroke-width='1'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15z'/%3E%3Cpath d='M13.99 -15.25l13 7.5v15l-13 7.5L1 7.75v-15z'/%3E%3Cpath d='M13.99 33.25l13 7.5v15l-13 7.5L1 55.75v-15z'/%3E%3C/g%3E%3C/svg%3E");
+    color:var(--ink); font-family:var(--font-ui); line-height:1.6; font-size:15px;
+  }
   .wrap { max-width:920px; margin:0 auto; padding:40px 24px 80px; }
-  .lang-switch { position:fixed; top:14px; right:16px; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:5px 12px; font-size:13px; color:#c4b5fd; text-decoration:none; }
-  header { border-bottom:1px solid #2a2a3e; padding-bottom:16px; margin-bottom:20px; }
-  .brand { font-size:22px; font-weight:700; color:#a78bfa; text-decoration:none; }
-  h1 { font-size:24px; margin:14px 0 4px; }
-  .count { color:#8b8fa3; font-size:14px; margin:0; }
-  .empty, .notice { text-align:center; color:#8b8fa3; padding:40px 20px; }
-  .notice a { color:#a78bfa; }
-  .reports-table { width:100%; border-collapse:collapse; margin-top:16px; }
-  .reports-table th { background:#1a1a2e; color:#c4b5fd; padding:10px 12px; text-align:left; font-size:13px; }
-  .reports-table td { padding:10px 12px; border-bottom:1px solid #21262d; font-size:13px; color:#e6edf3; vertical-align:top; }
-  .reports-table tr:hover td { background:rgba(124,58,237,0.05); }
-  .reports-table a { color:#7c3aed; text-decoration:none; }
+  .lang-switch { position:fixed; top:14px; right:16px; background:var(--ink); border:1.5px solid var(--brown); border-radius:8px; padding:5px 12px; font:700 12px/1.6 var(--font-mono); color:var(--y); text-decoration:none; }
+  header { border-bottom:2px solid var(--ink); padding-bottom:16px; margin-bottom:20px; }
+  .brand { display:inline-flex; align-items:center; gap:9px; font:800 22px/1 var(--font-brand); letter-spacing:.02em; color:var(--ink); text-decoration:none; }
+  /* §5.B 六角斜紋標記（黃底版：外黑內斜紋）。⚠ clip-path 會裁掉 border，用嵌套六角。 */
+  .brand-hex { width:24px; height:28px; flex-shrink:0; background:var(--ink); clip-path:var(--hex); display:inline-flex; align-items:center; justify-content:center; }
+  .brand-hex > i { width:15px; height:18px; clip-path:var(--hex); background:repeating-linear-gradient(162deg,var(--y) 0 3px,var(--ink) 3px 6px); }
+  h1 { font:800 24px/1.3 var(--font-ui); margin:14px 0 4px; color:var(--ink); }
+  .count { font:600 14px/1.6 var(--font-ui); color:var(--on-y); margin:0; }
+  .empty, .notice { text-align:center; font:600 14px/1.8 var(--font-ui); color:var(--on-y); padding:40px 20px; }
+  .notice a { color:var(--brown-d); }
+  /* §7.2 資料卡：米白 + 2px 黑框 */
+  .reports-table { width:100%; border-collapse:separate; border-spacing:0; margin-top:16px; border:2px solid var(--ink); border-radius:12px; overflow:hidden; }
+  .reports-table th { background:var(--ink); color:var(--y); padding:10px 12px; text-align:left; font:700 11px/1.6 var(--font-mono); letter-spacing:.08em; }
+  .reports-table td { background:var(--cream); padding:10px 12px; border-bottom:1px solid rgba(20,17,11,.14); font:500 13px/1.6 var(--font-ui); color:var(--ink); vertical-align:top; }
+  .reports-table tr:last-child td { border-bottom:none; }
+  .reports-table tr:hover td { background:#fff; }
+  .reports-table a { color:var(--brown-d); text-decoration:none; font-weight:700; }
   .reports-table a:hover { text-decoration:underline; }
-  .badges { white-space:nowrap; font-size:13px; }
+  .badges { white-space:nowrap; font:600 12px/1.6 var(--font-mono); color:var(--on-y-2); }
   /* PM-196：勾選刪除 */
   .col-cb { width:34px; text-align:center; }
   .reports-table td.col-cb, .reports-table th.col-cb { text-align:center; padding-left:8px; padding-right:8px; }
-  .report-cb, #selectAll { width:16px; height:16px; accent-color:#7c3aed; cursor:pointer; }
+  .report-cb, #selectAll { width:16px; height:16px; accent-color:var(--ink); cursor:pointer; }
   .delete-bar { display:flex; justify-content:flex-end; margin-top:16px; }
-  .delete-btn { background:#da3633; color:#fff; border:none; border-radius:8px; padding:9px 16px; font-size:14px; font-weight:600; cursor:pointer; }
-  .delete-btn:hover { background:#f85149; }
-  .delete-btn:disabled { background:#3a2a2a; color:#8b8fa3; cursor:not-allowed; }
+  /* 刪除是破壞性操作 → §2.1 磚紅 */
+  .delete-btn { background:var(--err); color:var(--y-pale); border:2px solid var(--err); border-radius:11px; padding:10px 18px; font:700 13px/1 var(--font-ui); cursor:pointer; }
+  .delete-btn:hover { background:#6E210C; border-color:#6E210C; }
+  .delete-btn:disabled { background:transparent; border-color:rgba(20,17,11,.35); color:var(--on-y-2); cursor:not-allowed; }
   @media (max-width:640px) { .col-desc, .col-time { display:none; } }
 </style>
 </head>
 <body>
 <a class="lang-switch" href="${escapeAttr(langSwitchHref)}">${t('EN', '中文')}</a>
 <div class="wrap">
-  <header><a class="brand" href="/">🐛 BugEzy</a></header>
+  <header><a class="brand" href="/"><span class="brand-hex"><i></i></span>BugEzy</a></header>
   ${bodyHtml}
 </div>
 </body>
@@ -4580,107 +4604,217 @@ function reportPageHtml(lang: PageLang): string {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>${t('BugEzy — Bug 報告', 'BugEzy — Bug Report')}</title>
+  <!-- PM-432：server 端頁面**可以**外連 Google Fonts（擴充功能不行是因為 CWS 隱私審查，
+       這裡沒有那個限制）。preconnect 讓字型早一步開始下載。 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;800&family=Noto+Sans+TC:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
+    /* ─────────────────────────────────────────────────────────────
+       PM-432：分享報告頁（設計稿畫面 14/15）· 1148px
+       這是 PM 與工程師唯一會看到的公開介面。§9 版面：黃底 + 黑 header + 米白資料卡。
+       ⚠ 報告頁的 CSP 是 script-src 'self'，所有 client 邏輯都在 /report-page.js。
+       ───────────────────────────────────────────────────────────── */
+    :root {
+      --y:#F7BE00; --y-deep:#DFA800; --y-pale:#FFE9AE; --cream:#FFF4D6;
+      --ink:#14110B; --ink-2:#211C13; --ink-3:#0E0C08;
+      --brown:#7A4E1D; --brown-d:#4A2F12;
+      --line-dark:#3A3122; --line-dark-2:#55492F;
+      --err:#8A2A0F; --err-fg:#E08B72; --info:#1E6FD9;
+      /* §2.4 深底上的次要文字只有這兩階 */
+      --on-dark:#A08B62; --on-dark-2:#C9A15A;
+      /* §3.2 黃底／米白底上的次要文字 */
+      --on-y:#3A2409; --on-y-2:#5E3A14;
+      /* 米白卡上的時間戳。⚠ §2.4 禁用 #6B5A3D 是**針對深底**（在黑底上沒有亮度差）；
+         這裡底色是 #FFF4D6，對比約 6:1，設計稿畫面 14 用的就是這個值。 */
+      --on-cream-dim:#6B5A3D;
+      --font-brand:Archivo,'Noto Sans TC','Microsoft JhengHei',system-ui,sans-serif;
+      --font-ui:'Noto Sans TC',system-ui,-apple-system,'Segoe UI','Microsoft JhengHei',sans-serif;
+      --font-mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      --hex:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);
+    }
     * { margin:0; padding:0; box-sizing:border-box; }
-    body { background:#0f0f1a; color:#e0e0e0; font-family:system-ui,"Microsoft JhengHei",sans-serif; }
-    /* PM-196：分享連結複製列 */
-    .share-box { max-width:1100px; margin:0 auto 40px; padding:0 24px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-    .share-box .share-label { color:#8b949e; font-size:14px; white-space:nowrap; }
-    .share-box input { flex:1; min-width:200px; background:#0d1117; border:1px solid #30363d; border-radius:8px; padding:9px 12px; color:#c9d1d9; font-size:13px; font-family:monospace; }
-    .share-copy-btn { background:#238636; color:#fff; border:none; border-radius:8px; padding:9px 16px; font-size:14px; font-weight:600; cursor:pointer; white-space:nowrap; }
-    .share-copy-btn:hover { background:#2ea043; }
-    .topbar { display:flex; align-items:center; gap:12px; padding:12px 24px; background:#1a1a2e; border-bottom:1px solid #2a2a3e; }
-    .topbar-brand { font-size:18px; font-weight:700; color:#a78bfa; }
-    .topbar-title { color:#888; font-size:14px; }
-    .report { max-width:1100px; margin:0 auto; padding:24px; }
-    .header { margin-bottom:20px; }
-    .header h1 { font-size:20px; color:#fff; margin-bottom:8px; }
-    .meta { font-size:13px; color:#888; line-height:1.8; }
-    .meta a { color:#a78bfa; text-decoration:none; }
-    .tab-bar { display:flex; gap:0; border-bottom:2px solid #2a2a3e; margin:20px 0 0; overflow-x:auto; }
-    .tab-btn { padding:10px 20px; background:none; border:none; border-bottom:2px solid transparent; margin-bottom:-2px; color:#888; font-size:14px; font-weight:500; cursor:pointer; white-space:nowrap; display:flex; align-items:center; gap:6px; transition:all 0.15s; }
-    .tab-btn:hover { color:#ccc; background:rgba(124,58,237,0.05); }
-    .tab-btn.active { color:#a78bfa; border-bottom-color:#7c3aed; }
-    .tab-badge { font-size:11px; padding:1px 7px; border-radius:10px; background:#2a2a3e; color:#aaa; }
-    .tab-badge.error { background:rgba(239,68,68,0.2); color:#ef4444; }
-    .tab-content { min-height:200px; padding:16px 0; }
+    /* §4 蜂巢紋 10%。⚠ data URI 內不可出現未編碼的 \`;\` —— 會提早結束 CSS 宣告。 */
+    body {
+      background:var(--y);
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='49' viewBox='0 0 28 49'%3E%3Cg fill='none' stroke='rgba(20,17,11,0.10)' stroke-width='1'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15z'/%3E%3Cpath d='M13.99 -15.25l13 7.5v15l-13 7.5L1 7.75v-15z'/%3E%3Cpath d='M13.99 33.25l13 7.5v15l-13 7.5L1 55.75v-15z'/%3E%3C/g%3E%3C/svg%3E");
+      color:var(--ink); font-family:var(--font-ui);
+    }
+
+    /* ── 黑 header（§5.B 三層六角：外黃 → 內黑 → 斜紋核心）── */
+    .topbar { display:flex; align-items:center; gap:12px; padding:13px 24px; background:var(--ink); border-bottom:none; }
+    /* ⚠ clip-path 會裁掉 box-shadow 與 border，外環一律用「外六角包內六角」的嵌套 */
+    .topbar-hex { width:28px; height:32px; flex-shrink:0; background:var(--y); clip-path:var(--hex); display:flex; align-items:center; justify-content:center; }
+    .topbar-hex > i { width:23px; height:27px; background:var(--ink); clip-path:var(--hex); display:flex; align-items:center; justify-content:center; }
+    .topbar-hex > i > i { width:15px; height:17px; clip-path:var(--hex); background:repeating-linear-gradient(162deg,var(--y) 0 3px,var(--ink) 3px 6px); }
+    .topbar-brand { font:800 18px/1 var(--font-brand); letter-spacing:.02em; color:var(--y); }
+    .topbar-title { font:500 13px/1 var(--font-ui); color:var(--on-dark); }
+    .lang-switch { margin-left:auto; padding:6px 14px; border:1.5px solid var(--brown); border-radius:8px; font:700 12px/1 var(--font-mono); color:var(--y); text-decoration:none; letter-spacing:.06em; }
+    .lang-switch:hover { border-color:var(--y); }
+
+    .report { max-width:1148px; margin:0 auto; padding:26px 24px 40px; display:flex; flex-direction:column; gap:22px; }
+
+    /* ── 標題區 + 分享連結卡（設計稿把分享卡移到標題右側）── */
+    .header { display:flex; align-items:flex-start; gap:24px; margin:0; }
+    .header-main { flex:1; min-width:0; display:flex; flex-direction:column; gap:10px; }
+    .header h1 { font:800 25px/1.3 var(--font-ui); letter-spacing:.01em; color:var(--ink); text-wrap:pretty; }
+    .meta { display:flex; flex-direction:column; gap:5px; font:600 13px/1.65 var(--font-ui); color:var(--on-y); }
+    .meta a { font-family:var(--font-mono); color:var(--brown-d); word-break:break-all; }
+    .meta .meta-tech { display:flex; gap:9px; flex-wrap:wrap; font-family:var(--font-mono); font-size:11.5px; }
+    .meta .meta-sep { color:rgba(74,47,18,.5); }
+    /* §2.3 分享連結卡屬系統訊息 → 咖啡底 */
+    .share-box { display:flex; flex-direction:column; gap:7px; padding:14px 16px; background:var(--brown); border-radius:12px; width:330px; flex-shrink:0; }
+    .share-box .share-label { font:700 11px/1 var(--font-ui); color:var(--y-pale); white-space:nowrap; }
+    .share-row { display:flex; gap:7px; }
+    .share-box input { flex:1; min-width:0; padding:9px 11px; border:none; border-radius:8px; background:var(--ink); color:var(--y-pale); font:400 11.5px/1.3 var(--font-mono); }
+    .share-copy-btn { flex-shrink:0; padding:9px 14px; border:none; border-radius:8px; background:var(--y); color:var(--ink); font:700 12px/1 var(--font-ui); cursor:pointer; white-space:nowrap; }
+    .share-copy-btn:hover { background:var(--y-deep); }
+
+    /* ── 分頁列 ── */
+    .tab-bar { display:flex; gap:2px; border-bottom:2px solid var(--ink); margin:0; overflow-x:auto; }
+    .tab-btn { display:flex; align-items:center; gap:8px; padding:11px 20px; margin-bottom:-2px; border:2px solid var(--ink); border-bottom:none; border-radius:11px 11px 0 0; background:transparent; color:var(--brown-d); font:700 13px/1 var(--font-ui); cursor:pointer; white-space:nowrap; }
+    .tab-btn:hover { background:rgba(20,17,11,.08); }
+    .tab-btn.active { background:var(--ink); color:var(--y); }
+    /* §7.6：Console 有錯 → 磚紅徽章；其餘低對比 */
+    .tab-badge { padding:2px 8px; border-radius:999px; background:rgba(20,17,11,.16); color:var(--brown-d); font:700 11px/1.3 var(--font-mono); }
+    .tab-badge.error { background:var(--err); color:var(--y-pale); }
+    .tab-btn.active .tab-badge { background:rgba(247,190,0,.18); color:var(--y); }
+    .tab-btn.active .tab-badge.error { background:var(--err); color:var(--y-pale); }
+    /* §6 截圖分頁：圓角框 + 中心圓點（原本是 📸） */
+    .ic-shot { width:15px; height:12px; box-sizing:border-box; border:2px solid currentColor; border-radius:3px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .ic-shot > i { width:5px; height:5px; border-radius:50%; background:currentColor; }
+
+    .tab-content { min-height:200px; padding:0; }
     .tab-panel { display:none; }
-    .tab-panel.active { display:block; }
-    .info-section { margin-bottom:20px; }
-    .info-section h3 { font-size:14px; color:#a78bfa; margin-bottom:8px; }
-    .info-section p { color:#ccc; line-height:1.7; white-space:pre-wrap; }
-    .info-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; font-size:13px; color:#aaa; }
-    .marker-item { display:flex; gap:8px; padding:6px 0; border-bottom:1px solid #1a1a2e; font-size:13px; color:#ccc; }
-    .marker-time { background:#7c3aed; color:#fff; padding:2px 8px; border-radius:4px; font-family:monospace; font-size:12px; }
-    .log-item { padding:8px 12px; border-bottom:1px solid #1a1a2e; font-family:monospace; font-size:13px; display:flex; gap:8px; }
-    .log-item.error { color:#ef4444; }
-    .log-item.warn { color:#f59e0b; }
+    .tab-panel.active { display:flex; flex-direction:column; gap:20px; }
+
+    /* ── section 標題統一 ── */
+    .info-section { display:flex; flex-direction:column; gap:9px; }
+    .info-section h3 { font:700 11px/1 var(--font-mono); letter-spacing:.1em; color:var(--brown-d); }
+    .info-section p { font:400 14px/1.75 var(--font-ui); color:var(--ink); white-space:pre-wrap; padding:13px 15px; background:var(--cream); border:2px solid var(--ink); border-radius:12px; }
+    /* Info 分頁兩欄：左內容、右 398px 側欄 */
+    .info-cols { display:flex; gap:20px; align-items:flex-start; }
+    .info-col-main { flex:1; min-width:0; display:flex; flex-direction:column; gap:20px; }
+    .info-col-side { width:398px; flex-shrink:0; display:flex; flex-direction:column; gap:20px; }
+    @media (max-width:900px) { .info-cols { flex-direction:column; } .info-col-side { width:100%; } }
+    /* 摘要 2×3（同 edit-report 那套米白格） */
+    .info-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:2px; background:var(--ink); border:2px solid var(--ink); border-radius:12px; overflow:hidden; }
+    .info-grid > div { background:var(--cream); padding:11px 13px; display:flex; flex-direction:column; gap:3px; min-width:0; font:700 11.5px/1 var(--font-ui); color:var(--on-y-2); }
+    .info-grid b { font:700 18px/1.1 var(--font-mono); color:var(--ink); }
+
+    /* ── 卡片框（log / network / voice / marker 共用）── */
+    .card-list { border:2px solid var(--ink); border-radius:12px; overflow:hidden; }
+    .card-list > * + * { border-top:1px solid rgba(20,17,11,.14); }
+
+    /* ── 時間軸標記（§7.3 手動=實線、AUTO=虛線）── */
+    .marker-item { display:flex; align-items:center; gap:11px; padding:10px 14px; background:var(--cream); font:600 13px/1.5 var(--font-ui); color:var(--ink); }
+    .marker-item.auto { background:rgba(255,244,214,.55); }
+    .marker-time { flex-shrink:0; padding:3px 9px; border-radius:6px; background:var(--ink); color:var(--y); font:700 11px/1.4 var(--font-mono); }
+    .marker-item.auto .marker-time { background:var(--brown); color:var(--y-pale); }
+    .marker-auto-tag { margin-left:auto; flex-shrink:0; font:700 10px/1 var(--font-mono); letter-spacing:.08em; color:var(--brown); }
+
+    /* ── Console log ── */
+    .log-item { display:flex; align-items:flex-start; gap:12px; padding:11px 15px; background:var(--cream); }
+    .log-item .log-msg { flex:1; min-width:0; font:500 12.5px/1.6 var(--font-mono); word-break:break-all; }
+    .log-item.error .log-msg { color:var(--err); }
+    .log-item.warn .log-msg { color:var(--brown); }
+    .log-time { flex-shrink:0; font:600 11.5px/1.6 var(--font-mono); color:var(--on-cream-dim); }
+    /* §6 error = 圓形 + 中央橫槓；warn = 三角 */
     .log-icon { flex-shrink:0; }
-    .log-msg { word-break:break-all; }
-    .log-time { color:#555; font-size:11px; margin-left:auto; flex-shrink:0; }
-    .net-item { padding:8px 12px; border-bottom:1px solid #1a1a2e; font-family:monospace; font-size:13px; display:flex; gap:12px; align-items:center; }
-    .net-status { font-weight:700; min-width:36px; }
-    .net-status.s4xx { color:#f59e0b; }
-    .net-status.s5xx { color:#ef4444; }
-    .net-method { color:#3b82f6; min-width:40px; }
-    .net-url { color:#ccc; word-break:break-all; flex:1; }
-    .net-duration { color:#555; font-size:11px; }
-    .voice-item { padding:8px 12px; border-bottom:1px solid #1a1a2e; font-size:14px; color:#ccc; line-height:1.6; }
-    .voice-time { color:#555; font-size:11px; margin-right:8px; }
+    .log-item.error .log-icon { width:15px; height:15px; margin-top:1px; border-radius:50%; background:var(--err); display:flex; align-items:center; justify-content:center; }
+    .log-item.error .log-icon > i { width:7px; height:2px; background:var(--cream); }
+    .log-item.warn .log-icon { width:15px; height:14px; margin-top:2px; background:var(--brown); clip-path:polygon(50% 0,100% 100%,0 100%); }
+    .log-more { display:flex; align-items:center; justify-content:center; padding:10px; background:rgba(255,244,214,.55); font:700 12px/1 var(--font-ui); color:var(--on-y-2); }
+
+    /* ── Network ── */
+    .net-item { display:flex; align-items:center; gap:14px; padding:10px 14px; background:var(--cream); }
+    .net-status { width:34px; flex-shrink:0; font:700 12.5px/1 var(--font-mono); }
+    /* 5xx 伺服器掛了 → 磚紅；4xx 找不到／權限 → 較淺的褐（米白底上對比約 6.9:1） */
+    .net-status.s5xx { color:var(--err); }
+    .net-status.s4xx { color:#8A5A24; }
+    .net-method { width:40px; flex-shrink:0; font:700 12px/1 var(--font-mono); color:var(--info); }
+    .net-url { flex:1; min-width:0; font:400 11.5px/1.4 var(--font-mono); color:var(--ink); word-break:break-all; }
+    .net-duration { flex-shrink:0; font:600 11px/1 var(--font-mono); color:var(--on-cream-dim); }
+
+    /* ── 語音記錄 ── */
+    .voice-item { display:flex; gap:11px; padding:10px 14px; background:var(--cream); font:400 13.5px/1.7 var(--font-ui); color:var(--ink); }
+    .voice-time { flex-shrink:0; font:600 11px/1.9 var(--font-mono); color:var(--on-cream-dim); }
+
+    /* ── 截圖 ── */
     .ss-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px; }
-    .ss-img { width:100%; border-radius:8px; border:1px solid #2a2a3e; cursor:pointer; }
-    .ss-img:hover { border-color:#7c3aed; }
-    /* PM-82/84：高畫質 AI 分析（高 Token）勾選 */
-    .screenshot-toggle { padding:16px; margin:0 0 16px; background:#161b22; border:1px solid #30363d; border-radius:10px; }
-    .screenshot-toggle label { display:flex; align-items:center; gap:10px; cursor:pointer; font-size:15px; color:#f0f6fc; }
-    .screenshot-toggle input[type="checkbox"] { width:18px; height:18px; accent-color:#7c3aed; flex-shrink:0; }
-    .toggle-hint { margin-top:8px; font-size:13px; color:#8b949e; }
-    .toggle-token { margin-top:4px; font-size:12px; color:#d29922; font-family:monospace; }
-    .token-panel { margin-top:24px; padding:16px; background:#1a1a2e; border:1px solid rgba(124,58,237,0.3); border-radius:12px; }
-    .token-row { display:flex; justify-content:space-between; padding:3px 0; font-size:13px; color:#aaa; }
-    .token-row.total { border-top:1px solid #2a2a3e; margin-top:6px; padding-top:6px; font-weight:700; color:#fff; }
-    .token-save { margin-top:10px; padding:10px; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); border-radius:8px; font-size:13px; color:#10b981; text-align:center; }
-    .loading { text-align:center; padding:60px; color:#888; }
-    .error-msg { text-align:center; padding:60px; color:#ef4444; }
-    /* PM-188：非會員閱讀他人分享報告的付費牆 */
-    .paywall { max-width:520px; margin:60px auto; padding:40px 32px; background:#161b22; border:1px solid #30363d; border-radius:16px; text-align:center; }
-    .paywall-icon { font-size:48px; line-height:1; margin-bottom:16px; }
-    .paywall h2 { font-size:20px; color:#f0f6fc; margin-bottom:12px; }
-    .paywall-desc { font-size:15px; color:#c9d1d9; margin-bottom:6px; }
-    .paywall-sub { font-size:14px; color:#8b949e; margin-bottom:24px; }
+    .ss-img { width:100%; border-radius:8px; border:2px solid var(--ink); cursor:pointer; display:block; }
+    .ss-img:hover { border-color:var(--brown); }
+
+    /* ── 高畫質 AI 分析（§7.3 空/選填 → 虛線框）── */
+    .screenshot-toggle { padding:14px 16px; background:rgba(255,244,214,.55); border:2px dashed rgba(20,17,11,.4); border-radius:12px; }
+    .screenshot-toggle label { display:flex; align-items:center; gap:10px; cursor:pointer; font:700 13.5px/1 var(--font-ui); color:var(--ink); }
+    .screenshot-toggle input[type="checkbox"] { width:18px; height:18px; accent-color:var(--ink); flex-shrink:0; }
+    .toggle-hint { margin-top:8px; font:600 12.5px/1.6 var(--font-ui); color:var(--on-y); }
+    .toggle-token { margin-top:4px; font:600 11.5px/1.5 var(--font-mono); color:var(--brown-d); }
+
+    /* ── Token 估算（§2.3 咖啡卡）── */
+    .token-panel { padding:15px 17px; background:var(--brown); border:none; border-radius:12px; }
+    .token-title { font:700 11px/1 var(--font-mono); letter-spacing:.1em; color:var(--y-pale); margin-bottom:9px; }
+    .token-row { display:flex; justify-content:space-between; gap:12px; padding:4px 0; font:600 12.5px/1.5 var(--font-ui); color:#F0D9A8; }
+    .token-row span:last-child { font-family:var(--font-mono); color:var(--y-pale); white-space:nowrap; }
+    .token-row.total { border-top:1px solid rgba(255,233,174,.28); margin-top:8px; padding-top:9px; font:700 13px/1.5 var(--font-ui); color:var(--y-pale); }
+    .token-save { margin-top:12px; padding:10px 12px; background:var(--y); border:none; border-radius:9px; font:700 12px/1.6 var(--font-ui); color:var(--ink); text-align:center; }
+
+    /* ── 網路環境 / 儲存狀態的小卡 ── */
+    .fact-list { display:flex; flex-direction:column; gap:0; border:2px solid var(--ink); border-radius:12px; overflow:hidden; }
+    .fact-row { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:9px 13px; background:var(--cream); font:600 12.5px/1.5 var(--font-ui); color:var(--on-y-2); }
+    .fact-row + .fact-row { border-top:1px solid rgba(20,17,11,.14); }
+    .fact-row b { font:700 12.5px/1.5 var(--font-mono); color:var(--ink); }
+    .fact-hex { width:8px; height:9px; flex-shrink:0; background:var(--ink); clip-path:var(--hex); }
+    /* §2.3 遮罩註記是系統主動告知 → 咖啡底 */
+    .fact-note { display:flex; align-items:flex-start; gap:9px; margin-top:9px; padding:10px 12px; background:var(--brown); border-radius:11px; font:500 11.5px/1.6 var(--font-ui); color:var(--y-pale); }
+    .fact-note .fact-hex { background:var(--y); margin-top:3px; }
+
+    .loading { text-align:center; padding:60px; font:600 14px/1 var(--font-ui); color:var(--on-y); }
+    .error-msg { text-align:center; padding:60px; font:700 14px/1 var(--font-ui); color:var(--err); }
+    .empty { text-align:center; padding:24px; font:600 13px/1 var(--font-ui); color:var(--on-y-2); background:var(--cream); border:2px solid var(--ink); border-radius:12px; }
+
+    /* PM-188：非會員閱讀他人分享報告的付費牆（PM-433 會再細修版面） */
+    .paywall { max-width:560px; margin:60px auto; padding:36px 32px; background:var(--cream); border:2px solid var(--ink); border-radius:16px; text-align:center; box-shadow:4px 4px 0 var(--brown-d); }
+    .paywall h2 { font:800 21px/1.35 var(--font-brand); color:var(--ink); margin-bottom:12px; }
+    .paywall-desc { font:600 14px/1.7 var(--font-ui); color:var(--ink); margin-bottom:6px; }
+    .paywall-sub { font:600 13px/1.7 var(--font-ui); color:var(--on-y-2); margin-bottom:24px; }
     .paywall-cta { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-bottom:20px; }
-    .paywall-btn { display:inline-block; padding:11px 22px; border-radius:10px; font-size:15px; font-weight:600; text-decoration:none; transition:filter 0.15s; }
-    .paywall-btn:hover { filter:brightness(1.1); }
-    .paywall-btn.primary { background:#7c3aed; color:#fff; }
-    .paywall-btn.secondary { background:#21262d; color:#c9d1d9; border:1px solid #30363d; }
-    .paywall-note { font-size:13px; color:#6e7681; }
-    .empty { text-align:center; padding:24px; color:#555; font-size:13px; }
-    .lang-switch { margin-left:auto; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:4px 12px; font-size:13px; color:#c4b5fd; text-decoration:none; }
-    .lang-switch:hover { background:#2a2a3e; }
+    .paywall-btn { display:inline-block; padding:12px 22px; border-radius:12px; font:700 14px/1 var(--font-ui); text-decoration:none; }
+    .paywall-btn.primary { background:var(--ink); color:var(--y); border:2px solid var(--ink); box-shadow:3px 3px 0 var(--brown-d); }
+    .paywall-btn.primary:hover { transform:translate(1px,1px); box-shadow:2px 2px 0 var(--brown-d); }
+    .paywall-btn.secondary { background:transparent; color:var(--brown-d); border:2px solid rgba(20,17,11,.4); }
+    .paywall-btn.secondary:hover { border-color:var(--ink); color:var(--ink); }
+    .paywall-note { font:600 12px/1.6 var(--font-ui); color:var(--on-y); }
   </style>
 </head>
 <body>
   <div class="topbar">
-    <span class="topbar-brand">🐛 BugEzy</span>
+    <span class="topbar-hex"><i><i></i></i></span>
+    <span class="topbar-brand">BugEzy</span>
     <span class="topbar-title">${t('Bug 報告', 'Bug Report')}</span>
     <a class="lang-switch" href="?lang=${lang === 'zh' ? 'en' : 'zh'}">${t('EN', '中文')}</a>
   </div>
   <div class="report" id="app">
     <div class="loading" id="loading">${t('載入中…', 'Loading…')}</div>
   </div>
-  <!-- PM-196：分享報告連結 + 一鍵複製（select+execCommand，非 clipboard API；複製邏輯在 report-page.js，因報告頁 CSP script-src 'self' 不允許 inline onclick）。預設隱藏，render 成功才顯示。 -->
+  <!-- PM-196：分享報告連結 + 一鍵複製（select+execCommand，非 clipboard API；複製邏輯在 report-page.js，因報告頁 CSP script-src 'self' 不允許 inline onclick）。預設隱藏，render 成功才顯示。
+       PM-432：設計稿把這張卡移到標題右側 —— 節點留在這裡（複製邏輯與 id 都不動），
+       render 完成後由 report-page.js 搬進標題列的 #share-slot。 -->
   <div id="share-box" class="share-box" style="display:none;">
-    <span class="share-label">${t('📤 分享報告連結：', '📤 Share report link:')}</span>
-    <input id="share-url" type="text" readonly />
-    <button id="share-copy" class="share-copy-btn">${t('📋 複製連結', '📋 Copy link')}</button>
+    <span class="share-label">${t('分享報告連結', 'Share report link')}</span>
+    <div class="share-row">
+      <input id="share-url" type="text" readonly />
+      <button id="share-copy" class="share-copy-btn">${t('複製連結', 'Copy link')}</button>
+    </div>
   </div>
   <!-- PM-99：截圖點擊頁內 lightbox（base64 data URL 無法 window.open，會開空白頁；改頁內放大）。PM-166：onclick 改由 report-page.js addEventListener -->
-  <div id="bugezy-lightbox" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;background:rgba(0,0,0,0.85);cursor:zoom-out;align-items:center;justify-content:center;">
+  <div id="bugezy-lightbox" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;background:rgba(14,12,8,0.86);cursor:zoom-out;align-items:center;justify-content:center;">
     <img id="bugezy-lightbox-img" style="max-width:95vw;max-height:95vh;border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,0.5);" />
   </div>
   <!-- PM-166：全部 client 邏輯（render + lightbox）抽到外部檔，CSP script-src 'self' 才能拿掉 unsafe-inline。
        PM-168：加 ?v 版本號——report-page.js 快取 1 天，改版時 bump 版本強制邊緣快取失效（否則新 HTML 配舊 JS）。 -->
-  <script src="/report-page.js?v=196"></script>
+  <script src="/report-page.js?v=432"></script>
 </body>
 </html>`;
 }
@@ -4726,7 +4860,9 @@ const REPORT_PAGE_JS = `
         ? t('請登入 BugEzy 並升級會員才能閱讀', 'Please log in to BugEzy and upgrade to read this report')
         : t('升級會員即可閱讀他人分享的報告', 'Upgrade to read reports shared by others');
       var h = '<div class="paywall">';
-      h += '<div class="paywall-icon">🔒</div>';
+      // PM-432：§6 馬賽克／鎖頭改幾何。完整的 66×76 鎖頭六角是 PM-433 的範圍，
+      //   這裡先把 emoji 換成六角殼 + 鎖身，不留 🔒 在畫面上。
+      h += '<div class="paywall-icon"><i class="lock-shackle"></i><i class="lock-body"></i></div>';
       h += '<h2>' + t('此報告需要會員權限才能閱讀', 'This report requires a membership to read') + '</h2>';
       h += '<p class="paywall-desc">' + t('BugEzy 會員可以閱讀他人分享的除錯報告', 'BugEzy members can read debug reports shared by others') + '</p>';
       h += '<p class="paywall-sub">' + sub + '</p>';
@@ -4776,13 +4912,18 @@ const REPORT_PAGE_JS = `
       const ssCount = r.screenshots?.length || 0;
       const markers = r.markers || [];
 
-      let html = '<div class="header">';
+      // PM-432：標題在左、分享連結卡在右（設計稿畫面 14）。#share-slot 是空的落點，
+      //   實際的 #share-box 節點在 HTML 裡（複製邏輯與 id 都不動），render 完才搬進來。
+      let html = '<div class="header"><div class="header-main">';
       html += '<h1>' + esc(r.title || t('（無標題）', '(untitled)')) + '</h1>';
       html += '<div class="meta">';
-      html += '<div>' + t('URL：', 'URL: ') + '<a href="'+esc(r.url)+'" target="_blank">'+esc(r.url)+'</a></div>';
-      html += '<div>'+esc(r.browser||'')+(r.screen_size ? ' ｜ '+esc(r.screen_size) : '')+'</div>'; // PM-219 修復5：screen_size 補 esc
-      html += '<div>'+fmtDate(r.created_at)+'</div>';
-      html += '</div></div>';
+      html += '<div><strong>URL</strong> <a href="'+esc(r.url)+'" target="_blank">'+esc(r.url)+'</a></div>';
+      html += '<div class="meta-tech">';
+      html += '<span>'+esc(r.browser||'')+'</span>';
+      if (r.screen_size) html += '<span class="meta-sep">|</span><span>'+esc(r.screen_size)+'</span>'; // PM-219 修復5：screen_size 補 esc
+      html += '<span class="meta-sep">|</span><span>'+fmtDate(r.created_at)+'</span>';
+      html += '</div>';
+      html += '</div></div><div id="share-slot"></div></div>';
 
       const tabs = [
         { key:'info', label:'Info', count:null },
@@ -4790,7 +4931,8 @@ const REPORT_PAGE_JS = `
         { key:'network', label:'Network', count:networkCount },
         { key:'voice', label:'Voice', count:voiceCount },
       ];
-      if (ssCount > 0) tabs.push({ key:'screenshots', label:'📸', count:ssCount });
+      // §6 截圖 → 圓角框 + 中心圓點（原本是 📸）。用 currentColor 才會跟著 active 換色。
+      if (ssCount > 0) tabs.push({ key:'screenshots', label:'<span class="ic-shot"><i></i></span>' + t('截圖','Screenshots'), count:ssCount });
 
       let defaultTab = 'info';
       if (consoleCount > 0) defaultTab = 'console';
@@ -4807,92 +4949,112 @@ const REPORT_PAGE_JS = `
 
       html += '<div class="tab-content">';
 
+      // PM-432：Info 分頁改兩欄（設計稿畫面 15）——左邊是這次錄到的內容，右邊是環境與摘要。
       html += '<div class="tab-panel'+(defaultTab==='info'?' active':'')+'" id="tab-info">';
+      html += '<div class="info-cols"><div class="info-col-main">';
       if (r.description) {
-        html += '<div class="info-section"><h3>' + t('💬 描述', '💬 Description') + '</h3><p>'+esc(r.description)+'</p></div>';
+        html += '<div class="info-section"><h3>' + t('描述', 'DESCRIPTION') + '</h3><p>'+esc(r.description)+'</p></div>';
       }
       if (markers.length > 0) {
-        html += '<div class="info-section"><h3>' + t('📌 時間軸標記', '📌 Timeline Markers') + '</h3>';
+        html += '<div class="info-section"><h3>' + t('時間軸標記', 'TIMELINE MARKERS') + '</h3><div class="card-list">';
         markers.forEach(m => {
           const min = Math.floor(m.time_sec/60);
           const sec = String(m.time_sec%60).padStart(2,'0');
           html += '<div class="marker-item"><span class="marker-time">'+min+':'+sec+'</span><span>'+esc(m.note||t('（無描述）','(no note)'))+'</span></div>';
         });
-        html += '</div>';
+        html += '</div></div>';
       }
+      // 語音記錄也放左欄（Voice 分頁仍在，這裡是 Info 的概覽）
+      if (voiceCount > 0) {
+        html += '<div class="info-section"><h3>' + t('語音記錄', 'VOICE') + '</h3><div class="card-list">';
+        (r.voiceTranscript||[]).slice(0, 6).forEach(v => {
+          html += '<div class="voice-item"><span class="voice-time">'+fmtTime(v.timestamp)+'</span>'+esc(v.text)+'</div>';
+        });
+        if (voiceCount > 6) html += '<div class="log-more">' + t('另外 ','+') + (voiceCount-6) + t(' 段語音（見 Voice 分頁）',' more (see Voice tab)') + '</div>';
+        html += '</div></div>';
+      }
+      html += '</div><div class="info-col-side">';
       if (r.networkSnapshot) {
         var ns = r.networkSnapshot;
         var nsStart = ns.atStart || ns; // 相容單一/雙時間點
         var nsEnd = ns.atEnd;
-        var fmtNet = function (x) {
-          if (!x) return '';
-          var online = x.online ? t('🟢 在線', '🟢 Online') : t('🔴 離線', '🔴 Offline');
-          var typ = (x.type && x.type !== 'unknown') ? x.type
+        // PM-432：拆成三個取值函式，事實列一列一項；🟢/🔴 換成文字（§7.7 不靠顏色傳達內容）
+        var fmtOnline = function (x) { return x && x.online ? t('在線', 'Online') : t('離線', 'Offline'); };
+        var fmtType = function (x) {
+          if (!x) return '—';
+          return (x.type && x.type !== 'unknown') ? x.type
             : (x.effectiveType && x.effectiveType !== 'unknown' ? String(x.effectiveType).toUpperCase() : t('未知','Unknown'));
+        };
+        var fmtSpeed = function (x) {
+          if (!x) return '—';
           var rtt = (x.rtt != null) ? x.rtt + 'ms' : '—';
           var dl = (x.downlink != null) ? x.downlink + ' Mbps' : '—';
-          var save = x.saveData ? t(' · 省流量模式', ' · Data Saver') : '';
-          return t('狀態：','Status: ') + online + t(' · 類型：',' · Type: ') + typ + t(' · 延遲：',' · Latency: ') + rtt + t(' · 頻寬：',' · Bandwidth: ') + dl + save;
+          return rtt + ' · ' + dl + (x.saveData ? t(' · 省流量模式', ' · Data Saver') : '');
         };
-        html += '<div class="info-section"><h3>' + t('📡 網路環境', '📡 Network Environment') + '</h3><p>' + esc(fmtNet(nsStart));
+        var fmtNet = function (x) {
+          if (!x) return '';
+          return t('狀態：','Status: ') + fmtOnline(x) + t(' · 類型：',' · Type: ') + fmtType(x) + t(' · 延遲/頻寬：',' · Latency/Bandwidth: ') + fmtSpeed(x);
+        };
+        html += '<div class="info-section"><h3>' + t('網路環境', 'NETWORK') + '</h3><div class="fact-list">';
+        html += '<div class="fact-row"><span><span class="fact-hex"></span> ' + t('狀態','Status') + '</span><b>' + esc(fmtOnline(nsStart)) + '</b></div>';
+        html += '<div class="fact-row"><span>' + t('類型','Type') + '</span><b>' + esc(fmtType(nsStart)) + '</b></div>';
+        html += '<div class="fact-row"><span>' + t('延遲 · 頻寬','Latency · Bandwidth') + '</span><b>' + esc(fmtSpeed(nsStart)) + '</b></div>';
+        html += '</div>';
         if (nsEnd && (nsEnd.online !== nsStart.online || nsEnd.effectiveType !== nsStart.effectiveType)) {
-          html += '<br>' + t('結束時：','At end: ') + esc(fmtNet(nsEnd));
+          html += '<div class="fact-note"><span class="fact-hex"></span><span>' + t('結束時：','At end: ') + esc(fmtNet(nsEnd)) + '</span></div>';
         }
-        html += '</p></div>';
+        html += '</div>';
       }
       // PM-157：儲存狀態（值已在 extension 端遮罩，server 只顯示遮罩後結果）
       if (r.storageSnapshot) {
         var ss = r.storageSnapshot;
-        var fmtItems = function (label, items) {
-          var arr = Array.isArray(items) ? items : [];
-          var h = '<div style="margin-bottom:8px"><strong>' + esc(label) + ' (' + arr.length + ' items)</strong>';
-          if (arr.length) {
-            h += '<ul style="margin:4px 0 0;padding-left:20px">';
-            arr.forEach(function (it) {
-              h += '<li><code>' + esc(String(it.key)) + '</code>: ' + esc(String(it.value)) +
-                ' <span style="color:#8b949e">(' + (it.size != null ? it.size : 0) + ' chars)</span></li>';
-            });
-            h += '</ul>';
-          }
-          return h + '</div>';
-        };
-        html += '<div class="info-section"><h3>' + t('💾 儲存狀態', '💾 Storage State') + '</h3>';
-        html += fmtItems('localStorage', ss.localStorage);
-        html += fmtItems('sessionStorage', ss.sessionStorage);
+        // PM-432：改成事實列（一行一種儲存），細項留給 MCP／JSON —— 報告頁只給概覽。
+        var countItems = function (items) { return Array.isArray(items) ? items.length : 0; };
         var cookieNames = Array.isArray(ss.cookieNames) ? ss.cookieNames : [];
-        html += '<div><strong>Cookies: ' + (ss.cookieCount != null ? ss.cookieCount : cookieNames.length) + '</strong>' +
-          (cookieNames.length ? ' <span style="color:#8b949e">(' + esc(cookieNames.join(', ')) + ')</span>' : '') + '</div>';
-        html += '<p style="color:#8b949e;font-size:12px;margin-top:8px">' + t('🔒 敏感值（密碼/token/email/卡號）已於使用者端自動遮罩', '🔒 Sensitive values (passwords/tokens/email/card numbers) auto-masked on the client') + '</p>';
+        html += '<div class="info-section"><h3>' + t('儲存狀態', 'STORAGE') + '</h3><div class="fact-list">';
+        html += '<div class="fact-row"><span><span class="fact-hex"></span> localStorage</span><b>' + countItems(ss.localStorage) + t(' 項',' items') + '</b></div>';
+        html += '<div class="fact-row"><span>sessionStorage</span><b>' + countItems(ss.sessionStorage) + t(' 項',' items') + '</b></div>';
+        html += '<div class="fact-row"><span>Cookies</span><b>' + (ss.cookieCount != null ? ss.cookieCount : cookieNames.length) + t(' 項',' items') + '</b></div>';
+        html += '</div>';
+        // §2.3 遮罩註記是系統主動告知 → 咖啡底
+        html += '<div class="fact-note"><span class="fact-hex"></span><span>' + t('敏感值（密碼/token/email/卡號）已於使用者端自動遮罩', 'Sensitive values (passwords/tokens/email/card numbers) auto-masked on the client') + '</span></div>';
         html += '</div>';
       }
-      html += '<div class="info-section"><h3>' + t('📊 摘要', '📊 Summary') + '</h3><div class="info-grid">';
-      html += '<div>' + t('DOM 事件：','DOM events: ') + (r.rrwebEvents?.length||0)+'</div>';
-      html += '<div>' + t('Console：','Console: ') + consoleCount+'</div>';
-      html += '<div>' + t('Network：','Network: ') + networkCount+'</div>';
-      html += '<div>' + t('語音：','Voice: ') + voiceCount + t(' 段',' segs') + '</div>';
-      html += '<div>' + t('截圖：','Screenshots: ') + ssCount+'</div>';
-      html += '</div></div></div>';
+      // 摘要改「數字在上、標籤在下」的米白格（同 edit-report 那套）
+      html += '<div class="info-section"><h3>' + t('摘要', 'SUMMARY') + '</h3><div class="info-grid">';
+      html += '<div><b>' + (r.rrwebEvents?.length||0) + '</b><span>' + t('DOM 事件','DOM events') + '</span></div>';
+      html += '<div><b>' + consoleCount + '</b><span>Console</span></div>';
+      html += '<div><b>' + networkCount + '</b><span>Network</span></div>';
+      html += '<div><b>' + voiceCount + '</b><span>' + t('語音段','Voice segs') + '</span></div>';
+      html += '<div><b>' + ssCount + '</b><span>' + t('截圖','Screenshots') + '</span></div>';
+      html += '</div></div>';
+      html += '</div></div>'; // /info-col-side /info-cols
+      html += '</div>'; // /tab-info
 
       html += '<div class="tab-panel'+(defaultTab==='console'?' active':'')+'" id="tab-console">';
       if (consoleCount === 0) {
-        html += '<div class="empty">' + t('沒有 Console 錯誤 ✓', 'No console errors ✓') + '</div>';
+        html += '<div class="empty">' + t('沒有 Console 錯誤', 'No console errors') + '</div>';
       } else {
+        // §6：error = 圓形 + 中央橫槓、warn = 三角（形狀由 .log-icon 的 CSS 決定，這裡只給空節點）
+        html += '<div class="card-list">';
         (r.consoleLogs||[]).forEach(log => {
           const cls = log.level === 'error' ? 'error' : 'warn';
-          const icon = log.level === 'error' ? '❌' : '⚠';
-          html += '<div class="log-item '+cls+'"><span class="log-icon">'+icon+'</span><span class="log-msg">'+esc(log.message)+'</span><span class="log-time">'+fmtTime(log.timestamp)+'</span></div>';
+          html += '<div class="log-item '+cls+'"><span class="log-icon"><i></i></span><span class="log-msg">'+esc(log.message)+'</span><span class="log-time">'+fmtTime(log.timestamp)+'</span></div>';
         });
+        html += '</div>';
       }
       html += '</div>';
 
       html += '<div class="tab-panel'+(defaultTab==='network'?' active':'')+'" id="tab-network">';
       if (networkCount === 0) {
-        html += '<div class="empty">' + t('沒有 Network 錯誤 ✓', 'No network errors ✓') + '</div>';
+        html += '<div class="empty">' + t('沒有 Network 錯誤', 'No network errors') + '</div>';
       } else {
+        html += '<div class="card-list">';
         (r.networkErrors||[]).forEach(err => {
           const cls = err.status >= 500 ? 's5xx' : 's4xx';
           html += '<div class="net-item"><span class="net-status '+cls+'">'+err.status+'</span><span class="net-method">'+esc(err.method)+'</span><span class="net-url">'+esc(err.url)+'</span><span class="net-duration">'+(err.duration||0)+'ms</span></div>';
         });
+        html += '</div>';
       }
       html += '</div>';
 
@@ -4900,9 +5062,11 @@ const REPORT_PAGE_JS = `
       if (voiceCount === 0) {
         html += '<div class="empty">' + t('沒有語音記錄', 'No voice transcript') + '</div>';
       } else {
+        html += '<div class="card-list">';
         (r.voiceTranscript||[]).forEach(v => {
           html += '<div class="voice-item"><span class="voice-time">'+fmtTime(v.timestamp)+'</span>'+esc(v.text)+'</div>';
         });
+        html += '</div>';
       }
       html += '</div>';
 
@@ -4912,13 +5076,13 @@ const REPORT_PAGE_JS = `
         html += '<div class="tab-panel" id="tab-screenshots">';
         html += '<div class="screenshot-toggle">'
           + '<label><input type="checkbox" id="allow-images-toggle"'+(allowImg?' checked':'')+' />'
-          + '<span class="toggle-label">' + t('📸 高畫質 AI 分析（高 Token）', '📸 HQ AI Analysis (high token)') + '</span></label>'
+          + '<span class="toggle-label">' + t('高畫質 AI 分析（高 Token）', 'HQ AI Analysis (high token)') + '</span></label>'
           + '<p class="toggle-hint" id="toggle-hint">'+(allowImg
-              ? t('✅ 已開啟 — AI 可看到截圖畫面，視覺 Bug 更精準（顏色、排版、CSS）', '✅ On — AI can see the screenshots, better for visual bugs (colors, layout, CSS)')
-              : t('🔒 未開啟 — AI 只讀文字，省 Token。遇到視覺 Bug 再開啟', '🔒 Off — AI reads text only to save tokens. Enable for visual bugs'))+'</p>'
+              ? t('已開啟 — AI 可看到截圖畫面，視覺 Bug 更精準（顏色、排版、CSS）', 'On — AI can see the screenshots, better for visual bugs (colors, layout, CSS)')
+              : t('未開啟 — AI 只讀文字，省 Token。遇到視覺 Bug 再開啟', 'Off — AI reads text only to save tokens. Enable for visual bugs'))+'</p>'
           + '<p class="toggle-token" id="toggle-token">'+(allowImg
-              ? t('⚠️ 每張截圖約 3,000~8,000 tokens（'+ssCount+' 張 ≈ '+approxTok+' tokens）', '⚠️ ~3,000–8,000 tokens per screenshot ('+ssCount+' imgs ≈ '+approxTok+' tokens)')
-              : t('💰 目前 AI 讀取此報告約 200~1,500 tokens', '💰 AI currently reads this report at ~200–1,500 tokens'))+'</p>'
+              ? t('每張截圖約 3,000~8,000 tokens（'+ssCount+' 張 ≈ '+approxTok+' tokens）', '~3,000–8,000 tokens per screenshot ('+ssCount+' imgs ≈ '+approxTok+' tokens)')
+              : t('目前 AI 讀取此報告約 200~1,500 tokens', 'AI currently reads this report at ~200–1,500 tokens'))+'</p>'
           + '</div>';
         html += '<div class="ss-grid">';
         (r.screenshots||[]).forEach(ss => {
@@ -4935,11 +5099,12 @@ const REPORT_PAGE_JS = `
       const networkText = JSON.stringify(r.networkErrors||[]);
       const descText = r.description || '';
       const items = [
-        { label:t('🎤 語音記錄','🎤 Voice'), len:voiceText.length },
-        { label:'🖥 Console', len:consoleText.length },
-        { label:'🌐 Network', len:networkText.length },
-        { label:t('📝 描述','📝 Description'), len:descText.length },
-        { label:t('📹 DOM 摘要','📹 DOM Summary'), len:105 },
+        // PM-432：拿掉每列前面的 emoji（§1）。這幾列本來就有文字標籤，圖示沒帶額外資訊。
+        { label:t('語音記錄','Voice'), len:voiceText.length },
+        { label:'Console', len:consoleText.length },
+        { label:'Network', len:networkText.length },
+        { label:t('描述','Description'), len:descText.length },
+        { label:t('DOM 摘要','DOM Summary'), len:105 },
       ];
       let totalT = 0;
       let tokenHtml = '';
@@ -4950,8 +5115,9 @@ const REPORT_PAGE_JS = `
       const chromeT = totalT * 15;
       const pct = chromeT > 0 ? Math.round((1-totalT/chromeT)*100) : 0;
       tokenHtml += '<div class="token-row total"><span>' + t('AI 讀取總計','AI Read Total') + '</span><span>~'+totalT.toLocaleString()+' tokens ≈ USD $'+((totalT*8/1e6).toFixed(4))+'</span></div>';
-      html += '<div class="token-panel"><div style="font-weight:600;margin-bottom:8px;color:#a78bfa;">' + t('📊 Token 估算','📊 Token Estimate') + '</div>' + tokenHtml;
-      html += '<div class="token-save">' + t('💡 同場景 Claude in Chrome：','💡 Same scenario, Claude in Chrome: ') + '~'+chromeT.toLocaleString()+' tokens ≈ USD $'+((chromeT*8/1e6).toFixed(4))+'<br>' + t('✅ BugEzy 為你省了 ','✅ BugEzy saved you ') + pct+'%</div></div>';
+      // PM-432：標題色碼不再寫在 inline style（舊紫色 #a78bfa），改走 .token-title；行首 emoji 拿掉（§1）。
+      html += '<div class="token-panel"><div class="token-title">' + t('TOKEN 估算','TOKEN ESTIMATE') + '</div>' + tokenHtml;
+      html += '<div class="token-save">' + t('同場景 Claude in Chrome：','Same scenario, Claude in Chrome: ') + '~'+chromeT.toLocaleString()+' tokens ≈ USD $'+((chromeT*8/1e6).toFixed(4))+'<br>' + t('BugEzy 為你省了 ','BugEzy saved you ') + pct+'%</div></div>';
 
       document.getElementById('app').innerHTML = html;
 
@@ -4970,6 +5136,10 @@ const REPORT_PAGE_JS = `
       if (shareBox && shareInput) {
         shareInput.value = location.origin + '/report/' + reportId;
         shareBox.style.display = 'flex';
+        // PM-432：設計稿把分享卡放在標題右側。節點本身不動（複製邏輯與 id 都保留），
+        //   只是 render 完之後搬進 #share-slot —— 付費牆／錯誤頁沒有這個落點，會留在原位。
+        var shareSlot = document.getElementById('share-slot');
+        if (shareSlot && shareBox.parentElement !== shareSlot) shareSlot.appendChild(shareBox);
         var shareBtn = document.getElementById('share-copy');
         if (shareBtn && !shareBtn.__wired) {
           shareBtn.__wired = true;
@@ -4979,7 +5149,7 @@ const REPORT_PAGE_JS = `
             shareInput.select();
             try { shareInput.setSelectionRange(0, 99999); } catch (e) {}
             try { document.execCommand('copy'); } catch (e) {}
-            shareBtn.textContent = t('✅ 已複製！', '✅ Copied!');
+            shareBtn.textContent = t('已複製！', 'Copied!');
             setTimeout(function () { shareBtn.textContent = shareOrig; }, 2000);
           });
         }
@@ -4994,11 +5164,11 @@ const REPORT_PAGE_JS = `
           const ht = document.getElementById('toggle-hint');
           const tk = document.getElementById('toggle-token');
           if (ht) ht.textContent = allow
-            ? t('✅ 已開啟 — AI 可看到截圖畫面，視覺 Bug 更精準（顏色、排版、CSS）', '✅ On — AI can see the screenshots, better for visual bugs (colors, layout, CSS)')
-            : t('🔒 未開啟 — AI 只讀文字，省 Token。遇到視覺 Bug 再開啟', '🔒 Off — AI reads text only to save tokens. Enable for visual bugs');
+            ? t('已開啟 — AI 可看到截圖畫面，視覺 Bug 更精準（顏色、排版、CSS）', 'On — AI can see the screenshots, better for visual bugs (colors, layout, CSS)')
+            : t('未開啟 — AI 只讀文字，省 Token。遇到視覺 Bug 再開啟', 'Off — AI reads text only to save tokens. Enable for visual bugs');
           if (tk) tk.textContent = allow
-            ? t('⚠️ 每張截圖約 3,000~8,000 tokens（'+cnt+' 張 ≈ '+(cnt*5000).toLocaleString()+' tokens）', '⚠️ ~3,000–8,000 tokens per screenshot ('+cnt+' imgs ≈ '+(cnt*5000).toLocaleString()+' tokens)')
-            : t('💰 目前 AI 讀取此報告約 200~1,500 tokens', '💰 AI currently reads this report at ~200–1,500 tokens');
+            ? t('每張截圖約 3,000~8,000 tokens（'+cnt+' 張 ≈ '+(cnt*5000).toLocaleString()+' tokens）', '~3,000–8,000 tokens per screenshot ('+cnt+' imgs ≈ '+(cnt*5000).toLocaleString()+' tokens)')
+            : t('目前 AI 讀取此報告約 200~1,500 tokens', 'AI currently reads this report at ~200–1,500 tokens');
           try {
             await fetch('/api/reports/' + reportId + '/settings', {
               method: 'PATCH',
