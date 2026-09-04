@@ -714,5 +714,70 @@ check('429   content.ts 用得到的字典值零 emoji', (() => {
   return [...new Set(bad)].join(' ');
 })() === '');
 
+console.log('\n=== ⑪ PM-430：群組 C · inject.ts 頁內注入 UI（畫面 23/25/26/27）===');
+
+const ijRaw = readFileSync('../extension/src/inject.ts', 'utf8');
+const ij = strip(ijRaw);
+
+check('430   色票集中成 HZ 常數（inject 是獨立 bundle，不能共用 content.ts 那份）',
+  /const HZ = \{/.test(ij) && /onDark2: '#C9A15A'/.test(ij));
+check('430   🔴 §3.4 三種字幕條的字級：即時 17px / Whisper 16px / 鍵盤 16px', (() => {
+  const live = /font:500 17px\/1\.4 \$\{HZ\.fontUi\}/.test(ij);
+  const sixteens = (ij.match(/font:500 16px\/1\.4 \$\{HZ\.fontUi\}/g) ?? []).length;
+  return live && sixteens === 2;
+})(), '字級不符 §3.4');
+check('430   三種字幕條的邊框強調程度不同（Whisper 黃 > 即時咖啡 > 鍵盤最低調）',
+  /border:1\.5px solid \$\{HZ\.y\}/.test(ij)
+  && /border:1\.5px solid \$\{HZ\.brown\}/.test(ij)
+  && /border:1\.5px solid \$\{HZ\.line2\}/.test(ij));
+check('430   §7.6 監控徽章：無錯誤咖啡底、有錯誤黃底黑字 + glow',
+  /background:\$\{HZ\.brown\};color:\$\{HZ\.yPale\}/.test(ij)
+  && /monitorBadge\.style\.background = HZ\.y/.test(ij)
+  && /bugezy-hz-glow 1\.6s/.test(ij));
+check('430   🔴 徽章的六角是文字的兄弟節點（updateMonitorBadge 會覆寫文字）',
+  /badge\.append\(badgeHex, badgeTxt\)/.test(ij)
+  && /bugezy-monitor-badge-text/.test(ij)
+  && !/monitorBadge\.textContent = it\(/.test(ij));
+check('430   §7.7 監控面板每列左側 3px 色條，標籤是文字不是 emoji',
+  /border-left:3px solid \$\{markColor\}/.test(ij)
+  && /let mark = 'WRN'/.test(ij) && /mark = 'ERR'/.test(ij) && /mark = 'RES'/.test(ij));
+check('430   §7.7 5xx 算 ERR（磚紅）、4xx 金黃',
+  /err\.status >= 500 \? HZ\.err : HZ\.yDeep/.test(ij));
+check('430   語音面板：三線拖曳把手 + 六角標題 + 收合三角（原本是 ▼ / ▶ 字元）',
+  /width:13px;height:2px/.test(ij)
+  && /clip-path:polygon\(0 0,100% 0,50% 100%\)/.test(ij)
+  && !/toggleBtn\.textContent/.test(ij));
+check('430   🔴 重啟鈕改幾何三角（原本是 🔄），30×30',
+  /width:30px;height:30px/.test(ij) && !/restartBtn\.textContent/.test(ij));
+check('430   §6.1 頁內麥克風授權：52×60 黃六角殼 + 反色四層麥克風',
+  /width:52px;height:60px[\s\S]{0,60}background:\$\{HZ\.y\};clip-path:\$\{HZ\.hex\}/.test(ij)
+  && /const micParts = \[/.test(ij)
+  && !/icon\.textContent = '🎙️'/.test(ijRaw));
+check('430   麥克風 overlay 遮罩用 rgba(14,12,8,.62)、卡片 308px',
+  /background:rgba\(14,12,8,\.62\)/.test(ij) && /width:308px/.test(ij));
+check('430   🔴 Whisper 音量柱的顏色由位置決定，.ts 不再 inline 覆寫',
+  /const BAR_COLORS = \[HZ\.brown, HZ\.yDeep, HZ\.y, HZ\.yDeep, HZ\.brown\]/.test(ij)
+  && !/style\.background = level > 0\.3/.test(ij));
+check('430   🔴 沒有舊色碼', (() => {
+  const dead = ['#7c3aed', '#6d28d9', '#a78bfa', '#1a1a2e', '#2a2a3e', '#ef4444', '#3fb950',
+    '#f59e0b', '#3b82f6', '#238636', '#f85149'];
+  return dead.filter((c) => new RegExp(c, 'i').test(ij)).join(', ');
+})() === '');
+check('430   🔴 注入 UI 零 emoji（console log 的 blog() 除外）', (() => {
+  const body = ij.replace(/\bblog\([^\n]*\n?/g, '');
+  return [...new Set(onlyEmoji(body))].join(' ');
+})() === '');
+check('430   inject.ts 用得到的字典值零 emoji', (() => {
+  const bad = [];
+  for (const m of i18n.matchAll(/^ {2}'?([A-Za-z0-9_.-]+)'?: *\{/gm)) {
+    const k = m[1];
+    if (!ij.includes(`'${k}'`)) continue;
+    let d = 1, i = m.index + m[0].length;
+    while (d && i < i18n.length) { if (i18n[i] === '{') d++; else if (i18n[i] === '}') d--; i++; }
+    bad.push(...onlyEmoji(i18n.slice(m.index, i)));
+  }
+  return [...new Set(bad)].join(' ');
+})() === '');
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

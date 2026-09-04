@@ -155,21 +155,75 @@ function main() {
   // PM-123：即時監控浮動 icon 改為直覺文字狀態條——
   // 無錯誤：綠色靜態「🟢 BugEzy 監控中」；有錯誤：橘色脈衝「⚠️ 發現 N 個錯誤（點我查看）」，
   // 點擊展開既有的即時 error 清單面板（toggleErrorPanel）＝「查看」。
+/**
+ * PM-430：大黃蜂色票（DESIGN_SPEC §2.1）。
+ *
+ * inject.ts 是獨立的 bundle（MAIN world），不能共用 content.ts 那份 HZ，所以各自帶一份。
+ * 這裡的 UI 全是 `createElement` + `style.cssText`，沒有 stylesheet 可以放 CSS 變數。
+ *
+ * ⚠ §2.2 **比例反轉**：底下是別人的網站，注入 UI 一律黑殼 + 黃強調。
+ */
+const HZ = {
+  y: '#F7BE00',
+  yDeep: '#DFA800',
+  yPale: '#FFE9AE',
+  ink: '#14110B',
+  ink2: '#211C13',
+  ink3: '#0E0C08',
+  brown: '#7A4E1D',
+  brownD: '#4A2F12',
+  line: '#3A3122',
+  line2: '#55492F',
+  err: '#8A2A0F',
+  errFg: '#E08B72',
+  /** §2.4 深底上的次要文字**只有這兩階** */
+  onDark: '#A08B62',
+  onDark2: '#C9A15A',
+  hex: 'polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%)',
+  fontUi: '"Noto Sans TC",system-ui,-apple-system,"Segoe UI","Microsoft JhengHei",sans-serif',
+  fontMono: '"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace',
+} as const;
+
+/** 建一個純幾何的六角（§6 所有項目符號一律小六角）。 */
+function hzHex(size = 9, color: string = HZ.y, pulse = false): HTMLElement {
+  const el = document.createElement('span');
+  el.style.cssText =
+    `width:${size}px;height:${Math.round(size * 1.11)}px;flex-shrink:0;background:${color};` +
+    `clip-path:${HZ.hex};` +
+    (pulse ? 'animation:bugezy-hz-pulse 1.2s ease-in-out infinite;' : '');
+  return el;
+}
+
+/** §8 pulse / glow：注入 UI 用得到的兩個 keyframes（只注入一次）。 */
+function ensureHzKeyframes(): void {
+  if (document.getElementById('bugezy-hz-anim')) return;
+  const st = document.createElement('style');
+  st.id = 'bugezy-hz-anim';
+  st.textContent =
+    '@keyframes bugezy-hz-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.86)}}' +
+    `@keyframes bugezy-hz-glow{0%,100%{box-shadow:0 2px 12px rgba(247,190,0,.35)}` +
+    `50%{box-shadow:0 2px 22px rgba(247,190,0,.85),0 0 40px rgba(247,190,0,.35)}}` +
+    '@keyframes bugezy-hz-bar{0%,100%{height:20%}50%{height:100%}}';
+  document.head.appendChild(st);
+}
+
   function showMonitorBadge() {
     if (monitorBadge) return;
-    // 橘色脈衝 keyframes（有錯誤時用）
-    if (!document.getElementById('bugezy-badge-pulse-style')) {
-      const s = document.createElement('style');
-      s.id = 'bugezy-badge-pulse-style';
-      s.textContent =
-        '@keyframes bugezy-badge-pulse{0%,100%{box-shadow:0 2px 12px rgba(245,158,11,0.3)}50%{box-shadow:0 2px 20px rgba(245,158,11,0.7),0 0 40px rgba(245,158,11,0.3)}}';
-      document.head.appendChild(s);
-    }
+    ensureHzKeyframes();
     const badge = document.createElement('div');
     badge.id = 'bugezy-monitor-badge';
+    // §7.6：無錯誤 = 咖啡底 + 米白字（系統在待命）；有錯誤 = 黃底黑字 + glow（要你做決定）
     badge.style.cssText =
-      'position:fixed;bottom:20px;right:20px;z-index:2147483647;pointer-events:auto;padding:8px 16px;border-radius:20px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:13px;font-weight:600;cursor:default;box-shadow:0 2px 12px rgba(0,0,0,0.3);transition:all 0.3s;user-select:none;background:rgba(22,163,74,0.9);color:#fff;';
-    badge.textContent = it('monitor-active');
+      `position:fixed;bottom:20px;right:20px;z-index:2147483647;pointer-events:auto;` +
+      `display:flex;align-items:center;gap:8px;padding:9px 16px;border-radius:999px;` +
+      `font:700 13px/1 ${HZ.fontUi};cursor:default;box-shadow:0 2px 12px rgba(0,0,0,0.3);` +
+      `transition:background .3s,color .3s;user-select:none;background:${HZ.brown};color:${HZ.yPale};`;
+    // 🔴 六角是文字的兄弟節點 —— updateMonitorBadge 會覆寫文字，放進去會被洗掉。
+    const badgeHex = hzHex(9, HZ.y);
+    const badgeTxt = document.createElement('span');
+    badgeTxt.id = 'bugezy-monitor-badge-text';
+    badgeTxt.textContent = it('monitor-active');
+    badge.append(badgeHex, badgeTxt);
     badge.title = it('monitor-active');
     document.body.appendChild(badge);
     monitorBadge = badge;
@@ -181,20 +235,25 @@ function main() {
     // PM-155：良好 Web Vitals 等 info 級不算「錯誤」，不計入 badge 數字（error/warn 才算問題）
     const consoleProblems = bgConsoleLogs.filter((e) => e.data.level !== 'info').length;
     const total = consoleProblems + bgNetworkErrors.length;
+    // PM-430：只換內層 span 的文字（六角是兄弟節點，textContent 會把它洗掉）
+    const bText = document.getElementById('bugezy-monitor-badge-text');
+    const bHex = monitorBadge.firstElementChild as HTMLElement | null;
     if (total === 0) {
-      monitorBadge.style.background = 'rgba(22,163,74,0.9)';
-      monitorBadge.style.color = '#fff';
+      monitorBadge.style.background = HZ.brown;
+      monitorBadge.style.color = HZ.yPale;
       monitorBadge.style.cursor = 'default';
       monitorBadge.style.animation = 'none';
-      monitorBadge.textContent = it('monitor-active');
+      if (bHex) bHex.style.background = HZ.y;
+      if (bText) bText.textContent = it('monitor-active');
       monitorBadge.title = it('monitor-active');
       monitorBadge.onclick = null;
     } else {
-      monitorBadge.style.background = 'rgba(245,158,11,0.95)';
-      monitorBadge.style.color = '#000';
+      monitorBadge.style.background = HZ.y;
+      monitorBadge.style.color = HZ.ink;
       monitorBadge.style.cursor = 'pointer';
-      monitorBadge.style.animation = 'bugezy-badge-pulse 1.5s ease-in-out infinite';
-      monitorBadge.textContent = it('monitor-errors', { n: total });
+      monitorBadge.style.animation = 'bugezy-hz-glow 1.6s ease-in-out infinite'; // §8 glow
+      if (bHex) bHex.style.background = HZ.ink; // 黃底上的六角要反色才看得見
+      if (bText) bText.textContent = it('monitor-errors', { n: total });
       monitorBadge.title = it('monitor-errors-title', { n: total });
       // PM-124：已上傳過報告 → 點 badge 直接開報告頁；否則展開 error 面板
       monitorBadge.onclick = () => {
@@ -223,12 +282,18 @@ function main() {
       updateMonitorBadge(); // badge 點擊改為開報告頁
       if (btn) {
         btn.textContent = it('monitor-uploaded');
-        btn.style.background = '#238636';
+        // PM-430：上傳成功 → 退成描邊次要按鈕（事情做完了，不該再搶注意力）
+        btn.style.background = 'transparent';
+        btn.style.border = `1px solid ${HZ.line2}`;
+        btn.style.color = HZ.onDark2;
         btn.disabled = false; // 再點由既有 handler 依 latestReportUrl 開報告頁
       }
     } else if (btn) {
       btn.textContent = it('monitor-upload-fail');
-      btn.style.background = '#f85149';
+      // 失敗 → §2.1 磚紅
+      btn.style.background = HZ.err;
+      btn.style.border = 'none';
+      btn.style.color = HZ.yPale;
       btn.disabled = false; // 再點由既有 handler（latestReportUrl 仍 null）重新上傳
     }
   });
@@ -243,24 +308,32 @@ function main() {
     const panel = document.createElement('div');
     panel.id = 'bugezy-error-panel';
     panel.style.cssText =
-      'position:fixed;bottom:80px;right:20px;z-index:2147483647;width:360px;max-height:400px;overflow-y:auto;background:#1a1a2e;border:1px solid #2a2a3e;border-radius:12px;padding:12px;box-shadow:0 8px 32px rgba(0,0,0,0.4);font-family:system-ui,sans-serif;font-size:13px;color:#eee;pointer-events:auto;';
+      `position:fixed;bottom:80px;right:20px;z-index:2147483647;width:384px;max-height:400px;` +
+      `overflow-y:auto;background:${HZ.ink};border:2px solid ${HZ.brown};border-radius:12px;padding:13px;` +
+      `box-shadow:0 8px 32px rgba(0,0,0,0.4);font:13px/1.5 ${HZ.fontUi};color:${HZ.yPale};pointer-events:auto;`;
 
     // PM-69：改用 DOM 節點建構（textContent 天生防注入），不再拼 innerHTML 字串，
     // 避免在啟用 Trusted Types 的 CSP 網站（如 GitHub）assign innerHTML 直接拋錯。
     const title = document.createElement('div');
-    title.style.cssText = 'font-weight:600;margin-bottom:8px;color:#a78bfa;';
-    title.textContent = it('monitor-panel-title');
+    title.style.cssText = `display:flex;align-items:center;gap:8px;margin-bottom:10px;font:700 12.5px/1 ${HZ.fontUi};color:${HZ.y};`;
+    const titleTxt = document.createElement('span');
+    titleTxt.textContent = it('monitor-panel-title');
+    title.append(hzHex(9, HZ.y), titleTxt);
     panel.appendChild(title);
 
     /** 一列錯誤：彩色標記 span + 內容 span（內容走 textContent 自動轉義） */
+    // §7.7：每列左側 3px 色條（ERR/5xx 磚紅、WRN 金黃），訊息本文一律米白等寬字。
+    //   標籤是文字（ERR / WRN / RES / VITAL / NET），**不靠顏色傳達內容**。
     function appendRow(markText: string, markColor: string, body: string) {
       const row = document.createElement('div');
-      row.style.cssText = 'padding:4px 0;border-bottom:1px solid #2a2a3e;';
+      row.style.cssText =
+        `display:flex;gap:8px;align-items:baseline;margin:6px 0;padding:7px 9px;` +
+        `background:${HZ.ink2};border-radius:8px;border-left:3px solid ${markColor};`;
       const mark = document.createElement('span');
-      mark.style.cssText = `color:${markColor};font-weight:600;`;
+      mark.style.cssText = `flex-shrink:0;font:700 10.5px/1.5 ${HZ.fontMono};letter-spacing:.06em;color:${markColor === HZ.err ? HZ.errFg : '#F0D9A8'};`;
       mark.textContent = markText;
       const text = document.createElement('span');
-      text.style.cssText = 'color:#ccc;margin-left:4px;';
+      text.style.cssText = `flex:1;min-width:0;font:500 11.5px/1.6 ${HZ.fontMono};color:${HZ.yPale};word-break:break-word;`;
       text.textContent = body;
       row.appendChild(mark);
       row.appendChild(text);
@@ -270,26 +343,29 @@ function main() {
     const cLogs = bgConsoleLogs.map((e) => e.data);
     cLogs.forEach((log) => {
       // PM-155：依 source 分圖示——resource 🖼️、web-vitals ⚡；否則依 level（error ❌ / warn ⚠）
-      let mark = '⚠';
-      let color = '#f59e0b'; // warn 橘
+      // PM-430：圖示換成文字標籤（§1 全站禁用 emoji、§7.7 不靠顏色傳達內容）
+      let mark = 'WRN';
+      // 明寫 string：HZ 是 as const，不標型別會被推成 "#DFA800" 這個字面型別，後面換色編不過
+      let color: string = HZ.yDeep; // §7.7 WRN → 金黃
       if (log.source === 'resource-error') {
-        mark = '🖼️';
+        mark = 'RES';
       } else if (log.source === 'web-vitals') {
-        mark = '⚡';
-        if (log.level === 'info') color = '#3fb950'; // 良好 → 綠
+        mark = 'VITAL';
+        if (log.level === 'info') color = HZ.y; // 良好 → 黃（這套系統沒有綠色）
       } else if (log.level === 'error') {
-        mark = '❌';
-        color = '#ef4444'; // error 紅
+        mark = 'ERR';
+        color = HZ.err; // §7.7 ERR / 5xx → 磚紅
       }
       appendRow(mark, color, log.message.slice(0, 120));
     });
     const nErrs = bgNetworkErrors.map((e) => e.data);
     nErrs.forEach((err) => {
-      appendRow(`🌐 ${err.status}`, '#3b82f6', `${err.method} ${err.url.slice(0, 80)}`);
+      // 5xx 算 ERR（§7.7），4xx 用金黃
+      appendRow(`NET ${err.status}`, err.status >= 500 ? HZ.err : HZ.yDeep, `${err.method} ${err.url.slice(0, 80)}`);
     });
     if (!cLogs.length && !nErrs.length) {
       const empty = document.createElement('div');
-      empty.style.cssText = 'color:#888;text-align:center;padding:12px;';
+      empty.style.cssText = `color:${HZ.onDark};text-align:center;padding:14px;font:600 12px/1.6 ${HZ.fontUi};`;
       empty.textContent = it('monitor-empty');
       panel.appendChild(empty);
     }
@@ -299,10 +375,13 @@ function main() {
       const uploadBtn = document.createElement('button');
       uploadBtn.id = 'bugezy-monitor-upload';
       uploadBtn.textContent = latestReportUrl ? it('monitor-uploaded') : it('monitor-upload');
+      // 已上傳 → 反黑描邊（次要）；未上傳 → 黃底主按鈕（要你做決定）
       uploadBtn.style.cssText =
-        'pointer-events:auto;display:block;width:100%;margin-top:8px;background:' +
-        (latestReportUrl ? '#238636' : '#7c3aed') +
-        ';color:#fff;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;';
+        `pointer-events:auto;display:block;width:100%;margin-top:10px;border-radius:9px;padding:11px;` +
+        `font:700 13px/1 ${HZ.fontUi};cursor:pointer;` +
+        (latestReportUrl
+          ? `background:transparent;border:1px solid ${HZ.line2};color:${HZ.onDark2};`
+          : `background:${HZ.y};border:none;color:${HZ.ink};`);
       uploadBtn.addEventListener('click', () => {
         if (latestReportUrl) {
           window.open(latestReportUrl, '_blank');
@@ -336,22 +415,36 @@ function main() {
     const bar = document.createElement('div');
     bar.id = 'bugezy-live-caption';
     // PM-30：改 flex 佈局，bar 本體 pointer-events:none，內部按鈕 auto
+    ensureHzKeyframes();
+    // §3.4 即時字幕 17px —— 使用者邊操作邊講話，眼睛不在字幕上，只會餘光掃過。
     bar.style.cssText =
-      'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);z-index:2147483647;pointer-events:none;background:rgba(0,0,0,0.85);color:#fff;padding:12px 28px;border-radius:12px;font-size:22px;max-width:80%;font-family:system-ui,sans-serif;transition:opacity 0.3s;letter-spacing:0.5px;display:flex;align-items:center;gap:8px;';
+      `position:fixed;bottom:100px;left:50%;transform:translateX(-50%);z-index:2147483647;` +
+      `pointer-events:none;background:${HZ.ink};border:1.5px solid ${HZ.brown};color:${HZ.yPale};` +
+      `padding:11px 20px;border-radius:14px;font:500 17px/1.4 ${HZ.fontUi};max-width:80%;` +
+      `transition:opacity 0.3s;display:flex;align-items:center;gap:10px;`;
 
-    // 文字部分用 span 包裹（PM-30：更新字幕只動這個 span，避免清掉 🔄 按鈕）
+    // 脈衝六角（原本靠字幕文字前面的 🟢/🔴 表示狀態，PM-430 改成獨立的標記）
+    bar.appendChild(hzHex(9, HZ.y, true));
+
+    // 文字部分用 span 包裹（PM-30：更新字幕只動這個 span，避免清掉重啟按鈕與六角）
     const textSpan = document.createElement('span');
     textSpan.id = 'bugezy-caption-text';
     textSpan.style.cssText = 'flex:1;pointer-events:none;text-align:center;';
-    textSpan.textContent = it('caption-recording'); // PM-70：啟動後 onstart 會切到 🟢 聽取中
+    textSpan.textContent = it('caption-recording');
 
     // 永久重啟按鈕（PM-30：靜默中斷時使用者隨時可手動重啟）
     const restartBtn = document.createElement('button');
     restartBtn.id = 'bugezy-voice-restart';
-    restartBtn.textContent = '🔄';
     restartBtn.title = '重新啟動語音辨識';
     restartBtn.style.cssText =
-      'pointer-events:auto;background:rgba(124,58,237,0.8);color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:16px;cursor:pointer;margin-left:12px;flex-shrink:0;vertical-align:middle;';
+      `pointer-events:auto;background:${HZ.ink2};border:1px solid ${HZ.line2};border-radius:8px;` +
+      `width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;` +
+      `cursor:pointer;margin-left:4px;flex-shrink:0;`;
+    // §6 播放三角（原本是 🔄）—— 「再跑一次」用三角比旋轉箭頭好畫，語意也通
+    const restartIcon = document.createElement('span');
+    restartIcon.style.cssText =
+      `width:10px;height:12px;background:${HZ.y};clip-path:polygon(0 0,100% 50%,0 100%);`;
+    restartBtn.appendChild(restartIcon);
     restartBtn.addEventListener('click', async () => {
       restartBtn.disabled = true;
       await forceRestartVoice();
@@ -370,7 +463,9 @@ function main() {
     // PM-237 Bug2：面板本體改 pointer-events:auto（否則拖不動）；預設 top:200px/right:12px，
     //   若使用者本頁曾拖曳過（voicePanelPos）則沿用該座標（改用 left 定位）。
     panel.style.cssText =
-      'position:fixed;top:200px;right:12px;z-index:2147483647;pointer-events:auto;width:260px;max-height:50vh;overflow-y:auto;background:rgba(0,0,0,0.8);border:1px solid rgba(124,58,237,0.5);border-radius:12px;padding:10px 14px;font-family:system-ui,sans-serif;font-size:14px;color:#eee;line-height:1.6;transition:opacity 0.3s;'; // PM-40/44：60→140→200px 避免被書籤列/其他擴充遮擋
+      `position:fixed;top:200px;right:12px;z-index:2147483647;pointer-events:auto;width:262px;` +
+      `max-height:50vh;overflow-y:auto;background:${HZ.ink};border:2px solid ${HZ.brown};` +
+      `border-radius:12px;padding:0;font:${HZ.fontUi};color:${HZ.yPale};transition:opacity 0.3s;`; // PM-40/44：60→140→200px 避免被書籤列/其他擴充遮擋
     if (voicePanelPos) {
       panel.style.left = `${voicePanelPos.left}px`;
       panel.style.top = `${voicePanelPos.top}px`;
@@ -381,31 +476,49 @@ function main() {
     //   （PM-31 Bug1 原設 none 防誤點；改用「只有 header 可拖、內容區仍 none」達成同樣防呆。）
     const header = document.createElement('div');
     header.style.cssText =
-      'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.15);pointer-events:auto;cursor:grab;user-select:none;';
+      `display:flex;justify-content:space-between;align-items:center;gap:8px;` +
+      `padding:8px 11px;background:${HZ.ink2};border-bottom:1px solid ${HZ.line};` +
+      `border-radius:10px 10px 0 0;pointer-events:auto;cursor:grab;user-select:none;`;
+    // 三線拖曳把手（設計稿畫面 23）—— 讓「這裡可以拖」變成看得出來的事
+    const grip = document.createElement('span');
+    grip.style.cssText = 'display:flex;flex-direction:column;gap:2px;flex-shrink:0;';
+    for (let i = 0; i < 3; i++) {
+      const line = document.createElement('span');
+      line.style.cssText = `width:13px;height:2px;border-radius:2px;background:${HZ.onDark2};`;
+      grip.appendChild(line);
+    }
+    header.appendChild(grip);
     // PM-69：用 DOM 節點建構，避免 innerHTML 在 Trusted-Types CSP 網站（如 GitHub）拋錯
     const headerLabel = document.createElement('span');
-    headerLabel.style.cssText = 'font-size:12px;color:#a78bfa;';
+    headerLabel.style.cssText = `flex:1;font:700 11.5px/1 ${HZ.fontUi};color:${HZ.y};`;
     headerLabel.textContent = it('caption-voice-log');
     header.appendChild(headerLabel);
 
     const content = document.createElement('div');
     content.id = 'bugezy-voice-content';
     // PM-237 Bug2：內容區維持 pointer-events:none（面板本體現為 auto，需顯式關掉內容區避免誤選文字干擾頁面）
-    content.style.cssText = 'white-space:pre-wrap;word-break:break-word;pointer-events:none;';
+    content.style.cssText =
+      `white-space:pre-wrap;word-break:break-word;pointer-events:none;` +
+      `padding:10px 12px;font:400 12px/1.6 ${HZ.fontUi};color:${HZ.yPale};`;
 
     // 收合按鈕獨立，只有它是 pointer-events:auto
     let collapsed = false;
     const toggleBtn = document.createElement('button');
     toggleBtn.id = 'bugezy-panel-toggle';
-    toggleBtn.textContent = '▼';
     toggleBtn.title = '收合/展開';
     toggleBtn.style.cssText =
-      'pointer-events:auto;background:rgba(124,58,237,0.6);border:none;border-radius:4px;color:#fff;font-size:12px;padding:2px 8px;cursor:pointer;';
+      `pointer-events:auto;background:transparent;border:1px solid ${HZ.line2};border-radius:7px;` +
+      `width:22px;height:20px;padding:0;display:flex;align-items:center;justify-content:center;cursor:pointer;`;
+    // §6 三角（原本是 ▼ / ▶ 兩個字元）。旋轉 -90 度就是「收合」。
+    const toggleIcon = document.createElement('span');
+    toggleIcon.style.cssText =
+      `width:9px;height:6px;background:${HZ.onDark2};clip-path:polygon(0 0,100% 0,50% 100%);transition:transform .2s;`;
+    toggleBtn.appendChild(toggleIcon);
     toggleBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       collapsed = !collapsed;
       content.style.display = collapsed ? 'none' : 'block';
-      toggleBtn.textContent = collapsed ? '▶' : '▼';
+      toggleIcon.style.transform = collapsed ? 'rotate(-90deg)' : 'none';
     });
     header.appendChild(toggleBtn);
 
@@ -458,9 +571,23 @@ function main() {
     document.getElementById('bugezy-live-caption')?.remove();
     const bar = document.createElement('div');
     bar.id = 'bugezy-live-caption';
+    // §3.4 鍵盤模式 16px；三條字幕條裡邊框最低調的一條（1.5px --line-dark-2）
     bar.style.cssText =
-      'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);z-index:2147483647;pointer-events:none;background:rgba(0,0,0,0.85);color:#fff;padding:12px 28px;border-radius:12px;font-size:18px;font-family:system-ui,sans-serif;';
-    bar.textContent = it('keyboard-bar');
+      `position:fixed;bottom:100px;left:50%;transform:translateX(-50%);z-index:2147483647;` +
+      `pointer-events:none;background:${HZ.ink};border:1.5px solid ${HZ.line2};color:${HZ.onDark2};` +
+      `padding:11px 20px;border-radius:14px;font:500 16px/1.4 ${HZ.fontUi};` +
+      `display:flex;align-items:center;gap:10px;`;
+    // §6 鍵盤 → 圓角方框 + 底部橫槓
+    const kb = document.createElement('span');
+    kb.style.cssText =
+      `width:17px;height:12px;box-sizing:border-box;border:2px solid ${HZ.onDark2};border-radius:3px;` +
+      `display:flex;align-items:flex-end;justify-content:center;padding-bottom:1.5px;flex-shrink:0;`;
+    const kbBar = document.createElement('span');
+    kbBar.style.cssText = `width:8px;height:2px;background:${HZ.onDark2};`;
+    kb.appendChild(kbBar);
+    const kbTxt = document.createElement('span');
+    kbTxt.textContent = it('keyboard-bar');
+    bar.append(kb, kbTxt);
     document.body.appendChild(bar);
     captionBar = bar;
   }
@@ -473,8 +600,12 @@ function main() {
     document.getElementById('bugezy-live-caption')?.remove();
     const bar = document.createElement('div');
     bar.id = 'bugezy-live-caption';
+    // §3.4 Whisper 錄音條 16px。邊框用黃色（比即時字幕的咖啡邊更強調 —— 這條是「正在錄，講完要按停止」）
     bar.style.cssText =
-      'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);z-index:2147483647;pointer-events:none;background:rgba(0,0,0,0.85);color:#fff;padding:12px 28px;border-radius:12px;font-size:18px;font-family:system-ui,sans-serif;display:flex;align-items:center;gap:10px;';
+      `position:fixed;bottom:100px;left:50%;transform:translateX(-50%);z-index:2147483647;` +
+      `pointer-events:none;background:${HZ.ink};border:1.5px solid ${HZ.y};color:${HZ.yPale};` +
+      `padding:11px 20px;border-radius:14px;font:500 16px/1.4 ${HZ.fontUi};` +
+      `display:flex;align-items:center;gap:10px;`;
 
     // PM-97：5 條音量條（取代原本 bugezy-pulse 靜態紅點）
     const bars = document.createElement('span');
@@ -483,8 +614,10 @@ function main() {
     for (let i = 0; i < 5; i++) {
       const b = document.createElement('span');
       b.className = 'bugezy-vol-bar';
+      // 柱色由內到外 brown → y-deep → y → y-deep → brown（設計稿畫面 26）
+      const BAR_COLORS = [HZ.brown, HZ.yDeep, HZ.y, HZ.yDeep, HZ.brown];
       b.style.cssText =
-        'width:4px;background:#ef4444;border-radius:2px;transition:height 0.15s ease;height:4px;';
+        `width:4px;background:${BAR_COLORS[i]};border-radius:2px;transition:height 0.15s ease;height:4px;`;
       bars.appendChild(b);
     }
     bar.appendChild(bars);
@@ -505,7 +638,8 @@ function main() {
       const threshold = (i + 1) / 5;
       const h = level >= threshold ? 4 + 16 * level + Math.random() * 4 : 4;
       (b as HTMLElement).style.height = `${Math.min(h, 20)}px`;
-      (b as HTMLElement).style.background = level > 0.3 ? '#3fb950' : '#ef4444';
+      // PM-430：不要在這裡覆寫顏色。柱色是建立時依位置給的（brown → y-deep → y → …），
+      //   inline style 一寫就永久蓋掉；「有沒有聽到聲音」由高度表達就夠了（§7.7）。
     });
   }) as EventListener);
 
@@ -623,7 +757,7 @@ function main() {
               }
 
               // 底部字幕：短暫顯示確認後回到聆聽中
-              setCaptionText(`✅ ${text}`);
+              setCaptionText(text); // PM-430：狀態由字幕條左側的脈衝六角表示，不再前綴 emoji
               window.setTimeout(() => {
                 if (voiceActive) setVoiceStatus('listening');
               }, 1500);
@@ -644,7 +778,7 @@ function main() {
         const trimmed = interim.trim();
         const now = Date.now();
         if (now - lastInterimUpdate >= INTERIM_THROTTLE_MS) {
-          setCaptionText(`🟢 ${trimmed}`);
+          setCaptionText(trimmed);
           lastInterimUpdate = now;
         }
 
@@ -672,7 +806,7 @@ function main() {
               }
 
               // 底部字幕確認
-              setCaptionText(`✅ ${promoted}`);
+              setCaptionText(promoted);
               window.setTimeout(() => {
                 if (voiceActive) setVoiceStatus('listening');
               }, 1500);
@@ -917,7 +1051,8 @@ function main() {
       const bad = value > threshold;
       collectConsoleLog({
         level: bad ? 'warn' : 'info',
-        message: `Web Vital ${name}: ${value}${unit} ${bad ? '⚠️ ' + desc : '✅ 良好'}`,
+        // PM-430：改文字標籤（§1 全站禁用 emoji）。這行會進 console log 與監控面板兩邊。
+        message: `Web Vital ${name}: ${value}${unit} ${bad ? desc : '良好'}`,
         timestamp: Date.now(),
         source: 'web-vitals',
       });
@@ -1239,77 +1374,57 @@ function main() {
     // PM-95：改成全頁半透明遮罩 + 居中卡片（原本是頂部橫條，跟網頁融在一起看不到）
     const overlay = document.createElement('div');
     overlay.id = 'bugezy-mic-overlay';
-    overlay.style.cssText = `
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      z-index: 2147483647;
-      background: rgba(0, 0, 0, 0.6);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    `;
+    overlay.style.cssText =
+      `position:fixed;top:0;left:0;right:0;bottom:0;z-index:2147483647;` +
+      `background:rgba(14,12,8,.62);display:flex;align-items:center;justify-content:center;` +
+      `font-family:${HZ.fontUi};`;
 
     const card = document.createElement('div');
-    card.style.cssText = `
-      background: #1a1a2e;
-      border: 1px solid #7c3aed;
-      border-radius: 16px;
-      padding: 32px 40px;
-      max-width: 380px;
-      text-align: center;
-      box-shadow: 0 8px 32px rgba(124, 58, 237, 0.3);
-    `;
+    card.style.cssText =
+      `width:308px;box-sizing:border-box;background:${HZ.ink};border:2px solid ${HZ.y};` +
+      `border-radius:16px;padding:26px 24px;text-align:center;` +
+      `display:flex;flex-direction:column;align-items:center;gap:14px;` +
+      `box-shadow:0 8px 32px rgba(0,0,0,.5);`;
 
+    // §6.1 四層麥克風，裝在 52px 的**黃色**六角殼裡（頁內是黑殼，所以殼反過來用黃、內部反色）
     const icon = document.createElement('div');
-    icon.textContent = '🎙️';
-    icon.style.cssText = 'font-size: 48px; line-height: 1;';
+    icon.style.cssText =
+      `width:52px;height:60px;flex-shrink:0;background:${HZ.y};clip-path:${HZ.hex};` +
+      `display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;`;
+    const micParts = [
+      `width:13px;height:19px;border-radius:7px;` +
+        `background:repeating-linear-gradient(${HZ.ink} 0 2px,${HZ.y} 2px 4px);` +
+        `box-shadow:0 0 0 2px ${HZ.ink} inset;`,
+      `width:17px;height:7px;box-sizing:border-box;border:2px solid ${HZ.ink};border-top:none;border-radius:0 0 10px 10px;`,
+      `width:2px;height:3px;background:${HZ.ink};`,
+      `width:12px;height:2px;border-radius:2px;background:${HZ.ink};`,
+    ];
+    for (const cssText of micParts) {
+      const part = document.createElement('span');
+      part.style.cssText = cssText;
+      icon.appendChild(part);
+    }
 
     const title = document.createElement('h3');
     title.textContent = it('mic-perm-title');
-    title.style.cssText = `
-      color: #fff;
-      font-size: 18px;
-      font-weight: 600;
-      margin: 16px 0 8px;
-    `;
+    title.style.cssText = `color:${HZ.y};font:700 17px/1.35 ${HZ.fontUi};margin:0;`;
 
     const desc = document.createElement('p');
     desc.textContent = it('mic-perm-desc');
-    desc.style.cssText = `
-      color: #aaa;
-      font-size: 14px;
-      line-height: 1.5;
-      margin: 0 0 24px;
-    `;
+    desc.style.cssText = `color:${HZ.onDark2};font:500 13px/1.6 ${HZ.fontUi};margin:0;`;
 
     const allowBtn = document.createElement('button');
     allowBtn.textContent = it('mic-perm-allow');
-    allowBtn.style.cssText = `
-      display: block;
-      width: 100%;
-      background: #7c3aed;
-      color: #fff;
-      border: none;
-      border-radius: 10px;
-      padding: 12px 32px;
-      font-size: 16px;
-      cursor: pointer;
-      font-weight: 600;
-    `;
+    allowBtn.style.cssText =
+      `display:block;width:100%;background:${HZ.y};color:${HZ.ink};border:none;` +
+      `border-radius:11px;padding:12px;font:700 14px/1 ${HZ.fontUi};cursor:pointer;`;
 
     const skipBtn = document.createElement('button');
     skipBtn.textContent = it('mic-perm-skip');
-    skipBtn.style.cssText = `
-      display: block;
-      width: 100%;
-      background: transparent;
-      color: #aaa;
-      border: none;
-      padding: 12px 0 0;
-      font-size: 13px;
-      cursor: pointer;
-    `;
+    skipBtn.style.cssText =
+      `display:block;width:100%;background:transparent;color:${HZ.onDark2};` +
+      `border:1px solid ${HZ.line2};border-radius:11px;padding:11px;` +
+      `font:700 13px/1 ${HZ.fontUi};cursor:pointer;`;
 
     card.appendChild(icon);
     card.appendChild(title);
