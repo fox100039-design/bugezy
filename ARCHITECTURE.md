@@ -508,11 +508,11 @@ job/           每日任務檔
    > 多個 AI 工具會各自 spawn 一個 bridge，只有第一個綁得到 port。後起的若直接死掉，AI 端只看到空白的「Failed to connect」查不出原因。
    > 保持 MCP server 活著並 `link.disable(reason)`，讓每個工具呼叫都回一句人看得懂的話。
 
-21. **大黃蜂視覺系統（PM-413~430）**：
+21. **大黃蜂視覺系統（PM-413~436）**：
     > 唯一依據是 `BugEzy 大黃蜂色調項目概覽/design_handoff_hornet_visual_system/DESIGN_SPEC.md`。
     > 設計稿（`.dc.html`）是規則的展示，**兩者衝突時以 DESIGN_SPEC 為準**（交付包 README 自訂的規則）。
     >
-    > **進度**：群組 A（popup）✅ · B（擴充頁面：annotate / edit-report / checkout / mic-permission）✅ · C（頁內注入 UI）✅ · **D（分享報告頁）與 E（官網 11 頁）未動**，兩者都在 `server/src/index.ts`。
+    > **進度：A~E 全部完成**（PM-305~437 共 131 張卡）—— A（popup）✅ · B（擴充頁面：annotate / edit-report / checkout / mic-permission）✅ · C（頁內注入 UI）✅ · D（分享報告頁 + 付費牆 + 找不到報告）✅ · E（官網 11 頁 + 日票成功頁）✅。D／E 都在 `server/src/index.ts`。端到端 **999 / 0**、守則斷言 **280 條**、Worker bundle gzip **770 KiB**。
     >
     > - **§2.2 比例反轉**：`content.ts` / `inject.ts` 的注入 UI 一律**黑殼 + 黃強調** —— 底下是別人的網站，整條黃橫幅會蓋掉對方設計。**唯一例外是截圖工具列**（全寬且短暫存在的模態工具，用黃底宣告「現在是 BugEzy 在控制」）。
     > - 🔴 **圖示是 `[data-i18n]` 元素的兄弟節點**。把 emoji 換成幾何 span 之後，**每一處 `textContent` 都會把圖示洗掉**。三種解法：① 兄弟節點（最常用）② 切 class 由 CSS 決定顯示哪個圖示（狀態切換）③ `::before`（`.ts` 會 `appendChild` 到同一容器時）。
@@ -527,6 +527,13 @@ job/           每日任務檔
     > - **蜂巢紋 data URI 內不可出現未編碼的 `;`**（§4）：會提早結束 CSS 宣告，整條 `background-image` 失效。
     > - **登入頁的蜂**：`<bee-video>`（`bee-video.js`，classic script，**不可走 esbuild entryPoints**，否則 `customElements.define` 不會執行）。despill 紅通道回補 `0.28`（去綠後偏暖黃而非偏灰）、`filter: saturate(1.55) contrast(1.25) brightness(1.10)`。**沒有靜態 fallback**（PM-424 移除，回歸交付包 §Assets 的原意）。
     > - **刻意不外連 Google Fonts**：擴充頁面連外字型 = 每次開啟都向第三方送一次請求，隱私政策要交代（v1.1.5 曾被 CWS 以「隱私政策資訊不足」退件）。字型走「設計字型優先 + 系統字備援」的堆疊。
+    > - **server 端頁面反過來，是外連 Google Fonts 的**（PM-432 起）：官網／報告頁不是擴充，沒有 CWS 那層隱私審查。11 個官網頁共用 `SITE_FONTS` / `SITE_CHROME_CSS` / `SITE_CONTENT_CSS` 三個常數 + `siteNav()` / `siteFooter()` 兩個函式，改一次全部套用。
+    > - 🔴 **共用 nav／footer 的選擇器一律「元素 + class」**（`nav.hz-nav` / `footer.hz-foot`，0,1,1）。各頁本來就有 `header {}` `footer {}` `footer a {}` 這類元素選擇器，只寫 `.hz-foot`（0,1,0）壓不過 `footer a`（0,0,2）。
+    > - 🔴 **官網三本翻譯字典（JA/KO/VI）用「繁體原文」當 key，值才是畫面上的字。** 改頁面文案要**同時**改 key（不然日／韓／越整句掉回英文），清 emoji 要**同時**清值（`makeT('ja')` 回傳的是值）。這三本只服務 `LANGS_6` 的三頁：首頁、FAQ、功能。
+    > - 🔴 **nav 的語言切換必須等於該頁 `hreflangTags` 宣告的語言集**（PM-289 canonical 鐵則的延伸）。已釘成跨函式斷言：11 頁的 `siteNav(lang, LANGS_x)` 與 `hreflangTags(…, LANGS_x)` 不一致就紅。
+    > - **Worker 沒有靜態資源目錄**：首頁 hero 的實拍蜂沿用 `icon-128.png` 那套 —— `server/src/hornet-png.ts` 存 base64（來源是擴充壓過的 71 KB 版，不是交付包的 1.4 MB），`GET /hornet-real.png` 提供。代價是 bundle gzip 約 +71 KiB。要省的話改丟 R2（截圖已經走 R2）。
+    > - **共用內容樣式把條列變成六角**（`ul { list-style:none }` + `li::before` clip-path）。**放在 `<li>` 裡的卡片要記得 `::before { content:none }`** —— 部落格列表卡、心得引言卡都是 `<li>`，不關掉每張卡前面會多一顆六角。
+    > - **整段替換頁面 `<style>` 會連帶弄丟寫在下半段的專屬 class**（PM-435 掉了 13 個：`.mcp-box` `.warn-box` `.tips` `.plan3 .pc` …）。收工前用「body 用到的 class 是否都有對應 CSS」掃一遍。
 
 
 ## §5 MCP Server Tool Schema
@@ -576,6 +583,7 @@ list_recent_reports   → 最近報告
 | 2026-07-04 | **SEO + 全站國際化 + 安全 P1-P2 收尾**（PM-136~152）。**SEO**：`/sitemap.xml`+`/robots.txt`+ 各頁 meta/canonical + GSC 驗證標籤（已收錄）。**多語系語音**：popup 語言下拉（zh/yue/日韓英越，日韓越暫鎖待金流）→ server Whisper `language` 白名單、Web Speech `lang` 經 `data-bugezy-lang` 傳入 MAIN world inject。**擴充 i18n**：`i18n.ts`（`t()`/`getUILang`）+ popup/monitor/toolbar/annotate 全 `data-i18n`/`it()`/`t()`；AI 輪盤多語預設。**對外頁英文版**：`getLang()`（Accept-Language + `?lang=` 覆蓋）+ 七頁 `t(zh,en)` 函式（首頁/install/features/changelog/guide/faq/privacy）+ 語言切換鈕 + `no-store`。**安全**：MCP `list_reports`/`get_live_errors`/`get_terminal_logs` 綁 email/session、live-errors/terminal-logs 改 per-user R2 key + 認證（terminal-logs 付費限定）、登出撤銷 server session（`/api/auth/logout`）、PATCH settings owner 驗證、**ECPay callback 冪等 + `payments` 表 + 金額比對**（續扣用 `MerchantTradeNo-Gwsr`）、`formatEcpayDate` 改 UTC+8、清 `debug/` 敏感檔。**其他**：截圖標注付費版走 Whisper、manifest 1.1.0 + 描述英文化、CLI `bugezy-watch` 加 `BUGEZY_TOKEN`。 |
 | 2026-09-02 | **大黃蜂視覺系統 — 群組 A（popup）**（PM-413~422，10 張卡）。popup 從深藍紫整套換成黃／黑／咖啡：design token 落地 `:root`、寬度 360→**320px**（§9）、登入頁 `<bee-video>`、主畫面十三個區塊、錄製中／完成、進階設定、偵察模式、票券／付費／日票／額度／取消五畫面、兩個 overlay。🔴 **emoji 只清 markup 沒有用** —— `applyTranslations()` 會把字典值蓋回畫面，55 個 popup 專用 key 一併清；幾何圖示一律做成 `[data-i18n]` 元素的**兄弟節點**。擴充圖示 128/48/32/16 重畫（六角斜紋，16px 去斜紋）。`_verify403` 92 → **122**（29 條規格護欄，全部反向驗證過）。全套 **841 / 0**。 |
 | 2026-09-03 | **大黃蜂視覺系統 — 群組 A 修正 + B + C**（PM-423~431，9 張卡）。popup 清掉 9 個舊紫色 token（那六處引用其實早被 PM-416 蓋掉、從未渲染）；登入頁移除靜態 fallback（🔴 根因是 `CustomEvent` 預設 `bubbles: false`，listener 卻掛在父層，備援圖從頭到尾壓在 canvas 上）。**群組 B**：付款中繼頁 ×2、麥克風授權頁、截圖標注頁、報告編輯頁。**群組 C**：`content.ts`（截圖工具列／釘選全套／元素高亮 §7.8 黃色雙環／除錯面板）、`inject.ts`（語音面板／三種字幕條／監控徽章與面板／頁內麥克風授權）。🔴 真正的工作量是**十幾處 `textContent` 會把新的幾何圖示洗掉**（見 §4-21）。🔴 `PIN_STATUS_EMOJI` 與判定字串的 emoji **留在資料裡**（popup 的 `sevClass()` 協定），新增 `stripSev()` 只在畫面上剝。兩個卡片要求的元件**不存在**：錄製工具列、AUTO 時間軸標記（`TimeMarker` 沒有來源欄位）。`_verify403` 122 → **219**（+97）。全套 **937 / 0**。**擴充功能端全部改完**，剩 server 端的群組 D／E。 |
+| 2026-09-04 | **大黃蜂視覺系統 — 群組 D + E（全部收工）**（PM-432~437，6 張卡）。**群組 D**：分享報告頁（黃底 + 黑 header + 分頁列 + Console/Info 兩分頁，分享連結卡搬到標題右側）、付費牆 66×76 幾何鎖頭、找不到報告三格蜂巢。**群組 E**：共用外殼 `SITE_FONTS`／`SITE_CHROME_CSS`／`SITE_CONTENT_CSS` + `siteNav()`／`siteFooter()` 套進 11 頁；首頁改黃／米白／黑交替分節（黃色只留給 hero、定價、結尾 CTA 三個決策點）並**補上從來不存在的 `#pricing` 定價區**（付費牆的「了解會員方案」本來是死連結）；內容頁 6 頁 + 部落格／心得／問題回報／日票成功頁。🔴 真正吃時間的是**三本翻譯字典**：key 是繁體原文（改頁面要同步改 key，21 條），**值才是日／韓／越看到的字（102 條 emoji 沒清到，被自己的護欄抓出來 —— 那條斷言原本切片切到定義在字典「前面」的 `makeT`，切出空字串、永遠是綠的）**。順手修掉 hreflang 宣告與語言切換不一致（已釘跨函式斷言）。三個「設計稿要、資料沒有」的欄位沒有編造：部落格分類、心得職稱、日票倒數（這頁是綠界 ClientBackURL，查不到 `day_pass_expires_at`，假倒數重整就歸零）。實拍蜂走 `hornet-png.ts` base64 + `GET /hornet-real.png`。`_verify403` 219 → **280**（+61，反向測試 81/81）。全套 **999 / 0**，bundle gzip **770 KiB**。**視覺系統 A~E 全部完成**。 |
 
 > 部署：Cloudflare Workers `bugezy-api`（**bugezy.dev** + `bugezy-api.bugezy-api.workers.dev` 雙域名）；每日 03:00 UTC cron 保活 Supabase。
 > （隨開發持續更新）
