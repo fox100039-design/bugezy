@@ -508,6 +508,27 @@ job/           每日任務檔
    > 多個 AI 工具會各自 spawn 一個 bridge，只有第一個綁得到 port。後起的若直接死掉，AI 端只看到空白的「Failed to connect」查不出原因。
    > 保持 MCP server 活著並 `link.disable(reason)`，讓每個工具呼叫都回一句人看得懂的話。
 
+21. **大黃蜂視覺系統（PM-413~430）**：
+    > 唯一依據是 `BugEzy 大黃蜂色調項目概覽/design_handoff_hornet_visual_system/DESIGN_SPEC.md`。
+    > 設計稿（`.dc.html`）是規則的展示，**兩者衝突時以 DESIGN_SPEC 為準**（交付包 README 自訂的規則）。
+    >
+    > **進度**：群組 A（popup）✅ · B（擴充頁面：annotate / edit-report / checkout / mic-permission）✅ · C（頁內注入 UI）✅ · **D（分享報告頁）與 E（官網 11 頁）未動**，兩者都在 `server/src/index.ts`。
+    >
+    > - **§2.2 比例反轉**：`content.ts` / `inject.ts` 的注入 UI 一律**黑殼 + 黃強調** —— 底下是別人的網站，整條黃橫幅會蓋掉對方設計。**唯一例外是截圖工具列**（全寬且短暫存在的模態工具，用黃底宣告「現在是 BugEzy 在控制」）。
+    > - 🔴 **圖示是 `[data-i18n]` 元素的兄弟節點**。把 emoji 換成幾何 span 之後，**每一處 `textContent` 都會把圖示洗掉**。三種解法：① 兄弟節點（最常用）② 切 class 由 CSS 決定顯示哪個圖示（狀態切換）③ `::before`（`.ts` 會 `appendChild` 到同一容器時）。
+    >   - `::before` 還有第二層陷阱：`.ts` 若寫 `el.style.display = 'block'`，**inline style 蓋掉 flex**，而 block 容器裡的 `::before` 預設 inline、寬高被忽略 —— 必須 `display: inline-block`。
+    > - 🔴 **嚴重度 emoji 是跨界協定，不能刪**：`content.ts` 的 `PIN_STATUS_EMOJI`（🟢🟡🔴⚪）與 `probeSummary()` 開頭的 🔴／⚠／✅，是 content script → popup 的判定訊號，popup 的 `sevClass()` 靠它決定色條顏色（PM-405：popup 不重新解讀 JSON 去猜嚴重度）。**資料裡留著，只在畫進頁面時用 `stripSev()` 剝掉**，狀態改用 §7.7 的左側 3px 色條。
+    > - **§3.4 字幕條的注意力階梯**：字級 Whisper 16px／即時 17px／鍵盤 16px，**邊框強調度也分級** —— Whisper 黃（正在錄，講完要按停止）> 即時咖啡（餘光掃過）> 鍵盤 `--line-dark-2`（只是告知）。規範只寫字級，這一層是實作時補的意圖，已釘成斷言。
+    > - **`inject.ts` 沒有 Shadow DOM**（只有 `content.ts` 的釘選 UI 有）。注入元件會**繼承所在網站的 CSS**，所以字體／字重／行高一律寫死在 `cssText`，不靠繼承。
+    > - **`cssText` 沒有 CSS 變數可用**，所以 `content.ts` / `inject.ts` 各自帶一份 `HZ` 色票常數（兩個是獨立 bundle，不能共用）。
+    > - **§2.4 深底上的次要文字只有兩階**：`#A08B62` / `#C9A15A`。`#8A7550`（3.8:1）被規範點名禁止 —— 設計稿與卡片有三處誤用，已全部改掉。
+    > - **§3.2 黃底上的文字**：≥11.5px 且字重 ≥600，說明文字用 `#3A2409`（**不是** `#4A2F12`）。唯一讓步是 popup 三入口的說明文字 10px（320px 寬撐不住），字重仍守 600。
+    > - **`clip-path` 會裁掉 `box-shadow` 與 `border`**（§5）：外環一律用「外六角包內六角」的嵌套。
+    > - **蜂巢紋 data URI 內不可出現未編碼的 `;`**（§4）：會提早結束 CSS 宣告，整條 `background-image` 失效。
+    > - **登入頁的蜂**：`<bee-video>`（`bee-video.js`，classic script，**不可走 esbuild entryPoints**，否則 `customElements.define` 不會執行）。despill 紅通道回補 `0.28`（去綠後偏暖黃而非偏灰）、`filter: saturate(1.55) contrast(1.25) brightness(1.10)`。**沒有靜態 fallback**（PM-424 移除，回歸交付包 §Assets 的原意）。
+    > - **刻意不外連 Google Fonts**：擴充頁面連外字型 = 每次開啟都向第三方送一次請求，隱私政策要交代（v1.1.5 曾被 CWS 以「隱私政策資訊不足」退件）。字型走「設計字型優先 + 系統字備援」的堆疊。
+
+
 ## §5 MCP Server Tool Schema
 
 ```
@@ -553,6 +574,8 @@ list_recent_reports   → 最近報告
 | 2026-08-14 | **Chrome Web Store 隱私合規 + 報告保留期限落地**（PM-291~293）。**PM-291**：`/privacy` 改寫為 §1~§11（權限對照表／6 家第三方附連結／Limited Use 中英／兒童隱私）；動筆前核對原始碼，修正卡片 3 處事實錯誤——manifest 無 `host_permissions`（真正該說明的是 `<all_urls>`）、**語音轉文字是 Groq 而非 Workers AI**（舊版政策的「不傳給其他 AI 服務商」為不實敘述）、「保留 7/90 天」當時尚未實作；另補揭露 Discord 會送出使用者 email。繁簡整句比對 opencc 掃 119 句補 5 字（414→420，兩表同步）。**PM-292**：報告清理 cron（免費 7 天／付費含票券 90 天，連同 R2 附件），**預設 dry-run**、先 R2 後 DB、`user_id` 為 null 不刪、單次 500 筆上限、查詢數固定不隨筆數增長；`/privacy` §5 同步改回明確期限並揭露「依刪除當下方案判定」。server deploy `e1353035`→`c808becb`。 |
 | 2026-07-06 | **免費版留存 + 全球化 + Python 9→10 + 我的報告 + 截圖 PII 防護 + 維運**（PM-170~186）。**用量留存**（PM-170）：`bumpUsage` 每月自動重置（≥30 天歸零 recording/rewind/mcp_count）+ `checkRewindUsage` 回溯檢查 + popup 三卡片「剩 N 次」（≤2 紅）+ 用完升級引導 overlay（日票/月費/每月重置）。**全球化付費**（PM-171~172）：付費資格改 **IP 國家偵測**（`request.cf.country`，`isPayCountry(['TW'])`），非台灣顯示「International Payments Coming Soon」；`getUserPlan` 回 `country`、`homePage(lang, request)` 定價依國家、`/checkout`+`day-pass/create` 加 `country!=='TW'` 403。**文案**（PM-173）：「MCP」→「MCP AI 讀取」白話並列（配額/用量文案，技術設定保留）。**問題回報**（PM-174）：`GET /feedback` 表單 + `POST /api/feedback`（不需登入、存 Supabase `feedback` 表 + country）。**我的報告**（PM-184）：`GET /reports?token=`（`verifySessionByToken` 驗證→server 渲染列表：時間/標題/描述/badges/查看，noindex+no-store）+ popup 「📋 我的報告」按鈕。**官方測試頁**（PM-180）：`testPage1(lang)` 涵蓋 Promise/資源/Web Vitals/網路/儲存/Python CLI 全捕捉能力（中英）。**Python 9→10**（PM-176~179）：`cli/parse-traceback.ts`（Python traceback / Node Error → `{type,message,frames[file,line,func,code]}`）+ `cli/detect-env.ts`（語言/版本/OS/套件快照）→ CLI 上傳 `parsed_errors`+`runtime`（先遮罩再解析）；server `formatTerminalLogs` 結構化回傳 + `generateTerminalSummary` 規則引擎（Python 16 種 + Node 5 種錯誤白話+修復+📍位置）貼 `get_terminal_logs` 最前面。**截圖 PII 防護**（PM-181/185/186）：截圖報告附帶 console/network（content `queryInjectLiveErrors`→SCREENSHOT_READY→background 快取→annotate `GET_COLLECTED_ERRORS`）；`detectSensitiveFields`/`getSensitiveRects`（content 掃 7~13 類敏感 input）→ 偵測警告 + `annotate` 手動 🔒 馬賽克筆刷 + **自動遮罩**（原頁 viewport 座標換算，整頁截圖才遮，可撤銷還原）。**維運**（PM-182/183）：cron 清理過期 sessions（`delete().lt(expires_at, now)`）+ `/mcp` body 1MB→413（補 CF rate-limit 只覆蓋 /api/）。**修**（PM-175）：輪盤語言切換改明確 flag（取代 JSON.stringify 誤判）。CLI（PM-176/177）待 `npm publish`；extension 整套待重上架。 |
 | 2026-07-04 | **SEO + 全站國際化 + 安全 P1-P2 收尾**（PM-136~152）。**SEO**：`/sitemap.xml`+`/robots.txt`+ 各頁 meta/canonical + GSC 驗證標籤（已收錄）。**多語系語音**：popup 語言下拉（zh/yue/日韓英越，日韓越暫鎖待金流）→ server Whisper `language` 白名單、Web Speech `lang` 經 `data-bugezy-lang` 傳入 MAIN world inject。**擴充 i18n**：`i18n.ts`（`t()`/`getUILang`）+ popup/monitor/toolbar/annotate 全 `data-i18n`/`it()`/`t()`；AI 輪盤多語預設。**對外頁英文版**：`getLang()`（Accept-Language + `?lang=` 覆蓋）+ 七頁 `t(zh,en)` 函式（首頁/install/features/changelog/guide/faq/privacy）+ 語言切換鈕 + `no-store`。**安全**：MCP `list_reports`/`get_live_errors`/`get_terminal_logs` 綁 email/session、live-errors/terminal-logs 改 per-user R2 key + 認證（terminal-logs 付費限定）、登出撤銷 server session（`/api/auth/logout`）、PATCH settings owner 驗證、**ECPay callback 冪等 + `payments` 表 + 金額比對**（續扣用 `MerchantTradeNo-Gwsr`）、`formatEcpayDate` 改 UTC+8、清 `debug/` 敏感檔。**其他**：截圖標注付費版走 Whisper、manifest 1.1.0 + 描述英文化、CLI `bugezy-watch` 加 `BUGEZY_TOKEN`。 |
+| 2026-09-02 | **大黃蜂視覺系統 — 群組 A（popup）**（PM-413~422，10 張卡）。popup 從深藍紫整套換成黃／黑／咖啡：design token 落地 `:root`、寬度 360→**320px**（§9）、登入頁 `<bee-video>`、主畫面十三個區塊、錄製中／完成、進階設定、偵察模式、票券／付費／日票／額度／取消五畫面、兩個 overlay。🔴 **emoji 只清 markup 沒有用** —— `applyTranslations()` 會把字典值蓋回畫面，55 個 popup 專用 key 一併清；幾何圖示一律做成 `[data-i18n]` 元素的**兄弟節點**。擴充圖示 128/48/32/16 重畫（六角斜紋，16px 去斜紋）。`_verify403` 92 → **122**（29 條規格護欄，全部反向驗證過）。全套 **841 / 0**。 |
+| 2026-09-03 | **大黃蜂視覺系統 — 群組 A 修正 + B + C**（PM-423~431，9 張卡）。popup 清掉 9 個舊紫色 token（那六處引用其實早被 PM-416 蓋掉、從未渲染）；登入頁移除靜態 fallback（🔴 根因是 `CustomEvent` 預設 `bubbles: false`，listener 卻掛在父層，備援圖從頭到尾壓在 canvas 上）。**群組 B**：付款中繼頁 ×2、麥克風授權頁、截圖標注頁、報告編輯頁。**群組 C**：`content.ts`（截圖工具列／釘選全套／元素高亮 §7.8 黃色雙環／除錯面板）、`inject.ts`（語音面板／三種字幕條／監控徽章與面板／頁內麥克風授權）。🔴 真正的工作量是**十幾處 `textContent` 會把新的幾何圖示洗掉**（見 §4-21）。🔴 `PIN_STATUS_EMOJI` 與判定字串的 emoji **留在資料裡**（popup 的 `sevClass()` 協定），新增 `stripSev()` 只在畫面上剝。兩個卡片要求的元件**不存在**：錄製工具列、AUTO 時間軸標記（`TimeMarker` 沒有來源欄位）。`_verify403` 122 → **219**（+97）。全套 **937 / 0**。**擴充功能端全部改完**，剩 server 端的群組 D／E。 |
 
 > 部署：Cloudflare Workers `bugezy-api`（**bugezy.dev** + `bugezy-api.bugezy-api.workers.dev` 雙域名）；每日 03:00 UTC cron 保活 Supabase。
 > （隨開發持續更新）
