@@ -275,7 +275,7 @@ console.log('\n=== ⑤ PM-413~421：大黃蜂視覺系統（群組 A · popup）
 
 // 這一整段是 Day 49 的「規格護欄」——把 DESIGN_SPEC.md 裡最容易被改回去、
 // 而且改回去不會有人立刻發現的幾條，釘成可執行的斷言。
-const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2190}-\u{21FF}\u{2300}-\u{23FF}\u{25A0}-\u{27BF}\u{2B00}-\u{2BFF}\u{2600}-\u{26FF}]/u;
+const EMOJI = /[\u{1F1E6}-\u{1F1FF}\u{1F300}-\u{1FAFF}\u{2190}-\u{21FF}\u{2300}-\u{23FF}\u{25A0}-\u{27BF}\u{2B00}-\u{2BFF}\u{2600}-\u{26FF}]/u;
 const KEEP = new Set(['→', '←', '·', '—', '–', '…']); // 排版用字元，不算 emoji
 const stripHtmlComments = (t) => t.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
 const onlyEmoji = (t) => [...t].filter((c) => EMOJI.test(c) && !KEEP.has(c));
@@ -890,6 +890,92 @@ check('433   舊的單行紅字 .error-msg 已整個換掉，沒留沒人用的 
   !/error-msg/.test(rp) && !/paywall-btn/.test(rp) && /renderNotFound\(\);/.test(rp));
 check('433   report-page.js 快取碼跟著改（不然舊 JS 會配新 CSS）',
   /\/report-page\.js\?v=433/.test(rp));
+
+console.log('\n=== ⑭ PM-434：群組 E · 官網共用外殼 + 首頁（畫面 28）===');
+
+const chrome = strip(srvRaw.slice(srvRaw.indexOf('const SITE_FONTS'),
+  srvRaw.indexOf('\n}\n', srvRaw.indexOf('function siteFooter')) + 3));
+const home = strip(srvRaw.slice(srvRaw.indexOf('function homePage('), srvRaw.indexOf('function privacyPage(')));
+const homeRaw = srvRaw.slice(srvRaw.indexOf('function homePage('), srvRaw.indexOf('function privacyPage('));
+
+check('434   §5.B 官網 nav 是黑底 + 兩層六角（報告頁那個是三層，別抄錯）',
+  /nav\.hz-nav \{[^}]*background:var\(--ink\)/.test(chrome)
+  && /nav\.hz-nav \.hz-hex \{[^}]*background:var\(--y\); clip-path:var\(--hex\)/.test(chrome)
+  && /nav\.hz-nav \.hz-hex > i \{[^}]*repeating-linear-gradient/.test(chrome)
+  && !/\.hz-hex > i > i/.test(chrome));
+check('434   🔴 nav／footer 選擇器一律「元素 + class」，否則壓不過各頁既有的 header{} footer{}',
+  /nav\.hz-nav \{/.test(chrome) && /footer\.hz-foot \{/.test(chrome)
+  && /footer\.hz-foot \.hz-foot-links a \{/.test(chrome)
+  && !/^\s*\.hz-nav \{/m.test(chrome) && !/^\s*\.hz-foot \{/m.test(chrome));
+check('434   深黑 footer #0E0C08；§2.4 沒用設計稿那個 #6B5A3D（黑底上 2.1:1）',
+  /--ink-2:#0E0C08/.test(chrome)
+  && /footer\.hz-foot \{[^}]*background:var\(--ink-2\)/.test(chrome)
+  && !/#6B5A3D/.test(chrome));
+
+check('434   🔴 11 個官網頁全部套用共用 nav + footer', (() => {
+  const navs = (srvRaw.match(/\$\{siteNav\(lang, LANGS_/g) || []).length;
+  const foots = (srvRaw.match(/\$\{siteFooter\(lang\)\}/g) || []).length;
+  return navs === 11 && foots === 11;
+})());
+check('434   🔴 nav 的語言切換必須跟該頁 hreflang 宣告一致（PM-289 canonical 鐵則）', (() => {
+  const fns = ['homePage', 'privacyPage', 'skillPage', 'guidePage', 'faqPage', 'featuresPage',
+    'blogListPage', 'blogPostPage', 'testimonialsPage', 'changelogPage', 'feedbackPage'];
+  return fns.every((fn) => {
+    const a = srvRaw.indexOf('function ' + fn + '(');
+    if (a < 0) return false;
+    const seg = srvRaw.slice(a, a + 40000);
+    const nav = /\$\{siteNav\(lang, (LANGS_\w+)/.exec(seg);
+    const href = /\$\{hreflangTags\([^,]+, (LANGS_\w+)\)\}/.exec(seg);
+    return !!nav && !!href && nav[1] === href[1];
+  });
+})());
+check('434   舊的 🐛 header／.lang-switch／langSwitchBar 全清（不留死碼）',
+  !/\u{1F41B} BugEzy<\/a><\/header>/u.test(srvRaw)
+  && !/langSwitchBar/.test(srvRaw)
+  && !/^\s*\.lang-switch/m.test(srvRaw.slice(srvRaw.indexOf('function homePage('), srvRaw.indexOf('function reportsShell'))));
+
+check('434   🔴 首頁交替分節：hero(黃)→三步驟(米白)→展示(黑)→賣點(米白)→語言(咖啡)→定價(黃)→CTA(黑)',
+  (home.match(/class="(?:hero|sec sec-steps|sec sec-show|sec sec-points|sec sec-langs|sec sec-price|sec-end)"/g) || []).join('|')
+  === 'class="hero"|class="sec sec-steps"|class="sec sec-show"|class="sec sec-points"|class="sec sec-langs"|class="sec sec-price"|class="sec-end"');
+check('434   §2.2 黃色只給三個決策點（hero／定價／—— 結尾 CTA 用黑底黃字），中間段不是黃底',
+  /\.hero \{[^}]*background:var\(--y\)/.test(home)
+  && /\.sec-price \{ background:var\(--y\)/.test(home)
+  && /\.sec-steps \{ background:var\(--cream\)/.test(home)
+  && /\.sec-show \{ background:var\(--ink\)/.test(home)
+  && /\.sec-points \{ background:var\(--cream\)/.test(home)
+  && /\.sec-langs \{ background:var\(--brown\)/.test(home)
+  && /\.sec-end \{ background:var\(--ink\)/.test(home));
+check('434   hero 用 56×98 的大蜂巢格（一般頁面是 28×49），且 data URI 內沒有未編碼的 ";"', (() => {
+  const uris = [...homeRaw.matchAll(/background-image:url\("([^"]*)"\)/g)];
+  return uris.length === 2 && uris.every((m) => m[1].includes("width='56' height='98'") && !m[1].includes(';'));
+})());
+
+check('434   定價區補上了 #pricing 錨點（付費牆的「了解會員方案」本來指向不存在的錨點）',
+  /id="pricing"/.test(home) && /\/#pricing/.test(chrome));
+check('434   §2.2 月費卡反黑 + 最划算標籤；§2.4 用 --on-dark 不是設計稿的 #8A7550',
+  /\.plan\.best \{[^}]*background:var\(--ink\); box-shadow:5px 5px 0 var\(--brown\)/.test(home)
+  && /\.plan \.flag \{ position:absolute; top:-13px/.test(home)
+  && /\.plan\.best \.price em \{ color:var\(--on-dark\)/.test(home)
+  && !/#8A7550/.test(home));
+check('434   三個方案的價格跟站內其他地方一致（NT$0／NT$80／NT$20）',
+  /<b>NT\$0<\/b>/.test(home) && /<b>NT\$80<\/b>/.test(home) && /<b>NT\$20<\/b>/.test(home));
+
+check('434   §6 三步驟用六角編號 44×51、賣點用六角項目符號 11×13（原本是 emoji）',
+  /\.step \.n \{ width:44px; height:51px[^}]*clip-path:var\(--hex\)/.test(home)
+  && /\.point i \{ width:11px; height:13px[^}]*clip-path:var\(--hex\)/.test(home)
+  && /<span class="n">1<\/span>/.test(home));
+check('434   hero 實拍蜂：base64 模組 + 路由 + 340px img（Worker 沒有靜態目錄，沿用 icon-128.png 那套）',
+  /import \{ HORNET_REAL_B64 \} from '\.\/hornet-png'/.test(srvRaw)
+  && /path === '\/hornet-real\.png'\) return hornetPng\(\)/.test(srvRaw)
+  && /<img src="\/hornet-real\.png"[^>]*width="340" height="340">/.test(home));
+
+check('434   🔴 首頁零 emoji（含七國旗）、零舊色碼', (() => {
+  const dead = ['#0f0f1a', '#1a1a2e', '#2a2a3e', '#7c3aed', '#a78bfa', '#c4b5fd', '#8b8fa3',
+    '#161b22', '#21262d', '#6d28d9', '#e0e0e0', '#c9c9d6', '#9aa3b2', '#b8b8c8', '#dcdce6'];
+  return onlyEmoji(home).length === 0 && !dead.some((c) => new RegExp(c, 'i').test(home));
+})());
+check('434   共用外殼零 emoji、零舊色碼', onlyEmoji(chrome).length === 0
+  && !/#0f0f1a|#1a1a2e|#2a2a3e|#7c3aed|#a78bfa|#c4b5fd|#8b8fa3/i.test(chrome));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

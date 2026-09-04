@@ -10,6 +10,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { createMcpHandler } from 'agents/mcp';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { HORNET_REAL_B64 } from './hornet-png';
 
 export interface Env {
   R2: R2Bucket;
@@ -558,24 +559,124 @@ function makeT(lang: PageLang): (zh: string, en: string) => string {
   return (_zh: string, en: string) => en;
 }
 
-// PM-261：六語切換列（繁/简/EN/日/한/VI），用於已多語化的子頁（features/install/faq）。
-//   自帶 inline style（不依賴各頁 .lang-switch pill CSS 的 a 樣式），當前語言高亮。
-function langSwitchBar(lang: PageLang): string {
-  const opts: Array<[PageLang, string]> = [
-    ['zh', '繁'],
-    ['zh-CN', '简'],
-    ['en', 'EN'],
-    ['ja', '日'],
-    ['ko', '한'],
-    ['vi', 'VI'],
+
+// ── PM-434：官網共用外殼（大黃蜂視覺系統）─────────────────────────────────
+//   11 個 *Page() 共用同一組色票 / nav / footer，改一次全部套用。
+//   §3 字型直接外連 Google Fonts —— server 端頁面沒有擴充那套 CWS 隱私限制。
+const SITE_FONTS = `<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;800&family=Noto+Sans+TC:wght@400;500;600;700;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">`;
+
+//   ⚠ nav / footer 的選擇器一律用「元素 + class」（0,1,1），才壓得過各頁既有的
+//     `header {}` `footer {}` `footer a {}` 元素選擇器（0,0,1 / 0,0,2）。
+const SITE_CHROME_CSS = `
+  :root {
+    --y:#F7BE00; --y-deep:#DFA800; --y-pale:#FFE9AE; --cream:#FFF4D6;
+    --ink:#14110B; --ink-2:#0E0C08; --brown:#7A4E1D; --brown-d:#4A2F12;
+    --on-dark:#A08B62; --on-dark-2:#C9A15A; --on-y:#3A2409; --on-y-2:#5E3A14;
+    --hex:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);
+    --font-brand:Archivo,'Noto Sans TC','Microsoft JhengHei',system-ui,sans-serif;
+    --font-ui:'Noto Sans TC',system-ui,-apple-system,'Segoe UI','Microsoft JhengHei',sans-serif;
+    --font-mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  nav.hz-nav { display:flex; align-items:center; gap:16px; padding:14px 40px; background:var(--ink); flex-wrap:wrap; }
+  /* §5.B 六角斜紋標記。官網 nav 用兩層（黃殼 + 透明斜紋），不是報告頁那種三層。 */
+  nav.hz-nav .hz-hex { width:26px; height:30px; flex-shrink:0; background:var(--y); clip-path:var(--hex); display:flex; align-items:center; justify-content:center; }
+  nav.hz-nav .hz-hex > i { width:17px; height:20px; clip-path:var(--hex); background:repeating-linear-gradient(162deg,var(--ink) 0 3px,transparent 3px 6px); }
+  nav.hz-nav .hz-brand { display:flex; align-items:center; gap:11px; font:800 19px/1 var(--font-brand); letter-spacing:.02em; color:var(--y); text-decoration:none; }
+  nav.hz-nav .hz-links { display:flex; gap:22px; margin-left:6px; flex-wrap:wrap; }
+  nav.hz-nav .hz-links a { font:600 13px/1 var(--font-ui); color:var(--on-dark-2); text-decoration:none; }
+  nav.hz-nav .hz-links a:hover, nav.hz-nav .hz-links a.on { color:var(--y); }
+  nav.hz-nav .hz-spacer { flex:1; }
+  nav.hz-nav .hz-lang { display:flex; gap:1px; border:1px solid #3A3122; border-radius:8px; overflow:hidden; }
+  nav.hz-nav .hz-lang a { padding:5px 10px; font:600 11px/1 var(--font-ui); color:var(--on-dark-2); text-decoration:none; }
+  nav.hz-nav .hz-lang a.mono { font-family:var(--font-mono); }
+  nav.hz-nav .hz-lang a.on { background:var(--y); color:var(--ink); font-weight:700; }
+  nav.hz-nav .hz-cta { padding:9px 17px; border:none; border-radius:9px; background:var(--y); color:var(--ink); font:700 13px/1 var(--font-ui); text-decoration:none; white-space:nowrap; }
+  nav.hz-nav .hz-cta:hover { background:var(--y-deep); }
+
+  footer.hz-foot { margin:0; padding:34px 40px; background:var(--ink-2); border:none; display:flex; flex-direction:column; gap:16px; align-items:center; }
+  footer.hz-foot .hz-foot-links { display:flex; gap:20px; flex-wrap:wrap; justify-content:center; }
+  footer.hz-foot .hz-foot-links a { margin:0; font:600 12.5px/1 var(--font-ui); color:var(--on-dark); text-decoration:none; }
+  footer.hz-foot .hz-foot-links a:hover { color:var(--y); }
+  /* §2.4：深底上的次要文字只有兩階。設計稿這行寫 #6B5A3D（2.1:1），黑底上讀不到 → 用 --on-dark。 */
+  footer.hz-foot .hz-foot-meta { font:500 11.5px/1.7 var(--font-ui); color:var(--on-dark); text-align:center; }
+  footer.hz-foot .hz-foot-meta a { color:var(--on-dark-2); text-decoration:none; }
+  @media (max-width:720px) {
+    nav.hz-nav { padding:12px 18px; gap:12px; }
+    nav.hz-nav .hz-spacer { display:none; }
+    footer.hz-foot { padding:28px 18px; }
+  }
+`;
+
+/** PM-434：官網共用黑色 nav。langs 必須跟該頁 hreflangTags 宣告的語言一致（見 PM-289 canonical 鐵則）。 */
+function siteNav(lang: PageLang, langs: PageLang[], active: string): string {
+  const t = makeT(lang);
+  const CWS = 'https://chromewebstore.google.com/detail/bugezy/hfnkjlbbpehkflgfbjenfmnmjkdjadcj';
+  const nav: Array<[string, string, string]> = [
+    ['/features', t('功能', 'Features'), 'features'],
+    ['/guide', t('指南', 'Guide'), 'guide'],
+    ['/#pricing', t('定價', 'Pricing'), 'pricing'],
+    ['/blog', t('部落格', 'Blog'), 'blog'],
+    ['/faq', 'FAQ', 'faq'],
   ];
-  const links = opts
-    .map(
-      ([l, label]) =>
-        `<a href="?lang=${l}" style="color:${l === lang ? '#fff' : '#c4b5fd'};font-weight:${l === lang ? '700' : '400'};text-decoration:none;">${label}</a>`,
+  const labels: Record<string, [string, boolean]> = {
+    zh: ['繁', false],
+    'zh-CN': ['简', false],
+    en: ['EN', true],
+    ja: ['日', false],
+    ko: ['한', false],
+    vi: ['VI', true],
+  };
+  // 單語頁（LANGS_ZH）不掛切換器：沒有其他語言版本可切。
+  const langBar =
+    langs.length < 2
+      ? ''
+      : `<div class="hz-lang">${langs
+          .map((l) => {
+            const [label, mono] = labels[l];
+            const cls = [mono ? 'mono' : '', l === lang ? 'on' : ''].filter(Boolean).join(' ');
+            return `<a href="?lang=${l}"${cls ? ` class="${cls}"` : ''}>${label}</a>`;
+          })
+          .join('')}</div>`;
+  return `<nav class="hz-nav">
+  <a class="hz-brand" href="/"><span class="hz-hex"><i></i></span>BugEzy</a>
+  <div class="hz-links">${nav
+    .map(([href, label, key]) => `<a href="${href}"${key === active ? ' class="on"' : ''}>${label}</a>`)
+    .join('')}</div>
+  <div class="hz-spacer"></div>
+  ${langBar}
+  <a class="hz-cta" href="${CWS}" target="_blank" rel="noopener">${t('免費安裝', 'Install free')}</a>
+</nav>`;
+}
+
+/** PM-434：官網共用深黑 footer。 */
+function siteFooter(lang: PageLang): string {
+  const t = makeT(lang);
+  const links: Array<[string, string]> = [
+    ['/', t('首頁', 'Home')],
+    ['/features', t('功能說明', 'Features')],
+    ['/guide', t('完整指南', 'Guide')],
+    ['/faq', 'FAQ'],
+    ['/blog', t('部落格', 'Blog')],
+    ['/testimonials', t('用戶心得', 'Testimonials')],
+    ['/changelog', t('更新日誌', 'Changelog')],
+    ['/skill', t('AI 客服手冊', 'AI Manual')],
+    ['/privacy', t('隱私政策', 'Privacy')],
+    ['/feedback', t('問題回報', 'Feedback')],
+    ['/reports', t('我的報告', 'My Reports')],
+    ['https://github.com/fox100039-design/bugezy', 'GitHub'],
+  ];
+  return `<footer class="hz-foot">
+  <div class="hz-foot-links">${links
+    .map(([href, label]) =>
+      href.startsWith('http')
+        ? `<a href="${href}" target="_blank" rel="noopener">${label}</a>`
+        : `<a href="${href}">${label}</a>`,
     )
-    .join('');
-  return `<div class="lang-switch" style="display:flex;gap:8px;">${links}</div>`;
+    .join('')}</div>
+  <div class="hz-foot-meta">${t('聯絡', 'Contact')}：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a><br>© 2026 BugEzy · v1.1.5 · ${t('亞洲平價 MCP 語音除錯工具', 'Affordable MCP voice debugging for Asia')}</div>
+</footer>`;
 }
 
 // PM-232：繁體 → 簡體轉換（與 extension/src/t2s.ts 同表）。詞彙先於字元（Mainland 用語）。
@@ -1538,6 +1639,16 @@ function iconPng(): Response {
   });
 }
 
+// PM-434：官網 hero 的實拍長腳大黃蜂。Worker 沒有靜態資源目錄，沿用上面 icon-128.png 那套。
+function hornetPng(): Response {
+  const bin = atob(HORNET_REAL_B64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Response(bytes, {
+    headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=604800' },
+  });
+}
+
 // PM-212：JSON-LD 結構化資料（Google rich snippets）。放在 <script type="application/ld+json">，
 // 內容為靜態（無使用者資料）；仍把 `<` 轉義為 < 防 `</script>` 提前結束（穩健做法）。
 function jsonLd(obj: unknown): string {
@@ -1834,195 +1945,276 @@ function homePage(lang: PageLang, _request: Request, canonLang: PageLang | null)
   <meta name="google-site-verification" content="ZTldzDIBqNhuszKWkQr3C1HByMCOTQP2HH3Kj2858gE" />
   ${canonicalTag('/', canonLang, LANGS_6)}
   ${hreflangTags('/', LANGS_6)}
-  <style>
+  ${SITE_FONTS}
+  <style>${SITE_CHROME_CSS}
+    /* ── PM-434：首頁（設計稿畫面 28）。長頁面不整頁黃，改黃／米白／黑交替分節；
+         黃色只留給 hero、定價、結尾 CTA 三個決策點。 ── */
     * { margin:0; padding:0; box-sizing:border-box; }
-    body { background:#0f0f1a; color:#e0e0e0; font-family:system-ui,-apple-system,"Segoe UI","Microsoft JhengHei",sans-serif; line-height:1.6; }
-    a { color:#a78bfa; text-decoration:none; }
-    .wrap { max-width:1000px; margin:0 auto; padding:0 20px; }
-    .lang-switch { position:fixed; top:14px; right:16px; z-index:20; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:5px 10px; font-size:13px; display:flex; gap:8px; }
-    .lang-switch a { color:#c4b5fd; text-decoration:none; }
-    .lang-switch a:hover { color:#fff; }
-    .lang-switch a.on { color:#fff; font-weight:700; }
-    .hero { text-align:center; padding:88px 20px 56px; background:radial-gradient(ellipse at top,rgba(124,58,237,0.22),transparent 62%); }
-    .hero .logo { font-size:52px; }
-    .hero h1 { font-size:40px; line-height:1.25; color:#fff; margin:14px 0 16px; letter-spacing:-0.01em; }
-    .hero p { font-size:19px; color:#c9c9d6; max-width:640px; margin:0 auto 30px; }
-    .btn-primary { display:inline-block; background:linear-gradient(135deg,#7c3aed,#6d28d9); color:#fff; font-weight:700; font-size:17px; padding:15px 34px; border-radius:12px; box-shadow:0 8px 24px rgba(124,58,237,0.35); transition:filter .15s, transform .1s; }
-  /* PM-280：完整指南入口——與 .btn-primary 同尺寸，但用外框做視覺分層（次要行動） */
-  .btn-guide { display:inline-block; border:2px solid #7c3aed; color:#c4b5fd; background:transparent;
-    font-weight:700; font-size:16px; padding:12px 30px; border-radius:12px; text-decoration:none;
-    transition:background 0.2s, color 0.2s; }
-  .btn-guide:hover { background:#7c3aed; color:#fff; }
-    .btn-primary:hover { filter:brightness(1.1); }
-    .btn-primary:active { transform:translateY(1px); }
-    .hero .note { display:block; color:#8b8fa3; font-size:13px; margin-top:14px; }
-    section { padding:56px 0; }
-    .sec-title { font-size:27px; color:#fff; text-align:center; margin-bottom:10px; }
-    .sec-sub { text-align:center; color:#9aa3b2; font-size:15px; margin-bottom:36px; }
+    body { background:var(--cream); color:var(--ink); font-family:var(--font-ui); line-height:1.6; }
+    a { color:var(--brown-d); text-decoration:none; }
+    img { display:block; max-width:100%; }
+    .sec { padding:64px 40px; }
+    .inner { max-width:1200px; margin:0 auto; }
+    .sec-head { display:flex; flex-direction:column; gap:9px; align-items:center; text-align:center; margin-bottom:34px; }
+    .sec-head h2 { font:800 33px/1.3 var(--font-ui); color:var(--ink); }
+    .sec-head .rule { width:52px; height:4px; border-radius:2px; background:var(--y); }
+    .sec-head p { font:600 14px/1.6 var(--font-ui); color:var(--on-y); }
+
+    /* §2 hero（決策點 1）。⚠ 蜂巢紋 data URI 內不可有未編碼的 `;`。hero 用 56×98 的大格。 */
+    .hero { padding:70px 40px 76px; background:var(--y);
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='98' viewBox='0 0 56 98'%3E%3Cg fill='none' stroke='rgba(20,17,11,0.09)' stroke-width='1.6'%3E%3Cpath d='M27.98 18.5l26 15v30l-26 15-26-15v-30z'/%3E%3Cpath d='M27.98 -30.5l26 15v30l-26 15-26-15v-30z'/%3E%3Cpath d='M27.98 66.5l26 15v30l-26 15-26-15v-30z'/%3E%3C/g%3E%3C/svg%3E");
+      display:flex; align-items:center; justify-content:center; gap:56px; flex-wrap:wrap; }
+    .hero-copy { max-width:620px; display:flex; flex-direction:column; gap:18px; }
+    .hero-copy h1 { font:900 52px/1.2 var(--font-ui); letter-spacing:-.01em; color:var(--ink); }
+    .hero-copy .lead { font:600 18px/1.7 var(--font-ui); color:var(--on-y); }
+    .hero-cta { display:flex; gap:12px; flex-wrap:wrap; }
+    .hero-note { display:flex; align-items:center; gap:9px; font:600 13px/1.6 var(--font-ui); color:var(--on-y); }
+    .hero-note i { width:9px; height:10px; flex-shrink:0; background:var(--ink); clip-path:var(--hex); }
+    .hero-art { width:398px; flex-shrink:0; display:flex; align-items:center; justify-content:center; }
+    .hero-art img { width:340px; height:340px; object-fit:contain; filter:drop-shadow(0 20px 34px rgba(74,47,18,.4)); }
+
+    /* §7.1 硬投影按鈕 */
+    .btn { display:inline-block; padding:17px 30px; border:2px solid var(--ink); border-radius:13px; background:var(--ink); color:var(--y); font:700 16px/1 var(--font-ui); box-shadow:4px 4px 0 var(--brown); white-space:nowrap; cursor:pointer; }
+    .btn:hover { transform:translate(2px,2px); box-shadow:2px 2px 0 var(--brown); }
+    .btn.ghost { background:transparent; color:var(--ink); border-color:rgba(20,17,11,.45); box-shadow:none; }
+    .btn.ghost:hover { transform:none; border-color:var(--ink); background:rgba(20,17,11,.07); }
+    .btn.on-dark { background:var(--y); color:var(--ink); border-color:var(--y); box-shadow:none; padding:17px 34px; }
+    .btn.on-dark:hover { transform:none; background:var(--y-deep); border-color:var(--y-deep); }
+
+    /* §3 米白三步驟 */
+    .sec-steps { background:var(--cream); }
     .steps { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; }
-    .step { background:#161b22; border:1px solid #2a2a3e; border-radius:16px; padding:28px 22px; text-align:center; }
-    .step .n { display:inline-block; width:26px; height:26px; line-height:26px; border-radius:50%; background:#7c3aed; color:#fff; font-size:13px; font-weight:700; margin-bottom:12px; }
-    .step .icon { font-size:34px; }
-    .step h3 { font-size:18px; color:#fff; margin:10px 0 8px; }
-    .step p { font-size:14px; color:#b8b8c8; }
-    .showcase { display:flex; flex-direction:column; gap:56px; }
+    .step { background:#fff; border:2px solid var(--ink); border-radius:16px; box-shadow:4px 4px 0 var(--y); padding:26px 24px; display:flex; flex-direction:column; gap:12px; }
+    .step .n { width:44px; height:51px; flex-shrink:0; background:var(--ink); clip-path:var(--hex); display:flex; align-items:center; justify-content:center; font:800 20px/1 var(--font-brand); color:var(--y); }
+    .step h3 { font:700 19px/1.4 var(--font-ui); color:var(--ink); }
+    .step p { font:500 14px/1.7 var(--font-ui); color:var(--on-y-2); }
+    .steps-more { text-align:center; margin-top:26px; }
+
+    /* §4 黑底展示區 */
+    .sec-show { background:var(--ink); }
+    .sec-show .sec-head h2 { color:var(--y); }
+    .showcase { display:flex; flex-direction:column; gap:44px; }
     .show-row { display:flex; align-items:center; gap:40px; }
     .show-row.reverse { flex-direction:row-reverse; }
     .show-row .shot { flex:1 1 55%; min-width:0; }
-    .show-row .shot img { width:100%; border-radius:14px; border:1px solid #2a2a3e; box-shadow:0 12px 40px rgba(0,0,0,0.4); display:block; }
-    .show-row .txt { flex:1 1 45%; }
-    .show-row .txt h3 { font-size:22px; color:#fff; margin-bottom:12px; }
-    .show-row .txt p { font-size:16px; color:#c2c2d0; line-height:1.7; }
-    .points { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; }
-    .point { background:#161b22; border:1px solid #2a2a3e; border-radius:14px; padding:22px; display:flex; gap:14px; align-items:flex-start; }
-    .point .pico { font-size:26px; flex-shrink:0; }
-    .point .ptxt { font-size:15px; color:#dcdce6; line-height:1.5; }
-    .langs { text-align:center; }
-    .langs img { max-width:340px; width:100%; border-radius:14px; border:1px solid #2a2a3e; margin:0 auto 24px; box-shadow:0 12px 40px rgba(0,0,0,0.4); display:block; }
-    .badges { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; }
-    .badge { border-radius:20px; padding:6px 16px; font-size:14px; }
-    .badge.active { background:rgba(124,58,237,0.18); border:1px solid #7c3aed; color:#d6c7ff; }
-    .badge.soon { background:#1a1a2e; border:1px solid #2a2a3e; color:#6b7280; }
-    .cta-end { text-align:center; background:radial-gradient(ellipse at center,rgba(124,58,237,0.16),transparent 65%); border-radius:20px; padding:56px 24px; margin-top:24px; }
-    .cta-end h2 { font-size:26px; color:#fff; margin-bottom:22px; }
-    .cta-end .store-shot { max-width:420px; width:100%; margin:28px auto 0; border-radius:14px; border:1px solid #2a2a3e; box-shadow:0 12px 40px rgba(0,0,0,0.4); display:block; }
-    .cta-links { margin-top:22px; font-size:13px; color:#8b8fa3; }
-    .cta-links a { margin:0 8px; }
-    footer { border-top:1px solid #2a2a3e; padding:32px 0; text-align:center; color:#888; font-size:13px; margin-top:24px; }
-    footer a { margin:0 6px; }
-    .contact-info { max-width:440px; margin:0 auto 20px; padding:20px 22px; background:#1a1a2e; border:1px solid #7c3aed; border-radius:12px; }
-    .contact-info h3 { font-size:17px; color:#a78bfa; margin:0 0 12px; }
-    .contact-info p { margin:6px 0; font-size:15px; color:#e0e0e0; }
-    .contact-info a { color:#a78bfa; margin:0; }
-    @media (max-width:720px) {
-      .hero { padding:64px 18px 44px; }
-      .hero h1 { font-size:30px; }
-      .hero p { font-size:16px; }
-      .steps { grid-template-columns:1fr; }
-      .points { grid-template-columns:1fr; }
+    .show-row .shot img { width:100%; border:2px solid var(--brown); border-radius:14px; background:#211C13; }
+    .show-row .txt { flex:1 1 45%; display:flex; flex-direction:column; gap:11px; }
+    .show-row .txt h3 { font:700 22px/1.4 var(--font-ui); color:var(--y); }
+    .show-row .txt p { font:500 14.5px/1.75 var(--font-ui); color:var(--on-dark-2); }
+
+    /* §5 米白賣點 */
+    .sec-points { background:var(--cream); }
+    .points { display:grid; grid-template-columns:repeat(2,1fr); gap:14px; }
+    .point { display:flex; align-items:flex-start; gap:12px; padding:18px 20px; background:#fff; border:2px solid var(--ink); border-radius:12px; }
+    .point i { width:11px; height:13px; flex-shrink:0; margin-top:4px; background:var(--y); clip-path:var(--hex); }
+    .point span { font:600 14.5px/1.6 var(--font-ui); color:var(--ink); }
+    .points-more { display:flex; gap:22px; justify-content:center; flex-wrap:wrap; margin-top:26px; font:700 14px/1 var(--font-ui); }
+
+    /* §6 咖啡語言帶（§2.3 咖啡＝系統說明的語氣） */
+    .sec-langs { background:var(--brown); display:flex; flex-direction:column; align-items:center; gap:26px; }
+    .sec-langs h2 { font:800 33px/1.3 var(--font-ui); color:var(--y-pale); text-align:center; }
+    .sec-langs .sub { font:600 14px/1.6 var(--font-ui); color:#F0D9A8; text-align:center; }
+    .sec-langs img { max-width:340px; width:100%; border:2px solid var(--y-pale); border-radius:14px; }
+    .lang-pills { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; }
+    .lang-pills span { padding:9px 18px; border-radius:999px; background:var(--y); color:var(--ink); font:700 13.5px/1 var(--font-ui); }
+
+    /* §7 黃底定價（決策點 2） */
+    .sec-price { background:var(--y); background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='98' viewBox='0 0 56 98'%3E%3Cg fill='none' stroke='rgba(20,17,11,0.09)' stroke-width='1.6'%3E%3Cpath d='M27.98 18.5l26 15v30l-26 15-26-15v-30z'/%3E%3Cpath d='M27.98 -30.5l26 15v30l-26 15-26-15v-30z'/%3E%3Cpath d='M27.98 66.5l26 15v30l-26 15-26-15v-30z'/%3E%3C/g%3E%3C/svg%3E"); }
+    .plans { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; align-items:stretch; }
+    .plan { padding:26px 24px; background:var(--cream); border:2px solid var(--ink); border-radius:16px; display:flex; flex-direction:column; gap:14px; }
+    .plan .tier { font:700 15px/1 var(--font-ui); color:var(--on-y-2); }
+    .plan .price { display:flex; align-items:baseline; gap:5px; }
+    .plan .price b { font:800 40px/1 var(--font-brand); color:var(--ink); }
+    .plan .price em { font:600 13px/1 var(--font-mono); font-style:normal; color:var(--on-y-2); }
+    .plan ul { list-style:none; display:flex; flex-direction:column; gap:7px; padding-top:10px; border-top:1px solid rgba(20,17,11,.18); }
+    .plan li { font:600 13px/1.6 var(--font-ui); color:var(--on-y-2); }
+    .plan .pick { width:100%; margin-top:auto; padding:13px; border:2px solid var(--ink); border-radius:11px; background:transparent; color:var(--ink); font:700 13.5px/1 var(--font-ui); text-align:center; }
+    .plan .pick:hover { background:rgba(20,17,11,.09); }
+    .plan.free .pick { border-color:rgba(20,17,11,.45); color:var(--on-y); }
+    .plan.free .pick:hover { border-color:var(--ink); color:var(--ink); }
+    /* §2.2 比例反轉：主推方案反黑 */
+    .plan.best { position:relative; background:var(--ink); box-shadow:5px 5px 0 var(--brown); }
+    .plan.best .tier { color:var(--on-dark-2); }
+    .plan.best .price b { color:var(--y); }
+    /* §2.4 深底次要文字只有兩階：設計稿這裡寫 #8A7550（3.8:1），黑底上不夠 → 用 --on-dark。 */
+    .plan.best .price em { color:var(--on-dark); }
+    .plan.best ul { border-top-color:#3A3122; }
+    .plan.best li { color:var(--y-pale); }
+    .plan.best .pick { background:var(--y); border-color:var(--y); color:var(--ink); }
+    .plan.best .pick:hover { background:var(--y-deep); border-color:var(--y-deep); }
+    .plan .flag { position:absolute; top:-13px; left:24px; padding:4px 12px; border-radius:999px; background:var(--cream); border:2px solid var(--ink); font:700 11px/1 var(--font-ui); color:var(--ink); }
+    .plans-note { margin-top:20px; text-align:center; font:600 13px/1.6 var(--font-ui); color:var(--on-y); }
+
+    /* §8 黑底結尾 CTA（決策點 3） */
+    .sec-end { background:var(--ink); padding:72px 40px; display:flex; flex-direction:column; align-items:center; gap:24px; text-align:center; }
+    .sec-end h2 { font:800 31px/1.45 var(--font-ui); color:var(--y); max-width:760px; }
+    .sec-end .store-shot { max-width:420px; width:100%; border:2px solid var(--brown); border-radius:14px; background:#211C13; }
+    .sec-end .end-links { display:flex; gap:14px; align-items:center; flex-wrap:wrap; justify-content:center; font:600 13px/1 var(--font-ui); }
+    .sec-end .end-links a { color:var(--on-dark-2); }
+    .sec-end .end-links a:hover { color:var(--y); }
+    .sec-end .end-links s { color:var(--on-dark); text-decoration:none; }
+
+    @media (max-width:900px) {
+      .sec { padding:48px 20px; }
+      .hero { padding:52px 20px 56px; gap:32px; }
+      .hero-copy h1 { font-size:34px; }
+      .hero-copy .lead { font-size:16px; }
+      .hero-art { width:100%; }
+      .hero-art img { width:240px; height:240px; }
+      .steps, .points, .plans { grid-template-columns:1fr; }
       .show-row, .show-row.reverse { flex-direction:column; gap:20px; }
-      .show-row .txt h3 { font-size:19px; }
+      .sec-end { padding:56px 20px; }
+      .sec-end h2 { font-size:24px; }
     }
   </style>
 </head>
 <body>
-  <div class="lang-switch">
-    <a href="?lang=zh"${lang === 'zh' ? ' class="on"' : ''}>繁</a>
-    <a href="?lang=zh-CN"${lang === 'zh-CN' ? ' class="on"' : ''}>简</a>
-    <a href="?lang=en"${lang === 'en' ? ' class="on"' : ''}>EN</a>
-    <a href="?lang=ja"${lang === 'ja' ? ' class="on"' : ''}>日</a>
-    <a href="?lang=ko"${lang === 'ko' ? ' class="on"' : ''}>한</a>
-    <a href="?lang=vi"${lang === 'vi' ? ' class="on"' : ''}>VI</a>
-  </div>
+${siteNav(lang, LANGS_6, '')}
 
-  <!-- §1 Hero -->
+  <!-- §1 Hero（決策點 1）-->
   <header class="hero">
-    <div class="logo">🐛</div>
-    <h1>${t('遇到 Bug，說不清楚？', "Can't explain the bug?")}</h1>
-    <p>${t('按一下錄製，用說的就好。BugEzy 自動收集畫面、操作、錯誤訊息，讓 AI 幫你修。', 'Just hit record and talk. BugEzy captures your screen, actions, and errors automatically — so AI can fix it for you.')}</p>
-    <a class="btn-primary" href="${CWS}" target="_blank" rel="noopener">${t('🔧 免費安裝 Chrome 擴充功能', '🔧 Install Free Chrome Extension')}</a>
-    <span class="note">${t('免費版每月 10 次錄製 · 不需信用卡', '10 free recordings per month · No credit card required')}</span>
+    <div class="hero-copy">
+      <h1>${t('遇到 Bug，說不清楚？', "Can't explain the bug?")}</h1>
+      <p class="lead">${t('按一下錄製，用說的就好。BugEzy 自動收集畫面、操作、錯誤訊息，讓 AI 幫你修。', 'Just hit record and talk. BugEzy captures your screen, actions, and errors automatically — so AI can fix it for you.')}</p>
+      <div class="hero-cta">
+        <a class="btn" href="${CWS}" target="_blank" rel="noopener">${t('免費安裝 Chrome 擴充功能', 'Install Free Chrome Extension')}</a>
+        <a class="btn ghost" href="/guide">${t('完整安裝與使用指南', 'Complete Install & Usage Guide')}</a>
+      </div>
+      <p class="hero-note"><i></i>${t('免費版每月 10 次錄製 · 不需信用卡', '10 free recordings per month · No credit card required')}</p>
+    </div>
+    <div class="hero-art">
+      <img src="/hornet-real.png" alt="${t('長腳大黃蜂', 'Hornet')}" width="340" height="340">
+    </div>
   </header>
 
-  <!-- §2 三步驟 -->
-  <section class="wrap">
-    <h2 class="sec-title">${t('簡單三步，不用教', 'Three simple steps')}</h2>
-    <div class="steps">
-      <div class="step"><span class="n">1</span><div class="icon">🎙️</div><h3>${t('按下錄製', 'Hit Record')}</h3><p>${t('打開 BugEzy，按一下就開始。邊操作邊說出你遇到的問題。', 'Open BugEzy, hit record. Operate and describe the issue in your own words.')}</p></div>
-      <div class="step"><span class="n">2</span><div class="icon">📋</div><h3>${t('自動整理', 'Auto-organized')}</h3><p>${t('BugEzy 自動收集畫面錄影、錯誤訊息、操作軌跡，整理成一份報告。', 'BugEzy captures screen replay, error logs, and actions into a structured report.')}</p></div>
-      <div class="step"><span class="n">3</span><div class="icon">🤖</div><h3>${t('AI 幫你修', 'AI Fixes It')}</h3><p>${t('把報告交給 AI，它直接告訴你哪裡壞了、怎麼修。', 'Hand the report to AI — it tells you what broke and how to fix it.')}</p></div>
-    </div>
-    <!-- PM-280：合併後的完整指南入口。次要色（紫框非實心）與上方「免費安裝」主 CTA 分層。 -->
-    <div style="text-align:center;margin-top:26px;">
-      <a class="btn-guide" href="/guide">${t('📖 完整安裝與使用指南', '📖 Complete Install & Usage Guide')}</a>
-    </div>
-  </section>
-
-  <!-- §3 截圖展示 -->
-  <section class="wrap">
-    <h2 class="sec-title">${t('眼見為憑', 'See it in action')}</h2>
-    <div class="showcase">
-      <div class="show-row">
-        <div class="shot"><img src="/screenshots/ss-recording.png" alt="${t('錄製中', 'Recording')}" loading="lazy"></div>
-        <div class="txt"><h3>${t('錄製超簡單', 'Recording is effortless')}</h3><p>${t('打開瀏覽器，按下錄製，邊操作邊用嘴巴講。你的聲音會即時變成文字。', 'Open your browser, hit record, and just talk. Your voice becomes text in real-time.')}</p></div>
+  <!-- §2 三步驟（米白）-->
+  <section class="sec sec-steps">
+    <div class="inner">
+      <div class="sec-head"><h2>${t('簡單三步，不用教', 'Three simple steps')}</h2><div class="rule"></div></div>
+      <div class="steps">
+        <div class="step"><span class="n">1</span><h3>${t('按下錄製', 'Hit Record')}</h3><p>${t('打開 BugEzy，按一下就開始。邊操作邊說出你遇到的問題。', 'Open BugEzy, hit record. Operate and describe the issue in your own words.')}</p></div>
+        <div class="step"><span class="n">2</span><h3>${t('自動整理', 'Auto-organized')}</h3><p>${t('BugEzy 自動收集畫面錄影、錯誤訊息、操作軌跡，整理成一份報告。', 'BugEzy captures screen replay, error logs, and actions into a structured report.')}</p></div>
+        <div class="step"><span class="n">3</span><h3>${t('AI 幫你修', 'AI Fixes It')}</h3><p>${t('把報告交給 AI，它直接告訴你哪裡壞了、怎麼修。', 'Hand the report to AI — it tells you what broke and how to fix it.')}</p></div>
       </div>
-      <div class="show-row reverse">
-        <div class="shot"><img src="/screenshots/ss-report-top.png" alt="${t('報告', 'Report')}" loading="lazy"></div>
-        <div class="txt"><h3>${t('報告自動整理', 'Reports, auto-organized')}</h3><p>${t('錄完後，BugEzy 自動產出完整報告 — 畫面回放、語音記錄、操作軌跡，全部幫你整理好。', 'After recording, BugEzy generates a complete report — screen replay, voice transcript, and action timeline, all organized for you.')}</p></div>
-      </div>
-      <div class="show-row">
-        <div class="shot"><img src="/screenshots/ss-report-bottom.png" alt="${t('AI 校正與 Token', 'AI correction & tokens')}" loading="lazy"></div>
-        <div class="txt"><h3>${t('AI 校正 + 省 93% 費用', 'AI correction + save 93%')}</h3><p>${t('AI 自動校正語音辨識的錯字，還幫你精簡重點。比起直接丟截圖給 AI，省下 93% 的費用。', 'AI auto-corrects speech recognition errors and summarizes key points. Save 93% on token costs compared to sending screenshots to AI.')}</p></div>
-      </div>
-      <div class="show-row reverse">
-        <div class="shot"><img src="/screenshots/ss-ai-fix.png" alt="${t('AI 修復', 'AI fix')}" loading="lazy"></div>
-        <div class="txt"><h3>${t('AI 直接幫你修 Bug', 'AI fixes the bug directly')}</h3><p>${t('把報告交給 AI，一句「幫我找出問題」，AI 就自動分析、找出根因、給你修復程式碼。不用再截圖、複製貼上、來回解釋。', 'Hand the report to AI. One command: "find and fix the issues." AI analyzes, identifies root causes, and gives you the fix. No more screenshots, copy-paste, or back-and-forth.')}</p></div>
-      </div>
+      <div class="steps-more"><a class="btn ghost" href="/guide">${t('完整安裝與使用指南', 'Complete Install & Usage Guide')}</a></div>
     </div>
   </section>
 
-  <!-- §4 賣點 -->
-  <section class="wrap">
-    <h2 class="sec-title">${t('為什麼選 BugEzy', 'Why BugEzy')}</h2>
-    <div class="points">
-      <div class="point"><span class="pico">🎙️</span><span class="ptxt">${t('用說的就好 — 支援中文、粵語、英文', 'Just talk — Chinese, Cantonese, English')}</span></div>
-      <div class="point"><span class="pico">🔴</span><span class="ptxt">${t('一鍵錄製 — 畫面 + 聲音 + 操作同步捕捉', 'One-click record — screen, voice, actions')}</span></div>
-      <div class="point"><span class="pico">🤖</span><span class="ptxt">${t('AI 自動分析 — 13 種 MCP 工具', 'AI auto-analysis — 13 MCP tools')}</span></div>
-      <div class="point"><span class="pico">💰</span><span class="ptxt">${t('省 93% 費用 — 比截圖丟 AI 便宜', 'Save 93% — cheaper than sending screenshots')}</span></div>
-      <div class="point"><span class="pico">🔒</span><span class="ptxt">${t('隱私保護 — 敏感資料自動打碼', 'Privacy first — sensitive data auto-masked')}</span></div>
-      <div class="point"><span class="pico">🆓</span><span class="ptxt">${t('免費開始 — 月費只要 NT$80', 'Start free — paid plan just NT$80/mo')}</span></div>
-      <div class="point"><span class="pico">🔗</span><span class="ptxt">${t('錄一次，所有 AI 讀 — 多工具同步連線', 'Record once, every AI reads — multi-tool sync')}</span></div>
+  <!-- §3 截圖展示（黑底）-->
+  <section class="sec sec-show">
+    <div class="inner">
+      <div class="sec-head"><h2>${t('眼見為憑', 'See it in action')}</h2><div class="rule"></div></div>
+      <div class="showcase">
+        <div class="show-row">
+          <div class="shot"><img src="/screenshots/ss-recording.png" alt="${t('錄製中', 'Recording')}" loading="lazy"></div>
+          <div class="txt"><h3>${t('錄製超簡單', 'Recording is effortless')}</h3><p>${t('打開瀏覽器，按下錄製，邊操作邊用嘴巴講。你的聲音會即時變成文字。', 'Open your browser, hit record, and just talk. Your voice becomes text in real-time.')}</p></div>
+        </div>
+        <div class="show-row reverse">
+          <div class="shot"><img src="/screenshots/ss-report-top.png" alt="${t('報告', 'Report')}" loading="lazy"></div>
+          <div class="txt"><h3>${t('報告自動整理', 'Reports, auto-organized')}</h3><p>${t('錄完後，BugEzy 自動產出完整報告 — 畫面回放、語音記錄、操作軌跡，全部幫你整理好。', 'After recording, BugEzy generates a complete report — screen replay, voice transcript, and action timeline, all organized for you.')}</p></div>
+        </div>
+        <div class="show-row">
+          <div class="shot"><img src="/screenshots/ss-report-bottom.png" alt="${t('AI 校正與 Token', 'AI correction & tokens')}" loading="lazy"></div>
+          <div class="txt"><h3>${t('AI 校正 + 省 93% 費用', 'AI correction + save 93%')}</h3><p>${t('AI 自動校正語音辨識的錯字，還幫你精簡重點。比起直接丟截圖給 AI，省下 93% 的費用。', 'AI auto-corrects speech recognition errors and summarizes key points. Save 93% on token costs compared to sending screenshots to AI.')}</p></div>
+        </div>
+        <div class="show-row reverse">
+          <div class="shot"><img src="/screenshots/ss-ai-fix.png" alt="${t('AI 修復', 'AI fix')}" loading="lazy"></div>
+          <div class="txt"><h3>${t('AI 直接幫你修 Bug', 'AI fixes the bug directly')}</h3><p>${t('把報告交給 AI，一句「幫我找出問題」，AI 就自動分析、找出根因、給你修復程式碼。不用再截圖、複製貼上、來回解釋。', 'Hand the report to AI. One command: "find and fix the issues." AI analyzes, identifies root causes, and gives you the fix. No more screenshots, copy-paste, or back-and-forth.')}</p></div>
+        </div>
+      </div>
     </div>
-    <p style="text-align:center;margin-top:24px;"><a href="/features" style="font-weight:600;">${t('查看完整功能 →', 'See full features →')}</a></p>
   </section>
 
-  <!-- §5 語言 -->
-  <section class="wrap langs">
-    <h2 class="sec-title">${t('用你的母語說', 'Speak your language')}</h2>
-    <p class="sec-sub">${t('支援七種語言語音輸入', 'Voice input in 7 languages')}</p>
+  <!-- §4 賣點（米白）-->
+  <section class="sec sec-points">
+    <div class="inner">
+      <div class="sec-head"><h2>${t('為什麼選 BugEzy', 'Why BugEzy')}</h2><div class="rule"></div></div>
+      <div class="points">
+        <div class="point"><i></i><span>${t('用說的就好 — 支援中文、粵語、英文', 'Just talk — Chinese, Cantonese, English')}</span></div>
+        <div class="point"><i></i><span>${t('一鍵錄製 — 畫面 + 聲音 + 操作同步捕捉', 'One-click record — screen, voice, actions')}</span></div>
+        <div class="point"><i></i><span>${t('AI 自動分析 — 13 種 MCP 工具', 'AI auto-analysis — 13 MCP tools')}</span></div>
+        <div class="point"><i></i><span>${t('省 93% 費用 — 比截圖丟 AI 便宜', 'Save 93% — cheaper than sending screenshots')}</span></div>
+        <div class="point"><i></i><span>${t('隱私保護 — 敏感資料自動打碼', 'Privacy first — sensitive data auto-masked')}</span></div>
+        <div class="point"><i></i><span>${t('免費開始 — 月費只要 NT$80', 'Start free — paid plan just NT$80/mo')}</span></div>
+        <div class="point"><i></i><span>${t('錄一次，所有 AI 讀 — 多工具同步連線', 'Record once, every AI reads — multi-tool sync')}</span></div>
+      </div>
+      <div class="points-more">
+        <a href="/features">${t('查看完整功能 →', 'See full features →')}</a>
+        <a href="/testimonials">${t('看看其他開發者怎麼說 →', 'See what other developers say →')}</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- §5 語言（咖啡）-->
+  <section class="sec sec-langs">
+    <h2>${t('用你的母語說', 'Speak your language')}</h2>
+    <p class="sub">${t('支援七種語言語音輸入', 'Voice input in 7 languages')}</p>
     <img src="/screenshots/ss-languages.png" alt="${t('語言選擇', 'Language selection')}" loading="lazy">
-    <div class="badges">
-      <span class="badge active">🇹🇼 ${t('繁體中文', 'Chinese')}</span>
-      <span class="badge active">🇨🇳 ${t('簡體中文', 'Simplified Chinese')}</span>
-      <span class="badge active">🇭🇰 ${t('粵語', 'Cantonese')}</span>
-      <span class="badge active">🇬🇧 English</span>
-      <span class="badge active">🇯🇵 日本語</span>
-      <span class="badge active">🇰🇷 한국어</span>
-      <span class="badge active">🇻🇳 Tiếng Việt</span>
+    <div class="lang-pills">
+      <span>${t('繁體中文', 'Chinese')}</span>
+      <span>${t('簡體中文', 'Simplified Chinese')}</span>
+      <span>${t('粵語', 'Cantonese')}</span>
+      <span>English</span>
+      <span>日本語</span>
+      <span>한국어</span>
+      <span>Tiếng Việt</span>
     </div>
   </section>
 
-  <!-- §6 CTA -->
-  <section class="wrap">
-    <div class="cta-end">
-      <h2>${t('還在用截圖跟 AI 解釋 Bug？試試用說的。', 'Still sending screenshots to explain bugs? Try just talking.')}</h2>
-      <a class="btn-primary" href="${CWS}" target="_blank" rel="noopener">${t('🔧 免費安裝', '🔧 Install Free')}</a>
-      <img class="store-shot" src="/screenshots/ss-store.png" alt="Chrome Web Store" loading="lazy">
-      <div class="cta-links">
-        <a href="${CWS}" target="_blank" rel="noopener">Chrome Web Store</a> ·
-        <a href="https://github.com/fox100039-design/bugezy" target="_blank" rel="noopener">GitHub</a> ·
-        <a href="/guide">${t('完整指南', 'Guide')}</a> ·
-        <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
+  <!-- §6 定價（決策點 2）-->
+  <section class="sec sec-price" id="pricing">
+    <div class="inner">
+      <div class="sec-head"><h2>${t('定價', 'Pricing')}</h2><div class="rule"></div><p>${t('免費開始，需要時再升級', 'Start free, upgrade when you need it')}</p></div>
+      <div class="plans">
+        <div class="plan free">
+          <div class="tier">${t('免費', 'Free')}</div>
+          <div class="price"><b>NT$0</b></div>
+          <ul>
+            <li>${t('每月 10 次錄製', '10 recordings per month')}</li>
+            <li>${t('5 次回溯 · 20 次 MCP', '5 rewinds · 20 MCP reads')}</li>
+            <li>${t('報告保留 7 天', '7-day report retention')}</li>
+          </ul>
+          <a class="pick" href="${CWS}" target="_blank" rel="noopener">${t('免費安裝', 'Install free')}</a>
+        </div>
+        <div class="plan best">
+          <span class="flag">${t('最划算', 'Best value')}</span>
+          <div class="tier">${t('月費', 'Monthly')}</div>
+          <div class="price"><b>NT$80</b><em>${t('/月', '/mo')}</em></div>
+          <ul>
+            <li>${t('全功能無限次', 'Unlimited everything')}</li>
+            <li>${t('Whisper 精準轉錄', 'Whisper precise transcription')}</li>
+            <li>${t('終端機 CLI · 報告保留 90 天', 'Terminal CLI · 90-day retention')}</li>
+          </ul>
+          <a class="pick" href="${CWS}" target="_blank" rel="noopener">${t('升級月費', 'Go monthly')}</a>
+        </div>
+        <div class="plan">
+          <div class="tier">${t('日票', 'Day pass')}</div>
+          <div class="price"><b>NT$20</b><em>/24h</em></div>
+          <ul>
+            <li>${t('24 小時無限次', 'Unlimited for 24 hours')}</li>
+            <li>${t('今天先解決這件事', 'Just fix it today')}</li>
+            <li>${t('不自動續約', 'No auto-renewal')}</li>
+          </ul>
+          <a class="pick" href="${CWS}" target="_blank" rel="noopener">${t('買日票', 'Buy day pass')}</a>
+        </div>
       </div>
+      <p class="plans-note">${t('升級與日票都在擴充功能裡完成付款，先安裝再選方案。', 'Upgrades and day passes are purchased inside the extension — install it first, then pick a plan.')}</p>
     </div>
   </section>
 
-  <!-- PM-272：用戶心得入口 -->
-  <section style="text-align:center;padding:40px 20px;">
-    <p style="font-size:18px;color:#c9c9d6;margin:0;">
-      💬 <a href="/testimonials">${t('看看其他開發者怎麼說 →', 'See what other developers say →')}</a>
-    </p>
+  <!-- §7 結尾 CTA（決策點 3）-->
+  <section class="sec-end">
+    <h2>${t('還在用截圖跟 AI 解釋 Bug？試試用說的。', 'Still sending screenshots to explain bugs? Try just talking.')}</h2>
+    <a class="btn on-dark" href="${CWS}" target="_blank" rel="noopener">${t('免費安裝', 'Install free')}</a>
+    <img class="store-shot" src="/screenshots/ss-store.png" alt="Chrome Web Store" loading="lazy">
+    <div class="end-links">
+      <a href="${CWS}" target="_blank" rel="noopener">Chrome Web Store</a><s>·</s>
+      <a href="https://github.com/fox100039-design/bugezy" target="_blank" rel="noopener">GitHub</a><s>·</s>
+      <a href="/guide">${t('完整指南', 'Guide')}</a>
+    </div>
   </section>
 
-  <!-- §7 Footer -->
-  <footer>
-    <div class="contact-info">
-      <h3>${t('聯絡我們', 'Contact Us')}</h3>
-      <p>📧 Email：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></p>
-    </div>
-    <div style="margin-top:8px;"><a href="/features">${t('功能說明', 'Features')}</a> | <a href="/guide">${t('完整指南', 'Guide')}</a> | <a href="/faq">${t('常見問題', 'FAQ')}</a> | <a href="/privacy">${t('隱私政策', 'Privacy')}</a> | <a href="/changelog">${t('更新日誌', 'Changelog')}</a> | <a href="/blog">${t('📝 部落格', '📝 Blog')}</a> | <a href="/skill">${t('🤖 AI 客服手冊', '🤖 AI Manual')}</a> | <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a> | <a href="/reports">${t('📋 我的報告', '📋 My Reports')}</a></div>
-    <div style="margin-top:8px;color:#555;">© 2026 BugEzy · v1.1.5 · ${t('亞洲平價 MCP 語音除錯工具', 'Affordable MCP voice debugging for Asia')}</div>
-  </footer>
+${siteFooter(lang)}
 </body>
 </html>`;
 }
@@ -2043,10 +2235,9 @@ function privacyPage(lang: PageLang, canonLang: PageLang | null): string {
 ${canonicalTag('/privacy', canonLang, LANGS_3)}
 ${hreflangTags('/privacy', LANGS_3)}
 ${ogMeta('/privacy', 'Privacy Policy — BugEzy', 'How BugEzy handles your data.')}
-<style>
+${SITE_FONTS}
+  <style>${SITE_CHROME_CSS}
   * { box-sizing: border-box; }
-  .lang-switch { position:fixed; top:14px; right:16px; z-index:10; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:5px 12px; font-size:13px; color:#c4b5fd; text-decoration:none; }
-  .lang-switch:hover { background:#2a2a3e; }
   body {
     margin: 0; padding: 0; background: #0f0f1a; color: #e8e8f0;
     font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
@@ -2081,11 +2272,8 @@ ${ogMeta('/privacy', 'Privacy Policy — BugEzy', 'How BugEzy handles your data.
 </style>
 </head>
 <body>
-<a class="lang-switch" href="?lang=${lang === 'zh' ? 'en' : 'zh'}">${t('EN', '中文')}</a>
+${siteNav(lang, LANGS_3, '')}
 <div class="wrap">
-  <header>
-    <a class="brand" href="/">🐛 BugEzy</a>
-  </header>
 ${t(
     `
   <h1>隱私政策</h1>
@@ -2309,20 +2497,8 @@ ${t(
 `,
   )}
 
-  <footer>
-    <a href="/">${t('首頁', 'Home')}</a>
-        <a href="/features">${t('功能說明', 'Features')}</a>
-    <a href="/guide">${t('完整指南', 'Guide')}</a>
-    <a href="/faq">FAQ</a>
-    <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
-    <a href="/blog">${t('📝 部落格', '📝 Blog')}</a>
-    <a href="/skill">${t('🤖 AI 客服手冊', '🤖 AI Manual')}</a>
-    <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a>
-    <a href="/reports">${t('📋 我的報告', '📋 My Reports')}</a>
-    <a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a>
-    <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
-  </footer>
 </div>
+${siteFooter(lang)}
 </body>
 </html>`;
 }
@@ -2625,10 +2801,9 @@ function skillPage(lang: PageLang, canonLang: PageLang | null): string {
 ${canonicalTag('/skill', canonLang, LANGS_3)}
 ${hreflangTags('/skill', LANGS_3)}
 ${ogMeta('/skill', 'AI Customer Service Guide — BugEzy SKILL.md', 'BugEzy MCP tool documentation for AI assistants. 13 tools including get_timeline.')}
-<style>
+${SITE_FONTS}
+  <style>${SITE_CHROME_CSS}
   * { box-sizing: border-box; }
-  .lang-switch { position:fixed; top:14px; right:16px; z-index:10; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:5px 12px; font-size:13px; color:#c4b5fd; text-decoration:none; }
-  .lang-switch:hover { background:#2a2a3e; }
   body { margin:0; padding:0; background:#0f0f1a; color:#e8e8f0; font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif; line-height:1.75; font-size:15px; }
   .wrap { max-width: 860px; margin: 0 auto; padding: 48px 24px 80px; }
   header { border-bottom: 1px solid #2a2a3e; padding-bottom: 20px; margin-bottom: 24px; }
@@ -2666,9 +2841,8 @@ ${ogMeta('/skill', 'AI Customer Service Guide — BugEzy SKILL.md', 'BugEzy MCP 
 </style>
 </head>
 <body>
-<a class="lang-switch" href="?lang=${lang === 'zh' ? 'en' : 'zh'}">${t('EN', '中文')}</a>
+${siteNav(lang, LANGS_3, '')}
 <div class="wrap">
-  <header><a class="brand" href="/">🐛 BugEzy</a></header>
 
   <h1>${t('🤖 BugEzy AI 客服手冊', '🤖 BugEzy AI Support Manual')}</h1>
   <p class="lead">${t('把這份文件放到你的專案裡，AI 就會教你怎麼用 BugEzy——讀報告、排除故障、通通自己搞定。', 'Drop this file into your project and your AI will teach you how to use BugEzy — reading reports, troubleshooting, all on its own.')}</p>
@@ -2691,20 +2865,8 @@ ${ogMeta('/skill', 'AI Customer Service Guide — BugEzy SKILL.md', 'BugEzy MCP 
 
   <div class="md">${bodyHtml}</div>
 
-  <footer>
-    <div class="links">
-      <a href="/">${t('首頁', 'Home')}</a>
-            <a href="/features">${t('功能說明', 'Features')}</a>
-      <a href="/guide">${t('完整指南', 'Guide')}</a>
-      <a href="/faq">FAQ</a>
-      <a href="/skill">${t('🤖 AI 客服手冊', '🤖 AI Manual')}</a>
-      <a href="/skill">${t('🤖 AI 客服手冊', '🤖 AI Manual')}</a>
-    <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a>
-    </div>
-    <div style="margin-top:8px;">${t('聯絡', 'Contact')}：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
-    <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
-  </footer>
 </div>
+${siteFooter(lang)}
 <script>
 (function () {
   var btn = document.getElementById('copySkill');
@@ -2815,10 +2977,9 @@ Full guide: https://bugezy.dev/guide`,
 ${canonicalTag('/guide', canonLang, LANGS_3)}
 ${hreflangTags('/guide', LANGS_3)}
 ${ogMeta('/guide', 'User Guide — BugEzy', 'Step-by-step guide to using BugEzy for bug reporting.')}
-<style>
+${SITE_FONTS}
+  <style>${SITE_CHROME_CSS}
   * { box-sizing: border-box; }
-  .lang-switch { position:fixed; top:14px; right:16px; z-index:10; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:5px 12px; font-size:13px; color:#c4b5fd; text-decoration:none; }
-  .lang-switch:hover { background:#2a2a3e; }
   body {
     margin: 0; padding: 0; background: #0f0f1a; color: #e8e8f0;
     font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
@@ -2907,9 +3068,8 @@ ${ogMeta('/guide', 'User Guide — BugEzy', 'Step-by-step guide to using BugEzy 
 </style>
 </head>
 <body>
-<a class="lang-switch" href="?lang=${lang === 'zh' ? 'en' : 'zh'}">${t('EN', '中文')}</a>
+${siteNav(lang, LANGS_3, 'guide')}
 <div class="wrap">
-  <header><a class="brand" href="/">🐛 BugEzy</a></header>
 
   <h1>${t('🐛 BugEzy 完整指南', '🐛 BugEzy Complete Guide')}</h1>
   <p class="lead">${t('從安裝到讓 AI 幫你修 Bug，一頁搞定。', 'From install to letting AI fix your bugs — all on one page.')}</p>
@@ -3089,22 +3249,8 @@ ${ogMeta('/guide', 'User Guide — BugEzy', 'Step-by-step guide to using BugEzy 
     </ul>
   </div>
 
-  <footer>
-    <div class="links">
-      <a href="/">${t('首頁', 'Home')}</a>
-      <a href="/features">${t('功能說明', 'Features')}</a>
-      <a href="/faq">FAQ</a>
-      <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
-      <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
-      <a href="/blog">${t('📝 部落格', '📝 Blog')}</a>
-    <a href="/skill">${t('🤖 AI 客服手冊', '🤖 AI Manual')}</a>
-    <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a>
-    <a href="/reports">${t('📋 我的報告', '📋 My Reports')}</a>
-    </div>
-    <div style="margin-top:8px;">${t('聯絡', 'Contact')}：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
-    <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
-  </footer>
 </div>
+${siteFooter(lang)}
 <script>
 // PM-280（承接 PM-190/191，原本在 /install）：已登入 → 把本頁所有 MCP 設定/網址（.mcp-cfg）
 //   的 bugezy.dev/mcp 自動補上 ?token=<session token>，AI 端就零操作能讀報告。
@@ -3209,10 +3355,9 @@ ${canonicalTag('/faq', canonLang, LANGS_6)}
 ${hreflangTags('/faq', LANGS_6)}
 ${ogMeta('/faq', 'FAQ — BugEzy', 'Frequently asked questions about BugEzy.')}
 ${jsonLd(faqLd)}
-<style>
+${SITE_FONTS}
+  <style>${SITE_CHROME_CSS}
   * { box-sizing: border-box; }
-  .lang-switch { position:fixed; top:14px; right:16px; z-index:10; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:5px 12px; font-size:13px; color:#c4b5fd; text-decoration:none; }
-  .lang-switch:hover { background:#2a2a3e; }
   body {
     margin: 0; padding: 0; background: #0f0f1a; color: #e8e8f0;
     font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
@@ -3245,9 +3390,8 @@ ${jsonLd(faqLd)}
 </style>
 </head>
 <body>
-${langSwitchBar(lang)}
+${siteNav(lang, LANGS_6, 'faq')}
 <div class="wrap">
-  <header><a class="brand" href="/">🐛 BugEzy</a></header>
 
   <h1>${t('🐛 BugEzy 常見問題', '🐛 BugEzy FAQ')}</h1>
 
@@ -3297,22 +3441,8 @@ ${langSwitchBar(lang)}
   <div class="faq-q">${t('Token 是什麼？為什麼 BugEzy 能省 Token？', 'What are tokens, and how does BugEzy save them?')}</div>
   <div class="faq-a"><p>${t('Token 是 AI 處理文字的計量單位，等於你的 AI 使用費用。BugEzy 用結構化文字（而非截圖）傳送報告給 AI，同樣的 Bug 資訊只需要 1/20 的 Token。每次 MCP AI 讀取都會顯示 Token 估算，讓你看到省了多少。', 'Tokens are the unit AI uses to process text — effectively your AI cost. BugEzy sends reports as structured text (not screenshots), so the same bug info takes 1/20 the tokens. Every MCP AI read shows a token estimate so you can see the savings.')}</p></div>
 
-  <footer>
-    <div class="links">
-      <a href="/">${t('首頁', 'Home')}</a>
-            <a href="/features">${t('功能說明', 'Features')}</a>
-      <a href="/guide">${t('完整指南', 'Guide')}</a>
-      <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
-      <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
-      <a href="/blog">${t('📝 部落格', '📝 Blog')}</a>
-    <a href="/skill">${t('🤖 AI 客服手冊', '🤖 AI Manual')}</a>
-    <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a>
-    <a href="/reports">${t('📋 我的報告', '📋 My Reports')}</a>
-    </div>
-    <div style="margin-top:8px;">${t('聯絡', 'Contact')}：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
-    <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
-  </footer>
 </div>
+${siteFooter(lang)}
 <script>
 document.querySelectorAll('.faq-q').forEach(function (q) {
   q.addEventListener('click', function () {
@@ -3348,10 +3478,9 @@ function featuresPage(lang: PageLang, canonLang: PageLang | null): string {
 ${canonicalTag('/features', canonLang, LANGS_6)}
 ${hreflangTags('/features', LANGS_6)}
 ${ogMeta('/features', 'Features — BugEzy', 'Voice recording, DOM replay, console capture, network errors, MCP integration, and more.')}
-<style>
+${SITE_FONTS}
+  <style>${SITE_CHROME_CSS}
   * { box-sizing: border-box; }
-  .lang-switch { position:fixed; top:14px; right:16px; z-index:10; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:5px 12px; font-size:13px; color:#c4b5fd; text-decoration:none; }
-  .lang-switch:hover { background:#2a2a3e; }
   body {
     margin: 0; padding: 0; background: #0f0f1a; color: #e8e8f0;
     font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
@@ -3420,9 +3549,8 @@ ${ogMeta('/features', 'Features — BugEzy', 'Voice recording, DOM replay, conso
 </style>
 </head>
 <body>
-${langSwitchBar(lang)}
+${siteNav(lang, LANGS_6, 'features')}
 <div class="wrap">
-  <header><a class="brand" href="/">🐛 BugEzy</a></header>
 
   <h1>${t('BugEzy 完整功能介紹', 'BugEzy — Full Feature Overview')}</h1>
   <p class="lead">${t('給進階開發者、AI 助手、技術評估者的完整產品規格', 'Complete product specs for developers, AI assistants, and technical evaluators')}</p>
@@ -3551,21 +3679,8 @@ ${langSwitchBar(lang)}
     <a class="cta-btn ghost" href="/">${t('回首頁', 'Home')}</a>
   </div>
 
-  <footer>
-    <div class="links">
-      <a href="/">${t('首頁', 'Home')}</a>
-      <a href="/skill">${t('🤖 AI 客服手冊', '🤖 AI Manual')}</a>
-      <a href="https://github.com/fox100039-design/bugezy" target="_blank" rel="noopener">GitHub</a>
-      <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
-      <a href="/blog">${t('📝 部落格', '📝 Blog')}</a>
-      <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
-            <a href="/faq">FAQ</a>
-      <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a>
-    </div>
-    <div style="margin-top:8px;">${t('聯絡', 'Contact')}：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a></div>
-    <div style="margin-top:8px;color:#555;">© 2026 BugEzy · v1.1.5</div>
-  </footer>
 </div>
+${siteFooter(lang)}
 </body>
 </html>`;
 }
@@ -3750,20 +3865,19 @@ function blogListPage(lang: PageLang, canonLang: PageLang | null): string {
 ${canonicalTag('/blog', canonLang, LANGS_ZH)}
 ${hreflangTags('/blog', LANGS_ZH)}
 ${ogMeta('/blog', 'BugEzy Blog — Debugging & AI Development', 'Practical articles on debugging, vibe coding, and AI development.')}
-<style>${BLOG_CSS}</style>
+${SITE_FONTS}
+  <style>${SITE_CHROME_CSS}${BLOG_CSS}</style>
 </head>
 <body>
+${siteNav(lang, LANGS_ZH, 'blog')}
 <div class="wrap">
-  <header><a class="brand" href="/">🐛 BugEzy</a></header>
   <h1>${t('部落格', 'Blog')}</h1>
   <p class="lead">${t('除錯、Vibe Coding、AI 開發的實用文章。', 'Practical takes on debugging, vibe coding, and AI development.')}</p>
   <ul class="post-list">
 ${items}
   </ul>
-  <footer>
-    <a href="/">${t('← 返回首頁', '← Back to home')}</a>
-  </footer>
 </div>
+${siteFooter(lang)}
 </body>
 </html>`;
 }
@@ -3804,11 +3918,12 @@ ${canonicalTag(`/blog/${post.slug}`, canonLang, LANGS_ZH)}
 ${hreflangTags(`/blog/${post.slug}`, LANGS_ZH)}
 ${ogMeta(`/blog/${post.slug}`, post.title, post.description)}
 ${jsonLd(articleLd)}
-<style>${BLOG_CSS}</style>
+${SITE_FONTS}
+  <style>${SITE_CHROME_CSS}${BLOG_CSS}</style>
 </head>
 <body>
+${siteNav(lang, LANGS_ZH, 'blog')}
 <div class="wrap">
-  <header><a class="brand" href="/">🐛 BugEzy</a></header>
   <p><a href="/blog">${t('← 返回部落格', '← Back to blog')}</a></p>
   <article>
     <h1>${escHtml(post.title)}</h1>
@@ -3823,10 +3938,8 @@ ${bodyHtml}
     <span>${prev ? `<a href="/blog/${prev.slug}">← ${escHtml(prev.title)}</a>` : ''}</span>
     <span>${next ? `<a href="/blog/${next.slug}">${escHtml(next.title)} →</a>` : ''}</span>
   </nav>
-  <footer>
-    <a href="/blog">${t('← 返回部落格列表', '← Back to blog list')}</a>
-  </footer>
 </div>
+${siteFooter(lang)}
 </body>
 </html>`;
 }
@@ -3908,11 +4021,12 @@ ${video}      <p class="t-quote">${escHtml(t(item.text.zh, item.text.en))}</p>
 ${canonicalTag('/testimonials', canonLang, LANGS_3)}
 ${hreflangTags('/testimonials', LANGS_3)}
 ${ogMeta('/testimonials', 'BugEzy Testimonials', 'Real developers share how BugEzy speeds up their debugging.')}
-<style>${BLOG_CSS}${TESTIMONIALS_CSS}</style>
+${SITE_FONTS}
+  <style>${SITE_CHROME_CSS}${BLOG_CSS}${TESTIMONIALS_CSS}</style>
 </head>
 <body>
+${siteNav(lang, LANGS_3, '')}
 <div class="wrap">
-  <header><a class="brand" href="/">🐛 BugEzy</a></header>
   <h1>${t('用戶心得', 'Testimonials')}</h1>
   <p class="lead">${t('看看其他開發者怎麼用 BugEzy 回報 Bug。', 'See how other developers report bugs with BugEzy.')}</p>
   <ul class="post-list">
@@ -3928,10 +4042,8 @@ ${items}
     <p class="note">${t('寄到 ', 'Send to ')}<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a>${t('，附上你的 BugEzy 帳號 email。', ', and include the email of your BugEzy account.')}</p>
   </section>
 
-  <footer>
-    <a href="/">${t('← 返回首頁', '← Back to home')}</a>
-  </footer>
 </div>
+${siteFooter(lang)}
 </body>
 </html>`;
 }
@@ -3951,10 +4063,9 @@ function changelogPage(lang: PageLang, canonLang: PageLang | null): string {
 ${canonicalTag('/changelog', canonLang, LANGS_3)}
 ${hreflangTags('/changelog', LANGS_3)}
 ${ogMeta('/changelog', 'Changelog — BugEzy', 'Latest updates and release notes.')}
-<style>
+${SITE_FONTS}
+  <style>${SITE_CHROME_CSS}
   * { box-sizing: border-box; }
-  .lang-switch { position:fixed; top:14px; right:16px; z-index:10; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:5px 12px; font-size:13px; color:#c4b5fd; text-decoration:none; }
-  .lang-switch:hover { background:#2a2a3e; }
   body { margin: 0; padding: 0; background: #0f0f1a; color: #e8e8f0;
     font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif; line-height: 1.75; font-size: 15px; }
   .wrap { max-width: 720px; margin: 0 auto; padding: 48px 24px 80px; }
@@ -3973,9 +4084,8 @@ ${ogMeta('/changelog', 'Changelog — BugEzy', 'Latest updates and release notes
 </style>
 </head>
 <body>
-<a class="lang-switch" href="?lang=${lang === 'zh' ? 'en' : 'zh'}">${t('EN', '中文')}</a>
+${siteNav(lang, LANGS_3, '')}
 <div class="wrap">
-  <header><a class="brand" href="/">🐛 BugEzy</a></header>
 
   <h1>${t('📋 BugEzy 更新日誌', '📋 BugEzy Changelog')}</h1>
   <p class="lead">${t('每次更新做了什麼，都記在這裡。', 'What changed in each update, all here.')}</p>
@@ -4077,22 +4187,8 @@ ${ogMeta('/changelog', 'Changelog — BugEzy', 'Latest updates and release notes
     </ul>
   </section>
 
-  <footer>
-    <div class="links">
-      <a href="/">${t('首頁', 'Home')}</a>
-            <a href="/features">${t('功能說明', 'Features')}</a>
-      <a href="/guide">${t('完整指南', 'Guide')}</a>
-      <a href="/faq">FAQ</a>
-      <a href="/privacy">${t('隱私政策', 'Privacy')}</a>
-      <a href="/changelog">${t('更新日誌', 'Changelog')}</a>
-      <a href="/blog">${t('📝 部落格', '📝 Blog')}</a>
-    <a href="/skill">${t('🤖 AI 客服手冊', '🤖 AI Manual')}</a>
-    <a href="/feedback">${t('📬 問題回報', '📬 Feedback')}</a>
-    <a href="/reports">${t('📋 我的報告', '📋 My Reports')}</a>
-    </div>
-    <div style="margin-top:8px;color:#555;">© 2026 BugEzy</div>
-  </footer>
 </div>
+${siteFooter(lang)}
 </body>
 </html>`;
 }
@@ -4111,10 +4207,9 @@ function feedbackPage(lang: PageLang, canonLang: PageLang | null): string {
 ${canonicalTag('/feedback', canonLang, LANGS_3)}
 ${hreflangTags('/feedback', LANGS_3)}
 ${ogMeta('/feedback', 'Feedback — BugEzy', 'Share your feedback and help improve BugEzy.')}
-<style>
+${SITE_FONTS}
+  <style>${SITE_CHROME_CSS}
   * { box-sizing: border-box; }
-  .lang-switch { position:fixed; top:14px; right:16px; z-index:10; background:#1a1a2e; border:1px solid #7c3aed; border-radius:8px; padding:5px 12px; font-size:13px; color:#c4b5fd; text-decoration:none; }
-  .lang-switch:hover { background:#2a2a3e; }
   body { margin:0; padding:0; background:#0f0f1a; color:#e8e8f0; font-family:system-ui,-apple-system,"Segoe UI","Microsoft JhengHei",sans-serif; line-height:1.7; font-size:15px; }
   .wrap { max-width:600px; margin:0 auto; padding:48px 24px 80px; }
   header { border-bottom:1px solid #2a2a3e; padding-bottom:20px; margin-bottom:24px; }
@@ -4137,9 +4232,8 @@ ${ogMeta('/feedback', 'Feedback — BugEzy', 'Share your feedback and help impro
 </style>
 </head>
 <body>
-<a class="lang-switch" href="?lang=${lang === 'zh' ? 'en' : 'zh'}">${t('EN', '中文')}</a>
+${siteNav(lang, LANGS_3, '')}
 <div class="wrap">
-  <header><a class="brand" href="/">🐛 BugEzy</a></header>
   <h1>${t('📬 問題回報', '📬 Feedback')}</h1>
   <p class="lead">${t('遇到問題或有建議？告訴我們！', 'Found a bug or have a suggestion? Let us know!')}</p>
   <form id="feedback-form">
@@ -4159,12 +4253,8 @@ ${ogMeta('/feedback', 'Feedback — BugEzy', 'Share your feedback and help impro
   </form>
   <div class="msg ok" id="fb-ok">${t('✅ 感謝回報！我們會盡快處理。', '✅ Thanks for your feedback! We will get on it soon.')}</div>
   <div class="msg err" id="fb-err"></div>
-  <footer>
-    <a href="/">${t('首頁', 'Home')}</a>
-    <a href="/faq">FAQ</a>
-    <a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a>
-  </footer>
 </div>
+${siteFooter(lang)}
 <script>
   var form = document.getElementById('feedback-form');
   var msgEl = document.getElementById('fb-message');
@@ -6284,6 +6374,7 @@ export default {
     if (request.method === 'GET' && path === '/robots.txt') return robotsTxt();
     // PM-211：OG/Twitter Card 分享圖（品牌 icon 128×128）
     if (request.method === 'GET' && path === '/icon-128.png') return iconPng();
+    if (request.method === 'GET' && path === '/hornet-real.png') return hornetPng();
     // PM-228：Official MCP Registry 的 HTTP 域名驗證——證明 bugezy.dev 擁有權（namespace dev.bugezy/*）。
     //   內容為 Ed25519 公鑰（可公開），對應私鑰僅本機持有、不進 repo。
     if (request.method === 'GET' && path === '/.well-known/mcp-registry-auth') {
