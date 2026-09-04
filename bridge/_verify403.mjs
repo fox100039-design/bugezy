@@ -977,5 +977,121 @@ check('434   🔴 首頁零 emoji（含七國旗）、零舊色碼', (() => {
 check('434   共用外殼零 emoji、零舊色碼', onlyEmoji(chrome).length === 0
   && !/#0f0f1a|#1a1a2e|#2a2a3e|#7c3aed|#a78bfa|#c4b5fd|#8b8fa3/i.test(chrome));
 
+console.log('\n=== ⑮ PM-435：群組 E · 內容頁（畫面 29 區塊庫 A）===');
+
+const CONTENT_PAGES = [
+  ['privacy', 'function privacyPage(', 'function renderMarkdown('],
+  ['skill', 'function skillPage(', 'function guidePage('],
+  ['guide', 'function guidePage(', 'function faqPage('],
+  ['faq', 'function faqPage(', 'function featuresPage('],
+  ['features', 'function featuresPage(', 'const BLOG_CSS'],
+  ['changelog', 'function changelogPage(', 'function feedbackPage('],
+];
+const pageSeg = (a, b) => strip(srvRaw.slice(srvRaw.indexOf(a), srvRaw.indexOf(b, srvRaw.indexOf(a))));
+const contentCss = strip(srvRaw.slice(srvRaw.indexOf('const SITE_CONTENT_CSS'), srvRaw.indexOf('/** PM-434')));
+
+check('435   🔴 六頁全部吃共用內容樣式，底色統一米白',
+  CONTENT_PAGES.every(([, a, b]) => /<style>\$\{SITE_CHROME_CSS\}\$\{SITE_CONTENT_CSS\}/.test(pageSeg(a, b)))
+  && /body \{[^}]*background:var\(--cream\)/.test(contentCss));
+check('435   §6 條列用六角，不是 disc／✓／emoji',
+  /li::before \{ content:''[^}]*clip-path:var\(--hex\)/.test(contentCss)
+  && /ul \{ list-style:none/.test(contentCss)
+  && !/content:"✓"/.test(srvRaw));
+check('435   §7.2 白卡 + 黃色螢光筆 + §2.3 咖啡補充框都在共用樣式裡',
+  /\.hz-card \{[^}]*background:#fff; border:2px solid var\(--ink\)/.test(contentCss)
+  && /\.hz-mark \{ font-weight:700; background:var\(--y\)/.test(contentCss)
+  && /\.hz-note \{[^}]*background:var\(--brown\)/.test(contentCss));
+
+check('435   🔴 FAQ 三角是 CSS 邊框畫的，不是 ▼ 字元；收合白卡／展開黃底 header', (() => {
+  const faq = pageSeg('function faqPage(', 'function featuresPage(');
+  return /\.faq-q \{[^}]*background:#fff; border:2px solid rgba\(20,17,11,\.35\)/.test(faq)
+    && /\.faq-q\.open \{[^}]*background:var\(--y\)/.test(faq)
+    && /\.faq-q::after \{ content:''[^}]*border-left:6px solid var\(--ink\)/.test(faq)
+    && /\.faq-q\.open::after \{[^}]*border-top:6px solid var\(--ink\)/.test(faq)
+    && !/▼/.test(faq);
+})());
+check('435   FAQ 標題與內容是兄弟節點 → 展開態必須用 .faq-q.open + .faq-a 接（不是包在一起）',
+  /\.faq-q\.open \+ \.faq-a \{/.test(pageSeg('function faqPage(', 'function featuresPage(')));
+
+check('435   🔴 §7.3 更新日誌：最新＝實線白卡 + 黑膠囊 + 最新標籤；舊版＝虛線 + 咖啡膠囊', (() => {
+  const cl = pageSeg('function changelogPage(', 'function feedbackPage(');
+  return /\.changelog-entry \{[^}]*border:2px dashed rgba\(20,17,11,\.35\)/.test(cl)
+    && /\.changelog-entry\.latest \{[^}]*border:2px solid var\(--ink\)/.test(cl)
+    && /\.cl-ver \{[^}]*background:var\(--brown\); color:var\(--y-pale\)/.test(cl)
+    && /\.changelog-entry\.latest \.cl-ver \{ background:var\(--ink\); color:var\(--y\)/.test(cl)
+    && (cl.match(/<section class="changelog-entry latest">/g) || []).length === 1
+    && (cl.match(/<span class="cl-ver">/g) || []).length === 5;
+})());
+
+check('435   🔴 隱私長文包成白卡 + 保留天數用黃色螢光筆 + Limited Use 是咖啡框', (() => {
+  const pv = pageSeg('function privacyPage(', 'function renderMarkdown(');
+  return (pv.match(/<section class="privacy-sec">/g) || []).length === 22
+    && (pv.match(/<span class="hz-mark">/g) || []).length === 4
+    && /\.limited-use \{[^}]*background:var\(--brown\)/.test(pv);
+})());
+check('435   🔴 螢光筆標的天數跟 RETENTION_FREE_DAYS／RETENTION_PAID_DAYS 對得上', (() => {
+  const free = /RETENTION_FREE_DAYS = (\d+)/.exec(srvRaw);
+  const paid = /RETENTION_PAID_DAYS = (\d+)/.exec(srvRaw);
+  const pv = pageSeg('function privacyPage(', 'function renderMarkdown(');
+  return !!free && !!paid
+    && pv.includes('<span class="hz-mark">' + free[1] + ' 天</span>')
+    && pv.includes('<span class="hz-mark">' + paid[1] + ' 天</span>')
+    && pv.includes('<span class="hz-mark">' + free[1] + ' days</span>')
+    && pv.includes('<span class="hz-mark">' + paid[1] + ' days</span>');
+})());
+
+check('435   功能頁：模式卡改六角圖示、語言膠囊沒有國旗、付費方案反黑', (() => {
+  const ft = pageSeg('function featuresPage(', 'const BLOG_CSS');
+  return /\.mode-card \.mi \{[^}]*clip-path:var\(--hex\)/.test(ft)
+    && (ft.match(/<span class="mi"><\/span>/g) || []).length === 6
+    && /\.plan3 \.pc\.hl \{ background:var\(--ink\)/.test(ft);
+})());
+check('435   §2.3 指南的警告／求助框是咖啡底（系統在說話），快速開始是黃底', (() => {
+  const gd = pageSeg('function guidePage(', 'function faqPage(');
+  return /\.warn-box \{[^}]*background:var\(--brown\)/.test(gd)
+    && /\.ai-help-box \{[^}]*background:var\(--brown\)/.test(gd)
+    && /\.quick-start \{[^}]*background:var\(--y\)/.test(gd);
+})());
+
+check('435   🔴 六頁零 emoji、零舊色碼', (() => {
+  const dead = ['#0f0f1a', '#1a1a2e', '#2a2a3e', '#7c3aed', '#a78bfa', '#c4b5fd', '#8b8fa3',
+    '#15152a', '#12121f', '#7ee0c5', '#238636', '#3fb950', '#f59e0b', '#7ee787', '#e8e8f0',
+    '#6d28d9', '#fcd34d', '#d0d0d8'];
+  return CONTENT_PAGES.every(([, a, b]) => {
+    const seg = pageSeg(a, b);
+    return onlyEmoji(seg).length === 0 && !dead.some((c) => seg.includes(c));
+  });
+})());
+check('435   🔴 清 emoji 時 JA/KO 字典的 key 有跟著改名（makeT 以繁體原文當 key，漏改會整句掉回英文）', (() => {
+  // ⚠ makeT 定義在字典「前面」，不能拿它當結尾切片（會切出空字串，斷言就永遠是綠的）。
+  const mapStart = srvRaw.indexOf('const JA_MAP');
+  const viStart = srvRaw.indexOf('const VI_MAP');
+  const maps = srvRaw.slice(mapStart, srvRaw.indexOf('\n};', viStart) + 3);
+  const keys = new Set([...maps.matchAll(/^  '((?:[^'\\]|\\.)*)':/gm)].map((m) => m[1]));
+  const stale = [];
+  for (const [, a, b] of CONTENT_PAGES) {
+    const seg = srvRaw.slice(srvRaw.indexOf(a), srvRaw.indexOf(b, srvRaw.indexOf(a)));
+    for (const m of seg.matchAll(/t\('((?:[^'\\]|\\.)*)'/g)) {
+      const zh = m[1];
+      // 字典裡若還留著「emoji + 同一句」的舊 key，就是漏改
+      for (const k of keys) {
+        if (k === zh || !k.endsWith(zh)) continue;
+        const prefix = k.slice(0, k.length - zh.length);
+        // 前綴要「整段都是 emoji 或空白」才算同一句（不然 'Terminal CLI' 會誤中長句 key）
+        if (prefix.trim() && onlyEmoji(prefix).length === [...prefix.trim()].length) stale.push(k);
+      }
+    }
+  }
+  return stale.length === 0;
+})());
+
+check('435   🔴 JA/KO/VI 字典的「值」也清了 emoji（日／韓／越看到的是值，不是 key）', (() => {
+  const s0 = srvRaw.indexOf('const JA_MAP');
+  const vi = srvRaw.indexOf('const VI_MAP');
+  const maps2 = srvRaw.slice(s0, srvRaw.indexOf('\n};', vi) + 3);
+  const entries = [...maps2.matchAll(/^  '(?:[^'\\]|\\.)*': '((?:[^'\\]|\\.)*)',$/gm)];
+  return entries.length > 500 && entries.every((m) => onlyEmoji(m[1]).length === 0);
+})());
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
