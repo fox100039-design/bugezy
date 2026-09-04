@@ -847,5 +847,49 @@ check('432   /reports 列表頁也換成黃底 + 米白資料卡，且零 emoji�
   && !/#0f0f1a|#1a1a2e|#7c3aed|#a78bfa|#c4b5fd|#8b8fa3|#da3633/i.test(rs)
   && onlyEmoji(rs).length === 0);
 
+console.log('\n=== ⑬ PM-433：群組 D · 付費牆／找不到報告（畫面 16/17）===');
+
+check('433   §6 鎖頭是四層幾何（六角殼 66×76 + 鎖扣 + 鎖身 + 鑰匙孔），形狀全在 CSS',
+  /\.paywall-icon \{[^}]*width:66px; height:76px[^}]*clip-path:var\(--hex\)/.test(rp)
+  && /\.paywall-icon \.lock-shackle \{[^}]*border:2\.5px solid var\(--y\); border-bottom:none; border-radius:10px 10px 0 0/.test(rp)
+  && /\.paywall-icon \.lock-body \{[^}]*background:var\(--y\)/.test(rp)
+  && /\.paywall-icon \.lock-body > i \{[^}]*background:var\(--ink\)/.test(rp)
+  && /<i class="lock-body"><i><\/i><\/i>/.test(rp));
+check('433   🔴 clip-path 會裁掉 border → 鎖扣／鎖身必須是六角殼的子元素，不能靠外框',
+  /class="paywall-icon"><i class="lock-shackle"><\/i><i class="lock-body">/.test(rp)
+  && !/\.paywall-icon \{[^}]*border:/.test(rp));
+check('433   付費牆 560px、直接站在黃底蜂巢紋上（設計稿這頁沒有米白卡）',
+  /\.paywall \{ max-width:560px/.test(rp)
+  && !/\.paywall \{[^}]*background:/.test(rp));
+check('433   §7.1 主按鈕硬投影 3px、次要描邊；hover 位移後投影縮成 2px',
+  /\.state-btn\.primary \{ background:var\(--ink\); color:var\(--y\); box-shadow:3px 3px 0 var\(--brown-d\)/.test(rp)
+  && /\.state-btn\.primary:hover \{ transform:translate\(1px,1px\); box-shadow:2px 2px 0 var\(--brown-d\)/.test(rp)
+  && /\.state-btn\.secondary \{ background:transparent[^}]*border-color:rgba\(20,17,11,\.4\)/.test(rp));
+
+check('433   §4 找不到報告用三格蜂巢：滿／空／滿（空的那格自己會說話，不靠顏色）',
+  /<span class="nf-cell"><i><\/i><\/span><span class="nf-cell empty"><i><\/i><\/span><span class="nf-cell"><i><\/i><\/span>/.test(rp)
+  && /\.nf-cell \{ width:26px; height:30px; background:rgba\(20,17,11,\.45\)[^}]*clip-path:var\(--hex\)/.test(rp)
+  && /\.nf-cell > i \{[^}]*background:var\(--y\)/.test(rp)
+  && /\.nf-cell\.empty > i \{ background:rgba\(20,17,11,\.28\)/.test(rp));
+check('433   找不到報告 520px + 回首頁主按鈕',
+  /\.notfound \{ max-width:520px/.test(rp)
+  && /<a class="state-btn primary" href="' \+ API \+ '\/">/.test(rp));
+
+// 這條是跨檔一致性：文案上的保留天數不能跟清理排程各說各話。
+check('433   🔴 保留期限文案（7 天／90 天）跟 RETENTION_FREE_DAYS／RETENTION_PAID_DAYS 對得上', (() => {
+  const free = /RETENTION_FREE_DAYS = (\d+)/.exec(srvRaw);
+  const paid = /RETENTION_PAID_DAYS = (\d+)/.exec(srvRaw);
+  if (!free || !paid) return false;
+  const zh = /免費版保留 (\d+) 天，付費版 (\d+) 天/.exec(rp);
+  const en = /(\d+) days on the free plan, (\d+) days on paid/.exec(rp);
+  if (!zh || !en) return false;
+  return zh[1] === free[1] && zh[2] === paid[1] && en[1] === free[1] && en[2] === paid[1];
+})());
+
+check('433   舊的單行紅字 .error-msg 已整個換掉，沒留沒人用的 class（不留死 CSS）',
+  !/error-msg/.test(rp) && !/paywall-btn/.test(rp) && /renderNotFound\(\);/.test(rp));
+check('433   report-page.js 快取碼跟著改（不然舊 JS 會配新 CSS）',
+  /\/report-page\.js\?v=433/.test(rp));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

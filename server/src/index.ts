@@ -4771,21 +4771,41 @@ function reportPageHtml(lang: PageLang): string {
     .fact-note .fact-hex { background:var(--y); margin-top:3px; }
 
     .loading { text-align:center; padding:60px; font:600 14px/1 var(--font-ui); color:var(--on-y); }
-    .error-msg { text-align:center; padding:60px; font:700 14px/1 var(--font-ui); color:var(--err); }
     .empty { text-align:center; padding:24px; font:600 13px/1 var(--font-ui); color:var(--on-y-2); background:var(--cream); border:2px solid var(--ink); border-radius:12px; }
 
-    /* PM-188：非會員閱讀他人分享報告的付費牆（PM-433 會再細修版面） */
-    .paywall { max-width:560px; margin:60px auto; padding:36px 32px; background:var(--cream); border:2px solid var(--ink); border-radius:16px; text-align:center; box-shadow:4px 4px 0 var(--brown-d); }
-    .paywall h2 { font:800 21px/1.35 var(--font-brand); color:var(--ink); margin-bottom:12px; }
-    .paywall-desc { font:600 14px/1.7 var(--font-ui); color:var(--ink); margin-bottom:6px; }
-    .paywall-sub { font:600 13px/1.7 var(--font-ui); color:var(--on-y-2); margin-bottom:24px; }
-    .paywall-cta { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-bottom:20px; }
-    .paywall-btn { display:inline-block; padding:12px 22px; border-radius:12px; font:700 14px/1 var(--font-ui); text-decoration:none; }
-    .paywall-btn.primary { background:var(--ink); color:var(--y); border:2px solid var(--ink); box-shadow:3px 3px 0 var(--brown-d); }
-    .paywall-btn.primary:hover { transform:translate(1px,1px); box-shadow:2px 2px 0 var(--brown-d); }
-    .paywall-btn.secondary { background:transparent; color:var(--brown-d); border:2px solid rgba(20,17,11,.4); }
-    .paywall-btn.secondary:hover { border-color:var(--ink); color:var(--ink); }
-    .paywall-note { font:600 12px/1.6 var(--font-ui); color:var(--on-y); }
+    /* ── PM-433：整頁狀態畫面共用的硬投影按鈕（§7.1）── */
+    .state-btn { display:inline-block; padding:13px 22px; border:2px solid var(--ink); border-radius:12px; font:700 14px/1 var(--font-ui); text-decoration:none; cursor:pointer; }
+    .state-btn.primary { background:var(--ink); color:var(--y); box-shadow:3px 3px 0 var(--brown-d); }
+    .state-btn.primary:hover { transform:translate(1px,1px); box-shadow:2px 2px 0 var(--brown-d); }
+    .state-btn.secondary { background:transparent; color:var(--brown-d); border-color:rgba(20,17,11,.4); }
+    .state-btn.secondary:hover { border-color:var(--ink); color:var(--ink); }
+
+    /* PM-188／PM-433：非會員閱讀他人分享報告的付費牆（設計稿畫面 16）。
+       內容直接站在黃底蜂巢紋上 —— 設計稿這頁沒有米白卡，黑 header 已經界定了頁面。 */
+    .paywall { max-width:560px; margin:0 auto; padding:40px 36px 44px; display:flex; flex-direction:column; align-items:center; gap:18px; text-align:center; }
+    /* §6 幾何鎖頭 66×76。⚠ clip-path 會裁掉 border，所以鎖扣／鎖身是六角殼「裡面」的子元素，不是外框。 */
+    .paywall-icon { width:66px; height:76px; flex-shrink:0; background:var(--ink); clip-path:var(--hex); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; }
+    .paywall-icon .lock-shackle { width:18px; height:11px; border:2.5px solid var(--y); border-bottom:none; border-radius:10px 10px 0 0; }
+    .paywall-icon .lock-body { width:26px; height:20px; border-radius:4px; background:var(--y); display:flex; align-items:center; justify-content:center; }
+    .paywall-icon .lock-body > i { width:4px; height:8px; border-radius:2px; background:var(--ink); }
+    .paywall-copy { display:flex; flex-direction:column; gap:10px; max-width:420px; }
+    .paywall h2 { font:800 21px/1.35 var(--font-brand); letter-spacing:.01em; color:var(--ink); }
+    .paywall-desc { font:500 14px/1.7 var(--font-ui); color:var(--ink); }
+    .paywall-sub { font:600 13px/1.65 var(--font-ui); color:var(--on-y); }
+    .paywall-cta { display:flex; gap:11px; justify-content:center; flex-wrap:wrap; padding-top:4px; }
+    .paywall-note { font:600 12px/1.6 var(--font-ui); color:var(--on-y); padding-top:2px; }
+
+    /* PM-433：找不到報告／已過保留期限（設計稿畫面 17） */
+    .notfound { max-width:520px; margin:0 auto; padding:36px 32px 38px; display:flex; flex-direction:column; align-items:center; gap:16px; text-align:center; }
+    /* §4 三格蜂巢：滿／空／滿。空的那格自己就說明了「這裡沒有東西」，不必再靠顏色。 */
+    .nf-hive { display:flex; gap:8px; }
+    .nf-cell { width:26px; height:30px; background:rgba(20,17,11,.45); clip-path:var(--hex); display:flex; align-items:center; justify-content:center; }
+    .nf-cell > i { width:19px; height:22px; clip-path:var(--hex); background:var(--y); }
+    .nf-cell.empty > i { background:rgba(20,17,11,.28); }
+    .nf-copy { display:flex; flex-direction:column; gap:9px; max-width:380px; }
+    .notfound h2 { font:800 19px/1.35 var(--font-brand); letter-spacing:.01em; color:var(--ink); }
+    .nf-desc { font:500 13.5px/1.75 var(--font-ui); color:var(--on-y); }
+    .notfound .state-btn { padding:12px 22px; font-size:13px; }
   </style>
 </head>
 <body>
@@ -4814,7 +4834,7 @@ function reportPageHtml(lang: PageLang): string {
   </div>
   <!-- PM-166：全部 client 邏輯（render + lightbox）抽到外部檔，CSP script-src 'self' 才能拿掉 unsafe-inline。
        PM-168：加 ?v 版本號——report-page.js 快取 1 天，改版時 bump 版本強制邊緣快取失效（否則新 HTML 配舊 JS）。 -->
-  <script src="/report-page.js?v=432"></script>
+  <script src="/report-page.js?v=433"></script>
 </body>
 </html>`;
 }
@@ -4860,15 +4880,16 @@ const REPORT_PAGE_JS = `
         ? t('請登入 BugEzy 並升級會員才能閱讀', 'Please log in to BugEzy and upgrade to read this report')
         : t('升級會員即可閱讀他人分享的報告', 'Upgrade to read reports shared by others');
       var h = '<div class="paywall">';
-      // PM-432：§6 馬賽克／鎖頭改幾何。完整的 66×76 鎖頭六角是 PM-433 的範圍，
-      //   這裡先把 emoji 換成六角殼 + 鎖身，不留 🔒 在畫面上。
-      h += '<div class="paywall-icon"><i class="lock-shackle"></i><i class="lock-body"></i></div>';
+      // PM-433：§6 幾何鎖頭 66×76（黑六角殼 + 鎖扣 + 鎖身 + 鑰匙孔），形狀全部在 CSS。
+      h += '<div class="paywall-icon"><i class="lock-shackle"></i><i class="lock-body"><i></i></i></div>';
+      h += '<div class="paywall-copy">';
       h += '<h2>' + t('此報告需要會員權限才能閱讀', 'This report requires a membership to read') + '</h2>';
       h += '<p class="paywall-desc">' + t('BugEzy 會員可以閱讀他人分享的除錯報告', 'BugEzy members can read debug reports shared by others') + '</p>';
       h += '<p class="paywall-sub">' + sub + '</p>';
+      h += '</div>';
       h += '<div class="paywall-cta">';
-      h += '<a class="paywall-btn primary" href="' + API + '/install">' + t('免費安裝 BugEzy', 'Install BugEzy free') + '</a>';
-      h += '<a class="paywall-btn secondary" href="' + API + '/#pricing">' + t('了解會員方案', 'View plans') + '</a>';
+      h += '<a class="state-btn primary" href="' + API + '/install">' + t('免費安裝 BugEzy', 'Install BugEzy free') + '</a>';
+      h += '<a class="state-btn secondary" href="' + API + '/#pricing">' + t('了解會員方案', 'View plans') + '</a>';
       h += '</div>';
       h += '<p class="paywall-note">' + t('已經是會員？請從 BugEzy 擴充登入', 'Already a member? Please log in from the BugEzy extension') + '</p>';
       h += '</div>';
@@ -4886,9 +4907,20 @@ const REPORT_PAGE_JS = `
         return r.json();
       })
       .then(function (r) { if (r) render(r); })
-      .catch(function () {
-        document.getElementById('app').innerHTML = '<div class="error-msg">' + t('找不到報告', 'Report not found') + '</div>';
-      });
+      .catch(function () { renderNotFound(); });
+
+    // PM-433：找不到報告／已過保留期限（設計稿畫面 17）。保留天數對得上 RETENTION_FREE_DAYS / RETENTION_PAID_DAYS。
+    function renderNotFound() {
+      var h = '<div class="notfound">';
+      h += '<div class="nf-hive"><span class="nf-cell"><i></i></span><span class="nf-cell empty"><i></i></span><span class="nf-cell"><i></i></span></div>';
+      h += '<div class="nf-copy">';
+      h += '<h2>' + t('找不到報告', 'Report not found') + '</h2>';
+      h += '<p class="nf-desc">' + t('連結可能打錯了，或報告已超過保留期限被自動刪除 — 免費版保留 7 天，付費版 90 天。', 'The link may be wrong, or the report passed its retention period and was deleted automatically — 7 days on the free plan, 90 days on paid.') + '</p>';
+      h += '</div>';
+      h += '<a class="state-btn primary" href="' + API + '/">' + t('回 BugEzy 首頁', 'Back to BugEzy') + '</a>';
+      h += '</div>';
+      document.getElementById('app').innerHTML = h;
+    }
 
     function fmtTime(ts) {
       if (!ts) return '';
