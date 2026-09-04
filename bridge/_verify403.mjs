@@ -1093,5 +1093,64 @@ check('435   🔴 JA/KO/VI 字典的「值」也清了 emoji（日／韓／越�
   return entries.length > 500 && entries.every((m) => onlyEmoji(m[1]).length === 0);
 })());
 
+console.log('\n=== ⑯ PM-436：群組 E · 部落格／心得／問題回報／日票（畫面 30 區塊庫 B）===');
+
+const blogCss = strip(srvRaw.slice(srvRaw.indexOf('const BLOG_CSS'), srvRaw.indexOf('function blogListPage')));
+const tCss = strip(srvRaw.slice(srvRaw.indexOf('const TESTIMONIALS_CSS'), srvRaw.indexOf('function testimonialsPage')));
+const blogList = strip(srvRaw.slice(srvRaw.indexOf('function blogListPage('), srvRaw.indexOf('function blogPostPage(')));
+const tPage = strip(srvRaw.slice(srvRaw.indexOf('function testimonialsPage('), srvRaw.indexOf('function changelogPage(')));
+const fb = strip(srvRaw.slice(srvRaw.indexOf('function feedbackPage('), srvRaw.indexOf('function reportsShell')));
+const dp = strip(srvRaw.slice(srvRaw.indexOf('function dayPassSuccessPage('), srvRaw.indexOf('// POST /api/ecpay/period-callback')));
+
+check('436   部落格列表卡＝白卡 + 黃色硬投影，日期在標題上方、底下有「閱讀全文」',
+  /\.post-item \{[^}]*background:#fff; border:2px solid var\(--ink\);\s*border-radius:14px; box-shadow:4px 4px 0 var\(--y\)/.test(blogCss)
+  && /\.post-date \{ font:600 11\.5px\/1 var\(--font-mono\)/.test(blogCss)
+  && /class="post-more"/.test(blogList)
+  // ⚠ indexOf 找不到會回 -1，-1 永遠小於任何位置 → 兩邊都要先確認存在
+  && blogList.includes('class="post-date"') && blogList.includes('<h2>')
+  && blogList.indexOf('class="post-date"') < blogList.indexOf('<h2>'));
+check('436   🔴 列表卡是 <li>，共用樣式的六角項目符號要關掉（不然每張卡前面多一顆）',
+  /\.post-item::before \{ content:none; \}/.test(blogCss)
+  && /\.t-item::before \{ content:none; \}/.test(tCss));
+check('436   部落格內文：h2 靠黃色直線帶層級，**粗體** 走黃色螢光筆',
+  /article h2 \{[^}]*border-left:5px solid var\(--y\)/.test(blogCss)
+  && /article p \{ margin:14px 0; font:400 14\.5px\/2 var\(--font-ui\)/.test(blogCss)
+  && /article strong \{ font-weight:700; background:var\(--y\)/.test(blogCss));
+
+check('436   🔴 §2.2 心得引言卡反黑 + 六角頭像取名字首字',
+  /\.t-item \{[^}]*background:var\(--ink\)/.test(tCss)
+  && /\.t-ava \{ width:32px; height:37px[^}]*background:var\(--y\); clip-path:var\(--hex\)/.test(tCss)
+  && /\.t-quote \{[^}]*color:var\(--y-pale\)/.test(tCss)
+  && /const initial = escHtml\(\[\.\.\.item\.name\]\[0\] \|\| 'B'\)/.test(tPage)
+  && !/content:"\\201C"/.test(tCss));
+
+check('436   問題回報：Email 與類型並排、描述用虛線框、送出鈕黑底黃字 + 硬投影',
+  /\.form-row \{ display:flex; gap:9px/.test(fb)
+  && /\.form-row \.f-cat \{ width:150px/.test(fb)
+  && /textarea \{[^}]*border:2px dashed rgba\(20,17,11,\.4\);\s*background:rgba\(255,244,214,\.55\)/.test(fb)
+  && /button \{[^}]*background:var\(--ink\); color:var\(--y\)[^}]*box-shadow:3px 3px 0 var\(--brown\)/.test(fb)
+  && /<div class="form-row">/.test(fb));
+check('436   §7.7 送出結果不只靠顏色：成功黃底黑字、失敗磚紅底',
+  /\.msg\.ok \{ background:var\(--y\); border:2px solid var\(--ink\); color:var\(--ink\)/.test(fb)
+  && /\.msg\.err \{ background:var\(--err\); border:2px solid var\(--err\); color:var\(--y-pale\)/.test(fb)
+  && /--err:#8A2A0F/.test(strip(srvRaw.slice(srvRaw.indexOf('const SITE_CHROME_CSS'), srvRaw.indexOf('/** PM-434')))));
+
+check('436   🔴 日票成功頁：黃底卡 + 三顆黑六角 + 脈衝膠囊，且尊重 prefers-reduced-motion',
+  /\.card\{max-width:420px;padding:28px 24px;background:var\(--y\);border:2px solid var\(--ink\)/.test(dp)
+  && (dp.match(/<i><\/i><i><\/i><i><\/i>/g) || []).length === 1
+  && /\.hexes i\{width:20px;height:23px;background:var\(--ink\);clip-path:var\(--hex\);\}/.test(dp)
+  && /animation:hz-pulse 1\.4s infinite/.test(dp)
+  && /prefers-reduced-motion:reduce\)\{\.pill i\{animation:none/.test(dp));
+check('436   🔴 日票膠囊不做假倒數（這頁沒有使用者身分，查不到 day_pass_expires_at）',
+  /<span>24 小時無限使用<\/span>/.test(dp)
+  && !/setInterval|toLocaleTimeString|剩餘/.test(dp));
+
+check('436   🔴 四頁零 emoji、零舊色碼', (() => {
+  const dead = ['#0f0f1a', '#1a1a2e', '#2a2a3e', '#7c3aed', '#a78bfa', '#c4b5fd', '#8b8fa3',
+    '#b8b8c8', '#d0d0d8', '#6b7280', '#7ee787', '#22c55e', '#ef4444', '#e0e0e0', '#e8e8f0', '#6d28d9'];
+  return [blogCss, tCss, blogList, tPage, fb, dp].every(
+    (seg) => onlyEmoji(seg).length === 0 && !dead.some((c) => seg.includes(c)));
+})());
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
