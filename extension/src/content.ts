@@ -39,14 +39,22 @@ function applyBugezyLang(speechLang: string) {
   contentUILang = getUILang(speechLang);
 }
 
-// PM-193：精準轉錄麥克風失敗 → 頁面頂部橘色提示條（8 秒後移除）。content 與頁面共用 DOM，直接建節點。
+// PM-193：精準轉錄麥克風失敗 → 頁面頂部提示條（8 秒後移除）。content 與頁面共用 DOM，直接建節點。
+// PM-429：改成 §2.3 的咖啡底系統訊息 + 黃色六角；字典值的 ⚠️ 也一併清掉了。
 function showMicFallbackTip() {
   document.getElementById('bugezy-mic-fallback-tip')?.remove();
   const tip = document.createElement('div');
   tip.id = 'bugezy-mic-fallback-tip';
   tip.style.cssText =
-    'position:fixed;top:0;left:0;right:0;background:#f59e0b;color:#000;text-align:center;padding:10px;font-size:13px;font-weight:600;z-index:2147483647;font-family:system-ui,-apple-system,"Microsoft JhengHei",sans-serif;';
-  tip.textContent = ct('mic-fallback-tip'); // i18n 值已含 ⚠️
+    `position:fixed;top:0;left:0;right:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;gap:10px;` +
+    `background:${HZ.brown};color:${HZ.yPale};padding:10px 16px;font:700 13px/1.5 ${HZ.fontUi};`;
+  // PM-429：六角是文字的**兄弟節點** —— 文字用 ct() 塞進內層 span，
+  //   直接對整條 tip 設 textContent 會把六角一起洗掉。
+  const tipHex = document.createElement('span');
+  tipHex.style.cssText = `width:8px;height:9px;flex-shrink:0;background:${HZ.y};clip-path:${HZ.hex};`;
+  const tipTxt = document.createElement('span');
+  tipTxt.textContent = ct('mic-fallback-tip');
+  tip.append(tipHex, tipTxt);
   document.body.prepend(tip);
   setTimeout(() => tip.remove(), 8000);
 }
@@ -781,16 +789,18 @@ function renderZoneOverlay(): void {
     const badge = document.createElement('div');
     const ec = h?.error_count ?? 0;
     const wc = h?.warning_count ?? 0;
-    badge.textContent = ec ? `🔴 ×${ec}` : wc ? `🟡 ×${wc}` : status === 'unknown' ? '⚫' : '✅';
+    // PM-429：§7.7「不靠顏色傳達內容」—— 原本只有 🔴/🟡/⚫/✅ 四顆圓點，
+    //   拿掉之後要補文字標籤，顏色只是輔助。
+    badge.textContent = ec ? `ERR ×${ec}` : wc ? `WRN ×${wc}` : status === 'unknown' ? '—' : 'OK';
     Object.assign(badge.style, {
       position: 'absolute',
       right: '0',
       top: '0',
       padding: '1px 6px',
-      background: 'rgba(0,0,0,.65)',
-      color: '#fff',
+      background: ec ? HZ.err : wc ? HZ.yDeep : HZ.ink,
+      color: ec ? HZ.yPale : wc ? HZ.ink : HZ.onDark2,
       fontSize: '11px',
-      fontFamily: 'system-ui,sans-serif',
+      fontFamily: HZ.fontMono,
       pointerEvents: 'auto',
       cursor: 'pointer',
       whiteSpace: 'nowrap',
@@ -997,22 +1007,28 @@ function renderPanel(): void {
   style.textContent = `
     :host{all:initial}
     .wrap{position:fixed;right:${panelPos.right}px;bottom:${panelPos.bottom}px;z-index:2147483647;
-      font:12px/1.6 system-ui,-apple-system,"Microsoft JhengHei",sans-serif;color:#e6e6e6}
-    .icon{width:36px;height:36px;border-radius:50%;background:#1a1a2e;border:1px solid #7c3aed;
-      display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;
-      box-shadow:0 2px 10px rgba(0,0,0,.45)}
-    .card{width:210px;background:#12121f;border:1px solid #7c3aed;border-radius:10px;
+      font:12px/1.6 ${HZ.fontUi};color:${HZ.yPale}}
+    .icon{width:36px;height:36px;background:${HZ.y};clip-path:${HZ.hex};
+      display:flex;align-items:center;justify-content:center;cursor:pointer;
+      filter:drop-shadow(0 2px 8px rgba(0,0,0,.45))}
+    /* §5 六角標記：外黃 → 內斜紋核心。⚠ clip-path 會裁掉 box-shadow 與 border，
+       所以外環一律用「外六角包內六角」，不要用 border/box-shadow。 */
+    .icon i{width:22px;height:26px;clip-path:${HZ.hex};
+      background:repeating-linear-gradient(162deg,${HZ.ink} 0 3px,transparent 3px 6px)}
+    .card{width:210px;background:${HZ.ink};border:2px solid ${HZ.brown};border-radius:12px;
       box-shadow:0 4px 20px rgba(0,0,0,.5);overflow:hidden}
-    .hd{display:flex;align-items:center;gap:6px;padding:8px 10px;background:#1a1a2e;
-      cursor:move;user-select:none;font-weight:700}
+    .hd{display:flex;align-items:center;gap:7px;padding:8px 10px;background:${HZ.ink2};
+      border-bottom:1px solid ${HZ.line};cursor:move;user-select:none;
+      font:700 11.5px/1 ${HZ.fontUi};color:${HZ.y}}
+    .hd .hx{width:9px;height:10px;flex-shrink:0;background:${HZ.y};clip-path:${HZ.hex}}
     .hd .sp{flex:1}
     .bd{padding:8px 10px}
-    .row{display:flex;justify-content:space-between;padding:2px 0}
-    .dim{color:#8b8b9e}
-    .ft{display:flex;gap:6px;padding:6px 10px;border-top:1px solid #2a2a3e}
-    button{flex:1;background:#232338;color:#c4b5fd;border:1px solid #3a3a52;border-radius:6px;
-      padding:3px 0;font-size:11px;cursor:pointer;font-family:inherit}
-    button:hover{background:#2d2d47}
+    .row{display:flex;justify-content:space-between;gap:10px;padding:2px 0;color:${HZ.yPale}}
+    .dim{color:${HZ.onDark}}
+    .ft{display:flex;gap:6px;padding:6px 10px;border-top:1px solid ${HZ.line}}
+    button{flex:1;background:transparent;color:${HZ.onDark2};border:1px solid ${HZ.line2};
+      border-radius:7px;padding:4px 0;font:700 11px/1 ${HZ.fontUi};cursor:pointer}
+    button:hover{border-color:${HZ.y};color:${HZ.y}}
   `;
   panelRoot.appendChild(style);
 
@@ -1022,7 +1038,7 @@ function renderPanel(): void {
   if (!panelExpanded) {
     const icon = document.createElement('div');
     icon.className = 'icon';
-    icon.textContent = '🐛';
+    icon.appendChild(document.createElement('i')); // §5 六角斜紋核心（原本是 🐛）
     icon.title = 'BugEzy Debug — 點擊展開';
     icon.addEventListener('click', () => {
       panelExpanded = true;
@@ -1038,11 +1054,13 @@ function renderPanel(): void {
 
   const hd = document.createElement('div');
   hd.className = 'hd';
+  const hx = document.createElement('span');
+  hx.className = 'hx';
   const t1 = document.createElement('span');
-  t1.textContent = '🐛 BugEzy Debug';
+  t1.textContent = 'BugEzy Debug';
   const sp = document.createElement('span');
   sp.className = 'sp';
-  hd.append(t1, sp);
+  hd.append(hx, t1, sp);
   // 拖動：改的是 right/bottom（面板釘在右下角，用 left/top 會在 resize 後跑掉）
   hd.addEventListener('mousedown', (e) => {
     const sx = e.clientX;
@@ -1081,13 +1099,16 @@ function renderPanel(): void {
     row.append(a, b);
     bd.appendChild(row);
   };
+  // PM-429：PIN_STATUS_EMOJI 是給 popup 的協定，不該直接畫進面板。
+  //   這裡改用狀態代碼（ok/warn/err/stale），面板本來就是給工程師看的除錯面板。
+  const PIN_STATUS_ABBR: Record<string, string> = { active: 'ok', warning: 'warn', error: 'err', stale: 'stale' };
   const pinBits = Object.entries(d.pins.byStatus)
-    .map(([k, n]) => `${PIN_STATUS_EMOJI[k as Pin['status']] ?? ''}${n}`)
+    .map(([k, n]) => `${PIN_STATUS_ABBR[k] ?? k}:${n}`)
     .join(' ');
-  addRow('📍 Pins', d.pins.total ? `${d.pins.total} (${pinBits})` : '0');
-  addRow('❌ Errors', d.errors === null ? '未查詢' : String(d.errors));
-  addRow('⚡ FCP', d.lcp ? `${(d.lcp.ms / 1000).toFixed(1)}s (${d.lcp.rating})` : '—');
-  addRow('🕐 狀態', d.monitoring ? '監控中' : '待命');
+  addRow('Pins', d.pins.total ? `${d.pins.total} (${pinBits})` : '0');
+  addRow('Errors', d.errors === null ? '未查詢' : String(d.errors));
+  addRow('FCP', d.lcp ? `${(d.lcp.ms / 1000).toFixed(1)}s (${d.lcp.rating})` : '—');
+  addRow('狀態', d.monitoring ? '監控中' : '待命');
 
   const ft = document.createElement('div');
   ft.className = 'ft';
@@ -1138,8 +1159,54 @@ function hideDebugPanel(): Record<string, unknown> {
 // 與圖釘覆蓋層分開兩層 —— 高亮是短暫的、會自動消失，圖釘是常駐的，
 // 混在同一層會讓高亮的清除邏輯把圖釘一起洗掉。
 
+/**
+ * PM-429：大黃蜂色票（DESIGN_SPEC §2.1）。
+ *
+ * 這個檔案的 UI 全是 `createElement` + `style.cssText`，沒有 stylesheet 可以放 CSS 變數，
+ * 所以色碼集中成一個常數物件，別再散落在各處字串裡。
+ *
+ * ⚠ §2.2 **比例反轉**：底下是別人的網站，整條黃橫幅會蓋掉對方設計，所以注入 UI 一律
+ *   黑殼 + 黃強調。**唯一例外是截圖工具列** —— 全寬且短暫存在的模態工具，用黃底宣告
+ *   「現在是 BugEzy 在控制」。
+ */
+const HZ = {
+  y: '#F7BE00',
+  yDeep: '#DFA800',
+  yPale: '#FFE9AE',
+  cream: '#FFF4D6',
+  ink: '#14110B',
+  ink2: '#211C13',
+  ink3: '#0E0C08',
+  brown: '#7A4E1D',
+  brownD: '#4A2F12',
+  line: '#3A3122',
+  line2: '#55492F',
+  err: '#8A2A0F',
+  errFg: '#E08B72',
+  /** §2.4 深底上的次要文字**只有這兩階**（#8A7550 等在黑底上幾乎沒有亮度差） */
+  onDark: '#A08B62',
+  onDark2: '#C9A15A',
+  /** §3.2 黃底上的說明文字 */
+  onY: '#3A2409',
+  hex: 'polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%)',
+  fontUi: '"Noto Sans TC",system-ui,-apple-system,"Segoe UI","Microsoft JhengHei",sans-serif',
+  fontMono: '"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace',
+} as const;
+
+/**
+ * 把 content script 判定用的嚴重度 emoji 從字串開頭拿掉。
+ *
+ * 🔴 那些 emoji（🔴🟡🟢⚪✅⚠）**是跨界協定** —— popup 的 `sevClass()` 靠它決定色條顏色
+ * （PM-405 定的規矩：popup 不重新判定嚴重度）。所以**資料裡要留著**，只有這個檔案自己
+ * 要把它畫進頁面時才剝掉（§1 全站禁用 emoji）。
+ */
+function stripSev(text: string): string {
+  return text.replace(/^[\u{1F534}\u{1F7E1}\u{1F7E2}\u{26AA}\u{26AB}\u2705\u26A0\uFE0F\u{1F50D}\u{1F4CC}]+\s*/u, '');
+}
+
 const HIGHLIGHT_MAX = 5; // 同時最多 5 個，超過先進先出
-const HIGHLIGHT_COLOR = '#00bfff';
+/** §7.8：原本的 #00bfff 亮藍與品牌無關。雙環在深色與淺色網站上都看得見，單線在黃色網站上會消失。 */
+const HIGHLIGHT_COLOR = HZ.y;
 let highlightLayer: HTMLElement | null = null;
 const activeHighlights: Array<{ el: HTMLElement; timer: number }> = [];
 
@@ -1203,8 +1270,10 @@ function highlightElement(
     top: `${r.top - 2}px`,
     width: `${r.width + 4}px`,
     height: `${r.height + 4}px`,
-    border: `2px dashed ${opts.color || HIGHLIGHT_COLOR}`,
+    // §7.8：黃色雙環（外圈半透明）。單線在黃色網站上會消失，雙環在深淺底都看得見。
+    border: 'none',
     borderRadius: '4px',
+    boxShadow: `0 0 0 3px ${opts.color || HIGHLIGHT_COLOR}, 0 0 0 6px rgba(247,190,0,.28)`,
     boxSizing: 'border-box',
     pointerEvents: 'none',
   } as CSSStyleDeclaration);
@@ -1334,7 +1403,7 @@ function repositionPins(): void {
       cursor: 'context-menu',
       opacity: pin.resolved ? '0.75' : '1',
     } as CSSStyleDeclaration);
-    dot.title = `📌 ${pin.description || '(無描述)'}
+    dot.title = `${pin.description || '(無描述)'}
 ${pin.selector}
 狀態：${pin.status}${pin.resolved ? '（已標記解決）' : ''}
 右鍵：分析／修改描述／標記已解決／移除`;
@@ -1392,7 +1461,7 @@ function bridgePinElement(selector: string, description: string): Record<string,
   };
   if (typeof description === 'string' && description) pin.description = description;
   pins.set(pin.id, pin);
-  highlightElement(selector, { durationMs: 1000, label: '📌 釘選' }); // PM-337
+  highlightElement(selector, { durationMs: 1000, label: '釘選' }); // PM-337
   queueReposition();
 
   return {
@@ -2169,57 +2238,82 @@ function ensurePinModeRoot(): ShadowRoot {
   const root = host.attachShadow({ mode: 'open' });
   const sheet = new CSSStyleSheet();
   sheet.replaceSync(`
+    /* PM-429：§2.2 比例反轉 —— 底下是別人的網站，注入 UI 一律黑殼 + 黃強調。 */
     :host { all: initial; }
+    @keyframes bz-pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: .35; transform: scale(.86); }
+    }
+    .bz-hex { width: 9px; height: 10px; flex-shrink: 0; background: ${HZ.y}; clip-path: ${HZ.hex}; }
+    .bz-hex.pulse { animation: bz-pulse 1.2s ease-in-out infinite; }
+    /* 選擇器提示：§3.3 選擇器是機器產出 → 等寬字 */
     .bz-tip {
-      position: absolute; max-width: 320px; padding: 5px 9px; border-radius: 6px;
-      background: rgba(17,24,39,.94); color: #e5e7eb; font: 12px/1.5 ui-monospace, monospace;
+      position: absolute; max-width: 320px; padding: 6px 10px; border-radius: 7px;
+      background: ${HZ.ink}; border: 1px solid ${HZ.brown};
+      color: ${HZ.yPale}; font: 500 12px/1.5 ${HZ.fontMono};
       pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       box-shadow: 0 2px 10px rgba(0,0,0,.4);
     }
-    .bz-tip.warn { background: rgba(180,83,9,.96); color: #fff; font-family: system-ui, sans-serif; }
+    /* iframe 警示版：磚紅底（§2.1 --err） */
+    .bz-tip.warn { background: ${HZ.err}; border-color: ${HZ.err}; color: ${HZ.yPale}; font-family: ${HZ.fontUi}; }
     .bz-banner {
       position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
-      padding: 8px 16px; border-radius: 999px; pointer-events: none;
-      background: #00bfff; color: #04222e; font: 600 13px/1 system-ui, sans-serif;
+      display: flex; align-items: center; gap: 9px;
+      padding: 9px 17px; border-radius: 999px; pointer-events: none;
+      background: ${HZ.ink}; color: ${HZ.y}; font: 700 13px/1 ${HZ.fontUi};
       box-shadow: 0 4px 16px rgba(0,0,0,.35);
     }
     .bz-card {
-      position: absolute; width: 280px; padding: 12px; border-radius: 10px;
-      background: #111827; color: #e5e7eb; font: 13px/1.5 system-ui, sans-serif;
+      position: absolute; width: 282px; padding: 13px; border-radius: 12px;
+      background: ${HZ.ink}; color: ${HZ.yPale}; font: 13px/1.5 ${HZ.fontUi};
       pointer-events: auto; box-shadow: 0 10px 30px rgba(0,0,0,.5);
-      border: 1px solid rgba(255,255,255,.12);
+      border: 2px solid ${HZ.y};
     }
-    .bz-card h4 { margin: 0 0 8px; font-size: 13px; font-weight: 700; }
+    .bz-card h4 {
+      display: flex; align-items: center; gap: 8px;
+      margin: 0 0 4px; font: 700 13px/1 ${HZ.fontUi}; color: ${HZ.y};
+    }
+    .bz-card h4 .opt { margin-left: auto; font: 500 11px/1 ${HZ.fontUi}; color: ${HZ.onDark}; }
     .bz-card input {
-      width: 100%; box-sizing: border-box; padding: 7px 9px; border-radius: 6px;
-      border: 1px solid rgba(255,255,255,.18); background: #0b1220; color: #e5e7eb;
-      font: 13px system-ui, sans-serif; outline: none;
+      width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 8px;
+      border: 2px solid ${HZ.y}; background: ${HZ.ink3}; color: ${HZ.yPale};
+      font: 13px ${HZ.fontUi}; outline: none;
     }
-    .bz-card input:focus { border-color: #00bfff; }
-    .bz-row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+    .bz-card input:focus { border-color: ${HZ.yDeep}; }
+    .bz-row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 11px; }
     .bz-btn {
-      padding: 6px 14px; border-radius: 6px; border: none; cursor: pointer;
-      font: 600 12px system-ui, sans-serif;
+      padding: 7px 15px; border-radius: 8px; border: none; cursor: pointer;
+      font: 700 12px ${HZ.fontUi};
     }
-    .bz-btn.primary { background: #00bfff; color: #04222e; }
-    .bz-btn.ghost { background: rgba(255,255,255,.1); color: #e5e7eb; }
+    .bz-btn.primary { background: ${HZ.y}; color: ${HZ.ink}; }
+    .bz-btn.primary:hover { background: ${HZ.yDeep}; }
+    .bz-btn.ghost { background: transparent; border: 1px solid ${HZ.line2}; color: ${HZ.onDark2}; }
+    .bz-btn.ghost:hover { border-color: ${HZ.y}; color: ${HZ.y}; }
     .bz-toast {
       position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%);
-      padding: 9px 16px; border-radius: 8px; pointer-events: none;
-      background: rgba(0,200,83,.96); color: #04220e; font: 600 13px system-ui, sans-serif;
+      display: flex; align-items: center; gap: 9px;
+      padding: 10px 17px; border-radius: 999px; pointer-events: none;
+      background: ${HZ.ink}; border: 1px solid ${HZ.brown};
+      color: ${HZ.yPale}; font: 600 13px ${HZ.fontUi};
       box-shadow: 0 6px 20px rgba(0,0,0,.35);
     }
+    /* §7.7 左側色條表示嚴重度（取代原本印在文字前的圓點 emoji）。
+       文字本身仍完整描述狀況，色條只是輔助 —— 不靠顏色傳達內容。 */
+    .bz-toast.sev-error { border-left: 3px solid ${HZ.err}; }
+    .bz-toast.sev-warning { border-left: 3px solid ${HZ.yDeep}; }
+    .bz-toast.sev-active { border-left: 3px solid ${HZ.y}; }
+    .bz-toast.sev-stale { border-left: 3px solid ${HZ.line2}; }
     .bz-menu {
-      position: absolute; min-width: 160px; padding: 5px; border-radius: 8px;
-      background: #111827; border: 1px solid rgba(255,255,255,.12);
+      position: absolute; min-width: 168px; padding: 5px; border-radius: 10px;
+      background: ${HZ.ink}; border: 1px solid ${HZ.brown};
       pointer-events: auto; box-shadow: 0 10px 30px rgba(0,0,0,.5);
     }
     .bz-menu button {
-      display: block; width: 100%; text-align: left; padding: 7px 10px; border: none;
-      border-radius: 5px; background: transparent; color: #e5e7eb; cursor: pointer;
-      font: 13px system-ui, sans-serif;
+      display: block; width: 100%; text-align: left; padding: 8px 11px; border: none;
+      border-radius: 7px; background: transparent; color: ${HZ.yPale}; cursor: pointer;
+      font: 600 13px ${HZ.fontUi};
     }
-    .bz-menu button:hover { background: rgba(255,255,255,.1); }
+    .bz-menu button:hover { background: ${HZ.ink2}; color: ${HZ.y}; }
     .bz-menu button:disabled { opacity: .4; cursor: not-allowed; }
   `);
   root.adoptedStyleSheets = [sheet];
@@ -2237,11 +2331,16 @@ function clampToViewport(el: HTMLElement, x: number, y: number): void {
   el.style.top = `${Math.max(6, Math.min(y, window.innerHeight - h - 6))}px`;
 }
 
-function pinModeToast(text: string): void {
+/**
+ * PM-429：`sev` 是選填的嚴重度。原本是把 PIN_STATUS_EMOJI 的圓點印在文字最前面，
+ * 改成 §7.7 的左側色條 —— 拿掉 emoji 但不損失「這是好消息還壞消息」這個資訊。
+ * 判定來源仍是 content script 自己算的 `Pin['status']`，沒有多一套邏輯。
+ */
+function pinModeToast(text: string, sev?: Pin['status']): void {
   const root = ensurePinModeRoot();
   root.querySelector('.bz-toast')?.remove();
   const t = document.createElement('div');
-  t.className = 'bz-toast';
+  t.className = sev ? `bz-toast sev-${sev}` : 'bz-toast';
   t.textContent = text;
   root.appendChild(t);
   setTimeout(() => t.remove(), 2000);
@@ -2291,11 +2390,25 @@ function openPinPrompt(
   card.className = 'bz-card';
 
   const title = document.createElement('h4');
-  title.textContent = `📌 描述這個問題（選填）`;
+  // PM-429：六角 + 標題 + 右側「選填」三個獨立節點（設計稿畫面 24）
+  const tHex = document.createElement('span');
+  tHex.className = 'bz-hex';
+  const tTxt = document.createElement('span');
+  tTxt.textContent = '描述這個問題';
+  const tOpt = document.createElement('span');
+  tOpt.className = 'opt';
+  tOpt.textContent = '選填';
+  title.append(tHex, tTxt, tOpt);
   card.appendChild(title);
 
   const sub = document.createElement('div');
-  Object.assign(sub.style, { fontSize: '11px', opacity: '.65', marginBottom: '8px' } as CSSStyleDeclaration);
+  // §3.3 選擇器是機器產出 → 等寬字；§2.4 深底次要文字只能用 --on-dark / --on-dark-2
+  Object.assign(sub.style, {
+    font: `500 11px/1.5 ${HZ.fontMono}`,
+    color: HZ.onDark,
+    margin: '0 0 9px',
+    wordBreak: 'break-all',
+  } as unknown as CSSStyleDeclaration);
   sub.textContent = describeElement(target);
   card.appendChild(sub);
 
@@ -2368,14 +2481,14 @@ function onPinModeMove(ev: MouseEvent): void {
   const isFrame = el.tagName === 'IFRAME' || el.tagName === 'FRAME';
   pinModeTooltip.className = isFrame ? 'bz-tip warn' : 'bz-tip';
   pinModeTooltip.textContent = isFrame
-    ? '⚠ iframe 內的元素暫不支援（跨框架限制）'
+    ? 'iframe 內的元素暫不支援（跨框架限制）'
     : describeElement(el);
   clampToViewport(pinModeTooltip, ev.clientX + 14, ev.clientY + 18);
 
   if (el !== pinModeLastHover && !isFrame) {
     pinModeLastHover = el;
     try {
-      highlightElement(uniqueSelector(el), { durationMs: 600, color: '#00bfff' });
+      highlightElement(uniqueSelector(el), { durationMs: 600 });
     } catch {
       /* selector 算不出來 → 只是沒有高亮，不影響點擊 */
     }
@@ -2397,7 +2510,7 @@ function onPinModeClick(ev: MouseEvent): void {
   ev.stopImmediatePropagation();
 
   if (el.tagName === 'IFRAME' || el.tagName === 'FRAME') {
-    pinModeToast('⚠ iframe 內的元素暫不支援');
+    pinModeToast('iframe 內的元素暫不支援');
     return;
   }
 
@@ -2407,17 +2520,18 @@ function onPinModeClick(ev: MouseEvent): void {
     if (description === null) return; // 取消
     const r = bridgePinElement(selector, description || auto);
     if (typeof r.error === 'string') {
-      pinModeToast(`⚠ ${r.error}`);
+      pinModeToast(String(r.error));
       return;
     }
     // PM-395 防線②：釘完**立刻自動分析一次**，使用者釘上去就直接看到紅綠，
     //   不用再回 popup 多點一次 [分析]。
     //   ⚠ 分析包含動態探測，也就是說**剛剛被攔下來沒觸發的按鈕，這時會被探測點一次**。
     //     這是刻意的（釘一個按鈕的意思就是「幫我盯著它」），具破壞性的按鈕仍然會被跳過。
-    pinModeToast(`📌 已釘選 ${describeElement(el)}，分析中…`);
+    pinModeToast(`已釘選 ${describeElement(el)}，分析中…`);
     void withPinModeSuspended(() => bridgePinAnalyze(selector)).then((res) => {
-      const emoji = PIN_STATUS_EMOJI[(res.status as Pin['status']) ?? 'active'] ?? '';
-      pinModeToast(`${emoji} ${String(res.summary ?? '已釘選')}`);
+      // PM-429：狀態改用 toast 的左側色條表示，不再把圓點 emoji 印進文字（§1 / §7.7）
+      const sev = (res.status as Pin['status']) ?? 'active';
+      pinModeToast(stripSev(String(res.summary ?? '已釘選')), sev);
     });
     // 留在釘選模式，可以繼續釘下一個
   });
@@ -2449,7 +2563,12 @@ function setPinMode(on: boolean): Record<string, unknown> {
     const root = ensurePinModeRoot();
     pinModeBanner = document.createElement('div');
     pinModeBanner.className = 'bz-banner';
-    pinModeBanner.textContent = '📌 釘選模式：點擊要標記的元素（ESC 結束）';
+    // PM-429：脈衝六角是文字的兄弟節點（textContent 會把它洗掉）
+    const bnHex = document.createElement('span');
+    bnHex.className = 'bz-hex pulse';
+    const bnTxt = document.createElement('span');
+    bnTxt.textContent = '釘選模式：點擊要標記的元素（ESC 結束）';
+    pinModeBanner.append(bnHex, bnTxt);
     root.appendChild(pinModeBanner);
     document.addEventListener('mousemove', onPinModeMove, true);
     document.addEventListener('click', onPinModeClick, true); // capture：最早攔到
@@ -2499,18 +2618,20 @@ function openPinMenu(x: number, y: number, pin: Pin): void {
 
   // 元素已消失的圖釘沒有東西可分析，禁用而不是讓它跑出一個錯誤
   const stale = pin.status === 'stale';
-  item('🔍 分析', stale, () => {
-    pinModeToast('🔍 分析中…');
+  item('分析', stale, () => {
+    pinModeToast('分析中…');
     void withPinModeSuspended(() => bridgePinAnalyze(pin.selector)).then((r) => {
       pinModeToast(
-        typeof r.error === 'string' ? `⚠ ${String(r.error).slice(0, 60)}` : `🔍 ${String(r.summary ?? '分析完成')}`,
+        typeof r.error === 'string'
+            ? String(r.error).slice(0, 60)
+            : stripSev(String(r.summary ?? '分析完成')), // PM-429：協定 emoji 只剝在畫面上，資料裡留著
       );
     });
   });
-  item('✏️ 修改描述', false, () => {
+  item('修改描述', false, () => {
     const el = document.querySelector(pin.selector);
     if (!el) {
-      pinModeToast('⚠ 元素已不存在，無法定位');
+      pinModeToast('元素已不存在，無法定位');
       return;
     }
     const r = el.getBoundingClientRect();
@@ -2518,17 +2639,17 @@ function openPinMenu(x: number, y: number, pin: Pin): void {
       if (d === null) return;
       pin.description = d || autoDescription(el);
       queueReposition();
-      pinModeToast('✏️ 描述已更新');
+      pinModeToast('描述已更新');
     });
   });
-  item(pin.resolved ? '↩️ 取消已解決' : '✅ 標記已解決', false, () => {
+  item(pin.resolved ? '取消已解決' : '標記已解決', false, () => {
     pin.resolved = !pin.resolved;
     queueReposition();
-    pinModeToast(pin.resolved ? '✅ 已標記為解決' : '↩️ 已取消解決標記');
+    pinModeToast(pin.resolved ? '已標記為解決' : '已取消解決標記');
   });
-  item('🗑️ 移除', false, () => {
+  item('移除', false, () => {
     bridgeRemovePin(pin.id);
-    pinModeToast('🗑️ 圖釘已移除');
+    pinModeToast('圖釘已移除');
   });
 
   root.appendChild(menu);
@@ -3400,19 +3521,23 @@ function showSensitiveWarning(fieldKeys: string[], onContinue: () => void) {
     'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:2147483647;font-family:-apple-system,system-ui,"Microsoft JhengHei",sans-serif;';
   const fieldsDesc = fieldKeys.map((k) => ct(k)).join(ct('sensitive-sep'));
   const card = document.createElement('div');
+  // §2.3 咖啡卡 = 系統在跟你說話（敏感資料警示屬系統主動告知）
   card.style.cssText =
-    'background:#1a1a2e;border:2px solid #f59e0b;border-radius:16px;padding:24px;max-width:360px;text-align:center;';
+    `background:${HZ.brown};border:2px solid ${HZ.y};border-radius:16px;padding:22px 20px;` +
+    `max-width:360px;text-align:center;font:${HZ.fontUi};`;
+  // §6 警示三角（原本是 ⚠️）。⚠ clip-path 會裁掉 box-shadow 與 border，這裡兩者都不加。
   card.innerHTML =
-    `<p style="font-size:28px;margin:0 0 8px;">⚠️</p>` +
-    `<p style="color:#f59e0b;font-size:16px;font-weight:700;margin:0 0 8px;"></p>` +
-    `<p style="color:#e6edf3;font-size:13px;margin:0 0 4px;"></p>` +
-    `<p style="color:#9aa3b2;font-size:12px;margin:0 0 16px;"></p>` +
+    `<p style="margin:0 auto 10px;width:26px;height:24px;background:${HZ.y};` +
+    `clip-path:polygon(50% 0,100% 100%,0 100%);"></p>` +
+    `<p style="color:${HZ.yPale};font:700 16px/1.35 ${HZ.fontUi};margin:0 0 8px;"></p>` +
+    `<p style="color:#F0D9A8;font:600 13px/1.7 ${HZ.fontUi};margin:0 0 4px;"></p>` +
+    `<p style="color:#F0D9A8;font:500 12px/1.6 ${HZ.fontUi};margin:0 0 16px;"></p>` +
     `<div style="display:flex;gap:8px;justify-content:center;">` +
-    `<button id="bz-sens-continue" style="background:#7c3aed;color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:14px;font-weight:600;cursor:pointer;"></button>` +
-    `<button id="bz-sens-cancel" style="background:transparent;color:#888;border:1px solid #444;border-radius:8px;padding:10px 20px;font-size:14px;cursor:pointer;"></button>` +
+    `<button id="bz-sens-continue" style="background:${HZ.y};color:${HZ.ink};border:none;border-radius:10px;padding:10px 20px;font:700 13px/1 ${HZ.fontUi};cursor:pointer;"></button>` +
+    `<button id="bz-sens-cancel" style="background:transparent;color:#F0D9A8;border:1px solid rgba(255,233,174,.45);border-radius:10px;padding:10px 20px;font:700 13px/1 ${HZ.fontUi};cursor:pointer;"></button>` +
     `</div>`;
   // textContent 設值（避免 fieldsDesc 進 innerHTML 的 XSS——雖為固定字典仍守則）
-  const ps = card.querySelectorAll('p');
+  const ps = card.querySelectorAll('p'); // ps[0] 是警示三角（沒有文字）
   ps[1].textContent = ct('sensitive-title');
   ps[2].textContent = ct('sensitive-page-has', { fields: fieldsDesc });
   ps[3].textContent = ct('sensitive-hint');
@@ -3524,33 +3649,67 @@ function setHint(text: string) {
 // PM-104：工具列入場橘光脈衝（0.7s×10≈7 秒後退回靜態）。PM-103 的紅色跑馬燈/isDarkBackground
 // 已刪除（工具列本身深色底、跑馬燈永不觸發）；改為單一橘光脈衝，並由 popup 開關控制。
 function applyOrangePulse(bar: HTMLElement): void {
-  if (!document.getElementById('bugezy-orange-pulse-style')) {
+  // PM-429：橘光 #ff8c00 與大黃蜂品牌無關，換成黑色底線的脈衝。
+  //   工具列本身已經是黃底，再往外發光只會糊掉；改成脈動底線比較收斂。
+  if (!document.getElementById('bugezy-hornet-pulse-style')) {
     const style = document.createElement('style');
-    style.id = 'bugezy-orange-pulse-style';
+    style.id = 'bugezy-hornet-pulse-style';
     style.textContent = `
-      @keyframes bugezy-orange-pulse {
-        0%, 100% { box-shadow: 0 0 8px rgba(255,140,0,0.3); border-color: #ff8c00; }
-        50% { box-shadow: 0 0 30px rgba(255,140,0,1), 0 0 60px rgba(255,140,0,0.5); border-color: #ffaa00; }
+      @keyframes bugezy-hornet-pulse {
+        0%, 100% { box-shadow: inset 0 -4px 0 rgba(20,17,11,0.18); }
+        50% { box-shadow: inset 0 -4px 0 ${HZ.brownD}; }
       }
     `;
     document.head.appendChild(style);
   }
-  bar.style.border = '2px solid #ff8c00';
-  bar.style.boxShadow = '0 0 20px rgba(255,140,0,0.8)';
-  bar.style.animation = 'bugezy-orange-pulse 0.7s ease-in-out 10'; // 0.7×10 = 7 秒
+  bar.style.animation = 'bugezy-hornet-pulse 0.7s ease-in-out 10'; // 0.7×10 = 7 秒
   window.setTimeout(() => {
     bar.style.animation = 'none';
-    bar.style.borderColor = '#444';
-    bar.style.boxShadow = '0 2px 8px rgba(255,140,0,0.15)';
-    bar.style.transition = 'border-color 0.5s, box-shadow 0.5s';
-    document.getElementById('bugezy-orange-pulse-style')?.remove();
+    bar.style.boxShadow = 'none';
+    bar.style.transition = 'box-shadow 0.5s';
+    document.getElementById('bugezy-hornet-pulse-style')?.remove();
   }, 7000);
+}
+
+/**
+ * PM-429：截圖工具列四個模式的幾何圖示（§6）。
+ * 整頁 = 圓角框 + 中心圓點（相機）／區域 = 空心方框／自由形狀 = 虛線方框／取消 = 交叉線。
+ * ⚠ 回傳的是 cssText —— 這個檔案沒有 stylesheet 可用，所有樣式都得走 inline。
+ */
+function ssModeIcon(mode: string, color: string): string {
+  const base = 'width:14px;height:12px;flex-shrink:0;box-sizing:border-box;';
+  if (mode === 'full') {
+    return `${base}border:2px solid ${color};border-radius:3px;` +
+      `background:radial-gradient(circle at 50% 50%,${color} 0 2.5px,transparent 2.5px);`;
+  }
+  if (mode === 'area') return `${base}border:2px solid ${color};border-radius:2px;`;
+  if (mode === 'free') return `${base}border:2px dashed ${color};border-radius:2px;`;
+  // 取消：兩條 45°／-45° 交叉線（§6）
+  return `width:12px;height:12px;flex-shrink:0;background:` +
+    `linear-gradient(45deg,transparent 43%,${color} 43% 57%,transparent 57%),` +
+    `linear-gradient(-45deg,transparent 43%,${color} 43% 57%,transparent 57%);`;
 }
 
 function createToolbar(onMode: (mode: string) => void) {
   const bar = document.createElement('div');
   bar.id = SS_TOOLBAR_ID;
-  bar.style.cssText = `position:fixed;top:0;left:0;right:0;z-index:${Z_TOP};display:flex;align-items:center;gap:8px;padding:10px 16px;background:#16213e;border-bottom:1px solid #333;font-family:system-ui,sans-serif;font-size:14px;color:#fff;`;
+  // §2.2：**唯一用黃底的注入元件** —— 全寬且短暫存在的模態工具，
+  //   用黃底宣告「現在是 BugEzy 在控制」。其餘注入 UI 一律黑殼 + 黃強調。
+  bar.style.cssText =
+    `position:fixed;top:0;left:0;right:0;z-index:${Z_TOP};display:flex;align-items:center;gap:10px;` +
+    `padding:12px 18px;background:${HZ.y};border-bottom:2px solid ${HZ.ink};` +
+    `font:${HZ.fontUi};font-size:14px;color:${HZ.ink};`;
+  // §5.B 六角斜紋標記（黃底版：外黑內斜紋）
+  const brandHex = document.createElement('span');
+  brandHex.style.cssText =
+    `width:22px;height:25px;flex-shrink:0;background:${HZ.ink};clip-path:${HZ.hex};` +
+    `display:flex;align-items:center;justify-content:center;`;
+  const brandCore = document.createElement('span');
+  brandCore.style.cssText =
+    `width:14px;height:17px;clip-path:${HZ.hex};` +
+    `background:repeating-linear-gradient(162deg,${HZ.y} 0 3px,${HZ.ink} 3px 6px);`;
+  brandHex.appendChild(brandCore);
+  bar.appendChild(brandHex);
   // PM-104：入場橘光脈衝（依 popup「工具列特效」開關，預設 ON）
   chrome.storage.local.get(TOOLBAR_EFFECT_KEY, (store) => {
     if (store[TOOLBAR_EFFECT_KEY] !== false) applyOrangePulse(bar);
@@ -3563,16 +3722,33 @@ function createToolbar(onMode: (mode: string) => void) {
   ];
   for (const [mode, label] of modes) {
     const b = document.createElement('button');
-    b.textContent = label;
     b.dataset.mode = mode;
-    b.style.cssText = `background:${mode === 'cancel' ? '#dc2626' : '#333'};color:#fff;border:1px solid #555;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:14px;`;
+    // §7.1：整頁是主按鈕（黑底黃字 + 硬投影），其餘描邊；取消用磚紅（§2.1 --err）
+    const isPrimary = mode === 'full';
+    const isCancel = mode === 'cancel';
+    b.style.cssText =
+      `display:flex;align-items:center;gap:7px;padding:9px 14px;border-radius:10px;cursor:pointer;` +
+      `font:700 13px/1 ${HZ.fontUi};border:2px solid ${isCancel ? HZ.err : HZ.ink};` +
+      (isCancel
+        ? `background:${HZ.err};color:${HZ.yPale};`
+        : isPrimary
+          ? `background:${HZ.ink};color:${HZ.y};box-shadow:2px 2px 0 ${HZ.brownD};`
+          : `background:transparent;color:${HZ.ink};`);
+    // §6 幾何圖示。圖示與文字各自是 span —— 這裡不用 textContent 直接寫，
+    //   否則之後任何一次覆寫都會把圖示洗掉（popup / annotate 都踩過）。
+    const ic = document.createElement('span');
+    ic.style.cssText = ssModeIcon(mode, isCancel ? HZ.yPale : isPrimary ? HZ.y : HZ.ink);
+    const tx = document.createElement('span');
+    tx.textContent = label;
+    b.append(ic, tx);
     b.addEventListener('click', () => onMode(mode));
     bar.appendChild(b);
   }
   const hint = document.createElement('span');
   hint.id = 'bugezy-ss-hint';
   hint.textContent = ct('toolbar-select-mode');
-  hint.style.cssText = 'margin-left:8px;color:#9aa3b2;';
+  // §3.2 黃底上的說明文字：≥11.5px、字重 ≥600、色票用 #3A2409
+  hint.style.cssText = `margin-left:8px;font:600 12px/1.4 ${HZ.fontUi};color:${HZ.onY};`;
   bar.appendChild(hint);
   document.body.appendChild(bar);
 }
@@ -3639,7 +3815,7 @@ function startAreaCapture() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const sx = start.x - window.scrollX;
     const sy = start.y - window.scrollY;
-    ctx.strokeStyle = '#7c3aed';
+    ctx.strokeStyle = HZ.y;
     ctx.lineWidth = 2;
     ctx.setLineDash([6, 4]);
     ctx.strokeRect(Math.min(sx, e.clientX), Math.min(sy, e.clientY), Math.abs(e.clientX - sx), Math.abs(e.clientY - sy));
@@ -3651,7 +3827,7 @@ function startAreaCapture() {
       setHint(ct('toolbar-region-hint'));
       const dot = document.createElement('div');
       dot.id = SS_DOT_ID;
-      dot.style.cssText = `position:absolute;left:${start.x - 5}px;top:${start.y - 5}px;width:10px;height:10px;border-radius:50%;background:#ef4444;z-index:${Z_TOP};pointer-events:none;`;
+      dot.style.cssText = `position:absolute;left:${start.x - 5}px;top:${start.y - 5}px;width:10px;height:11px;clip-path:${HZ.hex};background:${HZ.y};z-index:${Z_TOP};pointer-events:none;`;
       document.body.appendChild(dot);
       return;
     }
@@ -3716,7 +3892,7 @@ function startFreeCapture() {
   function redraw(cursor?: { x: number; y: number }) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (points.length === 0) return;
-    ctx.strokeStyle = '#7c3aed';
+    ctx.strokeStyle = HZ.y;
     ctx.lineWidth = 2;
     ctx.setLineDash([]);
     ctx.beginPath();
@@ -3728,7 +3904,7 @@ function startFreeCapture() {
     }
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = '#ef4444';
+    ctx.fillStyle = HZ.y;
     for (const p of points) {
       ctx.beginPath();
       ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);

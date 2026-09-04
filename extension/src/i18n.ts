@@ -139,11 +139,11 @@ const dict: Record<string, { zh: string; en: string; ja: string; ko: string; vi:
   'sensitive-title': { zh: '偵測到敏感欄位', en: 'Sensitive fields detected', ja: '機密欄を検出しました', ko: '민감한 필드가 감지되었습니다', vi: 'Đã phát hiện trường nhạy cảm' },
   'sensitive-page-has': { zh: '頁面上有：{fields}', en: 'This page contains: {fields}', ja: 'このページに含まれるもの：{fields}', ko: '이 페이지에 포함됨: {fields}', vi: 'Trang này chứa: {fields}' },
   'sensitive-hint': {
-    zh: '截圖後可用 🔒 馬賽克筆刷塗掉敏感區域再上傳',
-    en: 'Use the 🔒 mosaic brush to cover sensitive areas before uploading',
-    ja: 'スクリーンショット後、🔒 モザイクブラシで機密領域を塗りつぶしてからアップロードできます',
-    ko: '스크린샷 후 🔒 모자이크 브러시로 민감 영역을 가린 뒤 업로드할 수 있습니다',
-    vi: 'Sau khi chụp, dùng cọ 🔒 mosaic để che vùng nhạy cảm trước khi tải lên',
+    zh: '截圖後可用馬賽克筆刷塗掉敏感區域再上傳',
+    en: 'After capturing, use the mosaic brush to cover sensitive areas before uploading',
+    ja: 'キャプチャ後、モザイクブラシで機密部分を隠してからアップロードできます',
+    ko: '캡처 후 모자이크 브러시로 민감한 영역을 가린 뒤 업로드하세요',
+    vi: 'Sau khi chụp, dùng cọ mosaic che vùng nhạy cảm rồi tải lên',
   },
   'sensitive-continue': { zh: '繼續截圖', en: 'Continue', ja: 'スクリーンショットを続ける', ko: '스크린샷 계속', vi: 'Tiếp tục chụp' },
   'sensitive-cancel': { zh: '取消', en: 'Cancel', ja: 'キャンセル', ko: '취소', vi: 'Hủy' },
@@ -308,11 +308,11 @@ const dict: Record<string, { zh: string; en: string; ja: string; ko: string; vi:
   'mcp-config-hint': { zh: '當 AI 無法讀取你的報告時，按此複製，貼給你的 AI 重新設定', en: 'If AI cannot read your reports, copy this and paste to your AI to reconfigure', ja: 'AI がレポートを読み取れない場合、これをコピーして AI に貼り付け、再設定してください', ko: 'AI가 리포트를 읽지 못할 때 이것을 복사하여 AI에 붙여넣고 다시 설정하세요', vi: 'Khi AI không đọc được báo cáo của bạn, sao chép cái này và dán cho AI để cấu hình lại' },
   // PM-193：精準轉錄麥克風授權引導
   'mic-fallback-tip': {
-    zh: '⚠️ 精準轉錄麥克風授權不足，已切換為即時字幕模式。下次請選「允許這個網站使用」。',
-    en: '⚠️ Whisper mic permission denied. Switched to realtime mode. Next time select "Always allow".',
-    ja: '⚠️ 高精度文字起こしのマイク権限が不足しているため、リアルタイム字幕モードに切り替えました。次回は「このサイトに許可」を選択してください。',
-    ko: '⚠️ 고정밀 변환 마이크 권한이 부족하여 실시간 자막 모드로 전환했습니다. 다음에는 "이 사이트에 허용"을 선택하세요.',
-    vi: '⚠️ Quyền micro cho chuyển đổi chính xác không đủ, đã chuyển sang chế độ phụ đề trực tiếp. Lần sau hãy chọn "Luôn cho phép trang này".',
+    zh: '精準轉錄麥克風授權不足，已切換為即時字幕模式。下次請選「允許這個網站使用」。',
+    en: 'Whisper mic permission denied. Switched to realtime mode. Next time select "Always allow".',
+    ja: '高精度文字起こしのマイク権限が不足しているため、リアルタイム字幕モードに切り替えました。次回は「このサイトに許可」を選択してください。',
+    ko: '고정밀 변환 마이크 권한이 부족하여 실시간 자막 모드로 전환했습니다. 다음에는 "이 사이트에 허용"을 선택하세요.',
+    vi: 'Quyền micro cho chuyển đổi chính xác không đủ, đã chuyển sang chế độ phụ đề trực tiếp. Lần sau hãy chọn "Luôn cho phép trang này".',
   },
   'mic-perm-hint': {
     zh: '精準轉錄需選「永久允許」此網站使用麥克風',
@@ -338,13 +338,13 @@ const dict: Record<string, { zh: string; en: string; ja: string; ko: string; vi:
   },
 
   // ── PM-139：截圖工具列（content.ts）──
-  'toolbar-fullpage': { zh: '📷 整頁', en: '📷 Full Page', ja: '📷 全ページ', ko: '📷 전체 페이지', vi: '📷 Toàn trang' },
-  'toolbar-region': { zh: '⬜ 區域（兩點）', en: '⬜ Region (2 clicks)', ja: '⬜ 範囲（2クリック）', ko: '⬜ 영역 (2클릭)', vi: '⬜ Vùng (2 lần nhấp)' },
-  'toolbar-freeform': { zh: '✂️ 自由形狀', en: '✂️ Freeform', ja: '✂️ フリーフォーム', ko: '✂️ 자유 형태', vi: '✂️ Tự do' },
-  'toolbar-cancel': { zh: '✗ 取消', en: '✗ Cancel', ja: '✗ キャンセル', ko: '✗ 취소', vi: '✗ Hủy' },
+  'toolbar-fullpage': { zh: '整頁', en: 'Full Page', ja: '全ページ', ko: '전체 페이지', vi: 'Toàn trang' },
+  'toolbar-region': { zh: '區域（兩點）', en: 'Region (2 clicks)', ja: '範囲（2クリック）', ko: '영역 (2클릭)', vi: 'Vùng (2 lần nhấp)' },
+  'toolbar-freeform': { zh: '自由形狀', en: 'Freeform', ja: 'フリーフォーム', ko: '자유 형태', vi: 'Tự do' },
+  'toolbar-cancel': { zh: '取消', en: 'Cancel', ja: 'キャンセル', ko: '취소', vi: 'Hủy' },
   'toolbar-select-mode': { zh: '選擇截圖模式', en: 'Select screenshot mode', ja: 'スクリーンショットモードを選択', ko: '스크린샷 모드 선택', vi: 'Chọn chế độ chụp màn hình' },
   'toolbar-region-hint': { zh: '可自由捲動頁面，點第二下標記終點', en: 'Scroll freely, click again to set the end point', ja: 'ページを自由にスクロールし、もう一度クリックで終点を指定', ko: '페이지를 자유롭게 스크롤하고, 다시 클릭하여 끝점을 지정하세요', vi: 'Cuộn trang tự do, nhấp lần nữa để đánh dấu điểm cuối' },
-  'transcribing': { zh: '⏳ 語音轉錄中…', en: '⏳ Transcribing…', ja: '⏳ 音声を文字起こし中…', ko: '⏳ 음성 변환 중…', vi: '⏳ Đang chuyển đổi giọng nói…' },
+  'transcribing': { zh: '語音轉錄中…', en: 'Transcribing…', ja: '音声を文字起こし中…', ko: '음성 변환 중…', vi: 'Đang chuyển đổi giọng nói…' },
 
   // ── PM-139：即時監控（inject.ts，經 it()）──
   'monitor-active': { zh: '🟢 BugEzy 監控中', en: '🟢 BugEzy Monitoring', ja: '🟢 BugEzy 監視中', ko: '🟢 BugEzy 모니터링 중', vi: '🟢 BugEzy đang giám sát' },

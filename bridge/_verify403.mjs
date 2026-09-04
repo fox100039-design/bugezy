@@ -638,5 +638,81 @@ check('428   🔴 edit-report 一個 emoji 都不剩（markup + .ts + 它用得�
   return [...new Set(bad)].join(' ');
 })() === '');
 
+console.log('\n=== ⑩ PM-429：群組 C · content.ts 頁內注入 UI（畫面 23/24）===');
+
+const cnRaw = readFileSync('../extension/src/content.ts', 'utf8');
+const cn = strip(cnRaw);
+
+check('429   色票集中成 HZ 常數（cssText 是字串，沒有 CSS 變數可用）',
+  /const HZ = \{/.test(cn) && /y: '#F7BE00'/.test(cn) && /onDark: '#A08B62'/.test(cn));
+check('429   🔴 §7.8 元素高亮改黃色雙環（#00bfff 與品牌無關）',
+  !/#00bfff/i.test(cn)
+  && /HIGHLIGHT_COLOR = HZ\.y/.test(cn)
+  && /boxShadow: `0 0 0 3px \$\{opts\.color \|\| HIGHLIGHT_COLOR\}, 0 0 0 6px rgba\(247,190,0,\.28\)`/.test(cn));
+check('429   §2.2 截圖工具列是唯一用黃底的注入元件',
+  /background:\$\{HZ\.y\};border-bottom:2px solid \$\{HZ\.ink\}/.test(cn));
+check('429   §2.2 其餘注入 UI 是黑殼 + 黃強調（banner / tip / card / toast / menu）',
+  ['.bz-banner', '.bz-tip', '.bz-card', '.bz-toast', '.bz-menu'].every((c) => cn.includes(c))
+  && /\.bz-card \{[\s\S]{0,320}background: \$\{HZ\.ink\}[\s\S]{0,220}border: 2px solid \$\{HZ\.y\}/.test(cn));
+check('429   §2.1 iframe 提示用磚紅（--err）',
+  /\.bz-tip\.warn \{ background: \$\{HZ\.err\}/.test(cn));
+
+check('429   🔴 PIN_STATUS_EMOJI 與判定字串的 emoji **留著**（那是給 popup 的跨界協定）',
+  /const PIN_STATUS_EMOJI/.test(cn) && /emoji: p\.resolved \? '✅' : PIN_STATUS_EMOJI\[p\.status\]/.test(cn));
+check('429   🔴 但畫進頁面時要剝掉：stripSev() 存在且用在 toast 上',
+  /function stripSev/.test(cn)
+  && (cn.match(/stripSev\(/g) ?? []).length >= 3);
+check('429   🔴 toast 改用 §7.7 左側色條表示嚴重度（不再把圓點印進文字）',
+  /function pinModeToast\(text: string, sev\?: Pin\['status'\]\)/.test(cn)
+  && /\.bz-toast\.sev-error \{ border-left: 3px solid \$\{HZ\.err\}/.test(cn));
+
+check('429   🔴 六角是文字的兄弟節點（banner / 描述卡 / 降級提示條都會被 textContent 洗掉）',
+  /pinModeBanner\.append\(bnHex, bnTxt\)/.test(cn)
+  && /title\.append\(tHex, tTxt, tOpt\)/.test(cn)
+  && /tip\.append\(tipHex, tipTxt\)/.test(cn));
+check('429   §6 截圖工具列四個模式都有幾何圖示', (() => {
+  // 只看 createToolbar 的函式本體 —— 釘選選單那邊也有 `b.textContent = label`，
+  // 但那些項目本來就沒有圖示，不該被這條擋住。
+  const i = cn.indexOf('function createToolbar');
+  const body = i < 0 ? '' : cn.slice(i, cn.indexOf('\n}', i));
+  return /function ssModeIcon/.test(cn) && /b\.append\(ic, tx\)/.test(body) && !/b\.textContent = label/.test(body);
+})());
+check('429   工具列特效改大黃蜂色系（橘光 #ff8c00 已清）',
+  /@keyframes bugezy-hornet-pulse/.test(cn) && !/#ff8c00|#ffaa00/i.test(cn));
+check('429   §7.7 zone badge 補了文字標籤（不只靠顏色）',
+  /`ERR ×\$\{ec\}`/.test(cn) && /`WRN ×\$\{wc\}`/.test(cn));
+check('429   §2.3 敏感資料警示是咖啡卡 + 黃色警示三角',
+  /background:\$\{HZ\.brown\};border:2px solid \$\{HZ\.y\}/.test(cn)
+  && /clip-path:polygon\(50% 0,100% 100%,0 100%\)/.test(cn));
+
+check('429   🔴 沒有舊色碼', (() => {
+  const dead = ['#00bfff', '#7c3aed', '#6d28d9', '#ff8c00', '#3fb950', '#dc2626', '#4a4a5e',
+    '#1a1a2e', '#16213e', '#0f0f1a', '#ef4444', '#f59e0b', '#9aa3b2', '#e5e7eb', '#111827', '#12121f'];
+  return dead.filter((c) => new RegExp(c, 'i').test(cn)).join(', ');
+})() === '');
+check('429   🔴 注入 UI 零 emoji（協定用的 PIN_STATUS_EMOJI／判定前綴與 console log 除外）', (() => {
+  // `cn` 已經去過註解。再把三種「不是畫面」的東西整塊挖掉：
+  //   ① PIN_STATUS_EMOJI 的物件字面值（它的每一行長得像 `active: '🟢',`，逐行比對抓不到）
+  //   ② probeSummary 回傳的判定字串（popup 的 sevClass 靠開頭那顆 emoji 分色）
+  //   ③ blog() 的 console log（不是 UI）
+  let body = cn.replace(/const PIN_STATUS_EMOJI[\s\S]*?\n\};/, '');
+  body = body.replace(/return \['(?:error|warning|active)',[^\n]*\n?/g, '');
+  body = body.replace(/emoji: p\.resolved[^\n]*\n?/g, '');
+  body = body.replace(/\bblog\([^\n]*\n?/g, '');
+  const bad = [...new Set(onlyEmoji(body))];
+  return bad.join(' ');
+})() === '');
+check('429   content.ts 用得到的字典值零 emoji', (() => {
+  const bad = [];
+  for (const m of i18n.matchAll(/^ {2}'?([A-Za-z0-9_.-]+)'?: *\{/gm)) {
+    const k = m[1];
+    if (!cn.includes(`'${k}'`)) continue;
+    let d = 1, i = m.index + m[0].length;
+    while (d && i < i18n.length) { if (i18n[i] === '{') d++; else if (i18n[i] === '}') d--; i++; }
+    bad.push(...onlyEmoji(i18n.slice(m.index, i)));
+  }
+  return [...new Set(bad)].join(' ');
+})() === '');
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -14,7 +14,10 @@ const seg = (from, to) => {
   return src.slice(i, j);
 };
 const sensitive = seg('const SENSITIVE_RECT_SELECTORS', '/** PM-186：收集敏感欄位');
-const hlFn = seg('const HIGHLIGHT_MAX', '// ── PM-330／331：圖釘系統');
+// PM-429：起點從 `const HIGHLIGHT_MAX` 往前移到 `const HZ = {` —— 大黃蜂色票常數與
+//   stripSev() 就定義在它上面，highlightElement 會用到。切片起點沒跟著移的話，
+//   eval 進沙箱時會 `ReferenceError: HZ is not defined`。
+const hlFn = seg('const HZ = {', '// ── PM-330／331：圖釘系統');
 const pinsFn = seg('interface Pin {', '// ── PM-317：get_page_health');
 const analyzeFn = seg('const ANALYZE_STYLE_PROPS', '// ── PM-309：read_page');
 const readPage = seg('const READ_PAGE_MAX_CHARS', '// background → content：控制指令');

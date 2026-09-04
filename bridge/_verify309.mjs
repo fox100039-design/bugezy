@@ -24,7 +24,10 @@ const clickFn = seg('function bridgeClick', '// ── PM-311：type_text');
 const typeFn = seg('const TYPE_TEXT_REJECTED_INPUT_TYPES', '// ── PM-341~346：Zone Grid');
 const zonesFn = seg('interface Zone {', '// ── PM-339：右下角即時面板');
 const panelFn = seg('interface PanelData {', '// ── PM-337：藍框巡察動畫');
-const hlFn = seg('const HIGHLIGHT_MAX', '// ── PM-330／331：圖釘系統');
+// PM-429：起點從 `const HIGHLIGHT_MAX` 往前移到 `const HZ = {` —— 大黃蜂色票常數與
+//   stripSev() 就定義在它上面，highlightElement 會用到。切片起點沒跟著移的話，
+//   eval 進沙箱時會 `ReferenceError: HZ is not defined`。
+const hlFn = seg('const HZ = {', '// ── PM-330／331：圖釘系統');
 const pinsFn = seg('interface Pin {', '// ── PM-317：get_page_health');
 const healthFn = seg('const HEALTH_UNLABELLED_OK_TYPES', '// ── PM-316：get_web_vitals');
 const vitalsFn = seg('const VITAL_THRESHOLDS', '// ── PM-315：analyze_element');
@@ -419,8 +422,12 @@ console.log('\n=== ⑱ PM-339 即時面板 ===');
 const shown = api.showDebugPanel();
 const host = g.document.querySelector('[data-bugezy-panel]');
 check('339-1 面板已注入且用 shadow DOM 隔離', !!host && !!host.shadowRoot, `host=${!!host} shadow=${!!host?.shadowRoot}`);
-check('339-1 預設收合，只顯示 🐛 icon',
-  host?.shadowRoot?.querySelector('.icon')?.textContent === '🐛' && !host.shadowRoot.querySelector('.card'), JSON.stringify(shown));
+// 🔴 PM-429：icon 從 🐛 emoji 換成 §5 的六角斜紋標記（外六角 + 內斜紋核心的 <i>）。
+//   §1 全站禁用 emoji，所以這條改驗「有幾何標記」而不是「textContent 等於某顆 emoji」。
+check('339-1 預設收合，只顯示六角標記（不是 emoji）',
+  !!host?.shadowRoot?.querySelector('.icon > i')
+  && host.shadowRoot.querySelector('.icon').textContent === ''
+  && !host.shadowRoot.querySelector('.card'), JSON.stringify(shown));
 host.shadowRoot.querySelector('.icon').dispatchEvent(new g.MouseEvent('click', { bubbles: true }));
 const card = host.shadowRoot.querySelector('.card');
 check('339-2 點擊展開顯示卡片', !!card, 'card 不存在');
