@@ -1,6 +1,14 @@
 // PM-383~387 驗收：手動釘選模式。
 // 沿用 _verify309 的做法——**把 content.ts 裡真正的函式抽出來在 jsdom 的真實 DOM 上跑**，
 // 不自己搭一個假 DOM 測自己的假設。popup 側沒有 DOM 可跑，用原始碼靜態檢查。
+import { readFileSync as __rf } from 'fs';
+// PM-439：release/v1.2.0 把 bridge 整個拿掉了。這一整套測的就是 bridge 通道，
+// 原始碼不在就直接 SKIP —— 讓它變成永遠的紅燈，只會訓練大家忽略紅燈。
+if (!__rf('../extension/src/background.ts', 'utf8').includes('BRIDGE_URL')) {
+  console.log('SKIP  PM-383~387 手動釘選（bridge 側） —— 這個分支沒有 bridge（release/v1.2.0）');
+  process.exit(0);
+}
+
 import { readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
 import ts from 'typescript';

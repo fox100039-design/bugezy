@@ -4,6 +4,14 @@
 // ⚠ jsdom 不是 Chrome：它沒有版面計算，所以 checkVisibility 不存在、走 getComputedStyle 後備路徑。
 //   這裡驗的是**演算法**（去重、隱藏排除、額度、selector 唯一性、敏感遮蔽），
 //   實際瀏覽器行為仍以端到端為準。
+import { readFileSync as __rf } from 'fs';
+// PM-439：release/v1.2.0 把 bridge 整個拿掉了。這一整套測的就是 bridge 通道，
+// 原始碼不在就直接 SKIP —— 讓它變成永遠的紅燈，只會訓練大家忽略紅燈。
+if (!__rf('../extension/src/background.ts', 'utf8').includes('BRIDGE_URL')) {
+  console.log('SKIP  PM-309 read_page —— 這個分支沒有 bridge（release/v1.2.0）');
+  process.exit(0);
+}
+
 import { readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
 import ts from 'typescript';

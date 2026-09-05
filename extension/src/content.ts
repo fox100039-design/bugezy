@@ -231,165 +231,6 @@ window.addEventListener('message', async (e: MessageEvent) => {
     });
   }
 });
-
-/**
- * PM-308：bridge 的 `click_element` 用。
- *
- * 幾個「靜默成功」的陷阱——這些情況 `el.click()` **不會拋錯，只是什麼都沒發生**，
- * 若照實回 `clicked: true`，AI 會以為點成功了，然後對著沒有反應的頁面繼續往下推理：
- *   · `disabled` 的 button / input
- *   · `display:none`、`visibility:hidden`、尺寸為 0 的元素
- *   · 沒有 `click()` 方法的節點（例如純 SVG 以外的非 HTMLElement）
- * 因此一律先檢查再點，並把不能點的原因講清楚。
- */
-function bridgeClick(selector: string): Record<string, unknown> {
-  if (typeof selector !== 'string' || !selector.trim()) {
-    return { error: '缺少 selector 參數' };
-  }
-  let el: Element | null;
-  try {
-    el = document.querySelector(selector);
-  } catch {
-    // querySelector 對不合法的選擇器會丟 SyntaxError
-    return { error: `不是合法的 CSS 選擇器：${selector}` };
-  }
-  if (!el) {
-    return {
-      error: `找不到符合「${selector}」的元素`,
-      hint: '該元素可能尚未載入、位於 iframe 內（content script 只跑在最上層框架），或選擇器有誤。可先用 read_page 確認頁面上實際有哪些元素。',
-    };
-  }
-
-  const tag = el.tagName.toLowerCase();
-  // 先把描述資訊取好再點——點擊可能觸發導航，之後頁面就沒了
-  const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 100);
-
-  if ((el as HTMLInputElement).disabled) {
-    return { error: `元素「${selector}」是 disabled 狀態，點了不會有任何反應`, tag, text };
-  }
-  // 用與 read_page 相同的 isElementVisible：它優先走 `checkVisibility()`，
-  // 而 **`getComputedStyle` 只看元素自己**——父層 `display:none` 時，子元素的
-  // computed display 仍然是 `block`（Chrome 也一樣），單看自己的樣式抓不到「被祖先隱藏」。
-  if (!isElementVisible(el)) {
-    return { error: `元素「${selector}」目前不可見（display/visibility/opacity 或其祖先被隱藏），點了不會有任何反應`, tag, text };
-  }
-  const rect = el.getBoundingClientRect();
-  if (rect.width === 0 && rect.height === 0) {
-    return { error: `元素「${selector}」的尺寸為 0（不佔版面），點了不會有任何反應`, tag, text };
-  }
-  if (typeof (el as HTMLElement).click !== 'function') {
-    return { error: `元素「${selector}」（<${tag}>）沒有 click() 方法，無法點擊`, tag, text };
-  }
-
-  // PM-337：點擊前閃一下，讓使用者看得到 AI 點了哪裡
-  highlightElement(selector, { durationMs: 500, label: '點擊' });
-  (el as HTMLElement).click();
-  return { clicked: true, tag, text };
-}
-
-// ── PM-311：type_text ──────────────────────────────────────────────────────
-/** 這些 input type 不吃文字，硬寫 value 只會靜默無效（file 甚至會被瀏覽器擋下）。 */
-const TYPE_TEXT_REJECTED_INPUT_TYPES = new Set([
-  'checkbox', 'radio', 'file', 'button', 'submit', 'reset', 'image', 'range', 'color',
-]);
-
-/** 敏感欄位的值不回傳原文，避免密碼／token 進到 AI 的 context（同 PM-309）。 */
-function maskFieldValue(el: Element, value: string): string {
-  if (!value) return '';
-  const t = (el as HTMLInputElement).type;
-  return t === 'password' || isSensitiveField(el) ? '<已遮蔽：敏感欄位>' : value;
-}
-
-/**
- * PM-311：bridge 的 `type_text`。
- *
- * 🔴 **不能只做 `el.value = text` 再 dispatch 事件**——React 會在 input 上掛一個
- *   內部的 `_valueTracker`，直接指定 `.value` 不會更新它，於是 React 收到 input 事件時
- *   比對「值沒變」就**整個忽略**：畫面上文字出現了，但 React state 完全沒動，
- *   接著送出表單會送出空值。**這是典型的假成功**，而且從回傳值上看不出來。
- *   正解是透過原型上的 **原生 value setter** 寫入，繞過 tracker，再 dispatch 事件。
- */
-function bridgeTypeText(selector: string, text: string): Record<string, unknown> {
-  if (typeof selector !== 'string' || !selector.trim()) return { error: '缺少 selector 參數' };
-  if (typeof text !== 'string') return { error: 'text 必須是字串' };
-
-  let el: Element | null;
-  try {
-    el = document.querySelector(selector);
-  } catch {
-    return { error: `不是合法的 CSS 選擇器：${selector}` };
-  }
-  if (!el) {
-    return {
-      error: `找不到符合「${selector}」的元素`,
-      hint: '該元素可能尚未載入、位於 iframe 內（content script 只跑在最上層框架），或選擇器有誤。可先用 read_page 確認頁面上實際有哪些元素。',
-    };
-  }
-
-  const tag = el.tagName.toLowerCase();
-  const editable = el.getAttribute('contenteditable');
-  const isCE = editable !== null && editable !== 'false';
-  const isInput = tag === 'input';
-  const isTextarea = tag === 'textarea';
-  if (!isInput && !isTextarea && !isCE) {
-    return { error: `元素「${selector}」是 <${tag}>，不是可輸入的欄位（需要 input / textarea / contenteditable）`, tag };
-  }
-
-  const input = el as HTMLInputElement | HTMLTextAreaElement;
-  if (isInput) {
-    const t = (input as HTMLInputElement).type;
-    if (TYPE_TEXT_REJECTED_INPUT_TYPES.has(t)) {
-      return {
-        error: `元素「${selector}」是 <input type="${t}">，不接受文字輸入${t === 'file' ? '（瀏覽器基於安全性禁止用程式設定檔案欄位）' : t === 'checkbox' || t === 'radio' ? '（要改變勾選狀態請用 click_element）' : ''}`,
-        tag,
-      };
-    }
-  }
-
-  // disabled 與 readonly 分開報——AI 需要知道是「不能用」還是「只能看」，兩者的下一步不同
-  if (!isCE && input.disabled) {
-    return { error: `元素「${selector}」是 disabled 狀態，無法輸入`, tag };
-  }
-  if (!isCE && input.readOnly) {
-    return { error: `元素「${selector}」是 readonly 狀態，無法輸入（欄位存在但不允許修改）`, tag };
-  }
-  if (!isElementVisible(el)) {
-    return { error: `元素「${selector}」目前不可見（display/visibility/opacity 或其祖先被隱藏），輸入不會有任何效果`, tag };
-  }
-
-  const previous = isCE ? (el.textContent ?? '') : input.value;
-
-  try {
-    (el as HTMLElement).focus?.();
-  } catch {
-    /* focus 失敗不影響輸入 */
-  }
-
-  if (isCE) {
-    el.textContent = text;
-    el.dispatchEvent(new InputEvent('input', { bubbles: true, data: text, inputType: 'insertText' }));
-  } else {
-    // 繞過 React 的 _valueTracker：用原型上的原生 setter 寫入（見上方說明）
-    const proto = isTextarea ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-    const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
-    if (setter) setter.call(input, text);
-    else input.value = text; // 理論上不會走到，但不要因此整個失敗
-    // bubbles 必須為 true：React 用的是掛在 root 的委派監聽，不冒泡就收不到
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-  }
-
-  const now = isCE ? (el.textContent ?? '') : input.value;
-  return {
-    typed: true,
-    tag,
-    previous_value: maskFieldValue(el, previous),
-    new_value: maskFieldValue(el, now),
-    // 寫進去之後再讀一次確認——有些欄位有 maxlength 或輸入遮罩，會把值改掉
-    value_matches: now === text,
-  };
-}
-
 // ── PM-341~346：Zone Grid（規格書 §15）─────────────────────────────────────
 //
 // 依 §15.2 的四層規則自動分區；error 歸類走 PM-342 的「現場元素」而非 stack trace
@@ -481,6 +322,9 @@ function zoneIdFor(name: string): string {
   return id;
 }
 
+// PM-439（release/v1.2.0）：這一整組 `bridgeXxx()` 是 **popup 偵察模式與釘選**的實作。
+//   名字沿用當初 bridge 工具的叫法（歷史誤名），bridge 本身已經整個移除；
+//   保留名稱是為了不要為了改名去動幾十處呼叫點，功能與 bridge 無關。
 function bridgeMapPageZones(): Record<string, unknown> {
   const root = document.body;
   if (!root) return { zones: [], unassigned_count: 0, note: '頁面尚無 body' };
@@ -655,48 +499,6 @@ async function bridgeGetZoneHealth(): Promise<Record<string, unknown>> {
     ...(zonesStale ? { note: 'DOM 已大幅變動（可能是 SPA 換頁），建議重新呼叫 map_page_zones()。' } : {}),
   };
 }
-
-async function bridgeGetZoneErrors(zoneId: string): Promise<Record<string, unknown>> {
-  if (!zonesMapped) return { error: '尚未分區。請先呼叫 map_page_zones()。' };
-  const z = zoneList.find((x) => x.zone_id === zoneId || x.name === zoneId);
-  if (!z && zoneId !== 'Unassigned') {
-    return {
-      error: `找不到 zone「${zoneId}」`,
-      available: [...zoneList.map((x) => ({ zone_id: x.zone_id, name: x.name })), { zone_id: 'Unassigned', name: 'Unassigned' }],
-    };
-  }
-  const key = z ? z.zone_id : 'Unassigned';
-  const { buckets } = await collectZoneBuckets();
-  const b = buckets.get(key) ?? { errors: [], net: [] };
-  const errCount = b.errors.filter((e) => e.level === 'error').length + b.net.length;
-  const warnCount = b.errors.filter((e) => e.level === 'warn').length;
-  return {
-    zone: {
-      zone_id: key,
-      name: z ? z.name : 'Unassigned',
-      status: zoneStatusOf(errCount, warnCount),
-      ...(z ? { selector: z.selector } : {}),
-    },
-    errors: b.errors.map((e) => ({
-      level: e.level,
-      message: e.message,
-      source: e.source ?? 'console',
-      element_selector: e.elementSelector ?? null,
-      timestamp: e.timestamp,
-    })),
-    network_fails: b.net.map((n) => ({
-      url: n.url,
-      status: n.status,
-      method: n.method,
-      element_selector: n.elementSelector ?? null,
-      timestamp: n.timestamp,
-    })),
-    total_count: b.errors.length + b.net.length,
-    window_seconds: 30,
-    note: '錯誤來自 inject 的 30 秒滾動緩存（同 get_browser_errors）；element_selector 為 null 代表當下抓不到現場元素，該筆歸入 Unassigned。',
-  };
-}
-
 // ── PM-344：Zone Grid 視覺化覆蓋層 ─────────────────────────────────────────
 const ZONE_BORDER: Record<string, string> = {
   healthy: 'rgba(0,200,83,0.15)',
@@ -823,125 +625,7 @@ function queueZoneReposition(): void {
 }
 window.addEventListener('scroll', queueZoneReposition, { passive: true });
 window.addEventListener('resize', queueZoneReposition, { passive: true });
-
-async function bridgeShowZoneOverlay(): Promise<Record<string, unknown>> {
-  if (zoneList.length === 0) return { error: '尚未分區。請先呼叫 map_page_zones()。' };
-  // 順手更新健康狀態，否則覆蓋層會全部是灰色的 unknown
-  const health = await bridgeGetZoneHealth();
-  const zs = (health.zones ?? []) as typeof zoneHealthCache;
-  zoneHealthCache = zs;
-  zoneOverlayOn = true;
-  renderZoneOverlay();
-  return { overlay: 'shown', zone_count: zoneList.length };
-}
-
-function bridgeHideZoneOverlay(): Record<string, unknown> {
-  zoneOverlayOn = false;
-  zoneLayer?.remove();
-  zoneLayer = null;
-  return { overlay: 'hidden' };
-}
-
-// ── PM-345：watch_zones 持續監控（Pull 模式，§15.7 綠框②）──────────────────
-//
-// MCP 沒有 server 主動推播給模型的通道，所以這裡只做「本地定期掃描 + 累積變化」，
-// AI 主動呼叫 get_zone_changes 時才取走。
-interface ZoneChange {
-  zone_id: string;
-  name: string;
-  previous_status: string;
-  current_status: string;
-  timestamp: number;
-  new_errors: number;
-  suggested_action: string | null;
-}
 let zoneWatchTimer: number | undefined;
-let zoneWatchStartedAt = 0;
-let zoneWatchInterval = 10;
-let zoneChanges: ZoneChange[] = [];
-let zoneTotalChanges = 0;
-let lastZoneStatus = new Map<string, { status: string; errors: number }>();
-
-async function scanZones(): Promise<void> {
-  if (zoneList.length === 0) return;
-  const health = await bridgeGetZoneHealth();
-  const zs = (health.zones ?? []) as Array<{
-    zone_id: string; name: string; selector: string; status: string; error_count: number; warning_count: number;
-  }>;
-  zoneHealthCache = zs;
-  for (const z of zs) {
-    const prev = lastZoneStatus.get(z.zone_id);
-    if (prev && prev.status !== z.status) {
-      const change: ZoneChange = {
-        zone_id: z.zone_id,
-        name: z.name,
-        previous_status: prev.status,
-        current_status: z.status,
-        timestamp: Date.now(),
-        new_errors: Math.max(0, z.error_count - prev.errors),
-        // PM-346：惡化 → 建議深入；好轉 → 建議清理
-        suggested_action:
-          z.status === 'healthy'
-            ? `「${z.name}」已恢復正常，可用 remove_pin("${z.selector}") 清掉先前的圖釘`
-            : `呼叫 pin_analyze("${z.selector}") 深度分析「${z.name}」這一區`,
-      };
-      zoneChanges.push(change);
-      zoneTotalChanges++;
-    }
-    lastZoneStatus.set(z.zone_id, { status: z.status, errors: z.error_count });
-  }
-  if (zoneOverlayOn) renderZoneOverlay();
-}
-
-function bridgeWatchZones(intervalSeconds?: number): Record<string, unknown> {
-  if (zoneList.length === 0) return { error: '尚未分區。請先呼叫 map_page_zones()。' };
-  zoneWatchInterval = Math.max(2, intervalSeconds ?? 10);
-  // 重複呼叫 → **更新間隔而不是再開一個 watcher**（驗收條件 6）
-  const restarting = zoneWatchTimer !== undefined;
-  if (zoneWatchTimer !== undefined) clearInterval(zoneWatchTimer);
-  if (!restarting) {
-    zoneWatchStartedAt = Date.now();
-    zoneChanges = [];
-    zoneTotalChanges = 0;
-    lastZoneStatus = new Map();
-  }
-  void scanZones();
-  zoneWatchTimer = setInterval(() => void scanZones(), zoneWatchInterval * 1000) as unknown as number;
-  return {
-    watching: true,
-    zone_count: zoneList.length,
-    interval_seconds: zoneWatchInterval,
-    ...(restarting ? { note: '已在監控中 → 更新掃描間隔（沒有建立第二個 watcher）' } : {}),
-  };
-}
-
-function bridgeGetZoneChanges(): Record<string, unknown> {
-  const since = zoneWatchStartedAt;
-  const out = zoneChanges;
-  zoneChanges = []; // 取走即清空 —— 「自上次查詢後的變化」
-  return {
-    changes: out,
-    since_last_check: since,
-    watching: zoneWatchTimer !== undefined,
-    ...(zoneWatchTimer === undefined
-      ? { note: '目前沒有在監控。先呼叫 watch_zones() 才會累積變化。' }
-      : out.length === 0
-        ? { note: '自上次查詢以來沒有 zone 狀態變化。' }
-        : {}),
-  };
-}
-
-function bridgeStopWatchingZones(): Record<string, unknown> {
-  if (zoneWatchTimer === undefined) return { stopped: false, error: '目前沒有在監控 zones。' };
-  clearInterval(zoneWatchTimer);
-  zoneWatchTimer = undefined;
-  return {
-    stopped: true,
-    duration_seconds: Math.round((Date.now() - zoneWatchStartedAt) / 1000),
-    total_changes_detected: zoneTotalChanges,
-  };
-}
-
 // 分頁關閉／換頁時自動收斂（§15.7 橘框）——不收的話 setInterval 會跟著殘留
 window.addEventListener('pagehide', () => {
   if (zoneWatchTimer !== undefined) clearInterval(zoneWatchTimer);
@@ -960,199 +644,6 @@ try {
 } catch {
   /* 極端環境下 MutationObserver 不可用 → 就不標 stale */
 }
-
-// ── PM-339：右下角即時面板 ─────────────────────────────────────────────────
-//
-// 用 **shadow DOM** 隔離：面板注入的是任意使用者的網站，若用一般 DOM，
-// 對方的 CSS（`div{...}`、`* { box-sizing }`、reset）會把面板樣式弄爛，
-// 而我們的樣式也可能反過來影響對方頁面。shadow root 是唯一能雙向隔離的做法。
-
-interface PanelData {
-  pins: { total: number; byStatus: Record<string, number> };
-  errors: number | null;
-  lcp: { ms: number; rating: string } | null;
-  monitoring: boolean;
-}
-
-let panelHost: HTMLElement | null = null;
-let panelRoot: ShadowRoot | null = null;
-let panelExpanded = false;
-let panelTimer: number | undefined;
-let panelPos = { right: 16, bottom: 16 };
-
-function collectPanelData(): PanelData {
-  const byStatus: Record<string, number> = {};
-  for (const p of pins.values()) byStatus[p.status] = (byStatus[p.status] ?? 0) + 1;
-  const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
-  const fcp = performance.getEntriesByType('paint').find((x) => x.name === 'first-contentful-paint');
-  // 面板不主動去要 LCP（那要 async observer），改用同步就拿得到的 FCP 當近似，並標明
-  const ms = fcp ? Math.round(fcp.startTime) : nav ? Math.round(nav.responseStart) : 0;
-  return {
-    pins: { total: pins.size, byStatus },
-    errors: lastPanelErrorCount,
-    lcp: ms ? { ms, rating: rateVital('FCP', ms) } : null,
-    monitoring: pins.size > 0,
-  };
-}
-
-/** 由 get_browser_errors / get_page_health 呼叫後更新，面板不自己去抓（避免每 10 秒打擾 inject）。 */
-let lastPanelErrorCount: number | null = null;
-
-function renderPanel(): void {
-  if (!panelRoot) return;
-  const d = collectPanelData();
-  while (panelRoot.firstChild) panelRoot.removeChild(panelRoot.firstChild);
-
-  const style = document.createElement('style');
-  style.textContent = `
-    :host{all:initial}
-    .wrap{position:fixed;right:${panelPos.right}px;bottom:${panelPos.bottom}px;z-index:2147483647;
-      font:12px/1.6 ${HZ.fontUi};color:${HZ.yPale}}
-    .icon{width:36px;height:36px;background:${HZ.y};clip-path:${HZ.hex};
-      display:flex;align-items:center;justify-content:center;cursor:pointer;
-      filter:drop-shadow(0 2px 8px rgba(0,0,0,.45))}
-    /* §5 六角標記：外黃 → 內斜紋核心。⚠ clip-path 會裁掉 box-shadow 與 border，
-       所以外環一律用「外六角包內六角」，不要用 border/box-shadow。 */
-    .icon i{width:22px;height:26px;clip-path:${HZ.hex};
-      background:repeating-linear-gradient(162deg,${HZ.ink} 0 3px,transparent 3px 6px)}
-    .card{width:210px;background:${HZ.ink};border:2px solid ${HZ.brown};border-radius:12px;
-      box-shadow:0 4px 20px rgba(0,0,0,.5);overflow:hidden}
-    .hd{display:flex;align-items:center;gap:7px;padding:8px 10px;background:${HZ.ink2};
-      border-bottom:1px solid ${HZ.line};cursor:move;user-select:none;
-      font:700 11.5px/1 ${HZ.fontUi};color:${HZ.y}}
-    .hd .hx{width:9px;height:10px;flex-shrink:0;background:${HZ.y};clip-path:${HZ.hex}}
-    .hd .sp{flex:1}
-    .bd{padding:8px 10px}
-    .row{display:flex;justify-content:space-between;gap:10px;padding:2px 0;color:${HZ.yPale}}
-    .dim{color:${HZ.onDark}}
-    .ft{display:flex;gap:6px;padding:6px 10px;border-top:1px solid ${HZ.line}}
-    button{flex:1;background:transparent;color:${HZ.onDark2};border:1px solid ${HZ.line2};
-      border-radius:7px;padding:4px 0;font:700 11px/1 ${HZ.fontUi};cursor:pointer}
-    button:hover{border-color:${HZ.y};color:${HZ.y}}
-  `;
-  panelRoot.appendChild(style);
-
-  const wrap = document.createElement('div');
-  wrap.className = 'wrap';
-
-  if (!panelExpanded) {
-    const icon = document.createElement('div');
-    icon.className = 'icon';
-    icon.appendChild(document.createElement('i')); // §5 六角斜紋核心（原本是 🐛）
-    icon.title = 'BugEzy Debug — 點擊展開';
-    icon.addEventListener('click', () => {
-      panelExpanded = true;
-      renderPanel();
-    });
-    wrap.appendChild(icon);
-    panelRoot.appendChild(wrap);
-    return;
-  }
-
-  const card = document.createElement('div');
-  card.className = 'card';
-
-  const hd = document.createElement('div');
-  hd.className = 'hd';
-  const hx = document.createElement('span');
-  hx.className = 'hx';
-  const t1 = document.createElement('span');
-  t1.textContent = 'BugEzy Debug';
-  const sp = document.createElement('span');
-  sp.className = 'sp';
-  hd.append(hx, t1, sp);
-  // 拖動：改的是 right/bottom（面板釘在右下角，用 left/top 會在 resize 後跑掉）
-  hd.addEventListener('mousedown', (e) => {
-    const sx = e.clientX;
-    const sy = e.clientY;
-    const r0 = panelPos.right;
-    const b0 = panelPos.bottom;
-    const move = (ev: MouseEvent) => {
-      panelPos = {
-        right: Math.max(0, r0 - (ev.clientX - sx)),
-        bottom: Math.max(0, b0 - (ev.clientY - sy)),
-      };
-      const w = panelRoot?.querySelector('.wrap') as HTMLElement | null;
-      if (w) {
-        w.style.right = `${panelPos.right}px`;
-        w.style.bottom = `${panelPos.bottom}px`;
-      }
-    };
-    const up = () => {
-      window.removeEventListener('mousemove', move);
-      window.removeEventListener('mouseup', up);
-    };
-    window.addEventListener('mousemove', move);
-    window.addEventListener('mouseup', up);
-  });
-
-  const bd = document.createElement('div');
-  bd.className = 'bd';
-  const addRow = (label: string, value: string) => {
-    const row = document.createElement('div');
-    row.className = 'row';
-    const a = document.createElement('span');
-    a.textContent = label;
-    const b = document.createElement('span');
-    b.className = 'dim';
-    b.textContent = value;
-    row.append(a, b);
-    bd.appendChild(row);
-  };
-  // PM-429：PIN_STATUS_EMOJI 是給 popup 的協定，不該直接畫進面板。
-  //   這裡改用狀態代碼（ok/warn/err/stale），面板本來就是給工程師看的除錯面板。
-  const PIN_STATUS_ABBR: Record<string, string> = { active: 'ok', warning: 'warn', error: 'err', stale: 'stale' };
-  const pinBits = Object.entries(d.pins.byStatus)
-    .map(([k, n]) => `${PIN_STATUS_ABBR[k] ?? k}:${n}`)
-    .join(' ');
-  addRow('Pins', d.pins.total ? `${d.pins.total} (${pinBits})` : '0');
-  addRow('Errors', d.errors === null ? '未查詢' : String(d.errors));
-  addRow('FCP', d.lcp ? `${(d.lcp.ms / 1000).toFixed(1)}s (${d.lcp.rating})` : '—');
-  addRow('狀態', d.monitoring ? '監控中' : '待命');
-
-  const ft = document.createElement('div');
-  ft.className = 'ft';
-  const bCollapse = document.createElement('button');
-  bCollapse.textContent = 'Collapse';
-  bCollapse.addEventListener('click', () => {
-    panelExpanded = false;
-    renderPanel();
-  });
-  const bClose = document.createElement('button');
-  bClose.textContent = 'Close';
-  bClose.addEventListener('click', () => hideDebugPanel());
-  ft.append(bCollapse, bClose);
-
-  card.append(hd, bd, ft);
-  wrap.appendChild(card);
-  panelRoot.appendChild(wrap);
-}
-
-function showDebugPanel(): Record<string, unknown> {
-  if (!panelHost || !panelHost.isConnected) {
-    panelHost = document.createElement('div');
-    panelHost.setAttribute('data-bugezy-panel', '1');
-    document.documentElement.appendChild(panelHost);
-    panelRoot = panelHost.attachShadow({ mode: 'open' });
-  }
-  renderPanel();
-  if (panelTimer === undefined) {
-    panelTimer = setInterval(renderPanel, 10_000) as unknown as number; // 每 10 秒更新
-  }
-  return { panel: 'shown', expanded: panelExpanded };
-}
-
-function hideDebugPanel(): Record<string, unknown> {
-  if (panelTimer !== undefined) {
-    clearInterval(panelTimer);
-    panelTimer = undefined;
-  }
-  panelHost?.remove();
-  panelHost = null;
-  panelRoot = null;
-  return { panel: 'hidden' };
-}
-
 // ── PM-337：藍框巡察動畫（highlightElement）────────────────────────────────
 //
 // 純視覺增強，**不新增 MCP 工具**：讓使用者看得到「AI 現在在看哪個元素」。
@@ -1541,8 +1032,8 @@ async function bridgePinAnalyze(selector: string): Promise<Record<string, unknow
 /**
  * PM-394：巡檢的**總時間預算**。
  *
- * 每個圖釘的動態探測最多 5 秒，N 個圖釘就可能是 N×5 秒——bridge 那端的指令逾時
- * 會先炸掉，使用者只會看到「逾時」而完全不知道發生什麼事。所以這裡設總預算，
+ * 每個圖釘的動態探測最多 5 秒，N 個圖釘就可能是 N×5 秒——popup 會一直卡在
+ * 「巡檢中」而使用者完全不知道發生什麼事。所以這裡設總預算，
  * 超過之後剩下的圖釘**只做靜態分析並如實說明**，而不是默默截斷或整支失敗。
  */
 const PATROL_PROBE_BUDGET_MS = 20_000;
@@ -1660,26 +1151,6 @@ function bridgeClearPins(status?: string): Record<string, unknown> {
   queueReposition();
   return { cleared: doomed.length, status: target, remaining: pins.size };
 }
-
-function bridgeGetPinResults(): Record<string, unknown> {
-  repositionPins(); // 順便重算，讓 stale 狀態即時更新
-  return {
-    pins: [...pins.values()].map((p) => ({
-      pin_id: p.id,
-      selector: p.selector,
-      description: p.description,
-      status: p.status,
-      // PM-387：人工標記「已處理」。status 仍是四種之一，這是額外的一維資訊。
-      resolved: p.resolved === true,
-      created_at: p.created_at,
-      last_check: p.last_check,
-    })),
-    total_count: pins.size,
-    // 無圖釘時回**空陣列**而不是 error（驗收條件 3）
-    ...(pins.size === 0 ? { note: '這個分頁目前沒有任何圖釘。用 pin_element 或 pin_analyze 建立。' } : {}),
-  };
-}
-
 // ── PM-392～394：動態探測（pin_analyze 從「看」升級成「試」）──────────────
 //
 // 🔴 **這是整個專案裡唯一會主動操作使用者頁面的功能。** 靜態分析只是讀 DOM，
@@ -3079,14 +2550,6 @@ function bridgeAnalyzeElement(selector: string): Record<string, unknown> {
     ...(sensitive ? { sensitive_field: true } : {}),
   };
 }
-
-// ── PM-309：read_page ──────────────────────────────────────────────────────
-const READ_PAGE_MAX_CHARS = 50_000;
-/** 這些標籤連同子樹整個跳過——對「頁面上有什麼可以操作」毫無幫助，卻很佔額度。 */
-const READ_PAGE_SKIP_TAGS = new Set(['script', 'style', 'svg', 'noscript', 'template', 'link', 'meta', 'head']);
-/** AI 後續會用 click_element 操作的元素，要特別標出並附上可直接使用的 selector。 */
-const READ_PAGE_INTERACTIVE = new Set(['a', 'button', 'input', 'select', 'textarea', 'summary', 'label']);
-
 function isElementVisible(el: Element): boolean {
   const anyEl = el as Element & { checkVisibility?: (o?: unknown) => boolean };
   if (typeof anyEl.checkVisibility === 'function') {
@@ -3095,16 +2558,6 @@ function isElementVisible(el: Element): boolean {
   const s = getComputedStyle(el);
   return s.display !== 'none' && s.visibility !== 'hidden' && Number(s.opacity) !== 0;
 }
-
-/** 只取「直接屬於這個元素」的文字，**不含子元素**。見 extractPageContent 的說明。 */
-function ownText(el: Element): string {
-  let t = '';
-  for (const n of Array.from(el.childNodes)) {
-    if (n.nodeType === Node.TEXT_NODE) t += n.nodeValue ?? '';
-  }
-  return t.replace(/\s+/g, ' ').trim();
-}
-
 /**
  * 產生**能唯一命中該元素**的 CSS selector，讓 AI 可以直接餵給 click_element。
  * 只給 `[tag#id.class]` 這種描述是不夠的——`.btn` 可能同時命中十個按鈕，
@@ -3161,104 +2614,6 @@ function describeElement(el: Element): string {
   const cls = cn ? '.' + cn.split(/\s+/).slice(0, 3).join('.') : '';
   return `${tag}${id}${cls}`;
 }
-
-/** input/select/textarea 的補充資訊：type + placeholder + value。 */
-function describeFormField(el: Element): string {
-  const bits: string[] = [];
-  const input = el as HTMLInputElement;
-  if (el.tagName === 'INPUT' && input.type) bits.push(`type=${input.type}`);
-  if (input.placeholder) bits.push(`placeholder="${input.placeholder.slice(0, 60)}"`);
-  if (input.disabled) bits.push('disabled');
-  if (input.required) bits.push('required');
-  // 🔴 敏感欄位（密碼／token／信用卡…）的值**絕不外送**。
-  //   read_page 的結果會整份進到 AI 的 context，等於送出第三方；
-  //   /privacy 承諾的遮蔽必須在這裡也成立（ARCHITECTURE §4-15：隱私政策要對得上程式碼）。
-  if (input.type === 'password' || isSensitiveField(el)) {
-    if (input.value) bits.push('value=<已遮蔽：敏感欄位>');
-  } else if (input.value) {
-    bits.push(`value="${input.value.slice(0, 60)}"`);
-  }
-  return bits.join(' ');
-}
-
-/**
- * 把頁面壓成「給 AI 讀的文字地圖」，而不是原始 HTML。
- *
- * ⚠ **不能對每個元素都印 `textContent`**：`textContent` 含所有子孫的文字，
- *   `<body>` 會印出整頁、它底下每一層 `<div>` 再各印一次同樣的內容。
- *   一個中等頁面就會產生數十倍的重複文字，50000 字元的額度在前幾個元素就被吃光，
- *   而真正有用的按鈕全部落在截斷線之後。所以這裡只印 **ownText（直屬文字節點）**，
- *   並且**只有 interactive 元素、或本身帶文字的元素才輸出一行**。
- */
-function extractPageContent(): { content: string; truncated: boolean } {
-  const root: Element | null = document.querySelector('main') ?? document.body;
-  if (!root) return { content: '', truncated: false };
-
-  const lines: string[] = [];
-  let len = 0;
-  let truncated = false;
-
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, {
-    acceptNode(node): number {
-      const el = node as Element;
-      if (READ_PAGE_SKIP_TAGS.has(el.tagName.toLowerCase())) return NodeFilter.FILTER_REJECT;
-      // 隱藏元素連同**整個子樹**一起跳過（父層看不見，子層也不可能看得見）。
-      // 用 FILTER_REJECT 而不是 FILTER_SKIP，順便省下大量 getComputedStyle 呼叫。
-      if (!isElementVisible(el)) return NodeFilter.FILTER_REJECT;
-      return NodeFilter.FILTER_ACCEPT;
-    },
-  });
-
-  const depthOf = (el: Element): number => {
-    let d = 0;
-    let p = el.parentElement;
-    while (p && p !== root && d < 10) {
-      d++;
-      p = p.parentElement;
-    }
-    return d;
-  };
-
-  let node = walker.nextNode();
-  while (node) {
-    const el = node as Element;
-    const tag = el.tagName.toLowerCase();
-    const interactive = READ_PAGE_INTERACTIVE.has(tag);
-    const text = ownText(el);
-
-    let line = '';
-    if (tag === 'iframe') {
-      line = `${'  '.repeat(depthOf(el))}[${describeElement(el)}] （iframe 內容讀不到：content script 只跑在最上層框架）`;
-    } else if (interactive) {
-      const isField = tag === 'input' || tag === 'select' || tag === 'textarea';
-      const extra = isField ? describeFormField(el) : '';
-      // 🔴 表單欄位的 label **絕不可以退回 `.value`**——describeFormField 已經對敏感欄位
-      //   做過遮蔽，這裡若再拿原始 value 當標籤，密碼／token 會從標籤那一欄整個漏出去。
-      //   （這個洞是 PM-309 的 jsdom 測試抓到的，不是想出來的。）
-      const label =
-        text ||
-        el.getAttribute('aria-label') ||
-        (isField ? el.getAttribute('name') || '' : (el as HTMLInputElement).value || '');
-      line = `${'  '.repeat(depthOf(el))}[${describeElement(el)}] ${label}${extra ? ` ${extra}` : ''} → click: "${uniqueSelector(el)}"`;
-    } else if (text) {
-      line = `${'  '.repeat(depthOf(el))}[${describeElement(el)}] ${text}`;
-    }
-
-    if (line) {
-      if (len + line.length + 1 > READ_PAGE_MAX_CHARS) {
-        truncated = true;
-        break;
-      }
-      lines.push(line);
-      len += line.length + 1;
-    }
-    node = walker.nextNode();
-  }
-
-  if (truncated) lines.push('… (truncated)');
-  return { content: lines.join('\n'), truncated };
-}
-
 // background → content：控制指令
 chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse) => {
   if (msg.type === 'START_RECORDING') {
@@ -3311,49 +2666,20 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
   } else if (msg.type === 'GET_LIVE_ERRORS') {
     // PM-51：向 inject 要背景 buffer 的即時 errors（PM-181：抽成共用 queryInjectLiveErrors）
     void queryInjectLiveErrors().then(sendResponse);
-  } else if (msg.type === 'GET_PAGE_INFO') {
-    // PM-298：bridge 的 get_page_url 用。**不能用 chrome.tabs.query 的 url/title**——
-    //   那需要 `tabs` 權限（activeTab 只在使用者主動叫用擴充功能後才生效），
-    //   沒有權限時 Chrome 會靜默回空字串。content script 本來就在頁面裡，直接讀最準也不需任何權限。
-    sendResponse({ url: location.href, title: document.title });
-  } else if (msg.type === 'BRIDGE_CLICK') {
-    sendResponse(bridgeClick(msg.selector));
-  } else if (msg.type === 'BRIDGE_TYPE_TEXT') {
-    sendResponse(bridgeTypeText(msg.selector, msg.text));
-  } else if (msg.type === 'BRIDGE_PIN_ELEMENT') {
-    sendResponse(bridgePinElement(msg.selector, msg.description));
-  } else if (msg.type === 'BRIDGE_PIN_ANALYZE') {
+  } else if (msg.type === 'PIN_ANALYZE') {
     // PM-395 防線③：整個分析期間暫停釘選攔截（popup 按 [分析] 不該跳出描述框）
     void withPinModeSuspended(() => bridgePinAnalyze(msg.selector)).then(sendResponse);
-  } else if (msg.type === 'BRIDGE_MAP_ZONES') {
+  } else if (msg.type === 'SCOUT_MAP_ZONES') {
     sendResponse(bridgeMapPageZones());
-  } else if (msg.type === 'BRIDGE_ZONE_HEALTH') {
+  } else if (msg.type === 'SCOUT_ZONE_HEALTH') {
     void bridgeGetZoneHealth().then(sendResponse);
-  } else if (msg.type === 'BRIDGE_ZONE_ERRORS') {
-    void bridgeGetZoneErrors(msg.zone_id).then(sendResponse);
-  } else if (msg.type === 'BRIDGE_SHOW_ZONE_OVERLAY') {
-    void bridgeShowZoneOverlay().then(sendResponse);
-  } else if (msg.type === 'BRIDGE_HIDE_ZONE_OVERLAY') {
-    sendResponse(bridgeHideZoneOverlay());
-  } else if (msg.type === 'BRIDGE_WATCH_ZONES') {
-    sendResponse(bridgeWatchZones(msg.interval_seconds));
-  } else if (msg.type === 'BRIDGE_ZONE_CHANGES') {
-    sendResponse(bridgeGetZoneChanges());
-  } else if (msg.type === 'BRIDGE_STOP_WATCH_ZONES') {
-    sendResponse(bridgeStopWatchingZones());
-  } else if (msg.type === 'BRIDGE_SHOW_PANEL') {
-    sendResponse(showDebugPanel());
-  } else if (msg.type === 'BRIDGE_HIDE_PANEL') {
-    sendResponse(hideDebugPanel());
-  } else if (msg.type === 'BRIDGE_PATROL_PINS') {
+  } else if (msg.type === 'PIN_PATROL') {
     // PM-395 防線③：巡檢會對每個圖釘各探測一次，全程暫停釘選攔截
     void withPinModeSuspended(() => bridgePatrolPins()).then(sendResponse);
-  } else if (msg.type === 'BRIDGE_REMOVE_PIN') {
+  } else if (msg.type === 'PIN_REMOVE') {
     sendResponse(bridgeRemovePin(msg.pin_id, msg.selector));
-  } else if (msg.type === 'BRIDGE_CLEAR_PINS') {
+  } else if (msg.type === 'PIN_CLEAR') {
     sendResponse(bridgeClearPins(msg.status));
-  } else if (msg.type === 'BRIDGE_GET_PIN_RESULTS') {
-    sendResponse(bridgeGetPinResults());
   } else if (msg.type === 'PIN_MODE_ON') {
     sendResponse(setPinMode(true));
   } else if (msg.type === 'PIN_MODE_OFF') {
@@ -3362,19 +2688,12 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
     sendResponse({ pin_mode: pinModeActive });
   } else if (msg.type === 'GET_PIN_LIST') {
     sendResponse(getPinListForPopup());
-  } else if (msg.type === 'BRIDGE_GET_PAGE_HEALTH') {
+  } else if (msg.type === 'SCOUT_PAGE_HEALTH') {
     void bridgeGetPageHealth().then(sendResponse);
-  } else if (msg.type === 'BRIDGE_GET_WEB_VITALS') {
-    void bridgeGetWebVitals().then(sendResponse);
-  } else if (msg.type === 'BRIDGE_ANALYZE_ELEMENT') {
-    sendResponse(bridgeAnalyzeElement(msg.selector));
-  } else if (msg.type === 'BRIDGE_GET_BROWSER_ERRORS') {
+  } else if (msg.type === 'SCOUT_BROWSER_ERRORS') {
     // PM-313：**沿用 inject.ts 既有的攔截機制**（PM-51 的通道），不另外掛一套。
     //   inject 在 document_start 就開始收，不需要先按錄製。
     void queryInjectLiveErrors().then(({ consoleLogs, networkErrors }) => {
-      // PM-339：順手把錯誤數餵給面板（面板不自己去打擾 inject）
-      lastPanelErrorCount =
-        consoleLogs.filter((c) => c.level !== 'info').length + networkErrors.length;
       sendResponse({
         console_errors: consoleLogs
           // 'info' 是 Web Vitals 之類的中性訊息，產品內部本來就「不計入即時監控錯誤數」，
@@ -3396,19 +2715,6 @@ chrome.runtime.onMessage.addListener((msg: ControlMessage, _sender, sendResponse
           duration: n.duration,
         })),
       });
-    });
-  } else if (msg.type === 'BRIDGE_READ_PAGE') {
-    const { content, truncated } = extractPageContent();
-    sendResponse({
-      url: location.href,
-      title: document.title,
-      content,
-      truncated,
-      element_count: document.querySelectorAll('*').length,
-      // PM-319（DONE-310 留項）：頁面還在載入時 content 可能是空的或不完整，
-      //   沒有這個欄位的話，AI 分不出「這頁真的沒東西」還是「還沒 render 完」，
-      //   然後就會對著一個載到一半的頁面下結論。
-      ready_state: document.readyState,
     });
   } else if (msg.type === 'SET_MONITOR_BADGE') {
     // PM-52：轉發給 inject 顯示/隱藏頁面浮動 badge

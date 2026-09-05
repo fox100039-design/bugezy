@@ -157,37 +157,20 @@ export type ControlMessage =
   | { type: 'REWIND_DONE'; summary: RecordingSummary }
   // PM-51：🔍 即時監控（AI 透過 MCP 隨時查當前頁面 error）
   | { type: 'GET_LIVE_ERRORS' }
-  | { type: 'GET_PAGE_INFO' } // PM-298：bridge 的 get_page_url（content script 讀 location，不需 tabs 權限）
-  | { type: 'BRIDGE_CLICK'; selector: string } // PM-308：bridge 的 click_element
-  | { type: 'BRIDGE_READ_PAGE' } // PM-309：bridge 的 read_page
-  | { type: 'BRIDGE_TYPE_TEXT'; selector: string; text: string } // PM-311：bridge 的 type_text
-  | { type: 'BRIDGE_GET_BROWSER_ERRORS' } // PM-313：bridge 的 get_browser_errors
-  | { type: 'BRIDGE_ANALYZE_ELEMENT'; selector: string } // PM-315：bridge 的 analyze_element
-  | { type: 'BRIDGE_GET_WEB_VITALS' } // PM-316：bridge 的 get_web_vitals
-  | { type: 'BRIDGE_GET_PAGE_HEALTH' } // PM-317：bridge 的 get_page_health
-  | { type: 'BRIDGE_PIN_ELEMENT'; selector: string; description: string } // PM-330
-  | { type: 'BRIDGE_PIN_ANALYZE'; selector: string } // PM-331
-  | { type: 'BRIDGE_GET_PIN_RESULTS' } // PM-331
+  | { type: 'SCOUT_BROWSER_ERRORS' } // PM-313／PM-439：偵察模式一鍵全掃用
+  | { type: 'SCOUT_PAGE_HEALTH' } // PM-317／PM-439：偵察模式一鍵全掃用
+  | { type: 'PIN_ANALYZE'; selector: string } // PM-331
   // PM-383~386：手動釘選模式（popup → content）
   | { type: 'PIN_MODE_ON' }
   | { type: 'PIN_MODE_OFF' }
   | { type: 'PIN_MODE_STATUS' }
   | { type: 'GET_PIN_LIST' }
   | { type: 'PIN_MODE_CHANGED'; on: boolean } // content → background/popup
-  | { type: 'BRIDGE_QUERY_MEMORY_STATS' } // PM-404：popup → background → bridge（唯讀）
-  | { type: 'BRIDGE_PATROL_PINS' } // PM-334
-  | { type: 'BRIDGE_REMOVE_PIN'; pin_id?: string; selector?: string } // PM-335
-  | { type: 'BRIDGE_CLEAR_PINS'; status?: string } // PM-335
-  | { type: 'BRIDGE_MAP_ZONES' } // PM-341
-  | { type: 'BRIDGE_ZONE_HEALTH' } // PM-343
-  | { type: 'BRIDGE_ZONE_ERRORS'; zone_id: string } // PM-343
-  | { type: 'BRIDGE_SHOW_ZONE_OVERLAY' } // PM-344
-  | { type: 'BRIDGE_HIDE_ZONE_OVERLAY' } // PM-344
-  | { type: 'BRIDGE_WATCH_ZONES'; interval_seconds?: number } // PM-345
-  | { type: 'BRIDGE_ZONE_CHANGES' } // PM-345
-  | { type: 'BRIDGE_STOP_WATCH_ZONES' } // PM-345
-  | { type: 'BRIDGE_SHOW_PANEL' } // PM-339
-  | { type: 'BRIDGE_HIDE_PANEL' } // PM-339
+  | { type: 'PIN_PATROL' } // PM-334
+  | { type: 'PIN_REMOVE'; pin_id?: string; selector?: string } // PM-335
+  | { type: 'PIN_CLEAR'; status?: string } // PM-335
+  | { type: 'SCOUT_MAP_ZONES' } // PM-341
+  | { type: 'SCOUT_ZONE_HEALTH' } // PM-343
   | { type: 'START_MONITORING' }
   | { type: 'STOP_MONITORING' }
   // PM-52：通知 content/inject 顯示/隱藏頁面浮動監控 badge

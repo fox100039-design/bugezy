@@ -13,6 +13,16 @@ const pts = strip(ptsRaw);
 const i18n = readFileSync('../extension/src/i18n.ts', 'utf8');
 const bg = strip(readFileSync('../extension/src/background.ts', 'utf8'));
 
+// PM-439：release/v1.2.0 沒有 bridge。跟 bridge 通道／記憶矩陣有關的條目改成 SKIP，
+//   偵察模式的區塊數變成參數（有 bridge 三塊：圖釘／AI 監測／記憶矩陣；沒有就兩塊）。
+const HAS_BRIDGE = bg.includes('BRIDGE_URL');
+const SCOUT_BLOCKS = HAS_BRIDGE ? 3 : 2;
+let skip = 0;
+const checkBridge = (l, ok, extra = '') => {
+  if (!HAS_BRIDGE) { skip++; console.log('  SKIP ', l); return; }
+  check(l, ok, extra);
+};
+
 console.log('\n=== ① PM-403：第一層主門面 ===');
 check('403-2 🔴 圖釘區塊已經不在第一層（idleView）裡', (() => {
   const idle = html.slice(html.indexOf('id="idleView"'), html.indexOf('id="scoutView"'));
@@ -36,19 +46,23 @@ check('404-3 圖釘清單整段搬進第二層、功能完整', (() => {
     .every((id) => scout.includes(`id="${id}"`));
 })());
 check('404-4 AI 監測區塊 + 一鍵全掃', /id="scanAllBtn"/.test(html) && /id="scanResult"/.test(html) && /function runScanAll/.test(pts));
+// PM-439：這四個訊息型別在 release 分支改叫 SCOUT_*（它們是 popup 自己的協定，
+//   BRIDGE_ 前綴是歷史誤名）。兩種名字都收，斷言的意思不變。
 check('404-4 🔴 一鍵全掃是重跑既有工具，不是另寫一套偵測',
-  /BRIDGE_MAP_ZONES/.test(pts) && /BRIDGE_ZONE_HEALTH/.test(pts) && /BRIDGE_GET_PAGE_HEALTH/.test(pts) && /BRIDGE_GET_BROWSER_ERRORS/.test(pts));
+  /(BRIDGE|SCOUT)_MAP_ZONES/.test(pts) && /(BRIDGE_ZONE_HEALTH|SCOUT_ZONE_HEALTH)/.test(pts)
+  && /(BRIDGE_GET_PAGE_HEALTH|SCOUT_PAGE_HEALTH)/.test(pts)
+  && /(BRIDGE_GET_BROWSER_ERRORS|SCOUT_BROWSER_ERRORS)/.test(pts));
 check('404-4 掃描結果含 Zone／Error／Score（PM-408 後改走 i18n 鍵）',
   /'scout-zone'/.test(pts) && /'scout-error'/.test(pts) && /'scout-score'/.test(pts));
 check('404   🔴 掃描結果揭露 30 秒視窗（空結果不等於沒問題）',
   /'scout-window-note'/.test(pts) && /只涵蓋最近約 30 秒/.test(i18n));
-check('404-5 記憶矩陣區塊顯示筆數與各層摘要',
+checkBridge('404-5 記憶矩陣區塊顯示筆數與各層摘要',
   /id="memResult"/.test(html) && /entries_per_layer/.test(pts) && /memLayerName/.test(pts));
-check('404-6 🔴 Bridge 未連線 → 明確訊息（與「連上但出錯」分開）',
+checkBridge('404-6 🔴 Bridge 未連線 → 明確訊息（與「連上但出錯」分開）',
   /'mem-bridge-off'/.test(pts) && /'mem-read-failed'/.test(pts));
-check('408   🔴 未連線的判斷用穩定機器碼，不是比對中文句子',
+checkBridge('408   🔴 未連線的判斷用穩定機器碼，不是比對中文句子',
   /'bridge_offline'/.test(pts) && /'bridge_offline'/.test(bg), 'popup 或 background 還在用中文字串當判斷依據');
-check('404   尚未建立 .bugezy/ 也有專屬說明（不會顯示成 0 筆）',
+checkBridge('404   尚未建立 .bugezy/ 也有專屬說明（不會顯示成 0 筆）',
   /'mem-not-init'/.test(pts) && /尚未建立 \.bugezy\//.test(i18n));
 
 console.log('\n=== ③ PM-404：Extension → bridge 的唯讀查詢通道 ===');
@@ -61,12 +75,12 @@ check('404   🔴 只開放唯讀查詢 —— 破壞性的 memory_clear 沒有�
   !/case 'memory_clear'/.test(link) && !/memoryClear/.test(link), 'bridge 的查詢通道出現了破壞性操作');
 check('404   不支援的查詢回明確拒絕，不是靜默忽略', /不支援的查詢/.test(readFileSync('src/extension-link.ts', 'utf8')));
 check('404   型別層也標明只有 memory_stats 合法', /query: 'memory_stats'/.test(types));
-check('404   extension 端有送出與對回（含逾時）', /queryBridge/.test(bg) && /query_result/.test(bg) && /bridgeQueries/.test(bg));
-check('404   🔴 未連線時立刻回覆，不重試（popup 只是要顯示數字，不該卡住）',
+checkBridge('404   extension 端有送出與對回（含逾時）', /queryBridge/.test(bg) && /query_result/.test(bg) && /bridgeQueries/.test(bg));
+checkBridge('404   🔴 未連線時立刻回覆，不重試（popup 只是要顯示數字，不該卡住）',
   /readyState !== WebSocket\.OPEN[\s\S]{0,200}bridge_offline/.test(bg));
-check('404   popup 走 background 轉發，沒有自己開 WebSocket',
+checkBridge('404   popup 走 background 轉發，沒有自己開 WebSocket',
   /BRIDGE_QUERY_MEMORY_STATS/.test(pts) && !/new WebSocket/.test(pts));
-check('404   🔴 popup 明說這條通道是唯讀的、清除要走 AI',
+checkBridge('404   🔴 popup 明說這條通道是唯讀的、清除要走 AI',
   /'mem-readonly-note'/.test(pts) && /要清除記憶請用 AI 呼叫 memory_clear/.test(i18n));
 
 console.log('\n=== ④ PM-405：巡檢／分析結果人類可讀 ===');
@@ -106,14 +120,15 @@ check(`408-1 🔴 popup.ts 裡 t() 用到的 ${tsKeys.length} 個鍵字典裡全
   missingTs.length === 0, `缺：${missingTs.join(', ')}`);
 
 // 卡片點名的六個鍵，逐一確認繁中與英文都真的有值
-for (const [key, zh, en] of [
+// PM-439：memory-matrix 在 release 分支沒有了（記憶矩陣是 bridge 的前端），改成有條件加入
+for (const [key, zh, en] of ([
   ['scout-mode', '偵察模式', 'Scout Mode'],
   ['back', '返回', 'Back'],
   ['ai-monitor', 'AI 監測', 'AI Monitor'],
   ['scan-all', '一鍵全掃', 'Scan all'],
-  ['memory-matrix', '記憶矩陣', 'Memory Matrix'],
+].concat(HAS_BRIDGE ? [['memory-matrix', '記憶矩陣', 'Memory Matrix']] : []).concat([
   ['refresh', '重新整理', 'Refresh'],
-]) {
+]))) {
   const line = i18n.split('\n').find((l) => new RegExp(`(^|\\s|\\{)'?${key}'?\\s*:\\s*\\{\\s*zh:`).test(l)) ?? '';
   check(`408-1/2 ${key} → 繁中「${zh}」／英文「${en}」`,
     line.includes(`'${zh}'`) && line.includes(`'${en}'`), line.slice(0, 120) || '(找不到)');
@@ -135,7 +150,9 @@ check('408-2 🔴 第二層的動態文字沒有殘留硬編碼中文（英文�
   cjkLiterals.length === 0, `殘留 ${cjkLiterals.length} 條：${cjkLiterals.slice(0, 3).join(' / ')}`);
 
 check('408   語言切換時第二層會重繪（否則會停在切換前的語言）',
-  /applyTranslations[\s\S]{0,600}refreshPinList\(\)[\s\S]{0,200}refreshMemoryStats\(\)/.test(ptsRaw),
+  HAS_BRIDGE
+    ? /applyTranslations[\s\S]{0,600}refreshPinList\(\)[\s\S]{0,200}refreshMemoryStats\(\)/.test(ptsRaw)
+    : /applyTranslations[\s\S]{0,600}refreshPinList\(\)/.test(ptsRaw),
   'applyTranslations 沒有重繪第二層');
 
 // PM-418：三顆按鈕現在都要寫 `width: auto`——大黃蜂系統的全域 `button { width: 100% }`
@@ -187,30 +204,32 @@ check('409-3 第一層既有元素一個都沒少',
 
 console.log('\n=== ④d PM-410：三個 section 的標題與分隔線 ===');
 const scoutHtml = html.slice(html.indexOf('id="scoutView"'), html.indexOf('<section id="recordingView"'));
-for (const [label, key] of [['圖釘', 'pin-section-title'], ['AI 監測', 'ai-monitor'], ['記憶矩陣', 'memory-matrix']]) {
+for (const [label, key] of ([['圖釘', 'pin-section-title'], ['AI 監測', 'ai-monitor']]
+  .concat(HAS_BRIDGE ? [['記憶矩陣', 'memory-matrix']] : []))) {
   check(`410-1 ${label} section 有標題元素`, scoutHtml.includes(`data-i18n="${key}"`), `找不到 data-i18n="${key}"`);
 }
 // 🔴 PM-418：這條斷言整個翻面。大黃蜂視覺系統**全站禁用 emoji**（DESIGN_SPEC §1），
 //   三個標題的 📌 🤖 🧠 換成 §6 的幾何小六角 `.ico-hex`。驗的意圖沒變 ——
 //   「三個 section 的標題都有同一種標記，風格一致」—— 只是標記從 emoji 換成幾何圖形。
-check('410-1 三個標題都帶同一種幾何標記（六角，不是 emoji）',
-  (scoutHtml.match(/scout-block-title[^>]*>\s*<span class="ico-hex">/g) ?? []).length === 3,
+check(`410-1 ${SCOUT_BLOCKS} 個標題都帶同一種幾何標記（六角，不是 emoji）`,
+  (scoutHtml.match(/scout-block-title[^>]*>\s*<span class="ico-hex">/g) ?? []).length === SCOUT_BLOCKS,
   String((scoutHtml.match(/scout-block-title[^>]*>\s*<span class="ico-hex">/g) ?? []).length));
 check('418   🔴 第二層一個 emoji 都不剩（§1 全站禁用）',
   !/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(scoutHtml.replace(/<!--[\s\S]*?-->/g, '')));
-check('410-2 🔴 三個 section 的標題列用同一組 class（結構一致，不是三種寫法）',
-  (scoutHtml.match(/class="[^"]*scout-block-head[^"]*"/g) ?? []).length === 3,
+check(`410-2 🔴 ${SCOUT_BLOCKS} 個 section 的標題列用同一組 class（結構一致，不是每個一種寫法）`,
+  (scoutHtml.match(/class="[^"]*scout-block-head[^"]*"/g) ?? []).length === SCOUT_BLOCKS,
   String((scoutHtml.match(/class="[^"]*scout-block-head[^"]*"/g) ?? []).length));
 check('410-2 標題左、按鈕右、同一行',
   /\.scout-block-head \{[^}]*display: flex[^}]*justify-content: space-between/.test(html));
-check('410-3 🔴 三個 section 都有分隔線（圖釘那段原本沒有）',
-  (scoutHtml.match(/class="[^"]*scout-block[^"]*"/g) ?? []).filter((c) => !c.includes('scout-block-head') && !c.includes('scout-block-title')).length === 3,
+check(`410-3 🔴 ${SCOUT_BLOCKS} 個 section 都有分隔線（圖釘那段原本沒有）`,
+  (scoutHtml.match(/class="[^"]*scout-block[^"]*"/g) ?? []).filter((c) => !c.includes('scout-block-head') && !c.includes('scout-block-title')).length === SCOUT_BLOCKS,
   String((scoutHtml.match(/class="[^"]*scout-block[^"]*"/g) ?? []).filter((c) => !c.includes('scout-block-head') && !c.includes('scout-block-title')).length));
 check('410-3 第一個區塊不畫上分隔線（否則與 scout-head 的線變雙線）',
   /#scoutView > \.scout-block:first-of-type \{ border-top: none;/.test(html));
 check('410-4 標題不斷行', /\.pin-title,?[\s\S]{0,120}white-space: nowrap;/.test(html) || /white-space: nowrap;/.test(html.slice(html.indexOf('.scout-title'), html.indexOf('.scout-title') + 400)));
 check('410-5 🔴 既有功能一個都沒少（id 全部保留，只是多加 class）',
-  ['pinSection', 'pinCount', 'pinModeBtn', 'pinList', 'pinBulk', 'pinPatrolBtn', 'pinClearBtn', 'pinResult', 'scanAllBtn', 'memRefreshBtn']
+  ['pinSection', 'pinCount', 'pinModeBtn', 'pinList', 'pinBulk', 'pinPatrolBtn', 'pinClearBtn', 'pinResult', 'scanAllBtn']
+    .concat(HAS_BRIDGE ? ['memRefreshBtn'] : [])
     .every((id) => scoutHtml.includes(`id="${id}"`)));
 check('410   新的標題鍵也在字典裡（五語）', (() => {
   const line = i18n.split('\n').find((l) => /'pin-section-title'\s*:/.test(l)) ?? '';
@@ -1207,5 +1226,5 @@ check('438   開頭與終止符數量對得上（20 個整頁樣板：16 個多�
   (srvRaw.match(/`<!DOCTYPE html>/g) || []).length === 20
   && (srvRaw.match(/<\/html>`/g) || []).length === 20);
 
-console.log(`\n${pass} passed, ${fail} failed`);
+console.log(`\n${pass} passed, ${fail} failed${skip ? `, ${skip} skipped（這個分支沒有 bridge）` : ''}`);
 process.exit(fail ? 1 : 0);

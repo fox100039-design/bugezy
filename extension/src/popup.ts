@@ -203,10 +203,9 @@ function applyTranslations() {
     if (key) (el as HTMLInputElement | HTMLTextAreaElement).placeholder = t(key, currentUILang);
   });
   renderTicketWallet(); // PM-267：票券區含動態文字，語言切換後要重繪
-  // PM-408：第二層（圖釘清單／AI 監測／記憶矩陣）同樣是動態產生的文字。
+  // PM-408：第二層（圖釘清單／AI 監測）同樣是動態產生的文字。
   //   只跑 applyTranslations 的話，那些內容會停留在切換前的語言。
   void refreshPinList();
-  void refreshMemoryStats();
   updateJsonLockUI(); // PM-189：靜態翻譯會把 copy/export 還原為預設文字，依付費狀態覆寫鎖頭
 }
 
@@ -1935,7 +1934,7 @@ async function refreshPinList(): Promise<void> {
       void (async () => {
         analyze.disabled = true;
         const r = await toContent<Record<string, unknown>>({
-          type: 'BRIDGE_PIN_ANALYZE',
+          type: 'PIN_ANALYZE',
           selector: pin.selector,
         });
         // PM-393：顯示人話而不是 JSON。summary 已經由 content script 組成
@@ -1952,7 +1951,7 @@ async function refreshPinList(): Promise<void> {
     remove.textContent = t('pin-remove', currentUILang);
     remove.addEventListener('click', () => {
       void (async () => {
-        await toContent({ type: 'BRIDGE_REMOVE_PIN', pin_id: pin.pin_id });
+        await toContent({ type: 'PIN_REMOVE', pin_id: pin.pin_id });
         await refreshPinList();
       })();
     });
@@ -1989,7 +1988,7 @@ function initPinUi(): void {
   document.getElementById('pinPatrolBtn')?.addEventListener('click', () => {
     void (async () => {
       pinResultShow(t('patrol-running', currentUILang));
-      const r = await toContent<Record<string, unknown>>({ type: 'BRIDGE_PATROL_PINS' });
+      const r = await toContent<Record<string, unknown>>({ type: 'PIN_PATROL' });
       renderPatrolResult(r);
       await refreshPinList();
     })();
@@ -1997,7 +1996,7 @@ function initPinUi(): void {
   document.getElementById('pinClearBtn')?.addEventListener('click', () => {
     void (async () => {
       if (!confirm(t('pin-clear-confirm', currentUILang))) return;
-      await toContent({ type: 'BRIDGE_CLEAR_PINS', status: 'all' });
+      await toContent({ type: 'PIN_CLEAR', status: 'all' });
       document.getElementById('pinResult')?.classList.add('hidden');
       await refreshPinList();
     })();
@@ -2039,7 +2038,6 @@ function showScout(on: boolean): void {
     void scout.offsetWidth; // 重新觸發動畫（不 reflow 的話同一個 class 不會再播一次）
     scout.classList.add('slide-in');
     void refreshPinList();
-    void refreshMemoryStats();
   }
 }
 
@@ -2055,7 +2053,7 @@ async function refreshScoutBadge(): Promise<void> {
 
 // ── PM-404：AI 監測 ────────────────────────────────────────────────────────
 //
-// ⚠ `start_auto_detect` 本身在 **bridge** 裡（它是編排既有工具的呼叫序列），
+// ⚠ PM-439：`start_auto_detect` 當初住在 bridge 裡（它是編排既有工具的呼叫序列），
 //   popup 沒有那條通道。但它編排的每一支底層工具 content script 都有，
 //   所以這裡直接照同樣的順序問一遍 —— **不是重寫偵測邏輯，是重跑同一組查詢**。
 
@@ -2066,11 +2064,11 @@ async function runScanAll(): Promise<void> {
   if (btn) btn.disabled = true;
   box.textContent = t('scout-scanning', currentUILang);
   try {
-    await toContent({ type: 'BRIDGE_MAP_ZONES' }); // 先分區，get_zone_health 才有東西可算
+    await toContent({ type: 'SCOUT_MAP_ZONES' }); // 先分區，get_zone_health 才有東西可算
     const [health, zones, errs] = await Promise.all([
-      toContent<Record<string, unknown>>({ type: 'BRIDGE_GET_PAGE_HEALTH' }),
-      toContent<Record<string, unknown>>({ type: 'BRIDGE_ZONE_HEALTH' }),
-      toContent<Record<string, unknown>>({ type: 'BRIDGE_GET_BROWSER_ERRORS' }),
+      toContent<Record<string, unknown>>({ type: 'SCOUT_PAGE_HEALTH' }),
+      toContent<Record<string, unknown>>({ type: 'SCOUT_ZONE_HEALTH' }),
+      toContent<Record<string, unknown>>({ type: 'SCOUT_BROWSER_ERRORS' }),
     ]);
     if (!health && !zones && !errs) {
       box.textContent = t('scout-unsupported', currentUILang);
@@ -2106,53 +2104,6 @@ async function runScanAll(): Promise<void> {
   } finally {
     if (btn) btn.disabled = false;
   }
-}
-
-// ── PM-404：記憶矩陣 ───────────────────────────────────────────────────────
-// PM-408：層名走字典（原本是硬編碼中文，英文模式下會中英夾雜）
-const memLayerName = (layer: string): string => t(`mem-${layer.toLowerCase()}`, currentUILang);
-
-async function refreshMemoryStats(): Promise<void> {
-  const box = document.getElementById('memResult');
-  if (!box) return;
-  box.textContent = t('scout-loading', currentUILang);
-  const r = (await chrome.runtime.sendMessage({ type: 'BRIDGE_QUERY_MEMORY_STATS' }).catch(() => null)) as
-    | { ok: boolean; data?: Record<string, unknown>; error?: string }
-    | null;
-
-  while (box.firstChild) box.removeChild(box.firstChild);
-  if (!r || !r.ok) {
-    // 「連不上」與「連上但出錯」是兩件事，訊息要分開，否則使用者不知道要去修哪個
-    const d = document.createElement('div');
-    d.textContent = r?.error === 'bridge_offline' || r?.error === 'bridge_timeout'
-      ? t('mem-bridge-off', currentUILang)
-      : `${t('mem-read-failed', currentUILang)}：${r?.error ?? t('mem-unknown', currentUILang)}`;
-    box.appendChild(d);
-    return;
-  }
-  const data = r.data ?? {};
-  if (data.initialized === false) {
-    const d = document.createElement('div');
-    d.textContent = t('mem-not-init', currentUILang);
-    box.appendChild(d);
-    return;
-  }
-  const per = (data.entries_per_layer ?? {}) as Record<string, number>;
-  const total = Object.values(per).reduce((a, b) => a + Number(b || 0), 0);
-
-  const head = document.createElement('div');
-  head.textContent = t('mem-summary', currentUILang, { n: total, layers: Object.keys(per).length });
-  box.appendChild(head);
-  for (const [layer, n] of Object.entries(per)) {
-    const row = document.createElement('div');
-    row.textContent = t('mem-layer-row', currentUILang, { layer, name: memLayerName(layer), n });
-    box.appendChild(row);
-  }
-  const note = document.createElement('div');
-  note.className = 'scout-note';
-  // 🔴 為什麼不提供「清除全部」按鈕：見 DONE-404
-  note.textContent = t('mem-readonly-note', currentUILang);
-  box.appendChild(note);
 }
 
 // ── PM-405：巡檢／分析結果改成人類可讀 ─────────────────────────────────────
@@ -2211,7 +2162,6 @@ function initScoutUi(): void {
   document.getElementById('scoutEnterBtn')?.addEventListener('click', () => showScout(true));
   document.getElementById('scoutBackBtn')?.addEventListener('click', () => showScout(false));
   document.getElementById('scanAllBtn')?.addEventListener('click', () => void runScanAll());
-  document.getElementById('memRefreshBtn')?.addEventListener('click', () => void refreshMemoryStats());
   void refreshScoutBadge();
 }
 
