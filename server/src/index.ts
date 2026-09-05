@@ -2022,7 +2022,7 @@ function homePage(lang: PageLang, _request: Request, canonLang: PageLang | null)
     .sec-head .rule { width:52px; height:4px; border-radius:2px; background:var(--y); }
     .sec-head p { font:600 14px/1.6 var(--font-ui); color:var(--on-y); }
 
-    /* §2 hero（決策點 1）。⚠ 蜂巢紋 data URI 內不可有未編碼的 `;`。hero 用 56×98 的大格。 */
+    /* §2 hero（決策點 1）。⚠ 蜂巢紋 data URI 內不可有未編碼的分號。hero 用 56×98 的大格。 */
     .hero { padding:70px 40px 76px; background:var(--y);
       background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='98' viewBox='0 0 56 98'%3E%3Cg fill='none' stroke='rgba(20,17,11,0.09)' stroke-width='1.6'%3E%3Cpath d='M27.98 18.5l26 15v30l-26 15-26-15v-30z'/%3E%3Cpath d='M27.98 -30.5l26 15v30l-26 15-26-15v-30z'/%3E%3Cpath d='M27.98 66.5l26 15v30l-26 15-26-15v-30z'/%3E%3C/g%3E%3C/svg%3E");
       display:flex; align-items:center; justify-content:center; gap:56px; flex-wrap:wrap; }

@@ -1152,5 +1152,60 @@ check('436   🔴 四頁零 emoji、零舊色碼', (() => {
     (seg) => onlyEmoji(seg).length === 0 && !dead.some((c) => seg.includes(c)));
 })());
 
+console.log('\n=== ⑰ PM-438：整頁樣板不可被反引號提前截斷 ===');
+
+// 這次上線把首頁炸掉的原因：CSS 註解裡寫了反引號，template literal 提前結束。
+// tsc 不報錯（後面成了 dead code）、dry-run 也過、280 條斷言全綠 —— 因為沒有人檢查
+// 「這個樣板到底有沒有收在 </html>」。
+//
+// ⚠ 不要用手寫 tokenizer 追 ${...} 巢狀：blogPostPage 裡有
+//   `${post.description.replace(/"/g, '&quot;')}`，regex literal 會把掃描器帶到檔尾。
+//   改成「開頭 → 終止符」的區間 + 只查註解，簡單且正中失效模式。
+const HZ_OPEN = '`<!DOCTYPE html>\n';
+const hzPageTemplates = (() => {
+  const starts = [];
+  for (let i = srvRaw.indexOf(HZ_OPEN); i !== -1; i = srvRaw.indexOf(HZ_OPEN, i + 1)) starts.push(i);
+  // ⚠ 終止符一定要在「下一個 opener 之前」找 —— 直接往後 indexOf 會撿到下一頁的終止符，
+  //   樣板壞掉也照樣綠（這條斷言第一版就是這樣假的，被反向測試抓出來）。
+  return starts.map((start, k) => {
+    const limit = k + 1 < starts.length ? starts[k + 1] : srvRaw.length;
+    const end = srvRaw.indexOf('</html>`', start);
+    return {
+      line: srvRaw.slice(0, start).split('\n').length,
+      start,
+      end: end >= 0 && end < limit ? end : -1,
+    };
+  });
+})();
+
+check('438   🔴 每個整頁樣板都要在「自己這一段」裡收到 </html>` 終止符', (() => {
+  if (hzPageTemplates.length !== 16) {
+    console.log('   整頁樣板數量變了：' + hzPageTemplates.length + '（預期 16）');
+    return false;
+  }
+  const broken = hzPageTemplates.filter((t) => t.end < 0).map((t) => t.line);
+  if (broken.length) console.log('   收不到終止符：L' + broken.join(', L'));
+  return broken.length === 0;
+})());
+
+check('438   🔴 整頁樣板內的 CSS/HTML 註解不准有未跳脫的反引號（會提前關掉整個字串）', (() => {
+  const bad = [];
+  for (const t of hzPageTemplates) {
+    if (t.end < 0) continue;
+    const span = srvRaw.slice(t.start, t.end);
+    for (const re of [/\/\*[\s\S]*?\*\//g, /<!--[\s\S]*?-->/g]) {
+      for (const m of span.matchAll(re)) {
+        if (/(^|[^\\])`/.test(m[0])) bad.push(srvRaw.slice(0, t.start + m.index).split('\n').length);
+      }
+    }
+  }
+  if (bad.length) console.log('   註解裡有裸反引號：L' + [...new Set(bad)].join(', L'));
+  return bad.length === 0;
+})());
+
+check('438   開頭與終止符數量對得上（20 個整頁樣板：16 個多行 + 4 個字串串接）',
+  (srvRaw.match(/`<!DOCTYPE html>/g) || []).length === 20
+  && (srvRaw.match(/<\/html>`/g) || []).length === 20);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
