@@ -1240,5 +1240,54 @@ check('438   開頭與終止符數量對得上（20 個整頁樣板：16 個多�
   (srvRaw.match(/`<!DOCTYPE html>/g) || []).length === 20
   && (srvRaw.match(/<\/html>`/g) || []).length === 20);
 
+console.log('\n=== ⑱ PM-444：截圖鏈路（訊息傳遞，tsc 看不到）===');
+
+// 🔴 為什麼要有這一段：popup → background → content → 回傳 全靠 chrome 訊息傳遞，
+//    不是 import。清死碼時 `noUnusedLocals` 對這種連結完全無感 —— handler 被刪掉、
+//    tsc 依然 exit 0、build 依然成功，要到實機點下去才會發現。
+const ct444 = readFileSync('../extension/src/content.ts', 'utf8');
+const bg444 = readFileSync('../extension/src/background.ts', 'utf8');
+const pop444 = readFileSync('../extension/src/popup.ts', 'utf8');
+
+check('444   🔴 截圖鏈路四段都在（popup 按鈕 → background 派送 → content 接手 → 回傳）',
+  /screenshotBtn\.addEventListener/.test(pop444)
+  && /type: 'START_SCREENSHOT'/.test(bg444)
+  && /msg\.type === 'START_SCREENSHOT'/.test(ct444)
+  && /type: 'SCREENSHOT_READY'/.test(ct444)
+  && /case 'SCREENSHOT_READY'/.test(bg444));
+// ⚠ 一定要連 `(` 一起比對：只寫 /function createToolbar/ 的話，改名成 createToolbarX 照樣命中。
+check('444   🔴 截圖三模式（整頁／框選／自由形狀）與工具列都在',
+  /function createToolbar\(/.test(ct444)
+  && /async function startFullCapture\(/.test(ct444)
+  && /function startAreaCapture\(/.test(ct444)
+  && /function startFreeCapture\(/.test(ct444)
+  && /async function captureSegment\(/.test(ct444));
+check('444   截圖後 background 真的截得到畫面並開 annotate',
+  /chrome\.tabs\.captureVisibleTab\(/.test(bg444) && /annotate\.html\?/.test(bg444));
+check('444   截圖前的敏感欄位偵測與遮罩座標沒被一起清掉（隱私政策承諾的那一條）',
+  /function detectSensitiveFields\(/.test(ct444) && /function getSensitiveRects\(/.test(ct444));
+
+// i18n 的 key 是字串，刪字典時同樣不會有任何編譯錯誤 —— 畫面上直接顯示原始 key。
+check('444   🔴 所有被引用的 i18n key 字典裡都有（漏一條畫面就會印出鍵名本身）', (() => {
+  const dict = readFileSync('../extension/src/i18n.ts', 'utf8');
+  // ⚠ 字典兩種寫法都要收：'scout-mode':（有連字號才需要引號）與 logout:
+  const have = new Set([...dict.matchAll(/^\s*'?([a-z0-9_-]+)'?:\s*\{/gm)].map((m) => m[1]));
+  const files = ['popup.ts', 'popup.html', 'content.ts', 'inject.ts', 'annotate.ts', 'annotate.html',
+    'edit-report.ts', 'edit-report.html', 'checkout.ts', 'day-pass-checkout.ts',
+    'mic-permission.ts', 'mic-permission.html', 'background.ts'];
+  const missing = [];
+  for (const f of files) {
+    const src = readFileSync('../extension/src/' + f, 'utf8');
+    for (const m of src.matchAll(/\b(?:t|ct|it)\(\s*'([a-z0-9_-]+)'/g)) {
+      if (!have.has(m[1])) missing.push(`${m[1]}（${f}）`);
+    }
+    for (const m of src.matchAll(/data-i18n(?:-ph)?="([a-z0-9_-]+)"/g)) {
+      if (!have.has(m[1])) missing.push(`${m[1]}（${f}）`);
+    }
+  }
+  if (missing.length) console.log('   查無字典：' + [...new Set(missing)].slice(0, 8).join('、'));
+  return missing.length === 0;
+})());
+
 console.log(`\n${pass} passed, ${fail} failed${skip ? `, ${skip} skipped（送審版沒有 bridge／偵察模式）` : ''}`);
 process.exit(fail ? 1 : 0);
