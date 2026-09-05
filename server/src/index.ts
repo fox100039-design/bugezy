@@ -737,7 +737,7 @@ function siteFooter(lang: PageLang): string {
         : `<a href="${href}">${label}</a>`,
     )
     .join('')}</div>
-  <div class="hz-foot-meta">${t('聯絡', 'Contact')}：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a><br>© 2026 BugEzy · v1.1.5 · ${t('亞洲平價 MCP 語音除錯工具', 'Affordable MCP voice debugging for Asia')}</div>
+  <div class="hz-foot-meta">${t('聯絡', 'Contact')}：<a href="mailto:fox100039@gmail.com">fox100039@gmail.com</a><br>© 2026 BugEzy · v1.2.0 · ${t('亞洲平價 MCP 語音除錯工具', 'Affordable MCP voice debugging for Asia')}</div>
 </footer>`;
 }
 

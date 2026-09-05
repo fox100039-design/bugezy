@@ -1,5 +1,21 @@
 # BugEzy Changelog
 
+## v1.2.0（2026-09-05）— 大黃蜂視覺系統 + 精簡架構
+
+> 分支 `release/v1.2.0`（送審版）。master 仍保留 bridge。
+
+- 全站大黃蜂視覺改版（Popup / 截圖標注 / 報告編輯 / 付款 / 麥克風授權 / 頁內注入 UI / 分享報告頁 / 官網 11 頁）
+- 移除 bridge 模組，降低複雜度
+- Extension 打包體積 background −48%、content −11%（同參數 minify：27.5→14.4 KB、185.7→164.9 KB）
+
+**版本號只動了三處**：`extension/manifest.json`、根 `package.json`、官網 footer。
+
+**`/api/version` 刻意留在 1.1.5** —— 它是 popup 更新提示的來源，而且 popup 的判斷是
+`data.latest !== currentVersion`（**不相等**就跳，不是「比較新才跳」）。在商店真的上架 1.2.0 之前
+把它改成 1.2.0，等於對所有現役 1.1.5 使用者謊報有新版可裝。正確順序是：**商店審核通過 → 才 deploy
+帶著 `/api/version = 1.2.0` 的 server**。同理，官網 `/changelog` 的版本條目與 SKILL 手冊裡的版本段落
+也都還沒加 v1.2.0。
+
 ## Day 51（2026-09-04）— 大黃蜂視覺系統 群組 D + E 完成（A~E 全部收工）
 
 > 全套 **999 / 0**（14 套）。`_verify403` **219 → 280**（+61 條規格護欄，全部反向測試過）。
