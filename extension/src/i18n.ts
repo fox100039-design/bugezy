@@ -58,57 +58,17 @@ const dict: Record<string, { zh: string; en: string; ja: string; ko: string; vi:
   // ── PM-403~405：第二層「偵察模式」（PM-408 補齊翻譯）──
   // ⚠ 這些鍵在 PM-403/404 加 data-i18n 時漏了字典項，而 `t()` 找不到就回傳 key 本身，
   //   所以畫面上直接顯示 "scout-mode"、"back" 這種原始字串。已加測試防止再犯（見 _verify403）。
-  'pin-section-title': { zh: '圖釘', en: 'Pins', ja: 'ピン', ko: '핀', vi: 'Ghim' },
-  'pin-mode': { zh: '釘選模式', en: 'Pin Mode', ja: 'ピンモード', ko: '핀 모드', vi: 'Chế độ ghim' },
-  'scout-mode': { zh: '偵察模式', en: 'Scout Mode', ja: '偵察モード', ko: '정찰 모드', vi: 'Chế độ trinh sát' },
   back: { zh: '返回', en: 'Back', ja: '戻る', ko: '뒤로', vi: 'Quay lại' },
   // PM-418：這兩顆按鈕原本是硬寫在 popup.html 的中文（帶 emoji），英文模式下也只有中文。
   // PM-418：analyze-visible 原本直接塞 ✅ / ❌，換成文字。
   yes: { zh: '有', en: 'yes', ja: 'あり', ko: '있음', vi: 'có' },
   no: { zh: '無', en: 'no', ja: 'なし', ko: '없음', vi: 'không' },
-  'pin-patrol-all': { zh: '巡檢全部', en: 'Patrol all', ja: '一括巡回', ko: '전체 순찰', vi: 'Tuần tra tất cả' },
-  'pin-clear-all': { zh: '清除全部', en: 'Clear all', ja: 'すべて削除', ko: '전체 삭제', vi: 'Xóa tất cả' },
-  'ai-monitor': { zh: 'AI 監測', en: 'AI Monitor', ja: 'AI モニター', ko: 'AI 모니터', vi: 'Giám sát AI' },
-  'scan-all': { zh: '一鍵全掃', en: 'Scan all', ja: '一括スキャン', ko: '전체 스캔', vi: 'Quét tất cả' },
   refresh: { zh: '重新整理', en: 'Refresh', ja: '再読み込み', ko: '새로고침', vi: 'Làm mới' },
 
   // 第二層的**動態文字**（由 popup.ts 產生）。驗收 2 要求「英文模式全英文」，
   // 只補 data-i18n 那六個鍵是不夠的——使用者實際讀到的內容大半在這裡。
-  'scout-scan-never': { zh: '尚未掃描，點「一鍵全掃」開始', en: 'Not scanned yet — tap "Scan all" to start', ja: '未スキャンです。「一括スキャン」を押してください', ko: '아직 스캔하지 않았습니다. "전체 스캔"을 누르세요', vi: 'Chưa quét — nhấn "Quét tất cả" để bắt đầu' },
-  'scout-scanning': { zh: '掃描中…', en: 'Scanning…', ja: 'スキャン中…', ko: '스캔 중…', vi: 'Đang quét…' },
-  'scout-loading': { zh: '讀取中…', en: 'Loading…', ja: '読み込み中…', ko: '불러오는 중…', vi: 'Đang tải…' },
-  'scout-unsupported': { zh: '這個分頁不支援掃描（chrome:// 或商店頁面）。', en: 'This tab cannot be scanned (chrome:// or Web Store page).', ja: 'このタブはスキャンできません（chrome:// またはストアページ）。', ko: '이 탭은 스캔할 수 없습니다(chrome:// 또는 스토어 페이지).', vi: 'Không thể quét tab này (chrome:// hoặc trang Web Store).' },
-  'scout-scan-failed': { zh: '掃描失敗', en: 'Scan failed', ja: 'スキャン失敗', ko: '스캔 실패', vi: 'Quét thất bại' },
-  'scout-zone': { zh: 'Zone：', en: 'Zones: ', ja: 'Zone：', ko: 'Zone: ', vi: 'Zone: ' },
   // PM-415：原本用綠/黃/紅圓點區分三個數字。§7.7「不靠顏色傳達內容」，
   //   圓點拿掉後三個數字會變成無法分辨的一串，所以補上文字標籤。
-  'scout-zone-fmt': { zh: '{n} 區（正常 {ok}／注意 {warn}／異常 {err}）', en: '{n} zones (OK {ok} / WARN {warn} / ERR {err})', ja: '{n} 領域（正常 {ok}／注意 {warn}／異常 {err}）', ko: '{n}개 영역(정상 {ok} / 주의 {warn} / 오류 {err})', vi: '{n} vùng (OK {ok} / Chú ý {warn} / Lỗi {err})' },
-  'scout-zone-none': { zh: '這一頁沒有可辨識的語意區域', en: 'No recognisable semantic zones on this page', ja: 'このページには識別可能な意味領域がありません', ko: '이 페이지에는 인식 가능한 시맨틱 영역이 없습니다', vi: 'Không có vùng ngữ nghĩa nhận diện được trên trang này' },
-  'scout-error': { zh: 'Error：', en: 'Errors: ', ja: 'Error：', ko: 'Error: ', vi: 'Error: ' },
-  'scout-error-fmt': { zh: '{critical} critical ／ {minor} minor', en: '{critical} critical / {minor} minor', ja: '{critical} critical ／ {minor} minor', ko: '{critical} critical / {minor} minor', vi: '{critical} critical / {minor} minor' },
-  'scout-error-none': { zh: '沒有錯誤', en: 'No errors', ja: 'エラーなし', ko: '오류 없음', vi: 'Không có lỗi' },
-  'scout-score': { zh: 'Score：', en: 'Score: ', ja: 'Score：', ko: 'Score: ', vi: 'Score: ' },
-  'scout-window-note': { zh: '錯誤只涵蓋最近約 30 秒；zone 為 0 時所有錯誤都會落在 Unassigned。', en: 'Errors cover only the last ~30s. With 0 zones, every error lands in Unassigned.', ja: 'エラーは直近約 30 秒のみ。zone が 0 の場合すべて Unassigned になります。', ko: '오류는 최근 약 30초만 포함합니다. zone이 0이면 모두 Unassigned로 분류됩니다.', vi: 'Lỗi chỉ tính ~30 giây gần nhất. Nếu có 0 zone, mọi lỗi rơi vào Unassigned.' },
-  'patrol-title': { zh: '巡檢結果（{n} 個圖釘）', en: 'Patrol result ({n} pins)', ja: '巡回結果（{n} 個のピン）', ko: '순찰 결과({n}개 핀)', vi: 'Kết quả tuần tra ({n} ghim)' },
-  'patrol-footer': { zh: '問題：{bad} ｜ 正常：{ok}', en: 'Issues: {bad} | OK: {ok}', ja: '問題：{bad} ｜ 正常：{ok}', ko: '문제: {bad} | 정상: {ok}', vi: 'Vấn đề: {bad} | Bình thường: {ok}' },
-  'patrol-changed': { zh: '狀態變化：{from} → {to}', en: 'Status changed: {from} → {to}', ja: '状態変化：{from} → {to}', ko: '상태 변화: {from} → {to}', vi: 'Trạng thái đổi: {from} → {to}' },
-  'patrol-running': { zh: '巡檢中…（每個圖釘都會做一次動態探測，可能需要幾秒）', en: 'Patrolling… (each pin gets a live probe, this can take a few seconds)', ja: '巡回中…（各ピンで動的プローブを実行、数秒かかります）', ko: '순찰 중…(각 핀마다 동적 프로브를 실행하므로 몇 초 걸립니다)', vi: 'Đang tuần tra… (mỗi ghim được thăm dò động, có thể mất vài giây)' },
-  'patrol-failed': { zh: '巡檢失敗（分頁可能不支援）', en: 'Patrol failed (tab may not be supported)', ja: '巡回失敗（このタブは非対応の可能性）', ko: '순찰 실패(지원되지 않는 탭일 수 있음)', vi: 'Tuần tra thất bại (tab có thể không được hỗ trợ)' },
-  'patrol-no-pins': { zh: '這個分頁沒有圖釘。', en: 'No pins on this tab.', ja: 'このタブにピンはありません。', ko: '이 탭에는 핀이 없습니다.', vi: 'Tab này không có ghim.' },
-  'analyze-title': { zh: '分析結果', en: 'Analysis', ja: '分析結果', ko: '분석 결과', vi: 'Kết quả phân tích' },
-  'analyze-failed': { zh: '分析失敗（分頁可能不支援）', en: 'Analysis failed (tab may not be supported)', ja: '分析失敗（このタブは非対応の可能性）', ko: '분석 실패(지원되지 않는 탭일 수 있음)', vi: 'Phân tích thất bại (tab có thể không được hỗ trợ)' },
-  'analyze-probe': { zh: '探測：{type}', en: 'Probe: {type}', ja: 'プローブ：{type}', ko: '프로브: {type}', vi: 'Thăm dò: {type}' },
-  'analyze-not-restored': { zh: '未能還原原值', en: 'Original value not restored', ja: '元の値に戻せませんでした', ko: '원래 값을 복원하지 못했습니다', vi: 'Chưa khôi phục giá trị gốc' },
-  'analyze-visible': { zh: '可見：{v}　可互動：{i}', en: 'Visible: {v}  Interactive: {i}', ja: '可視：{v}　操作可：{i}', ko: '보임: {v}  상호작용: {i}', vi: 'Hiển thị: {v}  Tương tác: {i}' },
-  'analyze-size': { zh: '尺寸：{w}×{h}', en: 'Size: {w}×{h}', ja: 'サイズ：{w}×{h}', ko: '크기: {w}×{h}', vi: 'Kích thước: {w}×{h}' },
-  'pin-mode-on-hint': { zh: '已進入釘選模式：回到頁面點擊要標記的元素，按 ESC 或再按一次按鈕結束。', en: 'Pin mode on: go back to the page and click the element you want to flag. Press ESC or the button again to stop.', ja: 'ピンモード開始：ページに戻り、印を付けたい要素をクリックしてください。ESC かボタン再押下で終了します。', ko: '핀 모드 시작: 페이지로 돌아가 표시할 요소를 클릭하세요. ESC 또는 버튼을 다시 눌러 종료합니다.', vi: 'Đã bật chế độ ghim: quay lại trang và nhấp vào phần tử cần đánh dấu. Nhấn ESC hoặc nút lần nữa để dừng.' },
-  'pin-unsupported': { zh: '這個分頁不支援釘選（chrome:// 或商店頁面），請切換到一般網頁。', en: 'Pinning is not supported on this tab (chrome:// or Web Store). Switch to a normal page.', ja: 'このタブではピンを使えません（chrome:// またはストアページ）。通常のページに切り替えてください。', ko: '이 탭에서는 핀을 사용할 수 없습니다(chrome:// 또는 스토어 페이지). 일반 페이지로 이동하세요.', vi: 'Không thể ghim trên tab này (chrome:// hoặc Web Store). Hãy chuyển sang trang thường.' },
-  'pin-empty': { zh: '尚無圖釘，啟動釘選模式開始偵察', en: 'No pins yet — turn on Pin Mode to start scouting', ja: 'ピンはまだありません。ピンモードを開始してください', ko: '아직 핀이 없습니다. 핀 모드를 켜서 정찰을 시작하세요', vi: 'Chưa có ghim — bật Chế độ ghim để bắt đầu' },
-  'pin-count': { zh: '圖釘（{n}）', en: 'Pins ({n})', ja: 'ピン（{n}）', ko: '핀({n})', vi: 'Ghim ({n})' },
-  'pin-mode-btn-on': { zh: '釘選中... 點擊結束', en: 'Pinning… click to stop', ja: 'ピン中… クリックで終了', ko: '핀 중… 클릭하여 종료', vi: 'Đang ghim… nhấn để dừng' },
-  'pin-analyze': { zh: '分析', en: 'Analyze', ja: '分析', ko: '분석', vi: 'Phân tích' },
-  'pin-remove': { zh: '移除', en: 'Remove', ja: '削除', ko: '제거', vi: 'Xoá' },
-  'pin-clear-confirm': { zh: '確定要清除這個分頁的所有圖釘嗎？此操作無法復原。', en: 'Clear all pins on this tab? This cannot be undone.', ja: 'このタブのピンをすべて消しますか？元に戻せません。', ko: '이 탭의 모든 핀을 지울까요? 되돌릴 수 없습니다.', vi: 'Xoá tất cả ghim trên tab này? Không thể hoàn tác.' },
   // ── 日票 / 月費 ──
   'upgrade-unlock': { zh: '升級解鎖無限次', en: 'Upgrade for unlimited', ja: 'アップグレードで無制限', ko: '업그레이드하여 무제한', vi: 'Nâng cấp để không giới hạn' },
   'my-reports': { zh: '我的報告', en: 'My Reports', ja: 'マイレポート', ko: '내 리포트', vi: 'Báo cáo của tôi' }, // PM-184
@@ -266,7 +226,6 @@ const dict: Record<string, { zh: string; en: string; ja: string; ko: string; vi:
   'sum-console': { zh: 'Console', en: 'Console', ja: 'Console', ko: 'Console', vi: 'Console' },
   'sum-network': { zh: 'Network 錯誤', en: 'Network Errors', ja: 'Network エラー', ko: 'Network 오류', vi: 'Lỗi Network' },
   'sum-voice': { zh: '語音片段', en: 'Voice Clips', ja: '音声クリップ', ko: '음성 클립', vi: 'Đoạn giọng nói' },
-  'sum-time': { zh: '時間', en: 'Duration', ja: '時間', ko: '시간', vi: 'Thời gian' },
   'duration-sec': { zh: '{n} 秒', en: '{n}s', ja: '{n} 秒', ko: '{n}초', vi: '{n} giây' },
   'copy-json': { zh: '複製 JSON', en: 'Copy JSON', ja: 'JSON をコピー', ko: 'JSON 복사', vi: 'Sao chép JSON' },
   'export-json': { zh: '匯出 JSON（給 AI 讀）', en: 'Export JSON (for AI)', ja: 'JSON をエクスポート（AI 用）', ko: 'JSON 내보내기 (AI용)', vi: 'Xuất JSON (cho AI đọc)' },
@@ -409,7 +368,6 @@ const dict: Record<string, { zh: string; en: string; ja: string; ko: string; vi:
   'annotate-undo': { zh: '復原', en: 'Undo', ja: '元に戻す', ko: '실행 취소', vi: 'Hoàn tác' },
   'annotate-clear': { zh: '清除全部', en: 'Clear All', ja: 'すべてクリア', ko: '모두 지우기', vi: 'Xóa tất cả' },
   'annotate-cancel': { zh: '取消', en: 'Cancel', ja: 'キャンセル', ko: '취소', vi: 'Hủy' },
-  'annotate-save': { zh: '✅ 完成儲存', en: '✅ Save', ja: '✅ 保存', ko: '✅ 저장', vi: '✅ Lưu' },
   'annotate-next': { zh: '下一步', en: 'Next', ja: '次へ', ko: '다음', vi: 'Tiếp theo' }, // PM-204：截圖標注完導到編輯報告頁
   // PM-427：設計稿畫面 05 描述列的副標與兩句原本硬寫在 annotate.ts 的中文。
   'annotate-desc-sub': { zh: '選填 · 語音會自動填入', en: 'Optional · voice fills this in', ja: '任意 · 音声が自動入力されます', ko: '선택 · 음성이 자동 입력됩니다', vi: 'Tùy chọn · giọng nói sẽ tự điền' },
@@ -425,7 +383,6 @@ const dict: Record<string, { zh: string; en: string; ja: string; ko: string; vi:
   'annotate-desc-label': { zh: '問題描述（選填）', en: 'Description (optional)', ja: '問題の説明（任意）', ko: '문제 설명 (선택)', vi: 'Mô tả vấn đề (tùy chọn)' },
   'annotate-desc-ph': { zh: '描述你看到的問題，或按右邊麥克風語音輸入...', en: 'Describe the issue, or tap the mic on the right to dictate...', ja: '見つけた問題を説明するか、右のマイクで音声入力...', ko: '발견한 문제를 설명하거나, 오른쪽 마이크로 음성 입력하세요...', vi: 'Mô tả vấn đề bạn thấy, hoặc nhấn micro bên phải để nhập bằng giọng nói...' },
   'annotate-listening': { zh: '聆聽中，邊畫邊說描述問題...', en: 'Listening — describe while you draw...', ja: '聞き取り中、描きながら問題を説明してください...', ko: '듣는 중, 그리면서 문제를 설명하세요...', vi: 'Đang nghe, vừa vẽ vừa mô tả vấn đề...' },
-  'annotate-uploading': { zh: '⏳ 上傳中...', en: '⏳ Uploading...', ja: '⏳ アップロード中...', ko: '⏳ 업로드 중...', vi: '⏳ Đang tải lên...' },
   // PM-250：截圖標注頁 Whisper 提示 i18n（zh-CN 由 zh 自動 toSimplified；yue 走 zh UI）
   'an-whisper-recording': {
     zh: 'Whisper 錄音中，講完按停止鍵轉錄…',

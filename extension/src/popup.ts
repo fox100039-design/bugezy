@@ -203,9 +203,6 @@ function applyTranslations() {
     if (key) (el as HTMLInputElement | HTMLTextAreaElement).placeholder = t(key, currentUILang);
   });
   renderTicketWallet(); // PM-267：票券區含動態文字，語言切換後要重繪
-  // PM-408：第二層（圖釘清單／AI 監測）同樣是動態產生的文字。
-  //   只跑 applyTranslations 的話，那些內容會停留在切換前的語言。
-  void refreshPinList();
   updateJsonLockUI(); // PM-189：靜態翻譯會把 copy/export 還原為預設文字，依付費狀態覆寫鎖頭
 }
 
@@ -1726,6 +1723,23 @@ settingsHeader.addEventListener('click', () => {
   updateSettingsUI();
 });
 
+/**
+ * PM-443：semver 比較 —— `a` 是否比 `b` 新。
+ *
+ * 只比數字段（`1.2.0` / `1.10.0` 這種），非數字一律當 0；段數不同補 0 比。
+ * 字串比較會把 `1.10.0` 判成比 `1.9.0` 舊，所以一定要逐段轉數字。
+ */
+function isNewerVersion(a: string, b: string): boolean {
+  const pa = a.split('.').map((n) => Number.parseInt(n, 10) || 0);
+  const pb = b.split('.').map((n) => Number.parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = pa[i] ?? 0;
+    const y = pb[i] ?? 0;
+    if (x !== y) return x > y;
+  }
+  return false;
+}
+
 // PM-126：向 server 查最新版號，與 manifest 不一致 → popup 頂部亮燈提示（點擊開 /changelog）
 async function checkNewVersion() {
   try {
@@ -1733,7 +1747,10 @@ async function checkNewVersion() {
     const res = await fetch(`${API_BASE}/api/version`);
     if (!res.ok) return;
     const data = (await res.json()) as { latest?: string; changelog_url?: string };
-    if (data.latest && data.latest !== currentVersion) {
+    // PM-443：原本是 `latest !== current`，**不相等**就跳提示 —— 版本號往回走也照跳。
+    //   送審版本比線上 /api/version 新（1.2.0 vs 1.1.5，商店還沒放行）時，
+    //   使用者會看到「有新版 1.1.5 可用」。改成只在對方確實比較新時才提示。
+    if (data.latest && isNewerVersion(data.latest, currentVersion)) {
       const badge = $('update-badge');
       badge.style.display = 'flex';
       badge.textContent = t('update-available', currentUILang, {
@@ -1763,406 +1780,3 @@ void checkAuth().then((session) => {
     showLoginView();
   }
 });
-
-// ── PM-383~386：手動釘選模式 + 圖釘清單 ──────────────────────────────────
-//
-// ⚠ **釘選模式不會因為 popup 關閉而結束。** 卡片 PM-383 的驗收 3 寫「popup 關閉 →
-//   自動結束釘選模式」，但 popup 一失焦就會關閉，而使用者要點的正是頁面上的元素——
-//   自動結束等於這個功能永遠用不到（詳見 DONE-383）。改為：再按一次按鈕、或在頁面上
-//   按 ESC 才結束；模式啟動期間頁面上一直有一條橫幅，不會有「不知不覺還開著」的情況。
-
-const PIN_MODE_KEY = 'bugezy_pin_mode';
-
-interface PopupPin {
-  pin_id: string;
-  selector: string;
-  description: string;
-  status: 'active' | 'warning' | 'error' | 'stale';
-  resolved: boolean;
-  emoji: string;
-}
-
-/** 送訊息給當前分頁的 content script。沒有 content script（chrome:// 等）→ 回 null。 */
-async function toContent<T = unknown>(msg: Record<string, unknown>): Promise<T | null> {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab?.id) return null;
-  return (await chrome.tabs.sendMessage(tab.id, msg).catch(() => null)) as T | null;
-}
-
-// PM-393 的純文字版 formatProbeLine／formatPatrolResult 已於 PM-405 由結構化渲染取代，
-// 沒有呼叫端就不留（死碼會讓下一個人以為還有第二條顯示路徑）。
-
-function pinResultShow(text: string): void {
-  const box = document.getElementById('pinResult');
-  if (!box) return;
-  box.textContent = text;
-  box.classList.remove('hidden');
-}
-
-/**
- * PM-405：把巡檢／分析結果畫成有顏色的區塊，而不是一坨文字。
- *
- * **顏色來自 summary 開頭的 emoji**（🔴/🟡/🟢/⚪），那是 content script 已經算好的判定——
- * popup 不重新解讀 JSON 去猜嚴重度。兩邊各算一次判定遲早會分岔（PM-350 的
- * score/summary 不同步已經吃過這個虧）。
- *
- * PM-418：協定沒變，變的只是呈現 —— emoji 不再印在文字裡，改由 sevClass() 對照成
- * CSS class，色碼統一收在 popup.html 的 token（§7.7 左側 3px 色條）。
- */
-/**
- * PM-418：判定訊號**還是** content script 開頭那顆圓點 emoji（協定沒變，popup 仍然不重算），
- * 但畫面上不再印出 emoji —— 改成 §7.7 的左側 3px 色條，色碼由 CSS class 決定。
- * 這裡只負責 emoji → class 的對照，顏色一律留在 popup.html 的 token 裡。
- */
-function sevClass(emoji: string): string {
-  if (emoji === '🔴') return 'sev-err';
-  if (emoji === '🟡') return 'sev-warn';
-  if (emoji === '🟢' || emoji === '✅') return 'sev-ok';
-  return 'sev-none';
-}
-
-function pinResultRender(title: string, rows: Array<{ summary: string; selector: string; detail?: string }>, footer?: string): void {
-  const box = document.getElementById('pinResult');
-  if (!box) return;
-  while (box.firstChild) box.removeChild(box.firstChild);
-  box.classList.remove('hidden');
-
-  const h = document.createElement('div');
-  h.className = 'pin-res-title';
-  h.textContent = title;
-  box.appendChild(h);
-
-  for (const r of rows) {
-    const emoji = [...r.summary][0] ?? '';
-    const item = document.createElement('div');
-    item.className = `pin-res-row ${sevClass(emoji)}`;
-    const sel = document.createElement('div');
-    sel.className = 'pin-res-sel';
-    // PM-418：emoji 不進畫面，嚴重度由左側色條表示
-    sel.textContent = r.selector;
-    item.appendChild(sel);
-    const sum = document.createElement('div');
-    sum.className = 'pin-res-sum';
-    // 去掉開頭的判定 emoji（它現在是色條，不是文字）
-    sum.textContent = r.summary.replace(/^[🔴🟡🟢⚪✅]\s*/u, '');
-    item.appendChild(sum);
-    if (r.detail) {
-      const d = document.createElement('div');
-      d.className = 'pin-res-detail';
-      d.textContent = r.detail;
-      item.appendChild(d);
-    }
-    box.appendChild(item);
-  }
-
-  if (footer) {
-    const f = document.createElement('div');
-    f.className = 'pin-res-foot';
-    f.textContent = footer;
-    box.appendChild(f);
-  }
-}
-
-function renderPinModeBtn(on: boolean): void {
-  const btn = document.getElementById('pinModeBtn');
-  if (!btn) return;
-  btn.classList.toggle('on', on);
-  btn.textContent = on ? t('pin-mode-btn-on', currentUILang) : t('pin-mode', currentUILang);
-}
-
-async function refreshPinList(): Promise<void> {
-  const list = document.getElementById('pinList');
-  const bulk = document.getElementById('pinBulk');
-  const count = document.getElementById('pinCount');
-  if (!list || !bulk || !count) return;
-
-  const data = await toContent<{ pins: PopupPin[]; total_count: number; pin_mode: boolean }>({
-    type: 'GET_PIN_LIST',
-  });
-  while (list.firstChild) list.removeChild(list.firstChild);
-
-  if (!data) {
-    // 分頁沒有 content script（chrome://、應用程式商店、PDF）——講清楚而不是顯示成「沒有圖釘」
-    count.textContent = t('pin-section-title', currentUILang);
-    const p = document.createElement('div');
-    p.className = 'pin-empty';
-    p.textContent = t('pin-unsupported', currentUILang);
-    list.appendChild(p);
-    bulk.classList.add('hidden');
-    return;
-  }
-
-  renderPinModeBtn(data.pin_mode);
-  count.textContent = t('pin-count', currentUILang, { n: data.total_count });
-
-  if (data.total_count === 0) {
-    const p = document.createElement('div');
-    p.className = 'pin-empty';
-    p.textContent = t('pin-empty', currentUILang);
-    list.appendChild(p);
-    bulk.classList.add('hidden');
-    return;
-  }
-  bulk.classList.remove('hidden');
-
-  for (const pin of data.pins) {
-    const item = document.createElement('div');
-    // PM-418：狀態由左側 3px 色條表示，emoji 不進畫面（判定來源仍是 content script 的 pin.emoji）
-    item.className = `pin-item ${sevClass(pin.emoji)}${pin.resolved ? ' resolved' : ''}`;
-
-    const sel = document.createElement('div');
-    sel.className = 'pin-sel';
-    sel.textContent = `${pin.selector}${pin.status === 'stale' ? '（stale）' : ''}`;
-    item.appendChild(sel);
-
-    if (pin.description) {
-      const d = document.createElement('div');
-      d.className = 'pin-desc';
-      d.textContent = `「${pin.description}」`;
-      item.appendChild(d);
-    }
-
-    const acts = document.createElement('div');
-    acts.className = 'pin-acts';
-
-    const analyze = document.createElement('button');
-    analyze.className = 'pin-act';
-    analyze.textContent = t('pin-analyze', currentUILang);
-    // stale = 元素已從 DOM 消失，沒有東西可分析。禁用比讓它跑出一個錯誤誠實。
-    analyze.disabled = pin.status === 'stale';
-    analyze.addEventListener('click', () => {
-      void (async () => {
-        analyze.disabled = true;
-        const r = await toContent<Record<string, unknown>>({
-          type: 'PIN_ANALYZE',
-          selector: pin.selector,
-        });
-        // PM-393：顯示人話而不是 JSON。summary 已經由 content script 組成
-        //   「🔴 點擊觸發 TypeError: …」這種形式，直接用即可。
-        if (r && typeof r.error === 'string') pinResultShow(r.error);
-        else renderAnalyzeResult(pin.selector, r);
-        await refreshPinList();
-      })();
-    });
-    acts.appendChild(analyze);
-
-    const remove = document.createElement('button');
-    remove.className = 'pin-act';
-    remove.textContent = t('pin-remove', currentUILang);
-    remove.addEventListener('click', () => {
-      void (async () => {
-        await toContent({ type: 'PIN_REMOVE', pin_id: pin.pin_id });
-        await refreshPinList();
-      })();
-    });
-    acts.appendChild(remove);
-
-    item.appendChild(acts);
-    list.appendChild(item);
-  }
-}
-
-async function togglePinMode(): Promise<void> {
-  const cur = await toContent<{ pin_mode: boolean }>({ type: 'PIN_MODE_STATUS' });
-  if (!cur) {
-    pinResultShow(t('pin-unsupported', currentUILang));
-    return;
-  }
-  const next = !cur.pin_mode;
-  const r = await toContent<{ pin_mode: boolean }>({ type: next ? 'PIN_MODE_ON' : 'PIN_MODE_OFF' });
-  const on = r?.pin_mode === true;
-  renderPinModeBtn(on);
-  // chrome.storage.session：popup 重開時先用它畫，避免閃一下錯的狀態
-  try {
-    await chrome.storage.session.set({ [PIN_MODE_KEY]: on });
-  } catch {
-    /* session storage 不可用時只是少了預先渲染，不影響功能 */
-  }
-  if (on) {
-    pinResultShow(t('pin-mode-on-hint', currentUILang));
-  }
-}
-
-function initPinUi(): void {
-  document.getElementById('pinModeBtn')?.addEventListener('click', () => void togglePinMode());
-  document.getElementById('pinPatrolBtn')?.addEventListener('click', () => {
-    void (async () => {
-      pinResultShow(t('patrol-running', currentUILang));
-      const r = await toContent<Record<string, unknown>>({ type: 'PIN_PATROL' });
-      renderPatrolResult(r);
-      await refreshPinList();
-    })();
-  });
-  document.getElementById('pinClearBtn')?.addEventListener('click', () => {
-    void (async () => {
-      if (!confirm(t('pin-clear-confirm', currentUILang))) return;
-      await toContent({ type: 'PIN_CLEAR', status: 'all' });
-      document.getElementById('pinResult')?.classList.add('hidden');
-      await refreshPinList();
-    })();
-  });
-
-  // 先用 session 記住的狀態畫一次（避免閃爍），再向 content script 要真實狀態校正
-  void (async () => {
-    try {
-      const cached = await chrome.storage.session.get(PIN_MODE_KEY);
-      renderPinModeBtn(cached?.[PIN_MODE_KEY] === true);
-    } catch {
-      /* 忽略 */
-    }
-    await refreshPinList();
-  })();
-}
-
-initPinUi();
-
-// ── PM-403／404：兩層架構（第一層日常功能 ／ 第二層偵察模式）────────────────
-//
-// 實作方式刻意保守：**不去重排既有的 idleView**，而是把圖釘那一段整段搬到新的
-// `#scoutView`，兩個 section 用既有的 `.hidden` 機制切換。popup 有太多既有功能
-// 掛在 idleView 上（錄製／截圖／票券／提示詞／設定），把它拆成兩個滑動面板
-// 風險遠大於收益，而使用者看到的結果是一樣的。
-
-function showScout(on: boolean): void {
-  const idle = document.getElementById('idleView');
-  const scout = document.getElementById('scoutView');
-  if (!idle || !scout) return;
-  idle.classList.toggle('hidden', on);
-  scout.classList.toggle('hidden', !on);
-  // PM-418：第二層整頁反黑（§9.3）。scout-open 是給 show() 看的旗標——
-  //   沒有它的話，錄製狀態一更新就會呼叫 show('idle') 把偵察模式的黑底關掉。
-  document.body.classList.toggle('scout-open', on);
-  document.body.classList.toggle('dark', on);
-  if (on) {
-    scout.classList.remove('slide-in');
-    void scout.offsetWidth; // 重新觸發動畫（不 reflow 的話同一個 class 不會再播一次）
-    scout.classList.add('slide-in');
-    void refreshPinList();
-  }
-}
-
-/** 第一層的入口按鈕上顯示圖釘數，不進第二層也知道有沒有東西在盯。 */
-async function refreshScoutBadge(): Promise<void> {
-  const badge = document.getElementById('scoutPinBadge');
-  if (!badge) return;
-  const data = await toContent<{ total_count: number }>({ type: 'GET_PIN_LIST' });
-  const n = data?.total_count ?? 0;
-  badge.textContent = String(n);
-  badge.classList.toggle('hidden', n === 0);
-}
-
-// ── PM-404：AI 監測 ────────────────────────────────────────────────────────
-//
-// ⚠ PM-439：`start_auto_detect` 當初住在 bridge 裡（它是編排既有工具的呼叫序列），
-//   popup 沒有那條通道。但它編排的每一支底層工具 content script 都有，
-//   所以這裡直接照同樣的順序問一遍 —— **不是重寫偵測邏輯，是重跑同一組查詢**。
-
-async function runScanAll(): Promise<void> {
-  const box = document.getElementById('scanResult');
-  const btn = document.getElementById('scanAllBtn') as HTMLButtonElement | null;
-  if (!box) return;
-  if (btn) btn.disabled = true;
-  box.textContent = t('scout-scanning', currentUILang);
-  try {
-    await toContent({ type: 'SCOUT_MAP_ZONES' }); // 先分區，get_zone_health 才有東西可算
-    const [health, zones, errs] = await Promise.all([
-      toContent<Record<string, unknown>>({ type: 'SCOUT_PAGE_HEALTH' }),
-      toContent<Record<string, unknown>>({ type: 'SCOUT_ZONE_HEALTH' }),
-      toContent<Record<string, unknown>>({ type: 'SCOUT_BROWSER_ERRORS' }),
-    ]);
-    if (!health && !zones && !errs) {
-      box.textContent = t('scout-unsupported', currentUILang);
-      return;
-    }
-    const zoneList = (zones?.zones ?? []) as Array<{ status?: string }>;
-    const count = (st: string) => zoneList.filter((z) => z.status === st).length;
-    const cons = (errs?.console_errors ?? []) as Array<{ severity?: string }>;
-    const nets = (errs?.network_errors ?? []) as Array<{ severity?: string }>;
-    const critical = [...cons, ...nets].filter((e) => e.severity === 'critical').length;
-    const minor = [...cons, ...nets].filter((e) => e.severity === 'minor').length;
-
-    while (box.firstChild) box.removeChild(box.firstChild);
-    const line = (label: string, value: string) => {
-      const d = document.createElement('div');
-      d.textContent = `${label}${value}`;
-      box.appendChild(d);
-    };
-    line(t('scout-zone', currentUILang), zoneList.length
-      ? t('scout-zone-fmt', currentUILang, { n: zoneList.length, ok: count('healthy'), warn: count('warning'), err: count('error') })
-      : t('scout-zone-none', currentUILang));
-    line(t('scout-error', currentUILang), critical || minor
-      ? t('scout-error-fmt', currentUILang, { critical, minor })
-      : t('scout-error-none', currentUILang));
-    if (typeof health?.score === 'number') line(t('scout-score', currentUILang), `${health.score}/100`);
-    // 空結果的意思是「最近 30 秒沒出事」，不是「沒問題」——這句話不能省
-    const note = document.createElement('div');
-    note.className = 'scout-note';
-    note.textContent = t('scout-window-note', currentUILang);
-    box.appendChild(note);
-  } catch (e) {
-    box.textContent = `${t('scout-scan-failed', currentUILang)}：${String(e).slice(0, 120)}`;
-  } finally {
-    if (btn) btn.disabled = false;
-  }
-}
-
-// ── PM-405：巡檢／分析結果改成人類可讀 ─────────────────────────────────────
-/** PM-405：巡檢結果 —— 每個圖釘一列，底部給「問題 N ｜ 正常 M」。 */
-function renderPatrolResult(r: Record<string, unknown> | null): void {
-  if (!r) return pinResultShow(t('patrol-failed', currentUILang));
-  if (typeof r.error === 'string') return pinResultShow(r.error);
-  const results = (r.results ?? []) as Array<Record<string, unknown>>;
-  if (results.length === 0) return pinResultShow(String(r.note ?? t('patrol-no-pins', currentUILang)));
-
-  const problems = Number(r.problem_count ?? 0);
-  pinResultRender(
-    t('patrol-title', currentUILang, { n: results.length }),
-    results.map((x) => ({
-      summary: String(x.summary ?? ''),
-      selector: String(x.selector ?? ''),
-      detail: x.changed ? t('patrol-changed', currentUILang, { from: String(x.previous_status), to: String(x.status) }) : undefined,
-    })),
-    t('patrol-footer', currentUILang, { bad: problems, ok: results.length - problems })
-      + (r.note ? `
-${String(r.note)}` : ''),
-  );
-}
-
-/** PM-405：單一圖釘的分析結果 —— 探測類型／耗時／可見性都攤開。 */
-function renderAnalyzeResult(selector: string, r: Record<string, unknown> | null): void {
-  if (!r) return pinResultShow(t('analyze-failed', currentUILang));
-  const probe = (r.probe ?? {}) as Record<string, unknown>;
-  const analysis = (r.analysis ?? {}) as Record<string, unknown>;
-  const vis = (analysis.visibility ?? {}) as Record<string, unknown>;
-  const box = (analysis.box_model ?? {}) as Record<string, unknown>;
-
-  const bits: string[] = [];
-  if (probe.type) {
-    bits.push(t('analyze-probe', currentUILang, { type: String(probe.type) })
-      + (typeof probe.duration_ms === 'number' ? `（${probe.duration_ms} ms）` : ''));
-  }
-  if (probe.restored === false) bits.push(t('analyze-not-restored', currentUILang));
-  if (typeof probe.note === 'string' && probe.note) bits.push(probe.note);
-  // PM-418：原本塞 ✅ / ❌ 兩顆 emoji 進格式字串。改用「有／無」的文字 key，
-  //   §7.7「不靠顏色傳達內容」同理也不該靠 emoji。
-  const yn = (b: unknown) => t(b ? 'yes' : 'no', currentUILang);
-  bits.push(t('analyze-visible', currentUILang, { v: yn(vis.visible), i: yn(vis.has_size) }));
-  if (typeof box.width === 'number') {
-    bits.push(t('analyze-size', currentUILang, { w: Math.round(Number(box.width)), h: Math.round(Number(box.height)) }));
-  }
-
-  pinResultRender(t('analyze-title', currentUILang), [{
-    summary: String(r.summary ?? ''),
-    selector,
-    detail: bits.join('　'),
-  }]);
-}
-
-function initScoutUi(): void {
-  document.getElementById('scoutEnterBtn')?.addEventListener('click', () => showScout(true));
-  document.getElementById('scoutBackBtn')?.addEventListener('click', () => showScout(false));
-  document.getElementById('scanAllBtn')?.addEventListener('click', () => void runScanAll());
-  void refreshScoutBadge();
-}
-
-initScoutUi();

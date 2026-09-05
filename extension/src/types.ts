@@ -157,20 +157,6 @@ export type ControlMessage =
   | { type: 'REWIND_DONE'; summary: RecordingSummary }
   // PM-51：🔍 即時監控（AI 透過 MCP 隨時查當前頁面 error）
   | { type: 'GET_LIVE_ERRORS' }
-  | { type: 'SCOUT_BROWSER_ERRORS' } // PM-313／PM-439：偵察模式一鍵全掃用
-  | { type: 'SCOUT_PAGE_HEALTH' } // PM-317／PM-439：偵察模式一鍵全掃用
-  | { type: 'PIN_ANALYZE'; selector: string } // PM-331
-  // PM-383~386：手動釘選模式（popup → content）
-  | { type: 'PIN_MODE_ON' }
-  | { type: 'PIN_MODE_OFF' }
-  | { type: 'PIN_MODE_STATUS' }
-  | { type: 'GET_PIN_LIST' }
-  | { type: 'PIN_MODE_CHANGED'; on: boolean } // content → background/popup
-  | { type: 'PIN_PATROL' } // PM-334
-  | { type: 'PIN_REMOVE'; pin_id?: string; selector?: string } // PM-335
-  | { type: 'PIN_CLEAR'; status?: string } // PM-335
-  | { type: 'SCOUT_MAP_ZONES' } // PM-341
-  | { type: 'SCOUT_ZONE_HEALTH' } // PM-343
   | { type: 'START_MONITORING' }
   | { type: 'STOP_MONITORING' }
   // PM-52：通知 content/inject 顯示/隱藏頁面浮動監控 badge

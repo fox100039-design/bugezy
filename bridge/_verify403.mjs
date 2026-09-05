@@ -16,6 +16,13 @@ const bg = strip(readFileSync('../extension/src/background.ts', 'utf8'));
 // PM-439：release/v1.2.0 沒有 bridge。跟 bridge 通道／記憶矩陣有關的條目改成 SKIP，
 //   偵察模式的區塊數變成參數（有 bridge 三塊：圖釘／AI 監測／記憶矩陣；沒有就兩塊）。
 const HAS_BRIDGE = bg.includes('BRIDGE_URL');
+// PM-443：送審版把「偵察模式 + 圖釘」整組拿掉了（那是 bridge 時期加的功能，架上 v1.1.5 沒有）。
+//   測那組 UI 的條目改成 SKIP —— 功能不在了，斷言紅著只會讓人習慣忽略紅燈。
+const HAS_SCOUT = html.includes('scoutEnterBtn');
+const checkScout = (l, ok, extra = '') => {
+  if (!HAS_SCOUT) { skip++; console.log('  SKIP ', l); return; }
+  check(l, ok, extra);
+};
 const SCOUT_BLOCKS = HAS_BRIDGE ? 3 : 2;
 let skip = 0;
 const checkBridge = (l, ok, extra = '') => {
@@ -28,33 +35,33 @@ check('403-2 🔴 圖釘區塊已經不在第一層（idleView）裡', (() => {
   const idle = html.slice(html.indexOf('id="idleView"'), html.indexOf('id="scoutView"'));
   return !idle.includes('id="pinSection"');
 })(), '第一層還看得到 pinSection');
-check('403-3 第一層有「偵察模式 →」入口且可點', /id="scoutEnterBtn"/.test(html) && /scout-mode/.test(html));
-check('403   入口帶圖釘數 badge（不進第二層也知道有沒有東西在盯）', /id="scoutPinBadge"/.test(html) && /refreshScoutBadge/.test(pts));
+checkScout('403-3 第一層有「偵察模式 →」入口且可點', /id="scoutEnterBtn"/.test(html) && /scout-mode/.test(html));
+checkScout('403   入口帶圖釘數 badge（不進第二層也知道有沒有東西在盯）', /id="scoutPinBadge"/.test(html) && /refreshScoutBadge/.test(pts));
 check('403-5 第一層既有功能一個都沒動（錄製／截圖／報告／提示詞／兌換）',
   ['startBtn', 'rewindBtn', 'screenshotBtn', 'myReportsBtn', 'promoCode', 'copyMcpBtn'].every((id) => html.includes(`id="${id}"`)));
 check('403-4 票券錢包的展開／收合機制仍在', /id="ticketToggle"/.test(html) && /updateTicketFold/.test(pts));
 
 console.log('\n=== ② PM-404：第二層偵察模式 ===');
-check('404-1/2 有 scoutView 與返回按鈕', /id="scoutView"/.test(html) && /id="scoutBackBtn"/.test(html));
-check('404-1/2 進出第二層由 showScout 控制（用既有的 .hidden，不開新頁）',
+checkScout('404-1/2 有 scoutView 與返回按鈕', /id="scoutView"/.test(html) && /id="scoutBackBtn"/.test(html));
+checkScout('404-1/2 進出第二層由 showScout 控制（用既有的 .hidden，不開新頁）',
   /function showScout\(on: boolean\)/.test(pts) && /classList\.toggle\('hidden'/.test(pts));
-check('404   有滑入動畫，且用 animation 而非 transition',
+checkScout('404   有滑入動畫，且用 animation 而非 transition',
   /slide-in/.test(html) && /@keyframes scoutIn/.test(html));
-check('404-3 圖釘清單整段搬進第二層、功能完整', (() => {
+checkScout('404-3 圖釘清單整段搬進第二層、功能完整', (() => {
   const scout = html.slice(html.indexOf('id="scoutView"'));
   return ['pinSection', 'pinModeBtn', 'pinList', 'pinPatrolBtn', 'pinClearBtn', 'pinResult']
     .every((id) => scout.includes(`id="${id}"`));
 })());
-check('404-4 AI 監測區塊 + 一鍵全掃', /id="scanAllBtn"/.test(html) && /id="scanResult"/.test(html) && /function runScanAll/.test(pts));
+checkScout('404-4 AI 監測區塊 + 一鍵全掃', /id="scanAllBtn"/.test(html) && /id="scanResult"/.test(html) && /function runScanAll/.test(pts));
 // PM-439：這四個訊息型別在 release 分支改叫 SCOUT_*（它們是 popup 自己的協定，
 //   BRIDGE_ 前綴是歷史誤名）。兩種名字都收，斷言的意思不變。
-check('404-4 🔴 一鍵全掃是重跑既有工具，不是另寫一套偵測',
+checkScout('404-4 🔴 一鍵全掃是重跑既有工具，不是另寫一套偵測',
   /(BRIDGE|SCOUT)_MAP_ZONES/.test(pts) && /(BRIDGE_ZONE_HEALTH|SCOUT_ZONE_HEALTH)/.test(pts)
   && /(BRIDGE_GET_PAGE_HEALTH|SCOUT_PAGE_HEALTH)/.test(pts)
   && /(BRIDGE_GET_BROWSER_ERRORS|SCOUT_BROWSER_ERRORS)/.test(pts));
-check('404-4 掃描結果含 Zone／Error／Score（PM-408 後改走 i18n 鍵）',
+checkScout('404-4 掃描結果含 Zone／Error／Score（PM-408 後改走 i18n 鍵）',
   /'scout-zone'/.test(pts) && /'scout-error'/.test(pts) && /'scout-score'/.test(pts));
-check('404   🔴 掃描結果揭露 30 秒視窗（空結果不等於沒問題）',
+checkScout('404   🔴 掃描結果揭露 30 秒視窗（空結果不等於沒問題）',
   /'scout-window-note'/.test(pts) && /只涵蓋最近約 30 秒/.test(i18n));
 checkBridge('404-5 記憶矩陣區塊顯示筆數與各層摘要',
   /id="memResult"/.test(html) && /entries_per_layer/.test(pts) && /memLayerName/.test(pts));
@@ -84,19 +91,19 @@ checkBridge('404   🔴 popup 明說這條通道是唯讀的、清除要走 AI',
   /'mem-readonly-note'/.test(pts) && /要清除記憶請用 AI 呼叫 memory_clear/.test(i18n));
 
 console.log('\n=== ④ PM-405：巡檢／分析結果人類可讀 ===');
-check('405-1 巡檢有專屬渲染函式', /function renderPatrolResult/.test(pts));
-check('405-2 單一分析有專屬渲染函式', /function renderAnalyzeResult/.test(pts));
+checkScout('405-1 巡檢有專屬渲染函式', /function renderPatrolResult/.test(pts));
+checkScout('405-2 單一分析有專屬渲染函式', /function renderAnalyzeResult/.test(pts));
 // PM-418：色碼從 popup.ts 的 SEV_COLOR 對照表搬到 popup.html 的 token（§7.7 左側 3px 色條）。
 //   驗的東西不變 —— 「有依嚴重度分級的視覺」+「分級來自 content script 的 emoji」——
 //   只是實作從 inline style 換成 CSS class。
-check('405-3/4 依嚴重度上色（err／warn／ok 三級）',
+checkScout('405-3/4 依嚴重度上色（err／warn／ok 三級）',
   /function sevClass/.test(pts)
   && ['sev-err', 'sev-warn', 'sev-ok'].every((c) => pts.includes(`'${c}'`))
   && ['.pin-res-row.sev-err', '.pin-res-row.sev-warn', '.pin-res-row.sev-ok'].every((c) => html.includes(c)));
-check('405   🔴 顏色取自 content script 已算好的 emoji，popup 不重新判定嚴重度',
+checkScout('405   🔴 顏色取自 content script 已算好的 emoji，popup 不重新判定嚴重度',
   /顏色來自 summary 開頭的 emoji/.test(ptsRaw));
-check('405-5 分析顯示探測類型與耗時', /'analyze-probe'/.test(pts) && /duration_ms/.test(pts));
-check('405   分析也顯示可見性與尺寸', /'analyze-visible'/.test(pts) && /'analyze-size'/.test(pts));
+checkScout('405-5 分析顯示探測類型與耗時', /'analyze-probe'/.test(pts) && /duration_ms/.test(pts));
+checkScout('405   分析也顯示可見性與尺寸', /'analyze-visible'/.test(pts) && /'analyze-size'/.test(pts));
 check('405-1 🔴 結果不再是 JSON.stringify', !/JSON\.stringify\(r\)\.slice/.test(pts), '還有直接 stringify 的顯示路徑');
 check('405   舊的純文字版已移除，不留第二條顯示路徑',
   !/function formatPatrolResult/.test(pts) && !/function formatProbeLine/.test(pts));
@@ -121,14 +128,21 @@ check(`408-1 🔴 popup.ts 裡 t() 用到的 ${tsKeys.length} 個鍵字典裡全
 
 // 卡片點名的六個鍵，逐一確認繁中與英文都真的有值
 // PM-439：memory-matrix 在 release 分支沒有了（記憶矩陣是 bridge 的前端），改成有條件加入
-for (const [key, zh, en] of ([
-  ['scout-mode', '偵察模式', 'Scout Mode'],
+// 卡片點名的鍵，逐一確認繁中與英文都真的有值。
+// PM-439：memory-matrix 只有 bridge 版才有；PM-443：偵察模式那三個鍵在送審版已經清掉。
+const I18N_TITLE_KEYS = [
   ['back', '返回', 'Back'],
-  ['ai-monitor', 'AI 監測', 'AI Monitor'],
-  ['scan-all', '一鍵全掃', 'Scan all'],
-].concat(HAS_BRIDGE ? [['memory-matrix', '記憶矩陣', 'Memory Matrix']] : []).concat([
   ['refresh', '重新整理', 'Refresh'],
-]))) {
+];
+if (HAS_SCOUT) {
+  I18N_TITLE_KEYS.push(
+    ['scout-mode', '偵察模式', 'Scout Mode'],
+    ['ai-monitor', 'AI 監測', 'AI Monitor'],
+    ['scan-all', '一鍵全掃', 'Scan all'],
+  );
+}
+if (HAS_BRIDGE) I18N_TITLE_KEYS.push(['memory-matrix', '記憶矩陣', 'Memory Matrix']);
+for (const [key, zh, en] of I18N_TITLE_KEYS) {
   const line = i18n.split('\n').find((l) => new RegExp(`(^|\\s|\\{)'?${key}'?\\s*:\\s*\\{\\s*zh:`).test(l)) ?? '';
   check(`408-1/2 ${key} → 繁中「${zh}」／英文「${en}」`,
     line.includes(`'${zh}'`) && line.includes(`'${en}'`), line.slice(0, 120) || '(找不到)');
@@ -136,7 +150,7 @@ for (const [key, zh, en] of ([
 
 // 五種語言都要有值（型別要求，但空字串照樣通過型別檢查）
 const scoutLines = i18n.split('\n').filter((l) => /'(scout|mem|patrol|analyze|pin)-[a-z0-9-]+'?\s*:\s*\{\s*zh:/.test(l));
-check(`408-2 第二層的 ${scoutLines.length} 條字串五種語言都有非空值`,
+checkScout(`408-2 第二層的 ${scoutLines.length} 條字串五種語言都有非空值`,
   scoutLines.length > 20 && scoutLines.every((l) =>
     ['zh', 'en', 'ja', 'ko', 'vi'].every((lg) => new RegExp(`${lg}: '[^']+'`).test(l))),
   scoutLines.find((l) => !['zh', 'en', 'ja', 'ko', 'vi'].every((lg) => new RegExp(`${lg}: '[^']+'`).test(l)))?.slice(0, 120) ?? '');
@@ -149,7 +163,7 @@ const cjkLiterals = [...scoutCode.matchAll(/'([^'\n]{2,90})'/g)]
 check('408-2 🔴 第二層的動態文字沒有殘留硬編碼中文（英文模式才會真的是英文）',
   cjkLiterals.length === 0, `殘留 ${cjkLiterals.length} 條：${cjkLiterals.slice(0, 3).join(' / ')}`);
 
-check('408   語言切換時第二層會重繪（否則會停在切換前的語言）',
+checkScout('408   語言切換時第二層會重繪（否則會停在切換前的語言）',
   HAS_BRIDGE
     ? /applyTranslations[\s\S]{0,600}refreshPinList\(\)[\s\S]{0,200}refreshMemoryStats\(\)/.test(ptsRaw)
     : /applyTranslations[\s\S]{0,600}refreshPinList\(\)/.test(ptsRaw),
@@ -169,17 +183,17 @@ console.log('\n=== ④c PM-409：排版（寬度 + 不斷行）===');
 //    括號小字」三招在 320 站住，所以寬度這條斷言跟著翻面。**下面的 nowrap 與 flex-shrink
 //    斷言一個都沒有放寬** —— 它們才是 320 能成立的真正前提。
 check('413-1 popup 寬度改回 320px', /body \{[\s\S]{0,700}width: 320px;/.test(html), '仍是 360px');
-for (const sel of ['.scout-title', '.scout-block-title', '.pin-title']) {
+for (const sel of (HAS_SCOUT ? ['.scout-title', '.scout-block-title', '.pin-title'] : [])) {
   check(`409-1 ${sel} 不斷行`, new RegExp(`${sel.replace('.', '\\.')}[^{]*\\{[^}]*white-space: nowrap|white-space: nowrap[\\s\\S]{0,400}`).test(html)
     && /white-space: nowrap;/.test(html.slice(html.indexOf('.scout-title'), html.indexOf('.scout-title') + 900)));
 }
-check('409-1 三個標題都在同一條 nowrap 規則裡（不會漏掉其中一個）', (() => {
+checkScout('409-1 三個標題都在同一條 nowrap 規則裡（不會漏掉其中一個）', (() => {
   const i = html.indexOf('PM-409：第二層的標題與按鈕一律不斷行');
   const rule = html.slice(i, html.indexOf('}', i));
   return ['.scout-title', '.scout-block-title', '.pin-title', '.scout-back', '.scout-act', '.pin-mode-btn']
     .every((sel) => rule.includes(sel));
 })(), '有標題或按鈕沒被納入 nowrap');
-check('409-2 🔴 按鈕不讓步（flex-shrink: 0）—— 否則會被壓成兩行或截斷', (() => {
+checkScout('409-2 🔴 按鈕不讓步（flex-shrink: 0）—— 否則會被壓成兩行或截斷', (() => {
   const i = html.indexOf('按鈕不讓步');
   const rule = html.slice(i, html.indexOf('}', i));
   return ['.scout-back', '.scout-act', '.pin-mode-btn', '.scout-enter-right'].every((sel) => rule.includes(sel));
@@ -188,50 +202,50 @@ check('409-2 🔴 按鈕不讓步（flex-shrink: 0）—— 否則會被壓成�
 //    那組合會讓 flex item 被壓到 0 寬而整個消失（正是 PM-410 回報的症狀）。
 check('410   🔴 標題不再有 min-width:0 + overflow:hidden（那會讓它被壓到 0 寬而消失）',
   !/\.scout-block-title,\s*\n\s*\.pin-title \{\s*\n\s*min-width: 0;/.test(html), '標題仍可能被壓縮到消失');
-check('410   🔴 標題與按鈕兩側都不讓步（flex: 0 0 auto ／ flex-shrink: 0）',
+checkScout('410   🔴 標題與按鈕兩側都不讓步（flex: 0 0 auto ／ flex-shrink: 0）',
   /\.pin-title \{[\s\S]{0,60}flex: 0 0 auto;/.test(html));
-check('410   真的擠不下時由容器裁切，而不是讓子元素憑空不見',
+checkScout('410   真的擠不下時由容器裁切，而不是讓子元素憑空不見',
   /\.scout-head,\s*\n\s*\.scout-block-head,\s*\n\s*\.pin-head \{\s*\n\s*overflow: hidden;/.test(html));
-check('409-4/5 三個 head 都是 flex row 且左右對齊',
+checkScout('409-4/5 三個 head 都是 flex row 且左右對齊',
   /\.scout-head \{[\s\S]{0,200}justify-content: space-between/.test(html)
   && /\.scout-block-head \{[^}]*justify-content: space-between/.test(html)
   && /\.pin-head \{[^}]*justify-content: space-between/.test(html));
 check('409-3 🔴 第一層不受寬度影響（欄位用 1fr，沒有寫死像素寬）',
   /\.action-grid \{[^}]*grid-template-columns: repeat\(3, 1fr\)/.test(html)
   && !/\.action-grid \{[^}]*width: \d+px/.test(html));
-check('409-3 第一層既有元素一個都沒少',
+checkScout('409-3 第一層既有元素一個都沒少',
   ['startBtn', 'rewindBtn', 'screenshotBtn', 'myReportsBtn', 'scoutEnterBtn', 'promoCode'].every((id) => html.includes(`id="${id}"`)));
 
 console.log('\n=== ④d PM-410：三個 section 的標題與分隔線 ===');
 const scoutHtml = html.slice(html.indexOf('id="scoutView"'), html.indexOf('<section id="recordingView"'));
 for (const [label, key] of ([['圖釘', 'pin-section-title'], ['AI 監測', 'ai-monitor']]
   .concat(HAS_BRIDGE ? [['記憶矩陣', 'memory-matrix']] : []))) {
-  check(`410-1 ${label} section 有標題元素`, scoutHtml.includes(`data-i18n="${key}"`), `找不到 data-i18n="${key}"`);
+  checkScout(`410-1 ${label} section 有標題元素`, scoutHtml.includes(`data-i18n="${key}"`), `找不到 data-i18n="${key}"`);
 }
 // 🔴 PM-418：這條斷言整個翻面。大黃蜂視覺系統**全站禁用 emoji**（DESIGN_SPEC §1），
 //   三個標題的 📌 🤖 🧠 換成 §6 的幾何小六角 `.ico-hex`。驗的意圖沒變 ——
 //   「三個 section 的標題都有同一種標記，風格一致」—— 只是標記從 emoji 換成幾何圖形。
-check(`410-1 ${SCOUT_BLOCKS} 個標題都帶同一種幾何標記（六角，不是 emoji）`,
+checkScout(`410-1 ${SCOUT_BLOCKS} 個標題都帶同一種幾何標記（六角，不是 emoji）`,
   (scoutHtml.match(/scout-block-title[^>]*>\s*<span class="ico-hex">/g) ?? []).length === SCOUT_BLOCKS,
   String((scoutHtml.match(/scout-block-title[^>]*>\s*<span class="ico-hex">/g) ?? []).length));
 check('418   🔴 第二層一個 emoji 都不剩（§1 全站禁用）',
   !/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(scoutHtml.replace(/<!--[\s\S]*?-->/g, '')));
-check(`410-2 🔴 ${SCOUT_BLOCKS} 個 section 的標題列用同一組 class（結構一致，不是每個一種寫法）`,
+checkScout(`410-2 🔴 ${SCOUT_BLOCKS} 個 section 的標題列用同一組 class（結構一致，不是每個一種寫法）`,
   (scoutHtml.match(/class="[^"]*scout-block-head[^"]*"/g) ?? []).length === SCOUT_BLOCKS,
   String((scoutHtml.match(/class="[^"]*scout-block-head[^"]*"/g) ?? []).length));
-check('410-2 標題左、按鈕右、同一行',
+checkScout('410-2 標題左、按鈕右、同一行',
   /\.scout-block-head \{[^}]*display: flex[^}]*justify-content: space-between/.test(html));
-check(`410-3 🔴 ${SCOUT_BLOCKS} 個 section 都有分隔線（圖釘那段原本沒有）`,
+checkScout(`410-3 🔴 ${SCOUT_BLOCKS} 個 section 都有分隔線（圖釘那段原本沒有）`,
   (scoutHtml.match(/class="[^"]*scout-block[^"]*"/g) ?? []).filter((c) => !c.includes('scout-block-head') && !c.includes('scout-block-title')).length === SCOUT_BLOCKS,
   String((scoutHtml.match(/class="[^"]*scout-block[^"]*"/g) ?? []).filter((c) => !c.includes('scout-block-head') && !c.includes('scout-block-title')).length));
-check('410-3 第一個區塊不畫上分隔線（否則與 scout-head 的線變雙線）',
+checkScout('410-3 第一個區塊不畫上分隔線（否則與 scout-head 的線變雙線）',
   /#scoutView > \.scout-block:first-of-type \{ border-top: none;/.test(html));
-check('410-4 標題不斷行', /\.pin-title,?[\s\S]{0,120}white-space: nowrap;/.test(html) || /white-space: nowrap;/.test(html.slice(html.indexOf('.scout-title'), html.indexOf('.scout-title') + 400)));
-check('410-5 🔴 既有功能一個都沒少（id 全部保留，只是多加 class）',
+checkScout('410-4 標題不斷行', /\.pin-title,?[\s\S]{0,120}white-space: nowrap;/.test(html) || /white-space: nowrap;/.test(html.slice(html.indexOf('.scout-title'), html.indexOf('.scout-title') + 400)));
+checkScout('410-5 🔴 既有功能一個都沒少（id 全部保留，只是多加 class）',
   ['pinSection', 'pinCount', 'pinModeBtn', 'pinList', 'pinBulk', 'pinPatrolBtn', 'pinClearBtn', 'pinResult', 'scanAllBtn']
     .concat(HAS_BRIDGE ? ['memRefreshBtn'] : [])
     .every((id) => scoutHtml.includes(`id="${id}"`)));
-check('410   新的標題鍵也在字典裡（五語）', (() => {
+checkScout('410   新的標題鍵也在字典裡（五語）', (() => {
   const line = i18n.split('\n').find((l) => /'pin-section-title'\s*:/.test(l)) ?? '';
   return ['zh', 'en', 'ja', 'ko', 'vi'].every((lg) => new RegExp(`${lg}: '[^']+'`).test(line));
 })(), '缺 pin-section-title 或語言不全');
@@ -342,9 +356,9 @@ check('415-3 🔴 popup 用得到的 i18n 字典值也一個 emoji 都不剩（�
   }
   return bad.length === 0 ? true : bad.join(',');
 })() === true);
-check('415   幾何圖示是 markup 的兄弟節點，不在 [data-i18n] 元素裡（否則翻譯會把圖示洗掉）',
+checkScout('415   幾何圖示是 markup 的兄弟節點，不在 [data-i18n] 元素裡（否則翻譯會把圖示洗掉）',
   /<span class="ico-rec"><\/span>/.test(html) && /class="ico-arrow"/.test(html) && /class="ico-list"/.test(html));
-check('415   §7.7 不靠顏色傳達內容：zone 三個數字補了文字標籤',
+checkScout('415   §7.7 不靠顏色傳達內容：zone 三個數字補了文字標籤',
   /正常 \{ok\}／注意 \{warn\}／異常 \{err\}/.test(i18n));
 
 check('416-1 §9.3 整頁反黑是共用的 body.dark（錄製中 + 偵察模式）',
@@ -362,7 +376,7 @@ check('417   語言下拉沒有用 data URI 畫三角（§4 的 `;` 陷阱），
 check('417   🔴 複製 MCP 的回饋卡用 flex（inline display:block 會讓 ::before 的六角失去寬高）',
   /copyMcpFeedback\.style\.display = 'flex'/.test(pts));
 
-check('418-2 §7.7 圖釘與巡檢結果用左側 3px 色條，判定仍來自 content script 的 emoji',
+checkScout('418-2 §7.7 圖釘與巡檢結果用左側 3px 色條，判定仍來自 content script 的 emoji',
   /function sevClass/.test(pts) && /\.pin-item\.sev-err \{ border-left: 3px solid var\(--err\)/.test(html));
 
 check('419   §7.5 倒數用黑底、額度用黃底（同一個 popup 用底色分辨緊急程度）',
@@ -664,28 +678,28 @@ const cn = strip(cnRaw);
 
 check('429   色票集中成 HZ 常數（cssText 是字串，沒有 CSS 變數可用）',
   /const HZ = \{/.test(cn) && /y: '#F7BE00'/.test(cn) && /onDark: '#A08B62'/.test(cn));
-check('429   🔴 §7.8 元素高亮改黃色雙環（#00bfff 與品牌無關）',
+checkScout('429   🔴 §7.8 元素高亮改黃色雙環（#00bfff 與品牌無關）',
   !/#00bfff/i.test(cn)
   && /HIGHLIGHT_COLOR = HZ\.y/.test(cn)
   && /boxShadow: `0 0 0 3px \$\{opts\.color \|\| HIGHLIGHT_COLOR\}, 0 0 0 6px rgba\(247,190,0,\.28\)`/.test(cn));
 check('429   §2.2 截圖工具列是唯一用黃底的注入元件',
   /background:\$\{HZ\.y\};border-bottom:2px solid \$\{HZ\.ink\}/.test(cn));
-check('429   §2.2 其餘注入 UI 是黑殼 + 黃強調（banner / tip / card / toast / menu）',
+checkScout('429   §2.2 其餘注入 UI 是黑殼 + 黃強調（banner / tip / card / toast / menu）',
   ['.bz-banner', '.bz-tip', '.bz-card', '.bz-toast', '.bz-menu'].every((c) => cn.includes(c))
   && /\.bz-card \{[\s\S]{0,320}background: \$\{HZ\.ink\}[\s\S]{0,220}border: 2px solid \$\{HZ\.y\}/.test(cn));
-check('429   §2.1 iframe 提示用磚紅（--err）',
+checkScout('429   §2.1 iframe 提示用磚紅（--err）',
   /\.bz-tip\.warn \{ background: \$\{HZ\.err\}/.test(cn));
 
-check('429   🔴 PIN_STATUS_EMOJI 與判定字串的 emoji **留著**（那是給 popup 的跨界協定）',
+checkScout('429   🔴 PIN_STATUS_EMOJI 與判定字串的 emoji **留著**（那是給 popup 的跨界協定）',
   /const PIN_STATUS_EMOJI/.test(cn) && /emoji: p\.resolved \? '✅' : PIN_STATUS_EMOJI\[p\.status\]/.test(cn));
-check('429   🔴 但畫進頁面時要剝掉：stripSev() 存在且用在 toast 上',
+checkScout('429   🔴 但畫進頁面時要剝掉：stripSev() 存在且用在 toast 上',
   /function stripSev/.test(cn)
   && (cn.match(/stripSev\(/g) ?? []).length >= 3);
-check('429   🔴 toast 改用 §7.7 左側色條表示嚴重度（不再把圓點印進文字）',
+checkScout('429   🔴 toast 改用 §7.7 左側色條表示嚴重度（不再把圓點印進文字）',
   /function pinModeToast\(text: string, sev\?: Pin\['status'\]\)/.test(cn)
   && /\.bz-toast\.sev-error \{ border-left: 3px solid \$\{HZ\.err\}/.test(cn));
 
-check('429   🔴 六角是文字的兄弟節點（banner / 描述卡 / 降級提示條都會被 textContent 洗掉）',
+checkScout('429   🔴 六角是文字的兄弟節點（banner / 描述卡 / 降級提示條都會被 textContent 洗掉）',
   /pinModeBanner\.append\(bnHex, bnTxt\)/.test(cn)
   && /title\.append\(tHex, tTxt, tOpt\)/.test(cn)
   && /tip\.append\(tipHex, tipTxt\)/.test(cn));
@@ -698,7 +712,7 @@ check('429   §6 截圖工具列四個模式都有幾何圖示', (() => {
 })());
 check('429   工具列特效改大黃蜂色系（橘光 #ff8c00 已清）',
   /@keyframes bugezy-hornet-pulse/.test(cn) && !/#ff8c00|#ffaa00/i.test(cn));
-check('429   §7.7 zone badge 補了文字標籤（不只靠顏色）',
+checkScout('429   §7.7 zone badge 補了文字標籤（不只靠顏色）',
   /`ERR ×\$\{ec\}`/.test(cn) && /`WRN ×\$\{wc\}`/.test(cn));
 check('429   §2.3 敏感資料警示是咖啡卡 + 黃色警示三角',
   /background:\$\{HZ\.brown\};border:2px solid \$\{HZ\.y\}/.test(cn)
@@ -1226,5 +1240,5 @@ check('438   開頭與終止符數量對得上（20 個整頁樣板：16 個多�
   (srvRaw.match(/`<!DOCTYPE html>/g) || []).length === 20
   && (srvRaw.match(/<\/html>`/g) || []).length === 20);
 
-console.log(`\n${pass} passed, ${fail} failed${skip ? `, ${skip} skipped（這個分支沒有 bridge）` : ''}`);
+console.log(`\n${pass} passed, ${fail} failed${skip ? `, ${skip} skipped（送審版沒有 bridge／偵察模式）` : ''}`);
 process.exit(fail ? 1 : 0);
