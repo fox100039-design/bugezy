@@ -61,6 +61,10 @@ content.ts（GET_PAGE_INFO / 即時 console 與網路錯誤）→ 目標網頁
 
 #### MCP 工具總覽：全站 **65 支**（bridge 51 + 雲端 14）
 
+> 🔴 **`release/v1.2.0`（送審分支）只有雲端那 14 支。**（PM-439）
+> 擴充功能端已移除 bridge 的 WebSocket 通道，**`bridge/` 目錄本身沒刪** —— 只是裝了送審版的
+> 瀏覽器不會再連上去。master 維持 65 支不變。
+
 | 位置 | 數量 | 內容 |
 |---|---|---|
 | **bridge**（本機，`ws://127.0.0.1:19850`） | **51** | 瀏覽器操控 11 ＋ 圖釘 6 ＋ Zone Grid 8 ＋ 即時面板 2 ＋ 終端機監控 3 ＋ 嚴重度與自動化 7 ＋ 記憶矩陣 14 |
@@ -535,6 +539,31 @@ job/           每日任務檔
     > - **共用內容樣式把條列變成六角**（`ul { list-style:none }` + `li::before` clip-path）。**放在 `<li>` 裡的卡片要記得 `::before { content:none }`** —— 部落格列表卡、心得引言卡都是 `<li>`，不關掉每張卡前面會多一顆六角。
     > - **整段替換頁面 `<style>` 會連帶弄丟寫在下半段的專屬 class**（PM-435 掉了 13 個：`.mcp-box` `.warn-box` `.tips` `.plan3 .pc` …）。收工前用「body 用到的 class 是否都有對應 CSS」掃一遍。
 
+22. **送審分支 `release/v1.2.0`（PM-439~445）**：
+    > **只換視覺、不加新功能** —— 架上 v1.1.5 沒有的東西一律不進送審版。
+    >
+    > **移除**：bridge WebSocket 通道、偵察模式、圖釘、記憶矩陣、除錯面板、區域覆蓋層、`read_page` 全套。
+    > `content.ts` 3954 → **861 行**、`background.ts` 1494 → **822 行**。
+    > **保留**：錄製／截圖三模式／語音／上傳／票券／大黃蜂視覺，全部不動。
+    >
+    > - 🔴 **`BRIDGE_*` 是歷史誤名**：23 個裡有 8 個其實是 popup 自己的協定（釘選、偵察一鍵全掃）。
+    >   照卡片字面「刪掉所有 `BRIDGE_` handler」會當場弄壞 popup。處理是 bridge 專用的刪、popup 用的
+    >   改名 `PIN_*` / `SCOUT_*`（PM-443 之後那批也整組拿掉了）。
+    > - 🔴 **`noUnusedLocals` 看不到頂層語句**：`window.addEventListener` / `MutationObserver` 這種
+    >   即使實作已成孤兒也不會被點名（zone 覆蓋層就是這樣殘留的）。要刪整片時用**交叉引用**算
+    >   「這段裡的頂層宣告有誰被範圍外引用」，不要只信 tsc。
+    > - 🔴 **`noUnusedLocals` 也看不到訊息傳遞**：`chrome.runtime.sendMessage` 的 handler 被刪掉，
+    >   tsc 依然 exit 0、build 依然成功，要實機點下去才知道。護欄補在 `_verify403` 第 ⑱ 區
+    >   （截圖四段鏈路 + i18n 無斷鍵）。同理 **i18n key 是字串**，字典刪掉一條不會有編譯錯誤，
+    >   畫面會直接印出鍵名本身。
+    > - **版本通知要用 semver 比較**：原本 `latest !== current`，不相等就跳 —— 版本往回走也照跳。
+    >   `/api/version` 必須等**商店真的放行**之後才改，否則對所有現役使用者謊報有新版。
+    > - **回歸測試不砍斷言，改 SKIP**：四套 bridge 專屬的整套 SKIP，`_verify403` 的偵察／圖釘條目
+    >   走 `checkScout()`。守衛在 master 上不會觸發（那邊有 `BRIDGE_URL` 與 `scoutEnterBtn`），
+    >   可以安全合併回去讓兩邊測試檔同步。
+    > - **`npm run build` 是正式版、`npm run build:dev` 才有 `<all_urls>`**。開發中誤跑正式 build
+    >   會讓本機的擴充功能少掉 host 權限；打包前則相反，一定要跑正式 build。
+
 
 ## §5 MCP Server Tool Schema
 
@@ -584,6 +613,7 @@ list_recent_reports   → 最近報告
 | 2026-09-02 | **大黃蜂視覺系統 — 群組 A（popup）**（PM-413~422，10 張卡）。popup 從深藍紫整套換成黃／黑／咖啡：design token 落地 `:root`、寬度 360→**320px**（§9）、登入頁 `<bee-video>`、主畫面十三個區塊、錄製中／完成、進階設定、偵察模式、票券／付費／日票／額度／取消五畫面、兩個 overlay。🔴 **emoji 只清 markup 沒有用** —— `applyTranslations()` 會把字典值蓋回畫面，55 個 popup 專用 key 一併清；幾何圖示一律做成 `[data-i18n]` 元素的**兄弟節點**。擴充圖示 128/48/32/16 重畫（六角斜紋，16px 去斜紋）。`_verify403` 92 → **122**（29 條規格護欄，全部反向驗證過）。全套 **841 / 0**。 |
 | 2026-09-03 | **大黃蜂視覺系統 — 群組 A 修正 + B + C**（PM-423~431，9 張卡）。popup 清掉 9 個舊紫色 token（那六處引用其實早被 PM-416 蓋掉、從未渲染）；登入頁移除靜態 fallback（🔴 根因是 `CustomEvent` 預設 `bubbles: false`，listener 卻掛在父層，備援圖從頭到尾壓在 canvas 上）。**群組 B**：付款中繼頁 ×2、麥克風授權頁、截圖標注頁、報告編輯頁。**群組 C**：`content.ts`（截圖工具列／釘選全套／元素高亮 §7.8 黃色雙環／除錯面板）、`inject.ts`（語音面板／三種字幕條／監控徽章與面板／頁內麥克風授權）。🔴 真正的工作量是**十幾處 `textContent` 會把新的幾何圖示洗掉**（見 §4-21）。🔴 `PIN_STATUS_EMOJI` 與判定字串的 emoji **留在資料裡**（popup 的 `sevClass()` 協定），新增 `stripSev()` 只在畫面上剝。兩個卡片要求的元件**不存在**：錄製工具列、AUTO 時間軸標記（`TimeMarker` 沒有來源欄位）。`_verify403` 122 → **219**（+97）。全套 **937 / 0**。**擴充功能端全部改完**，剩 server 端的群組 D／E。 |
 | 2026-09-04 | **大黃蜂視覺系統 — 群組 D + E（全部收工）**（PM-432~437，6 張卡）。**群組 D**：分享報告頁（黃底 + 黑 header + 分頁列 + Console/Info 兩分頁，分享連結卡搬到標題右側）、付費牆 66×76 幾何鎖頭、找不到報告三格蜂巢。**群組 E**：共用外殼 `SITE_FONTS`／`SITE_CHROME_CSS`／`SITE_CONTENT_CSS` + `siteNav()`／`siteFooter()` 套進 11 頁；首頁改黃／米白／黑交替分節（黃色只留給 hero、定價、結尾 CTA 三個決策點）並**補上從來不存在的 `#pricing` 定價區**（付費牆的「了解會員方案」本來是死連結）；內容頁 6 頁 + 部落格／心得／問題回報／日票成功頁。🔴 真正吃時間的是**三本翻譯字典**：key 是繁體原文（改頁面要同步改 key，21 條），**值才是日／韓／越看到的字（102 條 emoji 沒清到，被自己的護欄抓出來 —— 那條斷言原本切片切到定義在字典「前面」的 `makeT`，切出空字串、永遠是綠的）**。順手修掉 hreflang 宣告與語言切換不一致（已釘跨函式斷言）。三個「設計稿要、資料沒有」的欄位沒有編造：部落格分類、心得職稱、日票倒數（這頁是綠界 ClientBackURL，查不到 `day_pass_expires_at`，假倒數重整就歸零）。實拍蜂走 `hornet-png.ts` base64 + `GET /hornet-real.png`。`_verify403` 219 → **280**（+61，反向測試 81/81）。全套 **999 / 0**，bundle gzip **770 KiB**。**視覺系統 A~E 全部完成**。 |
+| 2026-09-05 | **v1.2.0 送審版準備**（PM-438~445，8 張卡）。**PM-438 在 master**：大黃蜂官網上線（deploy 兩次 —— 第一次首頁是壞的，CSS 註解裡的反引號提前結束 template literal，`tsc`／dry-run／280 條斷言全部沒擋到，護欄與 `server/_verify-live.mjs` 已補）。**其餘在 `release/v1.2.0`**：移除 bridge（`background.ts` −672 行）、版本號 1.2.0、打包送審 zip（3187 KB / 25 entries，**84.5% 是 bee.webm**）、移除偵察模式 + 圖釘 + 記憶矩陣（`content.ts` 3954 → **861 行**）、版本通知改 semver 比較。🔴 **`BRIDGE_*` 是歷史誤名**，8 個其實是 popup 自己的協定，照字面刪會弄壞 popup。🔴 **`noUnusedLocals` 看不到頂層語句與訊息傳遞** —— 前者用交叉引用補、後者用 `_verify403` 第 ⑱ 區的鏈路護欄補。PM-444 查證截圖「被誤刪」的說法不成立（15/15 鏈路都在），真正原因是環境（reload 後舊分頁沒有 content script／dist 變成正式 manifest）。端到端 **589 / 0 / 53 skipped**（另 4 套整套 SKIP）。**master 不受影響，仍是 65 支 MCP 工具與完整 bridge。** |
 
 > 部署：Cloudflare Workers `bugezy-api`（**bugezy.dev** + `bugezy-api.bugezy-api.workers.dev` 雙域名）；每日 03:00 UTC cron 保活 Supabase。
 > （隨開發持續更新）

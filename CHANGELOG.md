@@ -1,5 +1,69 @@
 # BugEzy Changelog
 
+## Day 52（2026-09-05）— v1.2.0 送審版準備（`release/v1.2.0` 分支）
+
+> 端到端 **589 passed / 0 failed / 53 skipped**（另有 4 套 bridge 專屬的整套 SKIP）。
+> `_verify403` **283 → 227**（減少的是被 SKIP 的偵察／圖釘條目，斷言本身留在檔案裡）。
+> **master 完全沒動** —— 這一整天的改動都在 `release/v1.2.0` 上。
+
+| 卡 | 內容 |
+|---|---|
+| PM-438 | 部署大黃蜂官網上線（**這張在 master 上**） |
+| PM-439 | 建立 `release/v1.2.0`，移除 bridge |
+| PM-440 | 版本號 bump 到 1.2.0 |
+| PM-441 | 打包送審 zip |
+| PM-442 | 分支 build 確認 |
+| PM-443 | 移除偵察模式 + 圖釘 + 記憶矩陣，修版本通知比較 |
+| PM-444 | 查證截圖鏈路（結論：沒壞）+ 補訊息傳遞護欄 |
+| PM-445 | 收工文件 |
+
+### 刪掉了什麼
+
+| 檔案 | 前 → 後 |
+|---|---|
+| `content.ts` | 3954 → **861 行**（−3093） |
+| `background.ts` | 1494 → **822 行**（−672） |
+| `popup.ts` | −401 行 |
+| `popup.html` | −235 行（含 68 條 CSS 規則） |
+| `types.ts` | −30 個訊息型別 |
+| `i18n.ts` | −58 條 key |
+
+打包產物（同參數 minify）：`background` 27.5 → 14.4 KB（−48%）、`content` 185.7 → 164.9 KB（PM-439）；PM-443 之後 `dist/content.js` 再從 211,496 → **123,630 bytes（−41.5%）**。
+
+### 送審包
+
+`dist-zip/bugezy-v1.2.0.zip` — **3187 KB / 25 entries**、manifest 1.2.0、權限 5 項、`host_permissions` 為空。
+排除了 icon 設計原稿（`icons/proposals/` + `icon-source.svg`）與擴充功能沒用到的 `assets/hornet-real.png`。
+
+**⚠ 84.5% 是 `bee.webm`（2734 KB）** —— 程式碼部分只有約 450 KB。壓那支影片仍是縮包的唯一有效手段。
+
+### 🔴 `BRIDGE_*` 是歷史誤名，不能照字面刪
+
+PM-439 卡片要求「移除所有 `BRIDGE_` 開頭的 handler」，但 23 個裡有 **8 個其實是 popup 自己的協定**（釘選 4 個、偵察模式一鍵全掃 4 個）。照字面刪會當場弄壞 popup，而同一張卡的驗收又寫「功能正常」。
+處理：**bridge 專用的刪掉、popup 用的改名 `PIN_*` / `SCOUT_*`**，兩條驗收才同時成立。（PM-443 後來把偵察與圖釘整組拿掉，那批訊息也跟著消失。）
+
+### 🔴 `noUnusedLocals` 看不到兩種東西
+
+1. **頂層語句**（`window.addEventListener`、`MutationObserver`）—— zone 覆蓋層那套就是這樣殘留下來的。PM-443 改用交叉引用算出「L234~L2139 的 103 個頂層宣告只有 `HZ` 色票被範圍外引用」，才敢整片刪。
+2. **訊息傳遞**（`chrome.runtime.sendMessage`）—— handler 被刪掉 tsc 依然 exit 0、build 依然成功。PM-444 為此補了第 ⑱ 區護欄：截圖四段鏈路、三模式與工具列、`captureVisibleTab` + 開 annotate、敏感欄位偵測、**所有被引用的 i18n key 字典裡都有**。
+
+### 版本通知：修邏輯而不是隱藏
+
+原本 `latest !== current` —— **不相等**就跳提示，版本號往回走也照跳（送審版 1.2.0 對上 `/api/version` 的 1.1.5，會顯示「有新版 1.1.5 可用」）。新增 `isNewerVersion()` 逐段轉數字比（字串比會把 `1.10.0` 判成比 `1.9.0` 舊），8 組案例實測全對。
+
+**`/api/version` 與官網 changelog／SKILL 手冊刻意留在 1.1.5** —— 商店還沒放行 1.2.0 之前改掉，等於對所有現役使用者謊報有新版。正確順序是「商店審核通過 → 才 deploy 帶新版號的 server」。
+
+### 卡片上兩個數字我改了
+
+卡片寫「端到端 414 passed」與「MCP 工具從 65 降回 cloud 8 支」，兩個都不對：
+
+- **端到端實測是 589**（414 是 DONE-443 的加總筆誤，卡片沿用了）。逐套：327=42、350=27、355=81、362=23、366=19、367=47、375=47、389=43、403=227、398=33。
+- **雲端 MCP 是 14 支不是 8**（`server/src/index.ts` 裡 `server.tool(` 14 次）。`bridge/` 目錄本身沒刪，只是**擴充功能不再連它**，所以送審版實際能用的是那 14 支雲端工具。
+
+### 外部工具
+
+`dc-light v1.1.0` 新增 `render_html`（Edge headless 截圖）—— 那是 Claude Chat 端的工具，不在這個 repo 裡，**我沒有驗證過**，照卡片記錄。
+
 ## v1.2.0（2026-09-05）— 大黃蜂視覺系統 + 精簡架構
 
 > 分支 `release/v1.2.0`（送審版）。master 仍保留 bridge。
