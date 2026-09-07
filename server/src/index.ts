@@ -6423,6 +6423,10 @@ export default {
       if (reportId && reportId.length > 10) {
         const res = html(reportPageHtml(getLang(request)), true);
         res.headers.set('Cache-Control', 'no-store');
+        // PM-446：分享報告不該進搜尋結果。robots.txt 的 Disallow 只是「不要爬」，
+        //   擋不住「以裸連結形式收錄」—— 連結被貼到公開場合時 Google 仍可能列出網址。
+        //   header 版的 noindex 才是真的不要索引，且不依賴 robots.txt 的內容。
+        res.headers.set('X-Robots-Tag', 'noindex, nofollow');
         return res;
       }
     }

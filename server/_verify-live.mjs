@@ -95,6 +95,42 @@ if (!pngOk) bad++;
 console.log((pngOk ? '  OK  ' : ' FAIL ') + '/hornet-real.png'.padEnd(20) + png.status +
   '  ' + png.headers.get('content-type') + ' ' + pngLen + 'b');
 
+// PM-446：SEO 路由。GSC 報「被 robots.txt 封鎖」時，第一件事就是確認這兩條真的活著。
+const robots = await fetch(BASE + '/robots.txt');
+const robotsTxt = await robots.text();
+const robotsOk = robots.status === 200
+  && (robots.headers.get('content-type') || '').startsWith('text/plain')
+  && ['/api/', '/mcp', '/report/', '/reports'].every((d) => robotsTxt.includes('Disallow: ' + d))
+  && robotsTxt.includes('Sitemap: https://bugezy.dev/sitemap.xml');
+if (!robotsOk) bad++;
+console.log((robotsOk ? '  OK  ' : ' FAIL ') + '/robots.txt'.padEnd(20) + robots.status +
+  '  ' + (robots.headers.get('content-type') || '') + ' ' + robotsTxt.length + 'b');
+
+const sm = await fetch(BASE + '/sitemap.xml');
+const smXml = await sm.text();
+const locs = [...smXml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => new URL(m[1]).pathname);
+const disallow = robotsTxt.split('\n').filter((l) => /^Disallow:/i.test(l)).map((l) => l.split(':')[1].trim());
+// 🔴 sitemap 列出被 robots.txt 擋住的 URL，GSC 會直接報錯
+const smBlocked = locs.filter((p) => disallow.some((d) => d && p.startsWith(d)));
+const smOk = sm.status === 200
+  && (sm.headers.get('content-type') || '').startsWith('application/xml')
+  && locs.length >= 40 && smBlocked.length === 0;
+if (!smOk) bad++;
+console.log((smOk ? '  OK  ' : ' FAIL ') + '/sitemap.xml'.padEnd(20) + sm.status +
+  '  ' + locs.length + ' 個 URL' + (smBlocked.length ? '，其中被擋的：' + smBlocked.join(',') : '') +
+  ' ' + smXml.length + 'b');
+
+// 公開頁面連到「被 robots.txt 擋住」的路徑 → 這正是 GSC「已封鎖」警告的來源
+const linkedBlocked = new Set();
+for (const [path] of PAGES) {
+  const h = await (await fetch(BASE + path, { headers: { 'Accept-Language': 'zh-TW' } })).text();
+  for (const m of h.matchAll(/href="(\/[^"#?]*)"/g)) {
+    if (disallow.some((d) => d && m[1].startsWith(d))) linkedBlocked.add(m[1]);
+  }
+}
+console.log((linkedBlocked.size ? ' GAP  ' : '  OK  ') + '公開頁 → 被擋路徑'.padEnd(18) +
+  (linkedBlocked.size ? [...linkedBlocked].join(',') + '（GSC 會報「已封鎖」，見 DONE-446）' : '沒有'));
+
 console.log('-'.repeat(78));
 console.log(bad === 0 ? '線上驗收：全部通過' : `線上驗收：${bad} 項未過`);
 process.exit(bad === 0 ? 0 : 1);

@@ -1289,5 +1289,38 @@ check('444   🔴 所有被引用的 i18n key 字典裡都有（漏一條畫面�
   return missing.length === 0;
 })());
 
+console.log('\n=== ⑲ PM-446：SEO 路由（robots.txt / sitemap.xml）===');
+
+check('446   兩條路由都掛著，且 Content-Type 正確',
+  /path === '\/sitemap\.xml'\) return sitemapXml\(\)/.test(srvRaw)
+  && /path === '\/robots\.txt'\) return robotsTxt\(\)/.test(srvRaw)
+  && /'Content-Type': 'application\/xml; charset=utf-8'/.test(srvRaw)
+  && /'Content-Type': 'text\/plain; charset=utf-8'/.test(srvRaw));
+
+check('446   🔴 robots.txt 擋住四條私人路徑（/report/ 與 /reports 是使用者資料）', (() => {
+  const fn = srvRaw.slice(srvRaw.indexOf('function robotsTxt'), srvRaw.indexOf('// PM-211：Open Graph'));
+  return ['/api/', '/mcp', '/report/', '/reports'].every((d) => fn.includes(`Disallow: ${d}`))
+    && fn.includes('Sitemap: https://bugezy.dev/sitemap.xml');
+})());
+
+check('446   🔴 sitemap 的頁面清單不可以包含被 robots.txt 擋住的路徑', (() => {
+  const sm = srvRaw.slice(srvRaw.indexOf('function sitemapXml'), srvRaw.indexOf('function robotsTxt'));
+  const paths = [...sm.matchAll(/\{ path: '([^']+)'/g)].map((m) => m[1]);
+  const blocked = ['/api/', '/mcp', '/report/', '/reports'];
+  const bad = paths.filter((p) => blocked.some((b) => p.startsWith(b)));
+  if (bad.length) console.log('   sitemap 列了被擋的路徑：' + bad.join(', '));
+  return paths.length >= 10 && bad.length === 0;
+})());
+
+check('446   🔴 sitemap 的語言集合直接沿用 LANGS_*（跟 canonical／hreflang 同一個事實來源）',
+  /\{ path: '\/', langs: LANGS_6/.test(srvRaw)
+  && /\{ path: '\/blog', langs: LANGS_ZH/.test(srvRaw)
+  && /hreflang="x-default"/.test(srvRaw));
+
+check('446   🔴 分享報告頁不該被索引（robots.txt 只擋爬，擋不住「以裸連結收錄」）',
+  // ⚠ 要錨在 /report/ 那條路由裡：/test-errors 也有同一行 header，只查字串會被它餵飽。
+  /path\.startsWith\('\/report\/'\)[\s\S]{0,700}X-Robots-Tag', 'noindex, nofollow'/.test(srvRaw)
+  && /<meta name="robots" content="noindex, nofollow" \/>/.test(srvRaw));
+
 console.log(`\n${pass} passed, ${fail} failed${skip ? `, ${skip} skipped（送審版沒有 bridge／偵察模式）` : ''}`);
 process.exit(fail ? 1 : 0);
