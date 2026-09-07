@@ -5,7 +5,12 @@
 // 🔴 PM-448：git checkout 之後檔案會變成 CRLF（core.autocrlf），而下面的斷言到處嵌著 \n。
 //    不正規化的話，程式碼明明沒改，只因為剛切過分支就會假紅。
 import { readFileSync as __rfRaw } from 'fs';
-const __rf = (p, e = 'utf8') => __rfRaw(p, e).replace(/\r\n/g, '\n');
+const __rf = (p, e) => {
+  const r = __rfRaw(p, e);
+  // ⚠ 不要預設 utf8：有呼叫點是不帶 encoding 讀二進位（PNG）的，
+  //   強制解成字串會把位元組毀掉（_verify_phase1 量 icon 尺寸就是這樣變 0×0）。
+  return typeof r === 'string' ? r.replace(/\r\n/g, '\n') : r;
+};
 // PM-439：release/v1.2.0 把 bridge 整個拿掉了。這一整套測的就是 bridge 通道，
 // 原始碼不在就直接 SKIP —— 讓它變成永遠的紅燈，只會訓練大家忽略紅燈。
 if (!__rf('../extension/src/background.ts', 'utf8').includes('BRIDGE_URL')) {

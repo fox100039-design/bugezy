@@ -1,7 +1,12 @@
 // PM-389/390 驗收：stderr critical 信號 + BUGEZY.md
 // PM-448：git checkout 之後檔案會變成 CRLF，斷言裡嵌的換行會對不上（見 DONE-448）。
 import { readFileSync as __rfRaw, existsSync } from 'node:fs';
-const readFileSync = (p, e = 'utf8') => __rfRaw(p, e).replace(/\r\n/g, '\n');
+const readFileSync = (p, e) => {
+  const r = __rfRaw(p, e);
+  // ⚠ 不要預設 utf8：有呼叫點是不帶 encoding 讀二進位（PNG）的，
+  //   強制解成字串會把位元組毀掉（_verify_phase1 量 icon 尺寸就是這樣變 0×0）。
+  return typeof r === 'string' ? r.replace(/\r\n/g, '\n') : r;
+};
 import {
   signalCritical, signalBrowserErrors, signalTerminalErrors, signalZoneChanges, signalPinPatrol,
   _resetSignals, SIGNAL_DEDUP_MS,
