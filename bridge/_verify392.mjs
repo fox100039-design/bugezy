@@ -1,6 +1,9 @@
 // PM-392~394 驗收：pin_analyze 動態探測。
 // 沿用 _verify309 的做法——把 content.ts 裡真正的函式抽出來在 jsdom 的真實 DOM 上跑。
-import { readFileSync as __rf } from 'fs';
+// 🔴 PM-448：git checkout 之後檔案會變成 CRLF（core.autocrlf），而下面的斷言到處嵌著 \n。
+//    不正規化的話，程式碼明明沒改，只因為剛切過分支就會假紅。
+import { readFileSync as __rfRaw } from 'fs';
+const __rf = (p, e = 'utf8') => __rfRaw(p, e).replace(/\r\n/g, '\n');
 // PM-439：release/v1.2.0 把 bridge 整個拿掉了。這一整套測的就是 bridge 通道，
 // 原始碼不在就直接 SKIP —— 讓它變成永遠的紅燈，只會訓練大家忽略紅燈。
 if (!__rf('../extension/src/background.ts', 'utf8').includes('BRIDGE_URL')) {

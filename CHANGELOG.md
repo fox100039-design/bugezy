@@ -1,5 +1,50 @@
 # BugEzy Changelog
 
+## Day 54（2026-09-07）— SEO 修正 + v1.2.0 送審
+
+> **`release/v1.2.0`**：全套 **594 passed / 0 failed / 53 skipped**（另 4 套 bridge 專屬整套 SKIP）、`_verify403` **232**。
+> **master**：全套 **1007 / 0**、`_verify403` **288**。兩條分支都已 push。
+> SEO 修正**從 master 部署**（版本 `4bd3dd24`），因為 server 一直是從 master 上線的。
+
+### GSC「已封鎖無法索引」的真正原因
+
+不是缺 robots.txt —— 那兩條路由 PM-136／PM-264 就做好了（線上 200、Content-Type 正確、
+sitemap 57 個 URL 帶完整 hreflang）。真正的原因查出來是：
+
+**`/reports` 被全站 11 頁的 footer 連結，同時又被 `robots.txt` 擋住。**
+而它自己已經送 `<meta name="robots" content="noindex, nofollow">` —— 被 Disallow 擋著時
+**Google 永遠讀不到那個 noindex**，結果既排不出索引、又一直在 Search Console 報警。
+
+| 卡 | 內容 |
+|---|---|
+| PM-446 | 查證（結論：路由早就有，照卡片重做會退步）+ `/report/:id` 補 `X-Robots-Tag: noindex, nofollow` + 5 條 SEO 護欄 |
+| PM-447 | 拿掉 `Disallow: /reports`（方案 A），從 master 部署並線上驗收 |
+| PM-448 | 收工文件 + 修掉回歸腳本的 CRLF 敏感問題 |
+
+`Disallow: /report/` 維持 —— 那是別人的報告資料，不該讓爬蟲主動去要。
+
+### 🔴 回歸腳本對換行符敏感，剛切過分支就會假紅
+
+收工前跑測試，`_verify403` 從 **232/0 變成 227/5**，而程式碼一個字都沒改。
+
+原因是 `git checkout` 會依 `core.autocrlf` 把工作區檔案寫成 **CRLF**，而斷言裡到處嵌著 `\n`：
+
+```js
+srvRaw.indexOf('`<!DOCTYPE html>\n')          // → 找不到，整頁樣板數變 0
+srvRaw.indexOf('\n}\n', ...)                  // → -1，切出來的 chrome 是空字串
+```
+
+所以「剛切過分支」本身就會讓五條斷言變紅 —— 這種假紅最傷，因為它會訓練人忽略紅燈。
+**修法**：10 支會讀原始碼的回歸腳本，在入口把 `readFileSync` 包一層做 `\r\n → \n` 正規化，
+既有的幾十個呼叫點一行都不用動。`_verify355`／`_verify366` 讀的是 `.gitignore`／`config.json`／
+memory 檔，沒有換行敏感的斷言，不動。
+
+### 其他
+
+- `server/_verify-live.mjs` 的根因檢查「公開頁 → 被擋路徑」已由 `/reports` 翻成 **沒有**。
+- SEO 護欄與線上檢查**兩條分支都有**（master 才是被部署的那份，改動上線卻讓守它的斷言留在未合併分支＝裸奔）。
+- **CWS v1.2.0 已送審、等待審核** —— 這件事在我這邊無法驗證，照卡片記錄。
+
 ## Day 52（2026-09-05）— v1.2.0 送審版準備（`release/v1.2.0` 分支）
 
 > 端到端 **589 passed / 0 failed / 53 skipped**（另有 4 套 bridge 專屬的整套 SKIP）。

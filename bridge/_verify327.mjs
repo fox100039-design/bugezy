@@ -1,7 +1,10 @@
 // PM-327 驗收：終端機即時監控（真的 spawn 子程序，不模擬）
 import { spawn, execFileSync } from 'node:child_process';
 import { startMockWorkers } from './_mock-workers.mjs';
-import { readFileSync } from 'node:fs';
+// 🔴 PM-448：git checkout 之後檔案會變成 CRLF（core.autocrlf），而下面的斷言到處嵌著 \n。
+//    不正規化的話，程式碼明明沒改，只因為剛切過分支就會假紅。
+import { readFileSync as __rfRaw } from 'node:fs';
+const readFileSync = (p, e = 'utf8') => __rfRaw(p, e).replace(/\r\n/g, '\n');
 
 let pass = 0, fail = 0;
 const check = (l, ok, extra = '') => { ok ? pass++ : fail++; console.log(ok ? '  PASS ' : '  FAIL ', l, ok ? '' : '→ ' + extra); };

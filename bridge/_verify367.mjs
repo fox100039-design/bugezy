@@ -1,5 +1,8 @@
 // PM-367 驗收：瀏覽器錯誤 PII 遮罩（純邏輯，直接載入編譯後的模組）
-import { readFileSync } from 'node:fs';
+// 🔴 PM-448：git checkout 之後檔案會變成 CRLF（core.autocrlf），而下面的斷言到處嵌著 \n。
+//    不正規化的話，程式碼明明沒改，只因為剛切過分支就會假紅。
+import { readFileSync as __rfRaw } from 'node:fs';
+const readFileSync = (p, e = 'utf8') => __rfRaw(p, e).replace(/\r\n/g, '\n');
 import { maskBrowserError, maskUrl, maskConsoleEntry, maskNetworkEntry, maskErrorPayload } from './dist/pii-browser.js';
 import { maskStderr } from './dist/vendor/pii-mask.js';
 

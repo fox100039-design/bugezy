@@ -1,7 +1,10 @@
 // PM-403~406 驗收：popup 兩層架構、AI 監測、記憶矩陣唯讀通道、guide MCP30 章節。
 // popup 沒有 DOM 可跑（不是 content script，無法用 jsdom 抽函式），所以用原始碼靜態檢查；
 // 唯讀通道的協定兩端都查，guide 則直接打線上頁面。
-import { readFileSync } from 'node:fs';
+// 🔴 PM-448：git checkout 之後檔案會變成 CRLF（core.autocrlf），而下面的斷言到處嵌著 \n。
+//    不正規化的話，程式碼明明沒改，只因為剛切過分支就會假紅。
+import { readFileSync as __rfRaw } from 'node:fs';
+const readFileSync = (p, e = 'utf8') => __rfRaw(p, e).replace(/\r\n/g, '\n');
 
 let pass = 0, fail = 0;
 const check = (l, ok, extra = '') => { ok ? pass++ : fail++; console.log(ok ? '  PASS ' : '  FAIL ', l, ok ? '' : '→ ' + extra); };

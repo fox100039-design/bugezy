@@ -2,7 +2,10 @@
 //   ① 從 **實際打包產物** 抽出純函式測試（不另抄一份，原始碼結構變動時測試會失敗而非靜默通過）
 //   ② 真 MCP JSON-RPC 檢查工具註冊與 schema
 //   ③ 接真 Chrome 跑端到端（需擴充功能已重新載入 + port 19850 未被其他 bridge 占用）
-import { readFileSync as __rf } from 'fs';
+// 🔴 PM-448：git checkout 之後檔案會變成 CRLF（core.autocrlf），而下面的斷言到處嵌著 \n。
+//    不正規化的話，程式碼明明沒改，只因為剛切過分支就會假紅。
+import { readFileSync as __rfRaw } from 'fs';
+const __rf = (p, e = 'utf8') => __rfRaw(p, e).replace(/\r\n/g, '\n');
 // PM-439：release/v1.2.0 把 bridge 整個拿掉了。這一整套測的就是 bridge 通道，
 // 原始碼不在就直接 SKIP —— 讓它變成永遠的紅燈，只會訓練大家忽略紅燈。
 if (!__rf('../extension/src/background.ts', 'utf8').includes('BRIDGE_URL')) {

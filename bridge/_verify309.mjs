@@ -4,7 +4,10 @@
 // ⚠ jsdom 不是 Chrome：它沒有版面計算，所以 checkVisibility 不存在、走 getComputedStyle 後備路徑。
 //   這裡驗的是**演算法**（去重、隱藏排除、額度、selector 唯一性、敏感遮蔽），
 //   實際瀏覽器行為仍以端到端為準。
-import { readFileSync as __rf } from 'fs';
+// 🔴 PM-448：git checkout 之後檔案會變成 CRLF（core.autocrlf），而下面的斷言到處嵌著 \n。
+//    不正規化的話，程式碼明明沒改，只因為剛切過分支就會假紅。
+import { readFileSync as __rfRaw } from 'fs';
+const __rf = (p, e = 'utf8') => __rfRaw(p, e).replace(/\r\n/g, '\n');
 // PM-439：release/v1.2.0 把 bridge 整個拿掉了。這一整套測的就是 bridge 通道，
 // 原始碼不在就直接 SKIP —— 讓它變成永遠的紅燈，只會訓練大家忽略紅燈。
 if (!__rf('../extension/src/background.ts', 'utf8').includes('BRIDGE_URL')) {

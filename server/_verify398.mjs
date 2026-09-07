@@ -4,7 +4,10 @@
 //   單元測試要 mock 整個 PostgREST，成本遠高於價值）。所以這支做兩件事：
 //   ① **原始碼層面的不變式**——順序、fail-closed、退路，這些寫錯了線上也看不出來
 //   ② **線上端點的實際行為**——能在沒有使用者 token 的前提下驗到的部分
-import { readFileSync } from 'node:fs';
+// 🔴 PM-448：git checkout 之後檔案會變成 CRLF（core.autocrlf），而下面的斷言到處嵌著 \n。
+//    不正規化的話，程式碼明明沒改，只因為剛切過分支就會假紅。
+import { readFileSync as __rfRaw } from 'node:fs';
+const readFileSync = (p, e = 'utf8') => __rfRaw(p, e).replace(/\r\n/g, '\n');
 
 let pass = 0, fail = 0;
 const check = (l, ok, extra = '') => { ok ? pass++ : fail++; console.log(ok ? '  PASS ' : '  FAIL ', l, ok ? '' : '→ ' + extra); };

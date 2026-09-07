@@ -1,5 +1,7 @@
 // PM-389/390 驗收：stderr critical 信號 + BUGEZY.md
-import { readFileSync, existsSync } from 'node:fs';
+// PM-448：git checkout 之後檔案會變成 CRLF，斷言裡嵌的換行會對不上（見 DONE-448）。
+import { readFileSync as __rfRaw, existsSync } from 'node:fs';
+const readFileSync = (p, e = 'utf8') => __rfRaw(p, e).replace(/\r\n/g, '\n');
 import {
   signalCritical, signalBrowserErrors, signalTerminalErrors, signalZoneChanges, signalPinPatrol,
   _resetSignals, SIGNAL_DEDUP_MS,

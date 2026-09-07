@@ -2,7 +2,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { readFileSync } from 'node:fs';
+// 🔴 PM-448：git checkout 之後檔案會變成 CRLF（core.autocrlf），而下面的斷言到處嵌著 \n。
+//    不正規化的話，程式碼明明沒改，只因為剛切過分支就會假紅。
+import { readFileSync as __rfRaw } from 'node:fs';
+const readFileSync = (p, e = 'utf8') => __rfRaw(p, e).replace(/\r\n/g, '\n');
 import { memoryExport, memoryImport, memorySave } from './dist/memory-ops.js';
 import { _resetStore, ensureStore } from './dist/memory-store.js';
 import { maskBrowserError, maskUrl, MAX_MESSAGE_LEN, MAX_URL_LEN } from './dist/pii-browser.js';
