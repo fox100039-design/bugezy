@@ -527,6 +527,18 @@ job/           每日任務檔
     > - **蜂巢紋 data URI 內不可出現未編碼的 `;`**（§4）：會提早結束 CSS 宣告，整條 `background-image` 失效。
     > - **登入頁的蜂**：`<bee-video>`（`bee-video.js`，classic script，**不可走 esbuild entryPoints**，否則 `customElements.define` 不會執行）。despill 紅通道回補 `0.28`（去綠後偏暖黃而非偏灰）、`filter: saturate(1.55) contrast(1.25) brightness(1.10)`。**沒有靜態 fallback**（PM-424 移除，回歸交付包 §Assets 的原意）。
     > - **刻意不外連 Google Fonts**：擴充頁面連外字型 = 每次開啟都向第三方送一次請求，隱私政策要交代（v1.1.5 曾被 CWS 以「隱私政策資訊不足」退件）。字型走「設計字型優先 + 系統字備援」的堆疊。
+
+22. **回歸腳本讀檔一定要正規化換行（PM-448）**：
+    > `git checkout` 會依 `core.autocrlf` 把工作區寫成 CRLF，而斷言裡嵌著 `\n`
+    > （`'`<!DOCTYPE html>\n'`、`indexOf('\n}\n')`）—— **程式碼沒改，只因為剛切過分支就會假紅**。
+    > 10 支讀原始碼的腳本已在入口把 `readFileSync` 包一層做 `\r\n → \n`，既有呼叫點不動。
+    > 假紅比沒有測試更糟：它會訓練人忽略紅燈，而被埋掉的那條可能正是唯一擋得住真問題的護欄。
+    >
+    > - ⚠ **包一層的時候不要預設 `'utf8'`**：`_verify_phase1` 有呼叫點是不帶 encoding 讀 PNG 量尺寸的，
+    >   強制解字串會把位元組毀掉（icon 尺寸變 0×0）。只有回傳字串時才正規化。
+    > - ⚠ **`_verify_phase1` 讀的是 `extension/dist/background.js`**，而 `dist/` 在 .gitignore 裡、
+    >   **不會跟著 `git checkout` 換**。切完分支要先 `npm run build` 再跑，否則它是拿另一條分支的
+    >   打包產物在驗這條分支的原始碼。
     > - **server 端頁面反過來，是外連 Google Fonts 的**（PM-432 起）：官網／報告頁不是擴充，沒有 CWS 那層隱私審查。11 個官網頁共用 `SITE_FONTS` / `SITE_CHROME_CSS` / `SITE_CONTENT_CSS` 三個常數 + `siteNav()` / `siteFooter()` 兩個函式，改一次全部套用。
     > - 🔴 **共用 nav／footer 的選擇器一律「元素 + class」**（`nav.hz-nav` / `footer.hz-foot`，0,1,1）。各頁本來就有 `header {}` `footer {}` `footer a {}` 這類元素選擇器，只寫 `.hz-foot`（0,1,0）壓不過 `footer a`（0,0,2）。
     > - 🔴 **官網三本翻譯字典（JA/KO/VI）用「繁體原文」當 key，值才是畫面上的字。** 改頁面文案要**同時**改 key（不然日／韓／越整句掉回英文），清 emoji 要**同時**清值（`makeT('ja')` 回傳的是值）。這三本只服務 `LANGS_6` 的三頁：首頁、FAQ、功能。
@@ -584,6 +596,7 @@ list_recent_reports   → 最近報告
 | 2026-09-02 | **大黃蜂視覺系統 — 群組 A（popup）**（PM-413~422，10 張卡）。popup 從深藍紫整套換成黃／黑／咖啡：design token 落地 `:root`、寬度 360→**320px**（§9）、登入頁 `<bee-video>`、主畫面十三個區塊、錄製中／完成、進階設定、偵察模式、票券／付費／日票／額度／取消五畫面、兩個 overlay。🔴 **emoji 只清 markup 沒有用** —— `applyTranslations()` 會把字典值蓋回畫面，55 個 popup 專用 key 一併清；幾何圖示一律做成 `[data-i18n]` 元素的**兄弟節點**。擴充圖示 128/48/32/16 重畫（六角斜紋，16px 去斜紋）。`_verify403` 92 → **122**（29 條規格護欄，全部反向驗證過）。全套 **841 / 0**。 |
 | 2026-09-03 | **大黃蜂視覺系統 — 群組 A 修正 + B + C**（PM-423~431，9 張卡）。popup 清掉 9 個舊紫色 token（那六處引用其實早被 PM-416 蓋掉、從未渲染）；登入頁移除靜態 fallback（🔴 根因是 `CustomEvent` 預設 `bubbles: false`，listener 卻掛在父層，備援圖從頭到尾壓在 canvas 上）。**群組 B**：付款中繼頁 ×2、麥克風授權頁、截圖標注頁、報告編輯頁。**群組 C**：`content.ts`（截圖工具列／釘選全套／元素高亮 §7.8 黃色雙環／除錯面板）、`inject.ts`（語音面板／三種字幕條／監控徽章與面板／頁內麥克風授權）。🔴 真正的工作量是**十幾處 `textContent` 會把新的幾何圖示洗掉**（見 §4-21）。🔴 `PIN_STATUS_EMOJI` 與判定字串的 emoji **留在資料裡**（popup 的 `sevClass()` 協定），新增 `stripSev()` 只在畫面上剝。兩個卡片要求的元件**不存在**：錄製工具列、AUTO 時間軸標記（`TimeMarker` 沒有來源欄位）。`_verify403` 122 → **219**（+97）。全套 **937 / 0**。**擴充功能端全部改完**，剩 server 端的群組 D／E。 |
 | 2026-09-04 | **大黃蜂視覺系統 — 群組 D + E（全部收工）**（PM-432~437，6 張卡）。**群組 D**：分享報告頁（黃底 + 黑 header + 分頁列 + Console/Info 兩分頁，分享連結卡搬到標題右側）、付費牆 66×76 幾何鎖頭、找不到報告三格蜂巢。**群組 E**：共用外殼 `SITE_FONTS`／`SITE_CHROME_CSS`／`SITE_CONTENT_CSS` + `siteNav()`／`siteFooter()` 套進 11 頁；首頁改黃／米白／黑交替分節（黃色只留給 hero、定價、結尾 CTA 三個決策點）並**補上從來不存在的 `#pricing` 定價區**（付費牆的「了解會員方案」本來是死連結）；內容頁 6 頁 + 部落格／心得／問題回報／日票成功頁。🔴 真正吃時間的是**三本翻譯字典**：key 是繁體原文（改頁面要同步改 key，21 條），**值才是日／韓／越看到的字（102 條 emoji 沒清到，被自己的護欄抓出來 —— 那條斷言原本切片切到定義在字典「前面」的 `makeT`，切出空字串、永遠是綠的）**。順手修掉 hreflang 宣告與語言切換不一致（已釘跨函式斷言）。三個「設計稿要、資料沒有」的欄位沒有編造：部落格分類、心得職稱、日票倒數（這頁是綠界 ClientBackURL，查不到 `day_pass_expires_at`，假倒數重整就歸零）。實拍蜂走 `hornet-png.ts` base64 + `GET /hornet-real.png`。`_verify403` 219 → **280**（+61，反向測試 81/81）。全套 **999 / 0**，bundle gzip **770 KiB**。**視覺系統 A~E 全部完成**。 |
+| 2026-09-07 | **SEO 修正**（PM-446~448）。GSC 報「已封鎖 robots.txt 無法索引」，查證後**不是缺路由** —— `/robots.txt` 與 `/sitemap.xml` PM-136／PM-264 就做好了（線上 200、Content-Type 正確、57 個 URL 帶完整 hreflang）。**真正原因**：`/reports` 被全站 11 頁 footer 連結，同時被 robots.txt 擋住 —— 而它自己已送 `noindex, nofollow`，被擋住時 Google 永遠讀不到那個 noindex，既排不出索引又一直報警。**修法**：拿掉 `Disallow: /reports`；`/report/:id` 補 `X-Robots-Tag: noindex, nofollow`（原本完全沒有 robots 標記，robots.txt 只擋爬、擋不住「以裸連結收錄」）；`Disallow: /report/` 維持。護欄：`_verify403` 第 ⑲ 區 5 條 + `_verify-live.mjs` 線上 SEO 檢查（「公開頁 → 被擋路徑」已翻綠）。🔴 **回歸腳本對換行符敏感**：`git checkout` 後檔案變 CRLF，五條嵌了 `\n` 的斷言假紅（其中一條正是擋頁面截斷的 PM-438 護欄），10 支腳本已在入口正規化。deploy `4bd3dd24`。全套 **1007 / 0**。 |
 
 > 部署：Cloudflare Workers `bugezy-api`（**bugezy.dev** + `bugezy-api.bugezy-api.workers.dev` 雙域名）；每日 03:00 UTC cron 保活 Supabase。
 > （隨開發持續更新）

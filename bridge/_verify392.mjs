@@ -1,6 +1,14 @@
 // PM-392~394 驗收：pin_analyze 動態探測。
 // 沿用 _verify309 的做法——把 content.ts 裡真正的函式抽出來在 jsdom 的真實 DOM 上跑。
-import { readFileSync } from 'node:fs';
+// 🔴 PM-448：git checkout 之後檔案會變成 CRLF（core.autocrlf），而下面的斷言到處嵌著 \n。
+//    不正規化的話，程式碼明明沒改，只因為剛切過分支就會假紅。
+import { readFileSync as __rfRaw } from 'node:fs';
+const readFileSync = (p, e) => {
+  const r = __rfRaw(p, e);
+  // ⚠ 不要預設 utf8：有呼叫點是不帶 encoding 讀二進位（PNG）的，
+  //   強制解成字串會把位元組毀掉（_verify_phase1 量 icon 尺寸就是這樣變 0×0）。
+  return typeof r === 'string' ? r.replace(/\r\n/g, '\n') : r;
+};
 import { JSDOM } from 'jsdom';
 import ts from 'typescript';
 

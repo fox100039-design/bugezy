@@ -4,7 +4,15 @@
 // ⚠ jsdom 不是 Chrome：它沒有版面計算，所以 checkVisibility 不存在、走 getComputedStyle 後備路徑。
 //   這裡驗的是**演算法**（去重、隱藏排除、額度、selector 唯一性、敏感遮蔽），
 //   實際瀏覽器行為仍以端到端為準。
-import { readFileSync } from 'node:fs';
+// 🔴 PM-448：git checkout 之後檔案會變成 CRLF（core.autocrlf），而下面的斷言到處嵌著 \n。
+//    不正規化的話，程式碼明明沒改，只因為剛切過分支就會假紅。
+import { readFileSync as __rfRaw } from 'node:fs';
+const readFileSync = (p, e) => {
+  const r = __rfRaw(p, e);
+  // ⚠ 不要預設 utf8：有呼叫點是不帶 encoding 讀二進位（PNG）的，
+  //   強制解成字串會把位元組毀掉（_verify_phase1 量 icon 尺寸就是這樣變 0×0）。
+  return typeof r === 'string' ? r.replace(/\r\n/g, '\n') : r;
+};
 import { JSDOM } from 'jsdom';
 import ts from 'typescript';
 

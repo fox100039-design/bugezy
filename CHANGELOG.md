@@ -1,5 +1,34 @@
 # BugEzy Changelog
 
+## Day 54（2026-09-07）— SEO 修正（PM-446~448）
+
+> 全套 **1007 passed / 0 failed**（14 套）、`_verify403` **283 → 288**。
+> 已部署：版本 `4bd3dd24`。
+> ⚠ v1.2.0 送審版的工作在 `release/v1.2.0` 分支（Day 52），master 不含 bridge 移除等改動。
+
+### GSC「已封鎖無法索引」的真正原因
+
+不是缺 robots.txt —— 那兩條路由 PM-136／PM-264 就做好了（線上 200、Content-Type 正確、
+sitemap 57 個 URL 帶完整 hreflang）。真正的原因是：
+
+**`/reports` 被全站 11 頁的 footer 連結，同時又被 `robots.txt` 擋住。**
+它自己已經送 `<meta name="robots" content="noindex, nofollow">`，但被 Disallow 擋著時
+**Google 永遠讀不到那個 noindex** —— 既排不出索引、又一直在 Search Console 報警。
+
+- **fix**：`robots.txt` 拿掉 `Disallow: /reports`（讓 Google 讀得到 noindex 並真正移除）。
+  `Disallow: /report/` 維持 —— 那是別人的報告資料。
+- **fix**：`/report/:id` 補 `X-Robots-Tag: noindex, nofollow`（原本完全沒有 robots 標記；
+  robots.txt 只擋爬，擋不住「以裸連結形式收錄」）。
+- **test**：`_verify403` 第 ⑲ 區 5 條 SEO 護欄 + `server/_verify-live.mjs` 的線上檢查
+  （sitemap 不可列被擋 URL、公開頁不該連到被擋路徑 —— 後者就是這次的根因，已翻綠）。
+
+### 🔴 回歸腳本對換行符敏感，剛切過分支就會假紅
+
+`git checkout` 會依 `core.autocrlf` 把工作區檔案寫成 CRLF，而斷言裡到處嵌著 `\n`
+（`'`<!DOCTYPE html>\n'`、`indexOf('\n}\n')`）—— **程式碼一個字沒改，只因為剛切過分支
+就會有五條假紅**，其中一條正是擋頁面截斷的 PM-438 護欄。10 支讀原始碼的腳本已在入口
+把 `readFileSync` 包一層做 `\r\n → \n`，既有呼叫點不動。
+
 ## Day 51（2026-09-04）— 大黃蜂視覺系統 群組 D + E 完成（A~E 全部收工）
 
 > 全套 **999 / 0**（14 套）。`_verify403` **219 → 280**（+61 條規格護欄，全部反向測試過）。

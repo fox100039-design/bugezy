@@ -1,5 +1,13 @@
 // PM-367 驗收：瀏覽器錯誤 PII 遮罩（純邏輯，直接載入編譯後的模組）
-import { readFileSync } from 'node:fs';
+// 🔴 PM-448：git checkout 之後檔案會變成 CRLF（core.autocrlf），而下面的斷言到處嵌著 \n。
+//    不正規化的話，程式碼明明沒改，只因為剛切過分支就會假紅。
+import { readFileSync as __rfRaw } from 'node:fs';
+const readFileSync = (p, e) => {
+  const r = __rfRaw(p, e);
+  // ⚠ 不要預設 utf8：有呼叫點是不帶 encoding 讀二進位（PNG）的，
+  //   強制解成字串會把位元組毀掉（_verify_phase1 量 icon 尺寸就是這樣變 0×0）。
+  return typeof r === 'string' ? r.replace(/\r\n/g, '\n') : r;
+};
 import { maskBrowserError, maskUrl, maskConsoleEntry, maskNetworkEntry, maskErrorPayload } from './dist/pii-browser.js';
 import { maskStderr } from './dist/vendor/pii-mask.js';
 
