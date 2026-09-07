@@ -1614,8 +1614,14 @@ function robotsTxt(): Response {
     `Allow: /\n` +
     `Disallow: /api/\n` +
     `Disallow: /mcp\n` +
-    `Disallow: /report/\n` +
-    `Disallow: /reports\n\n` + // PM-184：我的報告列表（含 token，私人頁）
+    `Disallow: /report/\n\n` +
+    // 🔴 PM-447：**不要**把 /reports 加回 Disallow。
+    //   它自己已經送 `<meta name="robots" content="noindex, nofollow">`，而且全站 11 頁的
+    //   footer 都連它 —— 一旦被 robots.txt 擋住，Google 就永遠讀不到那個 noindex，
+    //   結果是既排不出索引、又一直在 Search Console 報「已封鎖 robots.txt」（PM-446 查證）。
+    //   讓它可被抓取，Google 才會讀到 noindex 並真正把它移除。頁面本身需要 session token，
+    //   沒 token 只會看到登入提示，沒有資料外洩。
+    //   `/report/` 維持封鎖：那是別人的報告資料，不該讓爬蟲主動去要。
     `Sitemap: https://bugezy.dev/sitemap.xml\n`;
   return new Response(body, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
 }

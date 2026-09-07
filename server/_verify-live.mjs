@@ -100,7 +100,9 @@ const robots = await fetch(BASE + '/robots.txt');
 const robotsTxt = await robots.text();
 const robotsOk = robots.status === 200
   && (robots.headers.get('content-type') || '').startsWith('text/plain')
-  && ['/api/', '/mcp', '/report/', '/reports'].every((d) => robotsTxt.includes('Disallow: ' + d))
+  && ['/api/', '/mcp', '/report/'].every((d) => robotsTxt.includes('Disallow: ' + d))
+  // 🔴 PM-447：/reports 必須**不在** Disallow 裡，否則 Google 讀不到它的 noindex
+  && !robotsTxt.includes('Disallow: /reports')
   && robotsTxt.includes('Sitemap: https://bugezy.dev/sitemap.xml');
 if (!robotsOk) bad++;
 console.log((robotsOk ? '  OK  ' : ' FAIL ') + '/robots.txt'.padEnd(20) + robots.status +

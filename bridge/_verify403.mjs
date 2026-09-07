@@ -1297,16 +1297,20 @@ check('446   兩條路由都掛著，且 Content-Type 正確',
   && /'Content-Type': 'application\/xml; charset=utf-8'/.test(srvRaw)
   && /'Content-Type': 'text\/plain; charset=utf-8'/.test(srvRaw));
 
-check('446   🔴 robots.txt 擋住四條私人路徑（/report/ 與 /reports 是使用者資料）', (() => {
+check('446/447 🔴 robots.txt 擋 /api/ /mcp /report/，但**不能**擋 /reports', (() => {
   const fn = srvRaw.slice(srvRaw.indexOf('function robotsTxt'), srvRaw.indexOf('// PM-211：Open Graph'));
-  return ['/api/', '/mcp', '/report/', '/reports'].every((d) => fn.includes(`Disallow: ${d}`))
+  const body = fn.slice(fn.indexOf('const body'), fn.indexOf('return new Response'));
+  // PM-447：/reports 自己有 noindex，被 Disallow 擋住反而讓 Google 讀不到那個 noindex
+  //   —— 既排不掉又一直報「已封鎖」。這條斷言就是要防止有人「順手補回來」。
+  return ['/api/', '/mcp', '/report/'].every((d) => body.includes(`Disallow: ${d}`))
+    && !/Disallow: \/reports/.test(body)
     && fn.includes('Sitemap: https://bugezy.dev/sitemap.xml');
 })());
 
 check('446   🔴 sitemap 的頁面清單不可以包含被 robots.txt 擋住的路徑', (() => {
   const sm = srvRaw.slice(srvRaw.indexOf('function sitemapXml'), srvRaw.indexOf('function robotsTxt'));
   const paths = [...sm.matchAll(/\{ path: '([^']+)'/g)].map((m) => m[1]);
-  const blocked = ['/api/', '/mcp', '/report/', '/reports'];
+  const blocked = ['/api/', '/mcp', '/report/']; // PM-447：/reports 已不再 Disallow
   const bad = paths.filter((p) => blocked.some((b) => p.startsWith(b)));
   if (bad.length) console.log('   sitemap 列了被擋的路徑：' + bad.join(', '));
   return paths.length >= 10 && bad.length === 0;
