@@ -566,6 +566,10 @@ job/           每日任務檔
     > - 🔴 **回歸腳本讀檔一定要正規化換行**（PM-448）：`git checkout` 會依 `core.autocrlf` 把工作區
     >   寫成 CRLF，而斷言裡嵌著 `\n`（`'`<!DOCTYPE html>\n'`、`indexOf('\n}\n')`）—— **程式碼沒改，
     >   只因為剛切過分支就會假紅**。10 支腳本已在入口把 `readFileSync` 包一層做 `\r\n → \n`。
+    > - ⚠ **包一層的時候不要預設 `'utf8'`**：`_verify_phase1` 有呼叫點是不帶 encoding 讀 PNG 量尺寸的，
+    >   強制解字串會把位元組毀掉（icon 尺寸變 0×0）。只有回傳字串時才正規化。
+    > - ⚠ **`_verify_phase1` 讀的是 `extension/dist/background.js`**，而 `dist/` 在 .gitignore 裡、
+    >   **不會跟著 `git checkout` 換**。切完分支要先 build 再跑，否則是拿另一條分支的產物在驗。
 
 
 ## §5 MCP Server Tool Schema
